@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -250,7 +250,9 @@ export default function Page() {
         <UserProvider>
             <FormatProvider>
                 <SidebarProvider>
-                    <DashboardContent />
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
                 </SidebarProvider>
             </FormatProvider>
         </UserProvider>
