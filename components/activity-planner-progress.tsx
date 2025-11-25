@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-    Accordion,
-    AccordionItem,
-    AccordionTrigger,
-    AccordionContent,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
@@ -279,6 +274,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 tsm={item.tsm}
                                                 manager={item.manager}
                                                 type_client={item.type_client}
+                                                contact_number={item.contact_number}
                                                 activityReferenceNumber={item.activity_reference_number}
                                                 accountReferenceNumber={item.account_reference_number}
                                                 onCreated={(newActivity) => setActivities((curr) => [...curr, newActivity])}

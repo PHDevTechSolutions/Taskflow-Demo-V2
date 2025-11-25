@@ -68,6 +68,7 @@ interface CreateActivityDialogProps {
     manager: string;
     target_quota?: string;
     type_client: string;
+    contact_number: string;
     activityReferenceNumber?: string;
     accountReferenceNumber?: string;
 }
@@ -100,6 +101,7 @@ export function CreateActivityDialog({
     tsm,
     manager,
     type_client,
+    contact_number,
     activityReferenceNumber,
     accountReferenceNumber,
 }: CreateActivityDialogProps) {
@@ -522,6 +524,7 @@ export function CreateActivityDialog({
                                     source={source}
                                     setSource={setSource}
                                     callback={callback}
+                                    contact_number={contact_number}
                                     setCallback={setCallback}
                                     callStatus={callStatus}
                                     setCallStatus={setCallStatus}

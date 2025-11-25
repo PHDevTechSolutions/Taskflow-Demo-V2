@@ -21,13 +21,12 @@ interface OutboundSheetProps {
     followUpDate: string; setFollowUpDate: React.Dispatch<React.SetStateAction<string>>;
     status: string; setStatus: React.Dispatch<React.SetStateAction<string>>;
     remarks: string; setRemarks: React.Dispatch<React.SetStateAction<string>>;
-
     loading: boolean;
 
+    contact_number: string;
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
-
 }
 
 export function OutboundSheet({
@@ -40,6 +39,7 @@ export function OutboundSheet({
     status, setStatus,
     remarks, setRemarks,
     loading,
+    contact_number,
     handleBack,
     handleNext,
     handleSave,
@@ -112,7 +112,17 @@ export function OutboundSheet({
             {/* STEP 3 */}
             {step === 3 && (
                 <div>
-                    <Label className="mb-3">Callback (Optional)</Label>
+                    {/* CONTACT NUMBER DISPLAY */}
+                    <Alert>
+                        <CheckCircle2Icon />
+                        <AlertTitle>{contact_number}</AlertTitle>
+                        <AlertDescription>
+                            Use this number when calling the client. Ensure accuracy before proceeding.
+                        </AlertDescription>
+
+                    </Alert>
+
+                    <Label className="mb-3 mt-4">Callback (Optional)</Label>
                     <Input
                         type="datetime-local"
                         value={callback}
@@ -152,6 +162,7 @@ export function OutboundSheet({
                     </FieldGroup>
 
                     <h2 className="text-sm font-semibold mt-3">Step 3 — Call Details</h2>
+
                     <div className="flex justify-between mt-4">
                         <Button variant="outline" onClick={handleBack}>Back</Button>
                         <Button onClick={handleNext}>Next</Button>
