@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, } from "@/components/
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircleIcon, PlusIcon, MinusIcon } from "lucide-react";
+import { AlertCircleIcon, PlusIcon, MinusIcon, CheckCircle2Icon } from "lucide-react";
 
 // Levenshtein Distance for fuzzy matching duplicates
 function levenshtein(a: string, b: string) {
@@ -447,11 +447,13 @@ export function AccountDialog({
               <Alert variant="destructive" className="mt-3">
                 <AlertCircleIcon />
                 <AlertTitle>{companyError}</AlertTitle>
-
               </Alert>
             )}
             {isCheckingDuplicate && (
-              <p className="text-gray-500 text-xs">Checking duplicates...</p>
+              <Alert>
+                <CheckCircle2Icon />
+                <AlertTitle>Checking duplicates...</AlertTitle>
+              </Alert>
             )}
 
             {duplicateInfo.length > 0 && (
