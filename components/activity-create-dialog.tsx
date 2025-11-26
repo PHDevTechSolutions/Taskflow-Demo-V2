@@ -353,6 +353,7 @@ export function CreateActivityDialog({
             }
 
             toast.success("Activity created and status updated successfully!");
+            onCreated(newActivity);
 
             resetForm();
             setStep(1);
@@ -439,7 +440,7 @@ export function CreateActivityDialog({
                                                 defaultValue={typeActivity}
                                                 onValueChange={(value) => {
                                                     setTypeActivity(value);
-                                                    setStartDate(new Date().toISOString());  // <-- set startDate here
+                                                    setStartDate(new Date().toISOString());
                                                 }}
                                             >
 

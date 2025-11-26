@@ -1,7 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+    Accordion,
+    AccordionItem,
+    AccordionTrigger,
+    AccordionContent,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
@@ -53,11 +58,10 @@ export const Progress: React.FC<NewTaskProps> = ({
     const [errorActivities, setErrorActivities] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-    // Dialog state for Done
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [selectedActivityRefNum, setSelectedActivityRefNum] = useState<string | null>(null);
+    const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
-    // Fetch companies by referenceid
+    // Fetch companies with no cache
     useEffect(() => {
         if (!referenceid) {
             setCompanies([]);
@@ -66,7 +70,14 @@ export const Progress: React.FC<NewTaskProps> = ({
         setLoadingCompanies(true);
         setErrorCompanies(null);
 
-        fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`)
+        fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`, {
+            cache: "no-store",
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+            },
+        })
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch company data");
                 return res.json();
@@ -82,31 +93,44 @@ export const Progress: React.FC<NewTaskProps> = ({
             });
     }, [referenceid]);
 
-    // Fetch activities and subscribe to realtime changes
-    useEffect(() => {
+    // Fetch activities with no cache via API route
+    const fetchActivities = useCallback(async () => {
         if (!referenceid) {
             setActivities([]);
             return;
         }
-
         setLoadingActivities(true);
         setErrorActivities(null);
 
-        const fetchActivities = async () => {
-            const { data, error } = await supabase
-                .from("activity")
-                .select("*")
-                .eq("referenceid", referenceid);
+        try {
+            const res = await fetch(`/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`, {
+                cache: "no-store",
+                headers: {
+                    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    Pragma: "no-cache",
+                    Expires: "0",
+                },
+            });
 
-            if (error) {
-                setErrorActivities(error.message);
-            } else {
-                setActivities(data || []);
+            if (!res.ok) {
+                const json = await res.json();
+                throw new Error(json.error || "Failed to fetch activities");
             }
-            setLoadingActivities(false);
-        };
 
+            const json = await res.json();
+            setActivities(json.data || []);
+        } catch (error: any) {
+            setErrorActivities(error.message || "Error fetching activities");
+        } finally {
+            setLoadingActivities(false);
+        }
+    }, [referenceid]);
+
+    // Initial fetch + realtime subscription to keep UI fresh
+    useEffect(() => {
         fetchActivities();
+
+        if (!referenceid) return;
 
         const channel = supabase
             .channel(`public:activity:referenceid=eq.${referenceid}`)
@@ -125,7 +149,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                     setActivities((curr) => {
                         switch (payload.eventType) {
                             case "INSERT":
-                                if (!curr.find((a) => a.id === newRecord.id)) {
+                                if (!curr.some((a) => a.id === newRecord.id)) {
                                     return [...curr, newRecord];
                                 }
                                 return curr;
@@ -144,9 +168,8 @@ export const Progress: React.FC<NewTaskProps> = ({
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [referenceid]);
+    }, [referenceid, fetchActivities]);
 
-    // Helper to check if date is in filter range
     const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
         if (!range) return true;
         const date = new Date(dateStr);
@@ -157,12 +180,10 @@ export const Progress: React.FC<NewTaskProps> = ({
         return true;
     };
 
-    // Define allowed statuses as an array
     const allowedStatuses = ["On-Progress", "Assisted", "Quote-Done", "SO-Done"];
 
-    // Merge activity with company info, filter by allowed statuses and date, then map and sort
     const mergedData = activities
-        .filter((a) => allowedStatuses.includes(a.status)) // <-- filter by multiple statuses
+        .filter((a) => allowedStatuses.includes(a.status))
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
         .map((activity) => {
             const company = companies.find(
@@ -175,30 +196,30 @@ export const Progress: React.FC<NewTaskProps> = ({
                 type_client: company?.type_client ?? "",
             };
         })
-
-        .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
-
+        .sort(
+            (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+        );
 
     const isLoading = loadingCompanies || loadingActivities;
     const error = errorCompanies || errorActivities;
 
-    // Handle marking activity as done
-    const openDoneDialog = (activityReferenceNumber: string) => {
-        setSelectedActivityRefNum(activityReferenceNumber);
+    const openDoneDialog = (id: string) => {
+        setSelectedActivityId(id);
         setDialogOpen(true);
     };
 
     const handleConfirmDone = async () => {
-        if (!selectedActivityRefNum) return;
+        if (!selectedActivityId) return;
 
         try {
-            setUpdatingId(selectedActivityRefNum);
+            setUpdatingId(selectedActivityId);
             setDialogOpen(false);
 
             const res = await fetch("/api/act-update-status", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ activityReferenceNumber: selectedActivityRefNum }),
+                body: JSON.stringify({ id: selectedActivityId }),
+                cache: "no-store",
             });
 
             const result = await res.json();
@@ -209,16 +230,14 @@ export const Progress: React.FC<NewTaskProps> = ({
                 return;
             }
 
-            setActivities((curr) =>
-                curr.filter((a) => a.activity_reference_number !== selectedActivityRefNum)
-            );
+            await fetchActivities();
 
             toast.success("Transaction marked as Done.");
         } catch {
             toast.error("An error occurred while updating status.");
         } finally {
             setUpdatingId(null);
-            setSelectedActivityRefNum(null);
+            setSelectedActivityId(null);
         }
     };
 
@@ -247,7 +266,6 @@ export const Progress: React.FC<NewTaskProps> = ({
             <div className="max-h-[400px] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
                     {mergedData.map((item) => {
-                        // Determine badge color based on status
                         let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
 
                         if (item.status === "Assisted" || item.status === "SO-Done") {
@@ -258,15 +276,12 @@ export const Progress: React.FC<NewTaskProps> = ({
 
                         return (
                             <AccordionItem key={item.id} value={item.id}>
-                                {/* Header container */}
                                 <div className="p-2 cursor-pointer select-none">
                                     <div className="flex justify-between items-center">
-                                        {/* Company name */}
                                         <AccordionTrigger className="flex-1 text-xs font-semibold">
                                             {item.company_name}
                                         </AccordionTrigger>
 
-                                        {/* Action buttons */}
                                         <div className="flex gap-2 ml-4">
                                             <CreateActivityDialog
                                                 target_quota={target_quota}
@@ -277,7 +292,9 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 contact_number={item.contact_number}
                                                 activityReferenceNumber={item.activity_reference_number}
                                                 accountReferenceNumber={item.account_reference_number}
-                                                onCreated={(newActivity) => setActivities((curr) => [...curr, newActivity])}
+                                                onCreated={() => {
+                                                    fetchActivities();
+                                                }}
                                             />
 
                                             <Button
@@ -294,7 +311,6 @@ export const Progress: React.FC<NewTaskProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* Badge below company name and buttons */}
                                     <div className="ml-1">
                                         <Badge variant={badgeColor} className="text-[8px]">
                                             {item.status.replace("-", " ")}
@@ -307,10 +323,12 @@ export const Progress: React.FC<NewTaskProps> = ({
                                         <strong>Contact Number:</strong> {item.contact_number}
                                     </p>
                                     <p>
-                                        <strong>Account Reference Number:</strong> {item.account_reference_number}
+                                        <strong>Account Reference Number:</strong>{" "}
+                                        {item.account_reference_number}
                                     </p>
                                     <p>
-                                        <strong>Date Created:</strong> {new Date(item.date_created).toLocaleDateString()}
+                                        <strong>Date Created:</strong>{" "}
+                                        {new Date(item.date_created).toLocaleDateString()}
                                     </p>
                                 </AccordionContent>
                             </AccordionItem>

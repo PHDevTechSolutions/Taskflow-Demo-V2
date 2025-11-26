@@ -20,9 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Update scheduled_status AND date_updated to current time
     const { data, error } = await supabase
-      .from("activity")
+      .from("history")
       .update({ 
-        status: "Done",
+        scheduled_status: "Done",
         date_updated: new Date().toISOString(),  // <-- add this line
       })
       .eq("id", id)

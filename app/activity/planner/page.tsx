@@ -20,6 +20,8 @@ import { toast } from "sonner";
 
 import { NewTask } from "@/components/activity-planner-newtask";
 import { Progress } from "@/components/activity-planner-progress";
+import { Scheduled } from "@/components/activity-planner-scheduled";
+import { Completed } from "@/components/activity-planner-completed";
 
 import { type DateRange } from "react-day-picker";
 import { Eye } from "lucide-react";
@@ -215,7 +217,11 @@ function DashboardContent() {
                                         <CardTitle>Scheduled</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        {/* Add your Scheduled content here */}
+                                        <Scheduled
+                                            referenceid={userDetails.referenceid}
+                                            target_quota={userDetails.target_quota}
+                                            dateCreatedFilterRange={dateCreatedFilterRange}
+                                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
                                     </CardContent>
                                 </Card>
 
@@ -225,8 +231,11 @@ function DashboardContent() {
                                             <CardTitle>Completed</CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                            {/* Add your Completed content here */}
-                                            <p className="text-sm text-muted-foreground">Completed tasks will show here.</p>
+                                            <Completed
+                                            referenceid={userDetails.referenceid}
+                                            target_quota={userDetails.target_quota}
+                                            dateCreatedFilterRange={dateCreatedFilterRange}
+                                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
                                         </CardContent>
                                     </Card>
                                 )}
