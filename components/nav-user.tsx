@@ -31,6 +31,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+
 export function NavUser({
   user,
   userId,
@@ -45,7 +48,30 @@ export function NavUser({
   const { isMobile } = useSidebar();
   const router = useRouter();
 
-  const handleLogout = () => {
+  const logLogoutActivity = async () => {
+    try {
+      // Gather details similar to login activity
+      const deviceId = localStorage.getItem("deviceId") || "unknown-device";
+      const location = null; // Optionally, you can implement geo-location like login
+      await addDoc(collection(db, "activity_logs"), {
+        userId,
+        email: user.name, // or you can pass email as a prop if available
+        status: "logout",
+        timestamp: new Date().toISOString(),
+        deviceId,
+        location,
+        browser: navigator.userAgent,
+        os: navigator.platform,
+        date_created: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to log logout activity:", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logLogoutActivity();
+
     localStorage.removeItem("userId");
     router.replace("/login");
   };
@@ -117,10 +143,7 @@ export function NavUser({
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="cursor-pointer"
-            >
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
               <LogOut />
               Log out
             </DropdownMenuItem>
