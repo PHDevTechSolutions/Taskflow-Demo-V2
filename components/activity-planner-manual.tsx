@@ -25,13 +25,14 @@ import {
 } from "@/components/ui/card";
 
 interface Company {
-  id: string;  
+  id: string;
   account_reference_number: string;
   company_name: string;
   contact_number?: string;
   type_client?: string;
   email_address: string;
   contact_person: string;
+  address: string;
   status: string;
 }
 
@@ -220,6 +221,9 @@ export const Manual: React.FC<ManualProps> = ({
         company_name: company?.company_name ?? "Unknown Company",
         contact_number: company?.contact_number ?? "-",
         type_client: company?.type_client ?? "",
+        contact_person: company?.contact_person ?? "",
+        email_address: company?.email_address ?? "",
+        address: company?.address ?? "",
       };
     })
     .sort(
@@ -329,82 +333,82 @@ export const Manual: React.FC<ManualProps> = ({
   };
 
   const handleAddActivity = async (company: Company) => {
-  if (!referenceid) {
-    toast.error("Missing reference ID");
-    return;
-  }
-
-  if (!tsm || !manager) {
-    toast.error("TSM or Manager information is missing.");
-    return;
-  }
-
-  setAddingAccount(company.account_reference_number);
-
-  const newActivityReferenceNumber = generateActivityReferenceNumber(company.company_name);
-
-  const payload = {
-    referenceid,
-    tsm,
-    manager,
-    account_reference_number: company.account_reference_number,
-    status: "On-Progress",
-    activity_reference_number: newActivityReferenceNumber,
-  };
-
-  try {
-    const res = await fetch("/api/act-save-account", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      toast.error(`Failed to save activity: ${json.error || "Unknown error"}`);
-      setAddingAccount(null);
+    if (!referenceid) {
+      toast.error("Missing reference ID");
       return;
     }
 
-    // 2. Calculate new next_available_date based on type_client
-    const now = new Date();
-    let newDate: Date;
-
-    if (company.type_client === "TOP 50") {
-      newDate = new Date(now.setDate(now.getDate() + 15)); // after 15 days
-    } else {
-      newDate = new Date(now.setMonth(now.getMonth() + 1)); // after 1 month
+    if (!tsm || !manager) {
+      toast.error("TSM or Manager information is missing.");
+      return;
     }
 
-    // Format date as YYYY-MM-DD
-    const nextAvailableDate = newDate.toISOString().split("T")[0];
+    setAddingAccount(company.account_reference_number);
 
-    const updateRes = await fetch("/api/act-update-account-next-date", {
-  method: "PATCH",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    id: company.id, // <-- use numeric id here
-    next_available_date: nextAvailableDate,
-  }),
-});
+    const newActivityReferenceNumber = generateActivityReferenceNumber(company.company_name);
+
+    const payload = {
+      referenceid,
+      tsm,
+      manager,
+      account_reference_number: company.account_reference_number,
+      status: "On-Progress",
+      activity_reference_number: newActivityReferenceNumber,
+    };
+
+    try {
+      const res = await fetch("/api/act-save-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast.error(`Failed to save activity: ${json.error || "Unknown error"}`);
+        setAddingAccount(null);
+        return;
+      }
+
+      // 2. Calculate new next_available_date based on type_client
+      const now = new Date();
+      let newDate: Date;
+
+      if (company.type_client === "TOP 50") {
+        newDate = new Date(now.setDate(now.getDate() + 15)); // after 15 days
+      } else {
+        newDate = new Date(now.setMonth(now.getMonth() + 1)); // after 1 month
+      }
+
+      // Format date as YYYY-MM-DD
+      const nextAvailableDate = newDate.toISOString().split("T")[0];
+
+      const updateRes = await fetch("/api/act-update-account-next-date", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: company.id, // <-- use numeric id here
+          next_available_date: nextAvailableDate,
+        }),
+      });
 
 
-    const updateData = await updateRes.json();
+      const updateData = await updateRes.json();
 
-    if (!updateRes.ok) {
-      toast.error(`Failed to update next available date: ${updateData.error || "Unknown error"}`);
-    } else {
-      toast.success("Activity added and next available date updated.");
-      await fetchActivities();
+      if (!updateRes.ok) {
+        toast.error(`Failed to update next available date: ${updateData.error || "Unknown error"}`);
+      } else {
+        toast.success("Activity added and next available date updated.");
+        await fetchActivities();
+      }
+    } catch (error) {
+      toast.error("Error saving activity");
+    } finally {
+      setAddingAccount(null);
     }
-  } catch (error) {
-    toast.error("Error saving activity");
-  } finally {
-    setAddingAccount(null);
-  }
-};
+  };
 
 
   if (isLoading) {
@@ -565,9 +569,15 @@ export const Manual: React.FC<ManualProps> = ({
                             manager={item.manager}
                             type_client={item.type_client}
                             contact_number={item.contact_number}
+                            email_address={item.email_address}
                             activityReferenceNumber={item.activity_reference_number}
+                            company_name={item.company_name}
+                            contact_person={item.contact_person}
+                            address={item.address}
                             accountReferenceNumber={item.account_reference_number}
-                            onCreated={fetchActivities}
+                            onCreated={() => {
+                              fetchActivities();
+                            }}
                           />
 
                           <Button
