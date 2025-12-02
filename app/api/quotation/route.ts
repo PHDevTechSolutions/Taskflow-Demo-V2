@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
+import fs from "fs";
+import path from "path";
 
 // Decode common HTML entities
 function decodeEntities(text: string): string {
@@ -14,19 +16,15 @@ function decodeEntities(text: string): string {
 
 // Parse description string (HTML or plain text) into [label, value] rows
 function parseDescriptionToRows(description: string): string[][] {
-  // Step 1: normalize separators
   let clean = description
     .replace(/\|\|/g, "\n") // treat || as new row
     .replace(/<br\s*\/?>/gi, "\n") // convert <br> to newline
     .replace(/<\/?[^>]+(>|$)/g, ""); // strip all HTML tags
 
-  // Step 2: decode HTML entities
   clean = decodeEntities(clean);
 
-  // Step 3: split by newline
   const lines = clean.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
 
-  // Step 4: group into [label, value] pairs
   const rows: string[][] = [];
   for (let i = 0; i < lines.length; i += 2) {
     const label = lines[i];
@@ -36,22 +34,62 @@ function parseDescriptionToRows(description: string): string[][] {
   return rows;
 }
 
-// Insert description table into a single cell (col=4)
-function addDescriptionTable(
-  sheet: ExcelJS.Worksheet,
-  description: string,
-  rowNumber: number,
-  colNumber: number
-) {
-  const rows = parseDescriptionToRows(description);
-
-  // Combine into one string with line breaks
-  const combined = rows.map(r => r.join(": ")).join("\n");
-
-  const cell = sheet.getRow(rowNumber).getCell(colNumber);
-  cell.value = combined;
-  cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+function clearBordersAndSetWhiteFill(sheet: ExcelJS.Worksheet, rowNumber: number, startCol = 1, endCol = 6) {
+  const row = sheet.getRow(rowNumber);
+  for (let col = startCol; col <= endCol; col++) {
+    const cell = row.getCell(col);
+    cell.border = {};
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFFFF" }, // white background
+    };
+  }
 }
+
+// Helper to add footer rows with merged cells from col 3 to 6
+function addFooterRow(
+  sheet: ExcelJS.Worksheet,
+  content: string | ExcelJS.RichText[],
+  rowHeight: number = 30   // ✅ default row height = 30
+) {
+  // Insert a row with empty col 1 and 2, content in col 3
+  const row = sheet.addRow(["", "", ""]);
+
+  // Merge col 3 to 6 on this row
+  sheet.mergeCells(row.number, 3, row.number, 6);
+
+  const cell = row.getCell(3);
+
+  if (typeof content === "string") {
+    cell.value = content;
+  } else if (Array.isArray(content)) {
+    cell.value = { richText: content };
+  } else {
+    cell.value = String(content);
+  }
+
+  cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+
+  // ✅ Apply row height (always at least 30)
+  row.height = rowHeight;
+}
+
+function setBorderForRow(sheet: ExcelJS.Worksheet, rowNumber: number, startCol = 1, endCol = 6) {
+  const borderStyle: ExcelJS.BorderStyle = "thin";
+  const borderColor = { argb: "FF000000" };
+  const row = sheet.getRow(rowNumber);
+  for (let col = startCol; col <= endCol; col++) {
+    const cell = row.getCell(col);
+    cell.border = {
+      top: { style: borderStyle, color: borderColor },
+      left: { style: borderStyle, color: borderColor },
+      bottom: { style: borderStyle, color: borderColor },
+      right: { style: borderStyle, color: borderColor },
+    };
+  }
+}
+
 
 export async function POST(req: Request) {
   const data = await req.json();
@@ -59,23 +97,122 @@ export async function POST(req: Request) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Quotation");
 
-  // Header
-  sheet.addRow(["QUOTATION / SALES ORDER"]);
-  sheet.addRow([]);
-  sheet.addRow([`Reference No: ${data.referenceNo}`, `Date: ${data.date}`]);
-  sheet.addRow([]);
-  sheet.addRow([`COMPANY NAME: ${data.companyName}`]);
-  sheet.addRow([`ADDRESS: ${data.address}`]);
-  sheet.addRow([`TEL NO: ${data.telNo}`]);
-  sheet.addRow([`EMAIL ADDRESS: ${data.email}`]);
-  sheet.addRow([`ATTENTION: ${data.attention}`]);
-  sheet.addRow([`SUBJECT: ${data.subject}`]);
-  sheet.addRow([]);
-  sheet.addRow(["We are pleased to offer you the following products for consideration:"]);
-  sheet.addRow([]);
+  const imagePath = path.resolve("./public/disruptive-banner.png");
+  const imageBuffer = fs.readFileSync(imagePath);
 
+  // Add image to workbook
+  const imageId = workbook.addImage({
+    buffer: imageBuffer.buffer,
+    extension: "png",
+  });
+
+  // Add an empty row for spacing (optional)
+  addFooterRow(sheet, "");
+
+  // Place image spanning columns 1 to 6, with explicit size to fit row height 80
+  sheet.addImage(imageId, {
+    tl: { col: 0, row: 0 } as any,
+    ext: { width: 900, height: 90 },
+  });
+
+  // Set the height of row 1 to fit the image height
+  sheet.getRow(1).height = 90;
+
+  // Clear borders and set white background fill on row 1 only
+  clearBordersAndSetWhiteFill(sheet, 1);
+
+  // Reference No
+  addFooterRow(sheet, "");
+
+  const refRow = sheet.addRow([""]);
+  sheet.mergeCells(refRow.number, 1, refRow.number, 6);  // merge entire row
+  const refCell = refRow.getCell(1);
+  refCell.value = {
+    richText: [
+      { text: "Reference No: ", font: { bold: true } },
+      { text: data.referenceNo.toUpperCase() }
+    ]
+  };
+  refCell.alignment = { horizontal: "right", vertical: "middle" };
+  clearBordersAndSetWhiteFill(sheet, refRow.number);
+
+  // Date
+  const dateRow = sheet.addRow([""]);
+  sheet.mergeCells(dateRow.number, 1, dateRow.number, 6);  // merge entire row
+  const dateCell = dateRow.getCell(1);
+  dateCell.value = {
+    richText: [
+      { text: "Date: ", font: { bold: true } },
+      { text: data.date }
+    ]
+  };
+
+  dateCell.alignment = { horizontal: "right", vertical: "middle" };
+  clearBordersAndSetWhiteFill(sheet, dateRow.number);
+
+  addFooterRow(sheet, "");
+
+  const companyInfo = [
+    { label: "COMPANY NAME: ", value: data.companyName },
+    { label: "ADDRESS: ", value: data.address },
+    { label: "TEL NO: ", value: data.telNo },
+    { label: "EMAIL ADDRESS: ", value: data.email },
+    { label: "ATTENTION: ", value: data.attention },
+    { label: "SUBJECT: ", value: data.subject },
+  ];
+
+  companyInfo.forEach(({ label, value }, index) => {
+    const row = sheet.addRow([
+      {
+        richText: [
+          { text: label, font: { bold: true } },
+          { text: value },
+        ],
+      },
+    ]);
+    sheet.mergeCells(row.number, 1, row.number, 6);
+
+    const cell = row.getCell(1);
+    cell.alignment = {
+      vertical: "top",
+      horizontal: "left",
+      wrapText: true,
+    };
+
+    // Set row height for padding
+    row.height = 30;
+
+    // Define border style and color
+    const borderStyle: ExcelJS.BorderStyle = "thin";
+    const borderColor = { argb: "FF000000" };
+
+    // Borders object, default no border
+    let border = {};
+
+    // Add top border only for first row (COMPANY NAME)
+    if (index === 0) {
+      border = {
+        top: { style: borderStyle, color: borderColor },
+      };
+    }
+
+    // Add bottom border for EMAIL ADDRESS (index 3) and SUBJECT (index 5)
+    if (index === 3 || index === 5) {
+      border = {
+        ...border,
+        bottom: { style: borderStyle, color: borderColor },
+      };
+    }
+
+    // Apply border to all cells in the row (cols 1 to 6)
+    for (let col = 1; col <= 6; col++) {
+      row.getCell(col).border = border;
+    }
+  });
+
+  addFooterRowFullWidth(sheet, "We are pleased to offer you the following products for consideration:");
   // Table header
-  sheet.addRow([
+  const headerRow = sheet.addRow([
     "ITEM NO",
     "QTY",
     "REFERENCE PHOTO",
@@ -83,6 +220,17 @@ export async function POST(req: Request) {
     "UNIT PRICE",
     "TOTAL AMOUNT",
   ]);
+
+  // Set header row height to 30
+  headerRow.height = 30;
+
+  // Center-align all header cells and set bold font
+  headerRow.eachCell((cell) => {
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    cell.font = { bold: true };
+  });
+
+  setBorderForRow(sheet, headerRow.number);
 
   // Items with images + description table
   for (const item of data.items) {
@@ -95,10 +243,19 @@ export async function POST(req: Request) {
       item.totalAmount,
     ]);
 
-    // Insert parsed description table into description column (col=4)
-    addDescriptionTable(sheet, item.description, row.number, 4);
+    // Description processing (same as before)
+    const descriptionRows = parseDescriptionToRows(item.description);
+    const combined = descriptionRows.map(r => r.join(": ")).join("\n");
+    const descCell = sheet.getRow(row.number).getCell(4);
+    descCell.value = combined;
+    descCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-    // Image handling
+    const minHeight = 15;
+    const lineHeight = 15;
+    const lineCount = combined.split("\n").length;
+    row.height = Math.max(minHeight, lineCount * lineHeight);
+
+    // Image handling with dynamic width
     try {
       const res = await fetch(item.referencePhoto);
       const arrayBuffer = await res.arrayBuffer();
@@ -109,70 +266,311 @@ export async function POST(req: Request) {
         extension: "png",
       });
 
+      const columnWidthInChars = sheet.getColumn(3).width || 20; // col 3 is index 3 (1-based)
+      const estimatedPixelWidth = columnWidthInChars * 7;
+
+      // Adjust aspect ratio if you know the original size, else keep fixed height
+      const originalImageWidth = 100;
+      const originalImageHeight = 100;
+      const aspectRatio = originalImageHeight / originalImageWidth;
+      const imageWidth = estimatedPixelWidth;
+      const imageHeight = imageWidth * aspectRatio;
+
       sheet.addImage(imageId, {
         tl: { col: 2, row: row.number - 1 },
-        ext: { width: 100, height: 100 },
+        ext: { width: imageWidth, height: imageHeight },
       });
 
-      sheet.getRow(row.number).height = 80;
+      // Adjust row height to fit image and description
+      row.height = Math.max(row.height || 0, imageHeight / 1.33);
     } catch (err) {
       console.error(`Failed to load image for item ${item.itemNo}:`, err);
     }
+
+    setBorderForRow(sheet, row.number);
   }
 
-  // Footer (same as before)
-  sheet.addRow([]);
-  sheet.addRow([`Choose Once:  ○ ${data.vatType}    ○ (other options not selected)`]);
-  sheet.addRow([]);
-  sheet.addRow([`Total Price: ₱${data.totalPrice.toFixed(2)}`]);
-  sheet.addRow([]);
-  sheet.addRow(["DELIVERY TERMS"]);
-  sheet.addRow(["Included:"]);
-  sheet.addRow(["- Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000."]);
-  sheet.addRow(["- Orders outside Metro Manila Free delivery is available for a minimum sales transaction of:"]);
-  sheet.addRow(["  ₱10,000 in Rizal,"]);
-  sheet.addRow(["  ₱15,000 in Bulacan and Cavite,"]);
-  sheet.addRow(["  ₱25,000 in Laguna, Pampanga, and Batangas."]);
-  sheet.addRow([]);
-  sheet.addRow(["Excluded:"]);
-  sheet.addRow(["- All lamp poles are subject to a delivery charge."]);
-  sheet.addRow(["- Installation and all hardware/accessories not indicated above."]);
-  sheet.addRow(["- Freight charges, arrastre, and other processing fees."]);
-  sheet.addRow([]);
-  sheet.addRow(["Notes:"]);
-  sheet.addRow(["- Deliveries are up to the vehicle unloading point only."]);
-  sheet.addRow(["- Additional shipping fee applies for other areas not mentioned above."]);
-  sheet.addRow(["- Subject to confirmation upon getting the actual weight and dimensions of the items."]);
-  sheet.addRow(["- In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges."]);
-  sheet.addRow([]);
-  sheet.addRow(["TERMS AND CONDITIONS"]);
-  sheet.addRow(["(Refer to your detailed terms & conditions text here...)"]);
-  sheet.addRow([]);
-  sheet.addRow(["PAYMENT TERMS"]);
-  sheet.addRow(["- Full payment due upon order confirmation."]);
-  sheet.addRow(["- Partial payments or deposits must be cleared before processing."]);
-  sheet.addRow(["- Payments can be made via bank transfer, check, or cash."]);
-  sheet.addRow([]);
-  sheet.addRow(["CANCELLATION POLICY"]);
-  sheet.addRow(["- Cancellation must be made in writing."]);
-  sheet.addRow(["- Orders cancelled after PO approval may incur penalties or restocking fees."]);
-  sheet.addRow(["- Client error returns are subject to 10% restocking fee."]);
-  sheet.addRow([]);
-  sheet.addRow(["SIGNATORIES"]);
-  sheet.addRow(["_________________________                _________________________"]);
-  sheet.addRow(["Authorized Company Representative       Authorized Client Representative"]);
-  sheet.addRow([]);
-  sheet.addRow(["Date: _______________                   Date: _______________"]);
+  const vatOptions = ["VAT Inc", "VAT Exe", "Zero-Rated"];
 
-  // Column widths
+  const vatRowValues = vatOptions.map(option => {
+    return option === data.vatType ? "● " + option : "○ " + option;
+  });
+
+  const vatAndTotalRow = sheet.addRow([
+    "", // col 1
+    "", // col 2
+    "", // placeholder for col 3 richText
+    vatRowValues.join("    "), // col 4
+    {
+      richText: [
+        { text: "Total Price: ", font: { bold: true } },
+        { text: `${data.totalPrice.toFixed(2)}` }
+      ]
+    }, // col 5
+    "" // col 6 placeholder for merge
+  ]);
+
+  // Set richText with bold and red font to col 3 cell
+  vatAndTotalRow.getCell(3).value = {
+    richText: [
+      {
+        text: "Choose One:",
+        font: { bold: true, color: { argb: "FFFF0000" } }, // red and bold
+      },
+    ],
+  };
+
+  sheet.mergeCells(vatAndTotalRow.number, 5, vatAndTotalRow.number, 6);
+
+  vatAndTotalRow.getCell(3).alignment = { horizontal: "left", vertical: "middle" };
+  vatAndTotalRow.getCell(4).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+  vatAndTotalRow.getCell(5).alignment = { horizontal: "right", vertical: "middle" };
+
+  // Set height to 30
+  vatAndTotalRow.height = 30;
+
+  // Add bottom border to all cells
+  const borderStyle: ExcelJS.BorderStyle = "thin";
+  const borderColor = { argb: "FF000000" };
+
+  for (let col = 1; col <= 6; col++) {
+    const cell = vatAndTotalRow.getCell(col);
+    const existingBorder = cell.border || {};
+    cell.border = {
+      ...existingBorder,
+      bottom: { style: borderStyle, color: borderColor },
+    };
+  }
+
+  // Modified helper: merge from col 1 to 6 instead of 3 to 6
+  function addFooterRowFullWidth(
+    sheet: ExcelJS.Worksheet,
+    content: string,
+    rowHeight: number = 30
+  ) {
+    const row = sheet.addRow([""]);
+    sheet.mergeCells(row.number, 1, row.number, 6);
+
+    const cell = row.getCell(1);
+    cell.value = content;
+    cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+
+    row.height = rowHeight;
+
+    // ✅ ONLY THIS SPECIFIC TEXT GETS TOP BORDER
+    if (content.startsWith("Thank you for allowing us to service your requirements")) {
+      cell.border = {
+        top: { style: "thick", color: { argb: "FF0070C0" } } // 🔵 BLUE + THICK BORDER
+      };
+    }
+
+  }
+
+  addFooterRow(sheet, "");
+
+  // Add all footer rows with rich text support
+  addFooterRow(sheet, [{ text: "*PHOTO MAY VARY FROM ACTUAL UNIT", font: { bold: true } }]);
+  addFooterRow(sheet, [{ text: "Included:", font: { bold: true } }]);
+  addFooterRow(sheet, "- Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.");
+  addFooterRow(sheet, "- Orders outside Metro Manila Free delivery is available for a minimum sales transaction of:");
+  addFooterRow(sheet, "  ₱10,000 in Rizal,");
+  addFooterRow(sheet, "  ₱15,000 in Bulacan and Cavite,");
+  addFooterRow(sheet, "  ₱25,000 in Laguna, Pampanga, and Batangas.");
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "Excluded:", font: { bold: true } }]);
+  addFooterRow(sheet, "- All lamp poles are subject to a delivery charge.");
+  addFooterRow(sheet, "- Installation and all hardware/accessories not indicated above.");
+  addFooterRow(sheet, "- Freight charges, arrastre, and other processing fees.");
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "Notes:", font: { bold: true } }]);
+  addFooterRow(sheet, "- Deliveries are up to the vehicle unloading point only.");
+  addFooterRow(sheet, "- Additional shipping fee applies for other areas not mentioned above.");
+  addFooterRow(sheet, "- Subject to confirmation upon getting the actual weight and dimensions of the items.");
+  addFooterRow(sheet, "- In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.");
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "TERMS AND CONDITIONS:", font: { bold: true } }]);
+  addFooterRow(sheet, [{ text: "AVAILABILITY:", font: { bold: true } }]);
+  addFooterRow(sheet, "*5-7 days if on stock upon receipt of approved PO.");
+  addFooterRow(sheet, "*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. ");
+  addFooterRow(sheet, "Barring any delay in shipping and customs clearance beyond Disruptive's control.");
+  addFooterRow(sheet, "*In the event of a conflict or inconsistency in estimated days under Availability");
+  addFooterRow(sheet, "and another estimate indicated elsewhere in this quotation, ");
+  addFooterRow(sheet, "the latter will prevail.");
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "WARRANTY:", font: { bold: true } }]);
+  addFooterRow(sheet, "One (1) year from the time of delivery for all busted lights except the damaged fixture.");
+  addFooterRow(sheet, "The warranty will be VOID under the following circumstances:");
+  addFooterRow(sheet, "*If the unit is being tampered with.");
+  addFooterRow(sheet, "*If the item(s) is/are altered in any way by unauthorized technicians.");
+  addFooterRow(sheet, "*If it has been subjected to misuse, mishandling, neglect, or accident.");
+  addFooterRow(sheet, "*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.");
+  addFooterRow(sheet, "*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.");
+  addFooterRow(sheet, "*Shipping costs for warranty claims are for customers' account.");
+  addFooterRow(sheet, "*If the product purchased is already phased out when the warranty is claimed, ");
+  addFooterRow(sheet, "the latest model or closest product SKU will be given as a replacement.");
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "SO VALIDITY:", font: { bold: true } }]);
+  addFooterRow(sheet, [
+    { text: "Sales order has validity period of " },
+    { text: "14 working days", font: { bold: true, color: { argb: "FFFF0000" } } },
+    { text: "(excluding holidays and Sundays) from the date of issuance." },
+  ]);
+
+  addFooterRow(sheet, [
+    { text: "Any sales order not confirmed and no verified payment within this " },
+    { text: "14-day period", font: { bold: true, color: { argb: "FFFF0000" } } },
+    { text: "will be automatically cancelled." },
+  ]);
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "STORAGE:", font: { bold: true } }]);
+  addFooterRow(sheet, [{ text: "Orders with confirmation/verified payment but undelivered after 14 working days " }]);
+  addFooterRow(sheet, [{ text: "(excluding holidays and Sundays starting from picking date)" }]);
+  addFooterRow(sheet, [{ text: "due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month " }]);
+  addFooterRow(sheet, [{ text: "(10% / 30 days =  0.33% per day)", font: { bold: true, color: { argb: "FFFF0000" } } }]);
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "RETURN:", font: { bold: true } }]);
+  addFooterRow(sheet, [{ text: "7 days return policy", font: { bold: true, color: { argb: "FFFF0000" } } }]);
+  addFooterRow(sheet, [{ text: "- if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, " }]);
+  addFooterRow(sheet, [{ text: "and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.", font: { bold: false } }]);
+
+  addFooterRow(sheet, "");
+
+  addFooterRow(sheet, [{ text: "PAYMENT:", font: { bold: true } }]);
+  addFooterRow(sheet, "Cash on Delivery (COD)");
+  addFooterRow(sheet, "NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.");
+  addFooterRow(sheet, [
+    { text: "Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.", font: { bold: true } }
+  ]);
+  addFooterRow(sheet, [
+    { text: "For special items,  Seventy Percent (70%) down payment, 30% upon delivery.", font: { bold: true } }
+  ]);
+
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "BANK DETAILS", font: { bold: true } }]);
+  addFooterRow(sheet, [{ text: "Payee to: DISRUPTIVE SOLUTIONS INC.", font: { bold: true } }]);
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "Bank: Metrobank", font: { bold: true } }]);
+  addFooterRow(sheet, "Account Name: DISRUPTIVE SOLUTIONS INC.");
+  addFooterRow(sheet, "Account number: 243-7-24354164-2");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "Bank: BDO", font: { bold: true } }]);
+  addFooterRow(sheet, "Account Name: DISRUPTIVE SOLUTIONS INC.");
+  addFooterRow(sheet, "Account number:  0021-8801-9258");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "DELIVERY", font: { bold: true } }]);
+  addFooterRow(sheet, "Delivery/Pick up is subject to confirmation.");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "VALIDITY", font: { bold: true } }]);
+  addFooterRow(sheet, [
+    {
+      text: "Thirty (30) calendar days from the date of this offer.",
+      font: { bold: true, color: { argb: "FFFF0000" } }
+    }
+  ]);
+  addFooterRow(sheet, [
+    {
+      text: "For special items, Seventy Percent (70%) down payment, 30% upon delivery.",
+      font: { bold: true }
+    }
+  ]);
+  addFooterRow(sheet, "In the event of changes in prevailing market conditions, duties, taxes,");
+  addFooterRow(sheet, "and all other importation charges, quoted prices are subject to change.");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, [{ text: "CANCELLATION:", font: { bold: true } }]);
+  addFooterRow(sheet, "1. Above quoted items are non-cancellable.");
+  addFooterRow(sheet, "2. If the customer cancels the order under any circumstances, the client");
+  addFooterRow(sheet, "shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.");
+  addFooterRow(sheet, "3. Downpayment for items not in stock/indent and order/special items are non-refundable");
+  addFooterRow(sheet, "and will be forfeited if the order is canceled.");
+  addFooterRow(sheet, "4. COD transaction payments should be ready upon delivery.");
+  addFooterRow(sheet, "If the payment is not ready within seven (7) days from the date of order, ");
+  addFooterRow(sheet, "the transaction is automatically canceled.");
+  addFooterRow(sheet, "5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.");
+
+  addFooterRow(sheet, "");
+  addFooterRowFullWidth(sheet, "Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.");
+  addFooterRowFullWidth(sheet, "Unless otherwise indicated in your Approved Purchase Order, you are deemed to have accepted the Terms and Conditions of this Quotation.");
+  addFooterRow(sheet, "");
+
+  addFooterRowFullWidth(sheet, "Disruptive Solutions Inc");
+  addFooterRow(sheet, "");
+
+  const rowUnderline = sheet.addRow([]);
+  sheet.mergeCells(rowUnderline.number, 1, rowUnderline.number, 3);
+  sheet.mergeCells(rowUnderline.number, 5, rowUnderline.number, 6);
+  rowUnderline.getCell(1).value = "_________________________";
+  rowUnderline.getCell(1).alignment = { horizontal: "left" };
+  rowUnderline.getCell(5).value = "_________________________";
+  rowUnderline.getCell(5).alignment = { horizontal: "right" };
+
+  // Clear borders and white background on underline row
+  clearBordersAndSetWhiteFill(sheet, rowUnderline.number);
+
+  // Add Sales Representative (left) and Company Authorized Representative (right)
+  const rowTitles = sheet.addRow([]);
+  sheet.mergeCells(rowTitles.number, 1, rowTitles.number, 3);
+  sheet.mergeCells(rowTitles.number, 5, rowTitles.number, 6);
+  rowTitles.getCell(1).value = "SALES REPRESENTATIVE";
+  rowTitles.getCell(1).alignment = { horizontal: "left" };
+  rowTitles.getCell(5).value = "COMPANY AUTHORIZED REPRESENTATIVE";
+  rowTitles.getCell(5).alignment = { horizontal: "right" };
+
+  // Clear borders and white background on titles row
+  clearBordersAndSetWhiteFill(sheet, rowTitles.number);
+
+  addFooterRow(sheet, "");
+
+  // Add Date lines (left and right)
+  const rowDates = sheet.addRow([]);
+  sheet.mergeCells(rowDates.number, 1, rowDates.number, 3);
+  sheet.mergeCells(rowDates.number, 5, rowDates.number, 6);
+  rowDates.getCell(1).value = "Date: _______________";
+  rowDates.getCell(1).alignment = { horizontal: "left" };
+  rowDates.getCell(5).value = "Date: _______________";
+  rowDates.getCell(5).alignment = { horizontal: "right" };
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  addFooterRow(sheet, "");
+  // Clear borders and white background on dates row
+  clearBordersAndSetWhiteFill(sheet, rowDates.number);
+
+  // Set column widths
   sheet.columns = [
     { width: 10 },
-    { width: 5 },
+    { width: 10 },
     { width: 20 }, // image column
-    { width: 50 }, // description
+    { width: 50 }, // description column
     { width: 15 },
-    { width: 15 },
+    { width: 20 },
   ];
+
+  // Remove all borders and set background fill to white for all cells
+  sheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      // Set fill background color to white
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFFFFF" }, // White color
+      };
+    });
+  });
 
   const buffer = await workbook.xlsx.writeBuffer();
 

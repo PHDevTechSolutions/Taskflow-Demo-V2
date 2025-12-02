@@ -438,7 +438,7 @@ export function CreateActivityDialog({
                     telNo: contact_number,
                     email: email_address,
                     attention: `${contact_person}, ${address}`,
-                    subject: "Quotation Subject",
+                    subject: "For Quotation",
                     items, // multiple items here
                     vatType: "Vat Inc",
                     totalPrice: Number(quotationAmount),
