@@ -676,6 +676,7 @@ export function QuotationSheet(props: Props) {
                 placeholder="Enter any remarks here..."
                 rows={3}
                 required
+                className="capitalize"
               />
 
               <FieldLabel className="mt-3">Status</FieldLabel>

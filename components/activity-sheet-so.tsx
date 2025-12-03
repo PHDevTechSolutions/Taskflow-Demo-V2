@@ -277,6 +277,8 @@ export function SOSheet(props: Props) {
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
+                                className="capitalize"
+                                required
                             />
                         </FieldSet>
                     </FieldGroup>

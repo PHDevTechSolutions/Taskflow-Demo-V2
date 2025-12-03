@@ -286,6 +286,8 @@ export function OutboundSheet({
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
+                                required
+                                className="capitalize"
                             />
                         </FieldSet>
                     </FieldGroup>

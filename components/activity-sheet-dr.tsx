@@ -263,6 +263,8 @@ export function DRSheet(props: Props) {
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
+                                required
+                                className="capitalize"
                             />
                         </FieldSet>
                     </FieldGroup>
