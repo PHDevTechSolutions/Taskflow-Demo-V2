@@ -33,6 +33,23 @@ interface NewTaskProps {
   onEmptyStatusChange?: (isEmpty: boolean) => void;
 }
 
+
+interface EndorsedTicket {
+  _id: string;
+  company_name: string;
+  contact_person: string;
+  contact_number: string;
+  email_address: string;
+  address: string;
+  ticket_reference_number: string;
+  wrap_up: string;
+  inquiry: string;
+  manager: string;
+  agent: string;
+  date_created: string;
+  date_updated: string;
+}
+
 export const NewTask: React.FC<NewTaskProps> = ({
   referenceid,
   onEmptyStatusChange,
@@ -40,6 +57,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [endorsedTickets, setEndorsedTickets] = useState<EndorsedTicket[]>([]);
+  const [loadingEndorsed, setLoadingEndorsed] = useState(false);
+  const [errorEndorsed, setErrorEndorsed] = useState<string | null>(null);
 
   const clusterOrder = [
     "TOP 50",
@@ -211,6 +232,39 @@ export const NewTask: React.FC<NewTaskProps> = ({
     fetchAccounts();
   }, [referenceid, onEmptyStatusChange]);
 
+  useEffect(() => {
+    if (!referenceid) {
+      setEndorsedTickets([]);
+      return;
+    }
+
+    const fetchEndorsedTickets = async () => {
+      setErrorEndorsed(null);
+      setLoadingEndorsed(true);
+      try {
+        // 'referenceid' dito ay ginagamit bilang 'agent' sa API query
+        const response = await fetch(
+          `/api/act-endorsed-ticket?referenceid=${encodeURIComponent(referenceid)}`
+        );
+        if (!response.ok) {
+          setErrorEndorsed("Failed to fetch endorsed tickets");
+          setLoadingEndorsed(false);
+          return;
+        }
+
+        const data = await response.json();
+        setEndorsedTickets(data.data || []);
+      } catch (err) {
+        console.error("Error fetching endorsed tickets:", err);
+        setErrorEndorsed("Error fetching endorsed tickets.");
+      } finally {
+        setLoadingEndorsed(false);
+      }
+    };
+
+    fetchEndorsedTickets();
+  }, [referenceid]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -266,6 +320,45 @@ export const NewTask: React.FC<NewTaskProps> = ({
   return (
     <div className="max-h-[400px] overflow-auto space-y-8 custom-scrollbar">
       {/* SECTION: TODAY */}
+      {loadingEndorsed ? (
+        <div className="flex justify-center items-center h-20">
+          <Spinner className="size-6" />
+        </div>
+      ) : errorEndorsed ? (
+        <Alert variant="destructive" className="p-3 text-xs">
+          <AlertCircleIcon className="inline-block mr-2" />
+          {errorEndorsed}
+        </Alert>
+      ) : endorsedTickets.length > 0 ? (
+        <section>
+          <h2 className="text-xs font-bold mb-4">Endorsed Tickets ({endorsedTickets.length})</h2>
+
+          <Accordion type="single" collapsible className="w-full">
+            {endorsedTickets.map((ticket) => (
+              <AccordionItem key={ticket._id} value={ticket._id}>
+                <div className="flex justify-between items-center p-2 cursor-pointer select-none">
+                  <AccordionTrigger className="flex-1 text-xs font-semibold">
+                    {ticket.company_name}
+                  </AccordionTrigger>
+                </div>
+                <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                  <p><strong>Contact Person:</strong> {ticket.contact_person}</p>
+                  <p><strong>Contact Number:</strong> {ticket.contact_number}</p>
+                  <p><strong>Email Address:</strong> {ticket.email_address}</p>
+                  <p><strong>Address:</strong> {ticket.address}</p>
+                  <p><strong>Ticket Reference #:</strong> {ticket.ticket_reference_number}</p>
+                  <p><strong>Wrap Up:</strong> {ticket.wrap_up}</p>
+                  <p><strong>Inquiry:</strong> {ticket.inquiry}</p>
+                  <p><strong>Manager:</strong> {ticket.manager}</p>
+                  <p><strong>Agent:</strong> {ticket.agent}</p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      ) : null}
+
+
       {totalTodayCount > 0 && (
         <section>
           <h2 className="text-xs font-bold mb-4">
