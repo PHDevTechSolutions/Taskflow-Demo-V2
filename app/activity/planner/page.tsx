@@ -164,7 +164,7 @@ function DashboardContent() {
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">Activity Planner</BreadcrumbPage>
+                                    <BreadcrumbPage className="line-clamp-1">Activity Planners</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
