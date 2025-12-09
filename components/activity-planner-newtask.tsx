@@ -317,6 +317,19 @@ export const NewTask: React.FC<NewTaskProps> = ({
     0
   );
 
+  const getFirstNonEmptyCluster = (
+    grouped: Record<string, Account[]>,
+    orderedList: string[]
+  ) => {
+    for (const cluster of orderedList) {
+      const accounts = grouped[cluster];
+      if (accounts && accounts.length > 0) return cluster;
+    }
+    return null;
+  };
+
+  const firstAvailableCluster = getFirstNonEmptyCluster(groupedNull, clusterOrder);
+
   return (
     <div className="max-h-[400px] overflow-auto space-y-8 custom-scrollbar">
       {/* SECTION: TODAY */}
@@ -349,15 +362,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
                   <p><strong>Ticket Reference #:</strong> {ticket.ticket_reference_number}</p>
                   <p><strong>Wrap Up:</strong> {ticket.wrap_up}</p>
                   <p><strong>Inquiry:</strong> {ticket.inquiry}</p>
-                  <p><strong>Manager:</strong> {ticket.manager}</p>
-                  <p><strong>Agent:</strong> {ticket.agent}</p>
                 </AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
         </section>
       ) : null}
-
 
       {totalTodayCount > 0 && (
         <section>
@@ -428,77 +438,63 @@ export const NewTask: React.FC<NewTaskProps> = ({
       )}
 
       {/* SECTION: NULL / AVAILABLE */}
-      {totalAvailableCount > 0 && (
+      {totalAvailableCount > 0 && firstAvailableCluster && (
         <section>
           <h2 className="text-xs font-bold mb-4">
-            Available OB Calls ({totalAvailableCount})
+            Available OB Calls ({groupedNull[firstAvailableCluster].length})
           </h2>
 
-          {clusterOrderNull.map((cluster) => {
-            const clusterAccounts = groupedNull[cluster];
-            if (!clusterAccounts || clusterAccounts.length === 0) return null;
+          <Alert>
+            <CheckCircle2Icon />
+            <AlertTitle className="text-xs">
+              Cluster Series: {firstAvailableCluster.toUpperCase()}
+            </AlertTitle>
+            <AlertDescription className="text-xs">
+              This alert provides important information about the selected cluster.
+            </AlertDescription>
+          </Alert>
 
-            return (
-              <div key={cluster} className="mb-4">
-                <Alert>
-                  <CheckCircle2Icon />
-                  <AlertTitle className="text-xs">Cluster Series: {cluster}</AlertTitle>
-                  <AlertDescription className="text-xs">
-                    This alert provides important information about the selected cluster.
-                  </AlertDescription>
-                </Alert>
+          <Accordion type="single" collapsible className="w-full">
+            {groupedNull[firstAvailableCluster].map((account) => (
+              <AccordionItem key={account.id} value={account.id}>
+                <div className="flex justify-between items-center p-2 cursor-pointer select-none">
+                  <AccordionTrigger className="flex-1 text-xs font-semibold">
+                    {account.company_name}
+                  </AccordionTrigger>
 
-                <Accordion type="single" collapsible className="w-full">
-                  {clusterAccounts.map((account) => (
-                    <AccordionItem key={account.id} value={account.id}>
-                      <div className="flex justify-between items-center p-2 cursor-pointer select-none">
-                        <AccordionTrigger className="flex-1 text-xs font-semibold">
-                          {account.company_name}
-                        </AccordionTrigger>
+                  <div className="flex gap-2 ml-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAdd(account);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleAdd(account);
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
 
-                        <div className="flex gap-2 ml-4">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAdd(account);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                handleAdd(account);
-                              }
-                            }}
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      </div>
-
-                      <AccordionContent className="flex flex-col gap-2 text-xs p-3 text-gray-700">
-                        <p>
-                          <strong>Contact:</strong> {account.contact_number}
-                        </p>
-                        <p>
-                          <strong>Email:</strong> {account.email_address}
-                        </p>
-                        <p>
-                          <strong>Client Type:</strong> {account.type_client}
-                        </p>
-                        <p>
-                          <strong>Address:</strong> {account.address}
-                        </p>
-                        <p className="text-[8px]">{account.account_reference_number}</p>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </div>
-            );
-          })}
+                <AccordionContent className="flex flex-col gap-2 text-xs p-3 text-gray-700">
+                  <p><strong>Contact:</strong> {account.contact_number}</p>
+                  <p><strong>Email:</strong> {account.email_address}</p>
+                  <p><strong>Client Type:</strong> {account.type_client}</p>
+                  <p><strong>Address:</strong> {account.address}</p>
+                  <p className="text-[8px]">{account.account_reference_number}</p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </section>
       )}
+
     </div>
   );
 };

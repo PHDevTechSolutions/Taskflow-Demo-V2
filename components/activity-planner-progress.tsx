@@ -364,6 +364,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                 </div>
 
                                 <AccordionContent className="text-xs px-4 py-2">
+                                    <p><strong>Type of Client:</strong> {item.type_client}</p>
                                     <p><strong>Contact Person:</strong> {item.contact_person}</p>
                                     <p><strong>Contact Number:</strong> {item.contact_number}</p>
                                     <p><strong>Email Address:</strong> {item.email_address}</p>
