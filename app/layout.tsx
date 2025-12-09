@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { UserProvider } from "@/contexts/UserContext";
+import { Analytics } from "@vercel/analytics/next"
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Reminders } from "@/components/reminders";
@@ -20,6 +21,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Taskflow - Sales Activity Planner and Tracker",
   description: "Developed by IT Team and Leroux Y Xchire",
+  icons: {
+    icon: "/Taskflow.png",
+    shortcut: "/Taskflow.png",
+    apple: "/Taskflow.png",
+  },
 };
 
 export default function RootLayout({
@@ -42,6 +48,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <Reminders />
+            <Analytics/>
             {children}
           </ThemeProvider>
           <Toaster />
