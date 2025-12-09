@@ -36,6 +36,7 @@ interface NewTaskProps {
 
 interface EndorsedTicket {
   _id: string;
+  account_reference_number: string;
   company_name: string;
   contact_person: string;
   contact_number: string;
@@ -265,6 +266,45 @@ export const NewTask: React.FC<NewTaskProps> = ({
     fetchEndorsedTickets();
   }, [referenceid]);
 
+  const handleUseEndorsed = async (ticket: EndorsedTicket) => {
+    try {
+      // Default region dahil walang region sa endorsed ticket
+      const region = "NCR";
+
+      const payload = {
+        ticket_reference_number: ticket.ticket_reference_number,
+        account_reference_number: ticket.account_reference_number,
+        tsm: ticket.manager,
+        referenceid: ticket.agent,
+        status: "On-Progress",
+        activity_reference_number: generateActivityRef(ticket.company_name, region),
+      };
+
+      const res = await fetch("/api/act-save-endorsed-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to use endorsed ticket");
+        return;
+      }
+
+      toast.success(`Endorsed ticket used: ${ticket.company_name}`);
+
+      // remove sa list after using it
+      setEndorsedTickets((prev) => prev.filter((t) => t._id !== ticket._id));
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Error using endorsed ticket.");
+    }
+  };
+
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -353,6 +393,23 @@ export const NewTask: React.FC<NewTaskProps> = ({
                   <AccordionTrigger className="flex-1 text-xs font-semibold">
                     {ticket.company_name}
                   </AccordionTrigger>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUseEndorsed(ticket);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleUseEndorsed(ticket);
+                      }
+                    }}
+                  >
+                    Use Ticket
+                  </Button>
+
                 </div>
                 <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
                   <p><strong>Contact Person:</strong> {ticket.contact_person}</p>
