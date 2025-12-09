@@ -108,14 +108,14 @@ export const Manual: React.FC<ManualProps> = ({
     setLoadingCompanies(true);
     setErrorCompanies(null);
 
-    fetch(`/api/com-fetch-companies`, {
-            cache: "no-store",
-            headers: {
-                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                Pragma: "no-cache",
-                Expires: "0",
-            },
-        })
+    fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch company data");
         return res.json();

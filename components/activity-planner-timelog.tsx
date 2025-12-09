@@ -48,15 +48,11 @@ export function TimeLogComponent({
             className="w-full"
           >
             <AccordionTrigger className="text-[10px] w-full">
-              <strong>Type: {log.Type}</strong>
+              {log.Type} - {new Date(log.date_created).toLocaleString()}
             </AccordionTrigger>
             <AccordionContent className="text-[10px] w-full">
               <div>
                 <strong>Status:</strong> {log.Status}
-              </div>
-              <div>
-                <strong>Date:</strong>{" "}
-                {new Date(log.date_created).toLocaleString()}
               </div>
               <div>
                 <strong>Location:</strong> {log.Location}
