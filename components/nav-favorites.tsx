@@ -4,7 +4,6 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
@@ -16,7 +15,7 @@ export function NavFavorites({
   favorites: {
     name: string;
     url: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; // icon component from lucide
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   }[];
 }) {
   const { isMobile } = useSidebar();

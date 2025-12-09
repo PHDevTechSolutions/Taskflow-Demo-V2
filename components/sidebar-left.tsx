@@ -75,7 +75,7 @@ const data = {
     { title: "Settings", url: "/settings", icon: Settings },
   ],
   favorites: [
-    { name: "Sales Performance", url: "#", icon: BarChart2 },
+    { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
     { name: "National Call Ranking", url: "#", icon: Phone },
   ],
   workspaces: [
@@ -289,6 +289,15 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     });
   }, [userDetails.Role]);
 
+  const favoritesWithId = React.useMemo(
+    () =>
+      data.favorites.map((favorite) => ({
+        ...favorite,
+        url: withUserId(favorite.url),
+      })),
+    [data.favorites, withUserId]
+  );
+
   // Append userId to URLs in filtered workspaces
   const workspacesWithId = React.useMemo(
     () =>
@@ -320,7 +329,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
       </SidebarHeader>
 
       <SidebarContent>
-        <NavFavorites favorites={data.favorites} />
+        <NavFavorites favorites={favoritesWithId} />
         <NavWorkspaces
           workspaces={workspacesWithId}
           openSections={openSections}
