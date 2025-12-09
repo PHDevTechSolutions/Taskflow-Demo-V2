@@ -3,17 +3,26 @@
 import * as React from "react";
 import { DatePicker } from "@/components/date-picker";
 import { NavUser } from "@/components/nav-user";
-import { Sidebar, SidebarContent,  SidebarFooter, SidebarHeader, SidebarSeparator, } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarSeparator, } from "@/components/ui/sidebar";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { useFormat } from "@/contexts/FormatContext";
 import { type DateRange } from "react-day-picker";
 
 import { Meeting } from "@/components/activity-planner-meeting";
+import { TimeLogComponent } from "@/components/activity-planner-timelog";
 
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
   userId?: string;
   dateCreatedFilterRange: DateRange | undefined;
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+};
+
+type TimeLog = {
+  Type: string;
+  Status: string;
+  date_created: string;
+  Location: string;
+  PhotoURL: string;
 };
 
 export function SidebarRight({
@@ -25,6 +34,10 @@ export function SidebarRight({
   const { timeFormat, dateFormat } = useFormat();
   const [time, setTime] = React.useState("");
   const [date, setDate] = React.useState("");
+
+  const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = React.useState(false);
+  const [errorLogs, setErrorLogs] = React.useState<string | null>(null);
 
   const [userDetails, setUserDetails] = React.useState({
     ReferenceID: "",
@@ -90,6 +103,34 @@ export function SidebarRight({
       .catch((err) => console.error(err));
   }, [userId]);
 
+  React.useEffect(() => {
+    if (!userDetails.Email) {
+      setTimeLogs([]);
+      return;
+    }
+
+    setLoadingLogs(true);
+    setErrorLogs(null);
+
+    fetch(`/api/fetch-timelogs?Email=${encodeURIComponent(userDetails.Email)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setTimeLogs(data.data);
+        } else {
+          setErrorLogs("Failed to fetch logs");
+          setTimeLogs([]);
+        }
+      })
+      .catch(() => {
+        setErrorLogs("Error fetching logs");
+        setTimeLogs([]);
+      })
+      .finally(() => {
+        setLoadingLogs(false);
+      });
+  }, [userDetails.Email]);
+
   function handleDateRangeSelect(range: DateRange | undefined) {
     setDateCreatedFilterRangeAction(range);
   }
@@ -138,6 +179,11 @@ export function SidebarRight({
               referenceid={userDetails.ReferenceID}
               tsm={userDetails.TSM}
               manager={userDetails.Manager}
+            />
+            <TimeLogComponent
+              timeLogs={timeLogs}
+              loadingLogs={loadingLogs}
+              errorLogs={errorLogs}
             />
           </CardContent>
         </Card>
