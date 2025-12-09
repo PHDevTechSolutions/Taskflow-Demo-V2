@@ -280,6 +280,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         activity_reference_number: generateActivityRef(ticket.company_name, region),
       };
 
+      // Save endorsed ticket as activity
       const res = await fetch("/api/act-save-endorsed-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -293,17 +294,32 @@ export const NewTask: React.FC<NewTaskProps> = ({
         return;
       }
 
-      toast.success(`Endorsed ticket used: ${ticket.company_name}`);
+      // ✅ Update ticket status to "Received"
+      const updateStatusRes = await fetch("/api/act-update-ticket-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_reference_number: ticket.ticket_reference_number,
+          status: "Received",
+        }),
+      });
+
+      const updateStatusData = await updateStatusRes.json();
+
+      if (!updateStatusRes.ok) {
+        toast.error(updateStatusData.error || "Failed to update ticket status");
+        return;
+      }
+
+      toast.success(`Endorsed ticket used and status updated: ${ticket.company_name}`);
 
       // remove sa list after using it
       setEndorsedTickets((prev) => prev.filter((t) => t._id !== ticket._id));
-
     } catch (err) {
       console.error(err);
       toast.error("Error using endorsed ticket.");
     }
   };
-
 
   if (loading) {
     return (

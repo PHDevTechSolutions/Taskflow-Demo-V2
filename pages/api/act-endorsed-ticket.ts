@@ -48,8 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { db } = await connectToDatabase();
     const collection = db.collection("endorsed-ticket");
 
-    // Query tickets by agent field using referenceid
-    const tickets = await collection.find({ agent: referenceid }).toArray();
+    // Query tickets by agent field using referenceid and filter by status "Endorsed"
+    const tickets = await collection.find({ 
+      agent: referenceid,
+      status: "Endorsed"
+    }).toArray();
 
     return res.status(200).json({ success: true, data: tickets, cached: false });
   } catch (error: any) {
