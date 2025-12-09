@@ -99,6 +99,39 @@ export const Manual: React.FC<ManualProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [loadingAllCompanies, setLoadingAllCompanies] = useState(false);
+  const [errorAllCompanies, setErrorAllCompanies] = useState<string | null>(null);
+
+  // Fetch all companies (for right side activities)
+  useEffect(() => {
+    setLoadingAllCompanies(true);
+    setErrorAllCompanies(null);
+
+    fetch(`/api/com-fetch-companies`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch all companies");
+        return res.json();
+      })
+      .then((data) => {
+        setAllCompanies(data.data || []);
+      })
+      .catch((err) => {
+        setErrorAllCompanies(err.message || "Error fetching all companies");
+      })
+      .finally(() => {
+        setLoadingAllCompanies(false);
+      });
+  }, []);
+
+
   // Fetch companies
   useEffect(() => {
     if (!referenceid) {
@@ -225,7 +258,7 @@ export const Manual: React.FC<ManualProps> = ({
     .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
-      const company = companies.find(
+      const company = allCompanies.find(
         (c) => c.account_reference_number === activity.account_reference_number
       );
       return {
@@ -241,6 +274,7 @@ export const Manual: React.FC<ManualProps> = ({
     .sort(
       (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
     );
+
 
   const isLoading = loadingCompanies || loadingActivities;
   const error = errorCompanies || errorActivities;
@@ -621,6 +655,9 @@ export const Manual: React.FC<ManualProps> = ({
 
                     <AccordionContent className="text-xs px-4 py-2">
                       <p><strong>Contact Number:</strong> {item.contact_number}</p>
+                      <p><strong>Contact Person:</strong> {item.contact_person}</p>
+                      <p><strong>Email Address:</strong> {item.email_address}</p>
+                      <p><strong>Type Client:</strong> {item.type_client}</p>
                       <p><strong>Date Created:</strong> {new Date(item.date_created).toLocaleDateString()}</p>
                     </AccordionContent>
                   </AccordionItem>

@@ -68,7 +68,7 @@ export const SPFTable: React.FC<SPFProps> = ({
         setLoadingCompanies(true);
         setErrorCompanies(null);
 
-        fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`)
+        fetch(`/api/com-fetch-companies`)
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch companies");
                 return res.json();
