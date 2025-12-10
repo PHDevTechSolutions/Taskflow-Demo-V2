@@ -125,9 +125,9 @@ const data = {
       icon: TrendingUp,
       pages: [
         { name: "Calls to Quote", url: "/conversion/calls-to-quote", icon: PhoneCall },
-        //{ name: "Quote To SO", url: "#", icon: FileText },
-        //{ name: "SO To SI", url: "#", icon: CreditCard },
-        //{ name: "Calls to SI", url: "#", icon: Rocket },
+        { name: "Quote To SO", url: "/conversion/quote-to-so", icon: FileText },
+        { name: "SO To SI", url: "/conversion/so-to-si", icon: CreditCard },
+        { name: "Calls to SI", url: "/conversion/calls-to-si", icon: Rocket },
       ],
     },
   ],

@@ -18,9 +18,7 @@ import {
     BarChart,
     Bar,
     XAxis,
-    YAxis,
     CartesianGrid,
-    Legend,
     ResponsiveContainer,
 } from "recharts";
 
@@ -40,27 +38,27 @@ import {
     ChartTooltipContent,
 } from "@/components/ui/chart";
 
-interface CallHistory {
+interface QuoteHistory {
     id: number;
     source?: string;
     status?: string;
     date_created?: string;
 }
 
-interface CallQuoteProps {
+interface QuoteSOProps {
     referenceid: string;
     target_quota?: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
-export const CallQuote: React.FC<CallQuoteProps> = ({
+export const QuoteSO: React.FC<QuoteSOProps> = ({
     referenceid,
     target_quota,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [activities, setActivities] = useState<CallHistory[]>([]);
+    const [activities, setActivities] = useState<QuoteHistory[]>([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
     const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
@@ -99,8 +97,8 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                     filter: `referenceid=eq.${referenceid}`,
                 },
                 (payload) => {
-                    const newRecord = payload.new as CallHistory;
-                    const oldRecord = payload.old as CallHistory;
+                    const newRecord = payload.new as QuoteHistory;
+                    const oldRecord = payload.old as QuoteHistory;
 
                     setActivities((curr) => {
                         switch (payload.eventType) {
@@ -162,55 +160,56 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
         return activities.filter((a) => getYearMonth(a.date_created) === lastMonth);
     }, [activities, lastMonth]);
 
-    const totalCalls = activitiesCurrentMonth.filter(
-        (a) => a.source === "Outbound - Touchbase"
-    ).length;
-
-    const totalQuotes = activitiesCurrentMonth.filter(
+    const totalQuotesCurrentMonth = activitiesCurrentMonth.filter(
         (a) => a.status === "Quote-Done"
     ).length;
 
-    const percentageCallsToQuote = totalCalls === 0 ? 0 : (totalQuotes / totalCalls) * 100;
-
-    const totalCallsLastMonth = activitiesLastMonth.filter(
-        (a) => a.source === "Outbound - Touchbase"
+    const totalSOCurrentMonth = activitiesCurrentMonth.filter(
+        (a) => a.status === "SO-Done"
     ).length;
 
     const totalQuotesLastMonth = activitiesLastMonth.filter(
         (a) => a.status === "Quote-Done"
     ).length;
 
-    const percentageCallsToQuoteLastMonth =
-        totalCallsLastMonth === 0 ? 0 : (totalQuotesLastMonth / totalCallsLastMonth) * 100;
+    const totalSOLastMonth = activitiesLastMonth.filter(
+        (a) => a.status === "SO-Done"
+    ).length;
 
-    // Build chart data like the example (months replaced by "Current" & "Last")
+    // Calculate percentage of Quote to SO (fixed)
+    const percentageQuoteToSOCurrentMonth =
+        totalQuotesCurrentMonth === 0 ? 0 : (totalSOCurrentMonth / totalQuotesCurrentMonth) * 100;
+
+    const percentageQuoteToSOLastMonth =
+        totalQuotesLastMonth === 0 ? 0 : (totalSOLastMonth / totalQuotesLastMonth) * 100;
+
+
     const chartData = [
         {
             month: "Current",
-            Calls: totalCalls,
-            Quotes: totalQuotes,
-            "Calls to Quote %": Number(percentageCallsToQuote.toFixed(2)),
+            Quotes: totalQuotesCurrentMonth,
+            SOs: totalSOCurrentMonth,
+            "Quote to SO %": Number(percentageQuoteToSOCurrentMonth.toFixed(2)),
         },
         {
             month: "Last",
-            Calls: totalCallsLastMonth,
             Quotes: totalQuotesLastMonth,
-            "Calls to Quote %": Number(percentageCallsToQuoteLastMonth.toFixed(2)),
+            SOs: totalSOLastMonth,
+            "Quote to SO %": Number(percentageQuoteToSOLastMonth.toFixed(2)),
         },
     ];
 
-    // Chart config to match your UI style colors, labels must match keys in chartData except "month"
     const chartConfig = {
-        Calls: {
-            label: "Calls",
-            color: "var(--color-desktop)",
-        },
         Quotes: {
             label: "Quotes",
             color: "var(--color-mobile)",
         },
-        "Calls to Quote %": {
-            label: "Calls to Quote %",
+        SOs: {
+            label: "SO Done",
+            color: "var(--color-desktop)",
+        },
+        "Quote to SO %": {
+            label: "Quote to SO %",
             color: "var(--color-accent)",
         },
     } satisfies ChartConfig;
@@ -240,9 +239,9 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
             {/* Summary Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Call Summary</CardTitle>
+                    <CardTitle>Quote and SO Summary</CardTitle>
                     <CardDescription>
-                        Comparison of current and last month data
+                        Comparison of current and last month data based on status
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -262,19 +261,19 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                                 </TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell>No. of Calls (Outbound - Touchbase)</TableCell>
-                                <TableCell className="text-right">{totalCalls}</TableCell>
-                                <TableCell className="text-right">{totalCallsLastMonth}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell>Total Number of Quotes (Quote-Done)</TableCell>
-                                <TableCell className="text-right">{totalQuotes}</TableCell>
+                                <TableCell>Number of Quotes (Quote-Done)</TableCell>
+                                <TableCell className="text-right">{totalQuotesCurrentMonth}</TableCell>
                                 <TableCell className="text-right">{totalQuotesLastMonth}</TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell>Percentage of Calls to Quote</TableCell>
-                                <TableCell className="text-right">{percentageCallsToQuote.toFixed(2)}%</TableCell>
-                                <TableCell className="text-right">{percentageCallsToQuoteLastMonth.toFixed(2)}%</TableCell>
+                                <TableCell>Number of SO (SO-Done)</TableCell>
+                                <TableCell className="text-right">{totalSOCurrentMonth}</TableCell>
+                                <TableCell className="text-right">{totalSOLastMonth}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell>Percentage of Quote to SO</TableCell>
+                                <TableCell className="text-right">{percentageQuoteToSOCurrentMonth.toFixed(2)}%</TableCell>
+                                <TableCell className="text-right">{percentageQuoteToSOLastMonth.toFixed(2)}%</TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
@@ -288,15 +287,19 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                 </CardHeader>
                 <CardContent className="text-xs text-gray-700">
                     <p>
-                        <strong>Percentage of Calls to Quote:</strong> This represents the ratio
-                        of successful quotes to total outbound calls. Calculated as:
+                        The numbers represent counts of quotes and sales orders completed, based on their status.
+                    </p>
+                    <p>
+                        <strong>Number of Quotes:</strong> Counts all activities with status <code>Quote-Done</code>.
+                    </p>
+                    <p>
+                        <strong>Number of SO:</strong> Counts all activities with status <code>SO-Done</code>.
                     </p>
                     <pre className="bg-gray-100 p-2 rounded text-sm">
-                        Percentage of Calls to Quote = (Total Number of Quotes ÷ No. of Calls) × 100%
+                        Percentage of Quote to SO: Calculated as (Number of Quotes ÷ Number of SO) × 100.
                     </pre>
                     <p>
-                        Comparison is made between the current month and the last month for calls,
-                        quotes, and the conversion percentage.
+                        Comparison is made between the current month and the last month for the given metrics.
                     </p>
                 </CardContent>
             </Card>
@@ -340,11 +343,11 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                 </CardContent>
                 <CardFooter className="flex-col items-start gap-2 text-sm">
                     <div className="flex gap-2 leading-none font-medium">
-                        Trending up by {(percentageCallsToQuote - percentageCallsToQuoteLastMonth).toFixed(2)}% this month{" "}
+                        Trending by {(percentageQuoteToSOCurrentMonth - percentageQuoteToSOLastMonth).toFixed(2)}% this month{" "}
                         <TrendingUp className="h-4 w-4" />
                     </div>
                     <div className="text-muted-foreground leading-none">
-                        Showing total calls, quotes, and conversion rate for the last 2 months
+                        Showing total quotes, SO, and quote-to-SO percentage for the last 2 months
                     </div>
                 </CardFooter>
             </Card>
@@ -352,4 +355,4 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
     );
 };
 
-export default CallQuote;
+export default QuoteSO;
