@@ -1,32 +1,167 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { type DateRange } from "react-day-picker";
+import { toast } from "sonner";
+
+import { AccountCard } from "@/components/dashboard-accounts-card";
+import { OutboundTouchbaseCard } from "@/components/dashboard-outbound-touchbase-card";
+
+// Assuming you will create these two cards as components
+import { SuccessfulCallsCard } from "@/components/dashboard-successful-calls-card";
+import { UnsuccessfulCallsCard } from "@/components/dashboard-unsuccessful-calls-card";
+
+import { SourceCard } from "@/components/dashboard-source-card";
+import { CSRMetricsCard } from "@/components/dashboard-csr-metrics-card";
+
+interface UserDetails {
+  referenceid: string;
+  tsm?: string;
+  manager?: string;
+}
+
+interface Activity {
+  source?: string;
+  call_status?: string;
+  date_created?: string; // ISO string or similar
+}
 
 function DashboardContent() {
-  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
+  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
+    DateRange | undefined
+  >(undefined);
 
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
 
-  // Get userId from URL query param
+  useEffect(() => {
+    if (!dateCreatedFilterRange) {
+      const today = new Date();
+      const from = new Date(today);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(today);
+      to.setHours(23, 59, 59, 999);
+      setDateCreatedFilterRangeAction({ from, to });
+    }
+  }, [dateCreatedFilterRange]);
+
+  const [userDetails, setUserDetails] = useState<UserDetails>({
+    referenceid: "",
+    tsm: "",
+    manager: "",
+  });
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [errorUser, setErrorUser] = useState<string | null>(null);
+
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [errorActivities, setErrorActivities] = useState<string | null>(null);
+
   const queryUserId = searchParams?.get("id") ?? "";
 
-  // Sync context with URL param on mount or param change
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) {
       setUserId(queryUserId);
     }
   }, [queryUserId, userId, setUserId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setErrorUser("User ID is missing.");
+      setLoadingUser(false);
+      return;
+    }
+
+    const fetchUserData = async () => {
+      setErrorUser(null);
+      setLoadingUser(true);
+      try {
+        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!response.ok) throw new Error("Failed to fetch user data");
+        const data = await response.json();
+
+        setUserDetails({
+          referenceid: data.ReferenceID || "",
+          tsm: data.TSM || "",
+          manager: data.Manager || "",
+        });
+
+        toast.success("User data loaded successfully!");
+      } catch (err) {
+        console.error("Error fetching user data:", err);
+        setErrorUser("Failed to fetch user data");
+        toast.error(
+          "Failed to connect to server. Please try again later or refresh your network connection"
+        );
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUserData();
+  }, [userId]);
+
+  const fetchActivities = useCallback(() => {
+    const referenceid = userDetails.referenceid;
+    if (!referenceid) {
+      setActivities([]);
+      return;
+    }
+    setLoadingActivities(true);
+    setErrorActivities(null);
+
+    fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setErrorActivities(err.message))
+      .finally(() => setLoadingActivities(false));
+  }, [userDetails.referenceid]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [fetchActivities]);
+
+  const isInDateRange = (dateString: string | undefined): boolean => {
+    if (!dateString) return true;
+    if (!dateCreatedFilterRange) return true;
+
+    const date = new Date(dateString);
+    const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+    const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+
+    if (from && date < from) return false;
+    if (to) {
+      const toEnd = new Date(to);
+      toEnd.setHours(23, 59, 59, 999);
+      if (date > toEnd) return false;
+    }
+    return true;
+  };
+
+  const filteredActivities = useMemo(() => {
+    return activities.filter((activity) => isInDateRange(activity.date_created));
+  }, [activities, dateCreatedFilterRange]);
 
   return (
     <>
@@ -42,17 +177,53 @@ function DashboardContent() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">
-                    Project Management & Task Tracking
-                  </BreadcrumbPage>
+                  <BreadcrumbPage className="line-clamp-1">Dashboard</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="bg-muted/50 mx-auto h-24 w-full max-w-3xl rounded-xl" />
-          <div className="bg-muted/50 mx-auto h-[100vh] w-full max-w-3xl rounded-xl" />
+
+        <div className="flex flex-col gap-4 p-4">
+          {/* Cards container: 4 cards in a row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <AccountCard referenceid={userDetails.referenceid} />
+
+            <OutboundTouchbaseCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+            />
+
+            <SuccessfulCallsCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+            />
+
+            <UnsuccessfulCallsCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+            />
+          </div>
+
+          {/* New: Two large cards side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Large Card 1 */}
+            <SourceCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+            />
+
+            <CSRMetricsCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+            />
+
+          </div>
         </div>
       </SidebarInset>
       <SidebarRight
@@ -60,7 +231,6 @@ function DashboardContent() {
         dateCreatedFilterRange={dateCreatedFilterRange}
         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
       />
-
     </>
   );
 }
@@ -70,9 +240,7 @@ export default function Page() {
     <UserProvider>
       <FormatProvider>
         <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
+          <DashboardContent />
         </SidebarProvider>
       </FormatProvider>
     </UserProvider>

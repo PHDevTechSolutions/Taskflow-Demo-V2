@@ -90,7 +90,7 @@ export const PendingTable: React.FC<NewTaskProps> = ({
     setLoadingCompanies(true);
     setErrorCompanies(null);
 
-    fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`, {
+    fetch(`/api/com-fetch-companies`, {
       cache: "no-store",
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -258,7 +258,6 @@ export const PendingTable: React.FC<NewTaskProps> = ({
 
   const allowedStatuses = ["SO-Done"];
 
-  // Merge activities with companies & history & filter + sort
   const mergedData = useMemo(() => {
     const historyMap = new Map<string, HistoryRecord[]>();
     history.forEach((h) => {
@@ -269,9 +268,18 @@ export const PendingTable: React.FC<NewTaskProps> = ({
       historyMap.get(key)?.push(h);
     });
 
+    // Calculate cutoff date 15 days ago from today
+    const today = new Date();
+    const cutoffDate = new Date(today);
+    cutoffDate.setDate(cutoffDate.getDate() - 15); // 15 days ago
+
     return activities
       .filter((a) => allowedStatuses.includes(a.status))
-      .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
+      // Filter for date_created older than 15 days ago
+      .filter((a) => {
+        const createdDate = new Date(a.date_created);
+        return !isNaN(createdDate.getTime()) && createdDate <= cutoffDate;
+      })
       .map((activity) => {
         const company = companies.find(
           (c) => c.account_reference_number === activity.account_reference_number
@@ -295,7 +303,7 @@ export const PendingTable: React.FC<NewTaskProps> = ({
       .sort(
         (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
       );
-  }, [activities, companies, history, dateCreatedFilterRange]);
+  }, [activities, companies, history]);
 
   // Apply search filtering (search all fields including so_number & so_amount)
   const filteredData = useMemo(() => {

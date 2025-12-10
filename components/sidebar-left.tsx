@@ -112,7 +112,7 @@ const data = {
         { name: "Account Sales Summary", url: "/reports/am", icon: DollarSign },
         { name: "Quotation Summary", url: "/reports/quotation", icon: FileText },
         { name: "Sales Order Summary", url: "/reports/so", icon: ShoppingCart },
-        //{ name: "Pending Sales Order", url: "/reports/pending", icon: XCircle  },
+        { name: "Pending Sales Order", url: "/reports/pending", icon: XCircle  },
         { name: "Sales Invoice Summary", url: "/reports/si", icon: File },
         { name: "CSR Inquiry Summary", url: "/reports/csr", icon: Phone },
         { name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
