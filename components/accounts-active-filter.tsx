@@ -9,12 +9,8 @@ import { Filter } from "lucide-react";
 interface AccountsActiveFilterProps {
   typeFilter: string;
   setTypeFilterAction: (value: string) => void;
-  statusFilter: string;
-  setStatusFilterAction: (value: string) => void;
   dateCreatedFilter: string | null;
   setDateCreatedFilterAction: (value: string | null) => void;
-  industryFilter: string;
-  setIndustryFilterAction: (value: string) => void;
   alphabeticalFilter: string | null;
   setAlphabeticalFilterAction: (value: string | null) => void;
 }
@@ -22,25 +18,12 @@ interface AccountsActiveFilterProps {
 export function AccountsActiveFilter({
   typeFilter,
   setTypeFilterAction,
-  statusFilter,
-  setStatusFilterAction,
   dateCreatedFilter,
   setDateCreatedFilterAction,
-  industryFilter,
-  setIndustryFilterAction,
   alphabeticalFilter,
   setAlphabeticalFilterAction,
 }: AccountsActiveFilterProps) {
   const [open, setOpen] = useState(false);
-
-  const industries = [
-    "all",
-    "Manufacturing",
-    "Retail",
-    "Technology",
-    "Finance",
-    "Healthcare",
-  ];
 
   return (
     <>
@@ -76,40 +59,6 @@ export function AccountsActiveFilter({
                   <SelectItem value="BALANCE 20">Balance 20</SelectItem>
                   <SelectItem value="CSR CLIENT">CSR Client</SelectItem>
                   <SelectItem value="TSA CLIENT">TSA Client</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Status Filter */}
-            <div>
-              <label className="block mb-1 font-medium text-xs">Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilterAction}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="New Client">New Client</SelectItem>
-                  <SelectItem value="Non-Buying">Non-Buying</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Industry Filter */}
-            <div>
-              <label className="block mb-1 font-medium text-xs">Industry</label>
-              <Select value={industryFilter} onValueChange={setIndustryFilterAction}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Industry" />
-                </SelectTrigger>
-                <SelectContent>
-                  {industries.map((industry) => (
-                    <SelectItem key={industry} value={industry}>
-                      {industry === "all" ? "All Industries" : industry}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -151,10 +100,8 @@ export function AccountsActiveFilter({
                   className="w-full"
                   onClick={() => {
                     setDateCreatedFilterAction(null);
-                    setIndustryFilterAction("all");
                     setAlphabeticalFilterAction(null);
                     setTypeFilterAction("all");
-                    setStatusFilterAction("all");
                   }}
                 >
                   Clear All Filters

@@ -86,64 +86,64 @@ export function AccountsTable({
 
     // Filter out removed accounts immediately
     const filteredData = useMemo(() => {
-  // Allowed statuses for display
-  const allowedStatuses = ["Non-Buying"];
+        // Allowed statuses for display
+        const allowedStatuses = ["Non-Buying"];
 
-  // Start filtering: exclude Removed and include only status in allowedStatuses
-  let data = localPosts.filter(
-    (item) => item.status && item.status !== "Removed" && allowedStatuses.includes(item.status)
-  );
+        // Start filtering: exclude Removed and include only status in allowedStatuses
+        let data = localPosts.filter(
+            (item) => item.status && item.status !== "Removed" && allowedStatuses.includes(item.status)
+        );
 
-  data = data.filter((item) => {
-    const matchesSearch =
-      !globalFilter ||
-      Object.values(item).some(
-        (val) =>
-          val != null &&
-          String(val).toLowerCase().includes(globalFilter.toLowerCase())
-      );
+        data = data.filter((item) => {
+            const matchesSearch =
+                !globalFilter ||
+                Object.values(item).some(
+                    (val) =>
+                        val != null &&
+                        String(val).toLowerCase().includes(globalFilter.toLowerCase())
+                );
 
-    // Filter by typeFilter dropdown: if 'all', allow all types; else match type_client
-    const matchesType =
-      typeFilter === "all" || item.type_client === typeFilter;
+            // Filter by typeFilter dropdown: if 'all', allow all types; else match type_client
+            const matchesType =
+                typeFilter === "all" || item.type_client === typeFilter;
 
-    // Status filter dropdown (if any)
-    const matchesStatus =
-      statusFilter === "all" || item.status === statusFilter;
+            // Status filter dropdown (if any)
+            const matchesStatus =
+                statusFilter === "all" || item.status === statusFilter;
 
-    const matchesIndustry =
-      industryFilter === "all" || item.industry === industryFilter;
+            const matchesIndustry =
+                industryFilter === "all" || item.industry === industryFilter;
 
-    return matchesSearch && matchesType && matchesStatus && matchesIndustry;
-  });
+            return matchesSearch && matchesType && matchesStatus && matchesIndustry;
+        });
 
-  // Sorting
-  data = data.sort((a, b) => {
-    if (alphabeticalFilter === "asc") {
-      return a.company_name.localeCompare(b.company_name);
-    } else if (alphabeticalFilter === "desc") {
-      return b.company_name.localeCompare(a.company_name);
-    }
+        // Sorting
+        data = data.sort((a, b) => {
+            if (alphabeticalFilter === "asc") {
+                return a.company_name.localeCompare(b.company_name);
+            } else if (alphabeticalFilter === "desc") {
+                return b.company_name.localeCompare(a.company_name);
+            }
 
-    if (dateCreatedFilter === "asc") {
-      return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
-    } else if (dateCreatedFilter === "desc") {
-      return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
-    }
+            if (dateCreatedFilter === "asc") {
+                return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
+            } else if (dateCreatedFilter === "desc") {
+                return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
+            }
 
-    return 0;
-  });
+            return 0;
+        });
 
-  return data;
-}, [
-  localPosts,
-  globalFilter,
-  typeFilter,
-  statusFilter,
-  industryFilter,
-  alphabeticalFilter,
-  dateCreatedFilter,
-]);
+        return data;
+    }, [
+        localPosts,
+        globalFilter,
+        typeFilter,
+        statusFilter,
+        industryFilter,
+        alphabeticalFilter,
+        dateCreatedFilter,
+    ]);
 
 
     // Download
@@ -399,12 +399,8 @@ export function AccountsTable({
                     <AccountsActiveFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilterAction={setStatusFilter}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
-                        industryFilter={industryFilter}
-                        setIndustryFilterAction={setIndustryFilter}
                         alphabeticalFilter={alphabeticalFilter}
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
                     />

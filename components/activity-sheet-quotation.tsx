@@ -171,8 +171,6 @@ export function QuotationSheet(props: Props) {
 
   const isStep5Valid =
     quotationNumber.trim().length >= 6 &&
-    quotationAmount.trim() !== "" &&
-    parseFloat(quotationAmount) > 0 &&
     callType.trim() !== "";
 
   const isStep6Valid = status.trim() !== "";
@@ -181,10 +179,6 @@ export function QuotationSheet(props: Props) {
   const handleNextStep5 = () => {
     if (quotationNumber.trim().length < 6) {
       setQuotationNumberError("Quotation Number must be more than 5 characters.");
-      return;
-    }
-    if (quotationAmount.trim() === "" || parseFloat(quotationAmount) === 0) {
-      toast.error("Please enter valid Quotation Amount.");
       return;
     }
     if (callType.trim() === "") {
@@ -588,7 +582,7 @@ export function QuotationSheet(props: Props) {
                   setQuotationNumber(e.target.value);
                   if (quotationNumberError) setQuotationNumberError("");
                 }}
-                placeholder="Enter quotation number"
+                placeholder="TSM-0000"
                 className="uppercase"
               />
               <FieldDescription className="text-sm text-muted-foreground">
@@ -606,7 +600,6 @@ export function QuotationSheet(props: Props) {
                 value={quotationAmount}
                 onChange={(e) => setQuotationAmount(e.target.value)}
                 placeholder="Enter quotation amount"
-                readOnly={!isManualEntry} // Editable only if manual entry
               />
 
               <FieldLabel className="mt-3">Type</FieldLabel>

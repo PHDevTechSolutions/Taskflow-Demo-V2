@@ -343,12 +343,8 @@ export function AccountsTable({
                     <AccountsActiveFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilterAction={setStatusFilter}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
-                        industryFilter={industryFilter}
-                        setIndustryFilterAction={setIndustryFilter}
                         alphabeticalFilter={alphabeticalFilter}
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
                     />

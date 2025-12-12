@@ -34,7 +34,7 @@ interface Account {
   region: string;
   industry: string;
   status?: string;
-  company_group?: string;
+  company_group: string;
 }
 
 interface UserDetails {

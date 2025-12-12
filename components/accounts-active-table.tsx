@@ -30,6 +30,7 @@ interface Account {
   region: string;
   type_client: string;
   date_created: string;
+  company_group: string;
   industry: string;
   status?: string;
 }
@@ -145,7 +146,6 @@ export function AccountsTable({
     alphabeticalFilter,
     dateCreatedFilter,
   ]);
-
 
   // Download
   function convertToCSV(data: Account[]) {
@@ -346,7 +346,6 @@ export function AccountsTable({
     fetchAgents();
   }, [userDetails.referenceid]);
 
-
   // Handle bulk remove action
   async function handleBulkRemove() {
     if (selectedAccountIds.length === 0 || !removeRemarks.trim()) return;
@@ -458,12 +457,8 @@ export function AccountsTable({
           <AccountsActiveFilter
             typeFilter={typeFilter}
             setTypeFilterAction={setTypeFilter}
-            statusFilter={statusFilter}
-            setStatusFilterAction={setStatusFilter}
             dateCreatedFilter={dateCreatedFilter}
             setDateCreatedFilterAction={setDateCreatedFilter}
-            industryFilter={industryFilter}
-            setIndustryFilterAction={setIndustryFilter}
             alphabeticalFilter={alphabeticalFilter}
             setAlphabeticalFilterAction={setAlphabeticalFilter}
           />
@@ -566,6 +561,7 @@ export function AccountsTable({
             industry: editingAccount.industry,
             status: editingAccount.status ?? "Active",
             delivery_address: editingAccount.delivery_address,
+            company_group: editingAccount.company_group,
             type_client: editingAccount.type_client,
             date_created: editingAccount.date_created,
           }}
