@@ -504,7 +504,7 @@ export const CCG: React.FC<{
                                                                         {formatTimeFromDate(dt)} - {ev.type_activity ?? ev.activity_reference_number}
                                                                     </p>
                                                                     <p className="text-xs text-muted-foreground">
-                                                                        {ev.company_name} • {ev.remarks ?? "—"}
+                                                                        {ev.company_name} • <span className="capitalize">{ev.remarks ?? "—"}</span>
                                                                     </p>
                                                                 </div>
                                                             );

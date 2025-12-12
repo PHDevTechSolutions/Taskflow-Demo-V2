@@ -243,7 +243,7 @@ export function SimpleCalendar({ referenceid, userId, email }: SimpleCalendarPro
   return (
     <div className="flex flex-col md:flex-row max-w-7xl mx-auto gap-6 min-h-[700px]">
       {/* Calendar left */}
-      <Card className="flex-shrink-0 w-full md:w-2/3">
+      <Card className="flex-shrink-0 w-full md:w-2/5">
         <CardHeader className="flex justify-between items-center mb-4">
           <Button
             variant="outline"
@@ -291,7 +291,7 @@ export function SimpleCalendar({ referenceid, userId, email }: SimpleCalendarPro
         {/* Days */}
         <div
           className="grid grid-cols-7 gap-1"
-          style={{ "--cell-size": "6rem" } as React.CSSProperties}
+          style={{ "--cell-size": "4rem" } as React.CSSProperties}
         >
           {daysArray.map((day, i) =>
             day ? (
@@ -327,14 +327,14 @@ export function SimpleCalendar({ referenceid, userId, email }: SimpleCalendarPro
                 )}
               </button>
             ) : (
-              <div key={i} className="h-[6rem]" />
+              <div key={i} className="h-[4rem]" />
             )
           )}
         </div>
       </Card>
 
       {/* Right panel: hourly schedule */}
-      <Card className="w-full md:w-1/3 gap-1 overflow-auto shadow-none border-0 max-h-[700px]">
+      <Card className="w-full md:w-2/3 gap-1 overflow-auto shadow-none border-0 max-h-[700px]">
         {selectedDate ? (
           (() => {
             const groupedEvents = eventsByHour(selectedEvents);
@@ -344,13 +344,13 @@ export function SimpleCalendar({ referenceid, userId, email }: SimpleCalendarPro
                 {hours.map((hour) => (
                   <div
                     key={hour}
-                    className="flex border-b border-gray-200 min-h-[3rem] items-start gap-2 px-2"
+                    className="flex border-b border-gray-200 min-h-[1rem] items-start gap-2 px-2"
                   >
                     {/* Hour label */}
                     <div className="w-12 text-xs text-gray-500 select-none">{formatHour(hour)}</div>
 
                     {/* Events in this hour */}
-                    <div className="flex-1 space-y-1 p-2">
+                    <div className="flex-1 space-y-1 p-1">
                       {groupedEvents[hour].length === 0 && (
                         <div className="text-xs text-muted-foreground italic">—</div>
                       )}
@@ -358,7 +358,7 @@ export function SimpleCalendar({ referenceid, userId, email }: SimpleCalendarPro
                       {groupedEvents[hour].map((ev) => (
                         <div
                           key={ev.id}
-                          className="rounded-md p-1 bg-muted hover:bg-muted/70 cursor-pointer"
+                          className="rounded-md p-5 bg-muted hover:bg-muted/70 cursor-pointer"
                         >
                           <p className="font-semibold text-xs capitalize">
                             {ev.time} - {ev.title}
