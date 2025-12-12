@@ -146,8 +146,7 @@ export const Completed: React.FC<CompletedProps> = ({
         })
         .filter(
             (a) =>
-                (a.status === "Delivered" || a.status === "Done") ||
-                a.scheduled_status === "Done"
+                (a.status === "Delivered" || a.status === "Done")
         ) // status Delivered or Done AND scheduled_status Done
         .sort(
             (a, b) =>

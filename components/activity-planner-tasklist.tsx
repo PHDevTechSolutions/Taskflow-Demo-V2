@@ -9,6 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableFooter,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { TaskListDialog } from "@/components/activity-planner-tasklist-dialog";
 import TaskListEditDialog from "./activity-planner-tasklist-edit-dialog";
 import { AccountsActiveDeleteDialog } from "./accounts-active-delete-dialog";
@@ -48,8 +58,8 @@ interface Completed {
     status?: string;
     start_date?: string;
     end_date?: string;
-    date_followup?: string;
-    date_site_vist?: string;
+    date_followup: string;
+    date_site_visit: string;
     date_created: string;
     date_updated?: string;
     account_reference_number?: string;
@@ -350,7 +360,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     // Confirm remove function
     const onConfirmRemove = async () => {
         try {
-            // Assuming your API endpoint for delete supports receiving multiple IDs and removeRemarks
             const res = await fetch("/api/act-delete-history", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
@@ -362,10 +371,6 @@ export const TaskList: React.FC<CompletedProps> = ({
 
             if (!res.ok) throw new Error("Failed to delete selected activities");
 
-            // Success toast (optional)
-            // toast.success("Selected activities deleted permanently.");
-
-            // Close dialog and clear selection + remarks
             setDeleteDialogOpen(false);
             clearSelection();
             setRemoveRemarks("");
@@ -377,6 +382,15 @@ export const TaskList: React.FC<CompletedProps> = ({
             console.error(error);
         }
     };
+
+    function formatTimeWithAmPm(time24: string) {
+        const [hourStr, minute] = time24.split(":");
+        let hour = parseInt(hourStr, 10);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        return `${hour}:${minute} ${ampm}`;
+    }
 
     return (
         <>
@@ -417,14 +431,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                 </div>
             </div>
 
-
-            {/* Show loading indicator */}
-            {isLoading && (
-                <div className="flex justify-center items-center h-40">
-                    <Spinner className="size-8" />
-                </div>
-            )}
-
             {/* Show error message */}
             {error && (
                 <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
@@ -456,111 +462,111 @@ export const TaskList: React.FC<CompletedProps> = ({
                 </div>
             )}
 
-            {/* Activities list */}
             {filteredActivities.length > 0 && (
                 <div className="overflow-auto space-y-8 custom-scrollbar">
-                    <Accordion type="single" collapsible className="w-full">
-                        {filteredActivities.map((item) => {
-                            let badgeColor: "default" | "secondary" | "destructive" | "outline" =
-                                "default";
+                    <Table className="text-xs">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[40px]" />
+                                <TableHead className="w-[60px] text-center">Edit</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Time</TableHead>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Contact #</TableHead>
+                                <TableHead>Type Client</TableHead>
+                                <TableHead>Project Name</TableHead>
+                                <TableHead>Project Type</TableHead>
+                                <TableHead>Source</TableHead>
+                                <TableHead>Target Quota</TableHead>
+                                <TableHead>Activity Type</TableHead>
+                                <TableHead>Callback</TableHead>
+                                <TableHead>Call Status</TableHead>
+                                <TableHead>Call Type</TableHead>
+                                <TableHead>Quotation #</TableHead>
+                                <TableHead>Quotation Amount</TableHead>
+                                <TableHead>SO #</TableHead>
+                                <TableHead>SO Amount</TableHead>
+                                <TableHead>Actual Sales</TableHead>
+                                <TableHead>Delivery Date</TableHead>
+                                <TableHead>DR #</TableHead>
+                                <TableHead>Ticket Ref #</TableHead>
+                                <TableHead>Remarks</TableHead>
+                                <TableHead>Date Followup</TableHead>
+                                <TableHead>Payment Terms</TableHead>
+                            </TableRow>
+                        </TableHeader>
 
-                            if (item.status === "Assisted" || item.status === "SO-Done") {
-                                badgeColor = "secondary";
-                            } else if (item.status === "Quote-Done") {
-                                badgeColor = "outline";
-                            }
+                        <TableBody>
+                            {filteredActivities.map((item) => {
+                                let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
+                                if (item.status === "Assisted" || item.status === "SO-Done") badgeColor = "secondary";
+                                else if (item.status === "Quote-Done") badgeColor = "outline";
 
-                            const isSelected = selectedIds.has(item.id);
+                                const displayValue = (v: any) =>
+                                    v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
 
-                            return (
-                                <AccordionItem key={item.id} value={String(item.id)}>
-                                    <div className="p-2 cursor-pointer select-none w-full">
-                                        <div className="flex justify-between items-center w-full">
-                                            <AccordionTrigger className="flex-1 text-xs font-semibold">
-                                                {/* Checkbox */}
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={(e) => {
-                                                        e.stopPropagation(); // Prevent accordion toggle
-                                                        toggleSelect(item.id);
-                                                    }}
-                                                    className="ml-1"
-                                                    aria-label={`Select activity ${item.activity_reference_number}`}
-                                                />
-                                                {new Date(item.date_updated ?? item.date_created).toLocaleDateString()}{" "}
-                                                <span className="text-[10px] text-muted-foreground mx-1">|</span>{" "}
-                                                {new Date(item.date_updated ?? item.date_created).toLocaleTimeString(
-                                                    [],
-                                                    {
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                    }
-                                                )}{" "}
-                                                <span className="mx-1">-</span> {item.company_name}
-                                            </AccordionTrigger>
+                                const isSelected = selectedIds.has(item.id);
 
-                                            <div className="flex items-center space-x-2">
-                                                <Badge variant={badgeColor} className="text-[8px] whitespace-nowrap">
-                                                    {item.status?.replace("-", " ")}
-                                                </Badge>
-
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation(); // prevent accordion toggle
-                                                        openEditDialog(item);
-                                                    }}
-                                                >
-                                                    Edit
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <AccordionContent className="text-xs px-4 py-2 space-y-1">
-                                        <p><strong>Contact Number:</strong> {item.contact_number}</p>
-                                        <p>
-                                            <strong>Account Reference Number:</strong> {item.account_reference_number}
-                                        </p>
-
-                                        {[
-                                            { label: "Type Client", value: item.type_client },
-                                            { label: "Project Name", value: item.project_name },
-                                            { label: "Project Type", value: item.project_type },
-                                            { label: "Source", value: item.source },
-                                            { label: "Target Quota", value: item.target_quota },
-                                            { label: "Activity Type", value: item.type_activity },
-                                            { label: "Callback", value: item.callback },
-                                            { label: "Call Status", value: item.call_status },
-                                            { label: "Call Type", value: item.call_type },
-                                            { label: "Quotation Number", value: item.quotation_number },
-                                            { label: "Quotation Amount", value: item.quotation_amount },
-                                            { label: "SO Number", value: item.so_number },
-                                            { label: "SO Amount", value: item.so_amount },
-                                            { label: "Actual Sales", value: item.actual_sales },
-                                            { label: "Delivery Date", value: item.delivery_date },
-                                            { label: "DR Number", value: item.dr_number },
-                                            { label: "Ticket Reference Number", value: item.ticket_reference_number },
-                                            { label: "Remarks", value: item.remarks },
-                                            { label: "Status", value: item.status },
-                                            { label: "Date Followup", value: item.date_followup },
-                                            { label: "Date Site Visit", value: item.date_site_vist },
-                                            { label: "Payment Terms", value: item.payment_terms },
-                                            { label: "Scheduled Status", value: item.scheduled_status },
-                                        ].map(({ label, value }) =>
-                                            value !== null && value !== undefined && String(value).trim() !== "" ? (
-                                                <p key={label}>
-                                                    <strong>{label}:</strong> {String(value)}
-                                                </p>
-                                            ) : null
-                                        )}
-                                    </AccordionContent>
-
-                                </AccordionItem>
-                            );
-                        })}
-                    </Accordion>
+                                return (
+                                    <TableRow key={item.id}>
+                                        <TableCell>
+                                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)} />
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                                                Edit
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>{new Date(item.date_updated ?? item.date_created).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            {new Date(item.date_updated ?? item.date_created).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
+                                        </TableCell>
+                                        <TableCell className="font-semibold">{item.company_name}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={badgeColor} className="text-[8px] whitespace-nowrap">
+                                                {item.status?.replace("-", " ")}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>{displayValue(item.contact_number)}</TableCell>
+                                        <TableCell>{displayValue(item.type_client)}</TableCell>
+                                        <TableCell>{displayValue(item.project_name)}</TableCell>
+                                        <TableCell>{displayValue(item.project_type)}</TableCell>
+                                        <TableCell>{displayValue(item.source)}</TableCell>
+                                        <TableCell>{displayValue(item.target_quota)}</TableCell>
+                                        <TableCell>{displayValue(item.type_activity)}</TableCell>
+                                        <TableCell>
+                                            {item.callback
+                                                ? `${new Date(item.callback).toLocaleDateString()} - ${formatTimeWithAmPm(
+                                                    item.callback.substring(11, 16)
+                                                )}`
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell>{displayValue(item.call_status)}</TableCell>
+                                        <TableCell>{displayValue(item.call_type)}</TableCell>
+                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
+                                        <TableCell>{displayValue(item.quotation_amount)}</TableCell>
+                                        <TableCell className="uppercase">{displayValue(item.so_number)}</TableCell>
+                                        <TableCell>{displayValue(item.so_amount)}</TableCell>
+                                        <TableCell>{displayValue(item.actual_sales)}</TableCell>
+                                        <TableCell>{displayValue(item.delivery_date)}</TableCell>
+                                        <TableCell className="uppercase">{displayValue(item.dr_number)}</TableCell>
+                                        <TableCell>{displayValue(item.ticket_reference_number)}</TableCell>
+                                        <TableCell className="capitalize">{displayValue(item.remarks)}</TableCell>
+                                        <TableCell>
+                                            {item.date_followup && !isNaN(new Date(item.date_followup).getTime())
+                                                ? new Date(item.date_followup).toLocaleDateString()
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell>{displayValue(item.payment_terms)}</TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
                 </div>
             )}
 

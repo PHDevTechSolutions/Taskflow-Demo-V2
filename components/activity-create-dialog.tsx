@@ -304,13 +304,6 @@ export function CreateActivityDialog({
                 }
                 return true;
 
-            case 4:
-                if (typeActivity === "Outbound Calls" && !followUpDate.trim()) {
-                    toast.error("Please select Follow Up Date.");
-                    return false;
-                }
-                return true;
-
             default:
                 return true;
         }

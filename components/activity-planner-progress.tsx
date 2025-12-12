@@ -194,7 +194,7 @@ export const Progress: React.FC<NewTaskProps> = ({
         return true;
     };
 
-    const allowedStatuses = ["On-Progress", "Assisted", "Quote-Done", "SO-Done"];
+    const allowedStatuses = ["On-Progress", "Assisted", "Quote-Done", "SO-Done", "Not Assisted"];
 
     const mergedData = activities
         .filter((a) => allowedStatuses.includes(a.status))

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -339,71 +339,70 @@ export const CCG: React.FC<{
         return Array.from(s).sort();
     }, [mergedActivities]);
 
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isToday =
+        selectedDate &&
+        selectedDate.getDate() === now.getDate() &&
+        selectedDate.getMonth() === now.getMonth() &&
+        selectedDate.getFullYear() === now.getFullYear();
+
+    const currentHourRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (isToday && currentHourRef.current && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            const elem = currentHourRef.current;
+            container.scrollTop = elem.offsetTop - 10; // scroll with 10px offset
+        }
+    }, [selectedDate, isToday, currentHour]);
+
     return (
         <div className="flex flex-col md:flex-row gap-6 min-h-[600px]">
             {/* Left: Calendar */}
-            <Card className="w-full md:w-2/3">
+            <Card className="w-full md:w-2/5">
                 <CardHeader className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (currentMonth === 0) {
-                                    setCurrentYear((y) => y - 1);
-                                    setCurrentMonth(11);
-                                } else setCurrentMonth((m) => m - 1);
-                                setSelectedDate(null);
-                            }}
-                        >
-                            Prev
-                        </Button>
-                        <CardTitle className="text-lg font-semibold">
-                            {new Date(currentYear, currentMonth).toLocaleString("default", { month: "long", year: "numeric" })}
-                        </CardTitle>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (currentMonth === 11) {
-                                    setCurrentYear((y) => y + 1);
-                                    setCurrentMonth(0);
-                                } else setCurrentMonth((m) => m + 1);
-                                setSelectedDate(null);
-                            }}
-                        >
-                            Next
-                        </Button>
-                    </div>
-
-                    {/* Search + Filters */}
-                    <div className="flex items-center gap-2">
-                        <Input
-                            placeholder="Search activities..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-56"
-                        />
-                        <TaskListDialog
-                            filterStatus={filterStatus}
-                            filterTypeActivity={filterTypeActivity}
-                            setFilterStatus={setFilterStatus}
-                            setFilterTypeActivity={setFilterTypeActivity}
-                            statusOptions={statusOptions}
-                            typeActivityOptions={typeActivityOptions}
-                        />
-                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            if (currentMonth === 0) {
+                                setCurrentYear((y) => y - 1);
+                                setCurrentMonth(11);
+                            } else setCurrentMonth((m) => m - 1);
+                            setSelectedDate(null);
+                        }}
+                    >
+                        Prev
+                    </Button>
+                    <CardTitle className="text-sm font-semibold">
+                        {new Date(currentYear, currentMonth).toLocaleString("default", { month: "long", year: "numeric" })}
+                    </CardTitle>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            if (currentMonth === 11) {
+                                setCurrentYear((y) => y + 1);
+                                setCurrentMonth(0);
+                            } else setCurrentMonth((m) => m + 1);
+                            setSelectedDate(null);
+                        }}
+                    >
+                        Next
+                    </Button>
                 </CardHeader>
 
                 {/* Weekday headings */}
-                <div className="grid grid-cols-7 text-center font-semibold text-gray-600 mb-2 select-none px-2">
+                <div className="grid grid-cols-7 text-center font-semibold text-gray-600 mb-2 select-none px-4">
                     {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((wd) => (
                         <div key={wd} className="text-sm">{wd}</div>
                     ))}
                 </div>
 
                 {/* Days grid */}
-                <div className="grid grid-cols-7 gap-1 px-2" style={{ "--cell-size": "6rem" } as React.CSSProperties}>
+                <div className="grid grid-cols-7 gap-1 px-6" style={{ "--cell-size": "4rem" } as React.CSSProperties}>
                     {(() => {
                         const arr: (number | null)[] = [];
                         for (let i = 0; i < firstWeekday; i++) arr.push(null);
@@ -437,7 +436,7 @@ export const CCG: React.FC<{
                                         )}
                                 </button>
                             ) : (
-                                <div key={idx} className="h-[6rem]" />
+                                <div key={idx} className="h-[4rem]" />
                             )
                         );
                     })()}
@@ -445,20 +444,33 @@ export const CCG: React.FC<{
             </Card>
 
             {/* Right: Hourly schedule for selected date */}
-            <Card className="w-full md:w-1/3 max-h-[700px] overflow-auto custom-scrollbar border-none shadow-none">
-                <CardContent className="p-2">
-                    <div className="mb-2 w-full flex items-start justify-between">
-                        {/* LEFT */}
-                        <h3 className="text-sm font-semibold">Events for</h3>
+            <Card className="w-full md:w-2/3 max-h-[700px] border-none shadow-none">
+                <CardContent
+                    className="p-2 overflow-auto custom-scrollbar"
+                    ref={scrollContainerRef}
+                >
+                    {/* Search + Filters */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                        <div className="flex items-center gap-2">
+                            <Input
+                                placeholder="Search activities..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-56"
+                            />
+                            <TaskListDialog
+                                filterStatus={filterStatus}
+                                filterTypeActivity={filterTypeActivity}
+                                setFilterStatus={setFilterStatus}
+                                setFilterTypeActivity={setFilterTypeActivity}
+                                statusOptions={statusOptions}
+                                typeActivityOptions={typeActivityOptions}
+                            />
+                        </div>
 
-                        {/* RIGHT */}
-                        <div className="flex flex-col items-end">
-                            <div className="text-xs text-muted-foreground">
-                                {selectedDate ? selectedDate.toLocaleDateString() : "No date selected"}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                Total: {selectedDayEvents.length}
-                            </div>
+                        <div className="flex flex-col items-end text-xs text-muted-foreground">
+                            <div>Events for {selectedDate ? selectedDate.toLocaleDateString() : "No date selected"}</div>
+                            <div>Total: {selectedDayEvents.length}</div>
                         </div>
                     </div>
 
@@ -467,30 +479,41 @@ export const CCG: React.FC<{
                             const hours = Array.from({ length: 24 }, (_, i) => i);
                             return (
                                 <div>
-                                    {hours.map((hour) => (
-                                        <div key={hour} className="flex border-b border-gray-100 min-h-[3rem] items-start gap-2 px-2 py-1">
-                                            <div className="w-12 text-xs text-gray-500 select-none">{formatHourLabel(hour)}</div>
-                                            <div className="flex-1 space-y-1 p-1">
-                                                {groupedByHour[hour].length === 0 ? (
-                                                    <div className="text-xs text-muted-foreground italic">—</div>
-                                                ) : (
-                                                    groupedByHour[hour].map((ev) => {
-                                                        const dt = parseDateCreated(ev.date_created)!;
-                                                        return (
-                                                            <div key={ev.id} className="rounded-md p-2 bg-muted hover:bg-muted/80 cursor-pointer">
-                                                                <p className="font-semibold text-xs">
-                                                                    {formatTimeFromDate(dt)} - {ev.type_activity ?? ev.activity_reference_number}
-                                                                </p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {ev.company_name} • {ev.remarks ?? "—"}
-                                                                </p>
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
+                                    {hours.map((hour) => {
+                                        const isCurrentHour = isToday && hour === currentHour;
+                                        return (
+                                            <div
+                                                key={hour}
+                                                ref={isCurrentHour ? currentHourRef : null}
+                                                className={`flex border-b border-gray-100 min-h-[1rem] items-start gap-2 px-2 py-1
+                    ${isCurrentHour ? "bg-yellow-100" : ""}
+                  `}
+                                            >
+                                                <div className="w-12 text-xs text-gray-500 select-none">
+                                                    {formatHourLabel(hour)}
+                                                </div>
+                                                <div className="flex-1 space-y-1 p-1">
+                                                    {groupedByHour[hour].length === 0 ? (
+                                                        <div className="text-xs text-muted-foreground italic">—</div>
+                                                    ) : (
+                                                        groupedByHour[hour].map((ev) => {
+                                                            const dt = parseDateCreated(ev.date_created)!;
+                                                            return (
+                                                                <div key={ev.id} className="rounded-md p-5 bg-muted hover:bg-muted/80 cursor-pointer">
+                                                                    <p className="font-semibold text-xs">
+                                                                        {formatTimeFromDate(dt)} - {ev.type_activity ?? ev.activity_reference_number}
+                                                                    </p>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {ev.company_name} • {ev.remarks ?? "—"}
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             );
                         })()
