@@ -204,17 +204,13 @@ export function AccountsTable({
                 {/* Right side: Filter */}
                 <div className="flex items-center gap-3">
                     <AccountsActiveFilter
-                        typeFilter={typeFilter}
-                        setTypeFilterAction={setTypeFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilterAction={setStatusFilter}
-                        dateCreatedFilter={dateCreatedFilter}
-                        setDateCreatedFilterAction={setDateCreatedFilter}
-                        industryFilter={industryFilter}
-                        setIndustryFilterAction={setIndustryFilter}
-                        alphabeticalFilter={alphabeticalFilter}
-                        setAlphabeticalFilterAction={setAlphabeticalFilter}
-                    />
+                                typeFilter={typeFilter}
+                                setTypeFilterAction={setTypeFilter}
+                                dateCreatedFilter={dateCreatedFilter}
+                                setDateCreatedFilterAction={setDateCreatedFilter}
+                                alphabeticalFilter={alphabeticalFilter}
+                                setAlphabeticalFilterAction={setAlphabeticalFilter}
+                              />
                 </div>
             </div>
 

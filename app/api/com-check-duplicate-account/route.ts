@@ -27,18 +27,29 @@ export async function GET(req: Request) {
     cleaned = cleaned.replace(/\d+$/g, "");
     cleaned = cleaned.trim();
 
-    // Use ILIKE with % cleaned % to find possible duplicates (case-insensitive)
-    // This is a simple fuzzy approach on DB side, more advanced fuzzy search can be added via extension
-    const results = await sql`
-      SELECT company_name, referenceid AS owner_referenceid
+    // Query DB for possible duplicates (case-insensitive fuzzy match)
+    const resultsRaw = await sql`
+      SELECT company_name, contact_person, contact_number, referenceid AS owner_referenceid
       FROM accounts
       WHERE company_name ILIKE ${`%${cleaned}%`}
       LIMIT 10;
     `;
 
-    if (results.length === 0) {
+    if (resultsRaw.length === 0) {
       return NextResponse.json({ exists: false, companies: [] }, { status: 200 });
     }
+
+    // Convert contact_person and contact_number from comma-separated strings to arrays
+    const results = resultsRaw.map((row: any) => ({
+      company_name: row.company_name,
+      owner_referenceid: row.owner_referenceid,
+      contact_person: row.contact_person
+        ? row.contact_person.split(",").map((s: string) => s.trim())
+        : [],
+      contact_number: row.contact_number
+        ? row.contact_number.split(",").map((s: string) => s.trim())
+        : [],
+    }));
 
     return NextResponse.json({ exists: true, companies: results }, { status: 200 });
   } catch (error: any) {

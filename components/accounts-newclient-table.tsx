@@ -460,13 +460,15 @@ export function AccountsTable({
                         onOpenChangeAction={setIsCreateDialogOpen}
                     />
 
-                    <div className="flex-grow w-full max-w-lg">
+                    <div className="flex-grow w-full max-w-lg flex items-center gap-3">
+                        <Button onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
                         <AccountsActiveSearch
                             globalFilter={globalFilter}
                             setGlobalFilterAction={setGlobalFilter}
                             isFiltering={isFiltering}
                         />
                     </div>
+
                 </div>
 
                 {/* Right side: Filter + Remove (only show Remove if selection > 0) */}
