@@ -55,8 +55,8 @@ import {
 function getMenuItems(userId: string | null) {
   return [
     { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-    { title: "Ask AI", url: "#", icon: Bot },
-    { title: "Inbox", url: "#", icon: Mail, badge: "5" },
+    //{ title: "Ask AI", url: "#", icon: Bot },
+    //{ title: "Inbox", url: "#", icon: Mail, badge: "5" },
   ];
 }
 
@@ -335,7 +335,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
           openSections={openSections}
           onToggleSection={handleToggle}
         />
-        {/*<NavSecondary items={navSecondaryWithId} className="mt-auto" />*/}
+        {/*<NavFavorites favorites={favoritesWithId} />*/}
         
       </SidebarContent>
 
