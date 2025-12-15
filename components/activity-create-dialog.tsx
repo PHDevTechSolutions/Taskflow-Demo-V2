@@ -178,6 +178,9 @@ export function CreateActivityDialog({
     const [startDate, setStartDate] = useState("");
     const [dateCreated, setDateCreated] = useState("");
 
+    const [tsmState, setTSMState] = useState(tsm || "");
+
+
     const [loading, setLoading] = useState(false);
     const [elapsedTime, setElapsedTime] = useState("");
     const [showExportNotification, setShowExportNotification] = React.useState(false);
@@ -662,88 +665,71 @@ export function CreateActivityDialog({
                             {/* STEP 1 */}
                             {step === 1 && (
                                 <div>
+                                    <h2 className="text-sm font-semibold mb-3"> Step 1 — Type of Activity</h2>
                                     <FieldGroup>
                                         <FieldSet>
                                             <FieldLabel>Select Activity Type</FieldLabel>
                                             <RadioGroup
-                                                defaultValue={typeActivity}
+                                                value={typeActivity}
                                                 onValueChange={(value) => {
                                                     setTypeActivity(value);
                                                     setStartDate(new Date().toISOString());
                                                 }}
                                             >
+                                                {[
+                                                    {
+                                                        value: "Outbound Calls",
+                                                        title: "Outbound Calls",
+                                                        desc:
+                                                            "Make outgoing calls to clients for updates, touchbase, or follow-ups.",
+                                                    },
+                                                    {
+                                                        value: "Inbound Calls",
+                                                        title: "Inbound Calls",
+                                                        desc:
+                                                            "Handle incoming calls from clients requesting assistance or information.",
+                                                    },
+                                                    {
+                                                        value: "Quotation Preparation",
+                                                        title: "Quotation Preparation",
+                                                        desc:
+                                                            "Prepare and submit quotations for clients including pricing and project details.",
+                                                    },
+                                                    {
+                                                        value: "Sales Order Preparation",
+                                                        title: "Sales Order Preparation",
+                                                        desc:
+                                                            "Prepare and submit sales orders for clients including pricing and project details.",
+                                                    },
+                                                    {
+                                                        value: "Delivered / Closed Transaction",
+                                                        title: "Delivered / Closed Transaction",
+                                                        desc:
+                                                            "Handle completed transactions including delivery confirmation, closing documentation, and final client coordination.",
+                                                    },
+                                                ].map((item) => (
+                                                    <FieldLabel key={item.value}>
+                                                        <Field orientation="horizontal">
+                                                            <FieldContent>
+                                                                <FieldTitle>{item.title}</FieldTitle>
+                                                                <FieldDescription>{item.desc}</FieldDescription>
 
-                                                <FieldLabel>
-                                                    <Field orientation="horizontal">
-                                                        <FieldContent>
-                                                            <FieldTitle>Outbound Calls</FieldTitle>
-                                                            <FieldDescription>
-                                                                Make outgoing calls to clients for updates,
-                                                                touchbase, or follow-ups.
-                                                            </FieldDescription>
-                                                        </FieldContent>
-                                                        <RadioGroupItem value="Outbound Calls" />
-                                                    </Field>
-                                                </FieldLabel>
+                                                                {typeActivity === item.value && (
+                                                                    <div className="mt-4 flex">
+                                                                        <Button onClick={handleNext}>
+                                                                            Next
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </FieldContent>
 
-                                                <FieldLabel>
-                                                    <Field orientation="horizontal">
-                                                        <FieldContent>
-                                                            <FieldTitle>Inbound Calls</FieldTitle>
-                                                            <FieldDescription>
-                                                                Handle incoming calls from clients requesting
-                                                                assistance or information.
-                                                            </FieldDescription>
-                                                        </FieldContent>
-                                                        <RadioGroupItem value="Inbound Calls" />
-                                                    </Field>
-                                                </FieldLabel>
-
-                                                <FieldLabel>
-                                                    <Field orientation="horizontal">
-                                                        <FieldContent>
-                                                            <FieldTitle>Quotation Preparation</FieldTitle>
-                                                            <FieldDescription>
-                                                                Prepare and submit quotations for clients including pricing and project details.
-                                                            </FieldDescription>
-                                                        </FieldContent>
-                                                        <RadioGroupItem value="Quotation Preparation" />
-                                                    </Field>
-                                                </FieldLabel>
-
-                                                <FieldLabel>
-                                                    <Field orientation="horizontal">
-                                                        <FieldContent>
-                                                            <FieldTitle>Sales Order Preparation</FieldTitle>
-                                                            <FieldDescription>
-                                                                Prepare and submit sales orders for clients including pricing and project details.
-                                                            </FieldDescription>
-                                                        </FieldContent>
-                                                        <RadioGroupItem value="Sales Order Preparation" />
-                                                    </Field>
-                                                </FieldLabel>
-
-                                                <FieldLabel>
-                                                    <Field orientation="horizontal">
-                                                        <FieldContent>
-                                                            <FieldTitle>Delivered / Closed Transaction</FieldTitle>
-                                                            <FieldDescription>
-                                                                Handle completed transactions including delivery confirmation, closing documentation, and final client coordination.
-                                                            </FieldDescription>
-                                                        </FieldContent>
-                                                        <RadioGroupItem value="Delivered / Closed Transaction" />
-                                                    </Field>
-                                                </FieldLabel>
+                                                            <RadioGroupItem value={item.value} />
+                                                        </Field>
+                                                    </FieldLabel>
+                                                ))}
                                             </RadioGroup>
                                         </FieldSet>
                                     </FieldGroup>
-
-                                    <h2 className="text-sm font-semibold mt-3">
-                                        Step 1 — Type of Activity
-                                    </h2>
-                                    <Button className="mt-4 w-full" onClick={handleNext}>
-                                        Next
-                                    </Button>
                                 </div>
                             )}
 
@@ -829,6 +815,8 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+                                    tsm={tsmState}
+                                    setTSM={setTSMState}
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}

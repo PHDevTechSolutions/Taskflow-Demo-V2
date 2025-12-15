@@ -8,8 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemHeader, ItemMedia, ItemTitle, } from "@/components/ui/item";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
+import EditableTable from "@/components/EditableTable";
 
 interface Props {
   step: number;
@@ -48,6 +58,8 @@ interface Props {
   setRemarks: (v: string) => void;
   status: string;
   setStatus: (v: string) => void;
+  tsm: string;
+  setTSM: (v: string) => void;
   handleBack: () => void;
   handleNext: () => void;
   handleSave: () => void;
@@ -80,6 +92,35 @@ interface SelectedProduct extends Product {
   price: number;
 }
 
+function extractTsmPrefix(tsm: string): string {
+  if (!tsm) return "";
+  const firstSegment = tsm.split("-")[0];
+  return firstSegment.substring(0, 2);
+}
+
+// Isang function lang para sa prefix mapping
+function getQuotationPrefix(type: string): string {
+  const map: Record<string, string> = {
+    "Ecoshift Corporation": "EC",
+    "Disruptive Solutions Inc": "DSI",
+  };
+
+  return map[type.trim()] || "";
+}
+
+
+interface ManualProduct {
+  id: number;
+  title: string;
+  skus: string[];
+  description: string;
+  images: { src: string }[];
+  base64Attachment?: string;
+  imageFilename?: string;
+  quantity?: number;
+  price?: number | string;
+}
+
 export function QuotationSheet(props: Props) {
   const {
     step, setStep,
@@ -100,6 +141,7 @@ export function QuotationSheet(props: Props) {
     followUpDate, setFollowUpDate,
     remarks, setRemarks,
     status, setStatus,
+    tsm, setTSM,
     handleBack,
     handleNext,
     handleSave,
@@ -111,7 +153,69 @@ export function QuotationSheet(props: Props) {
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
-  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [isManualEntry, setIsManualEntry] = useState(true);
+
+  const [localQuotationNumber, setLocalQuotationNumber] = useState(quotationNumber);
+  const [showQuotationAlert, setShowQuotationAlert] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(true);
+
+  // Manual Creation and Submission to Shopify
+  const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
+
+
+  async function fetchNextQuotationSequence(prefixBase: string): Promise<string> {
+    const currentYear = new Date().getFullYear();
+    const prefixWithYear = `${prefixBase}-${currentYear}`;
+
+    try {
+      const response = await fetch(`/api/fetch-quotation-number?prefix=${encodeURIComponent(prefixWithYear)}`);
+      const data = await response.json();
+
+      const existingNumbers: string[] = data.quotationNumbers || [];
+
+      const sequences = existingNumbers
+        .map((q) => {
+          const parts = q.split("-");
+          const lastPart = parts[parts.length - 1];
+          const num = parseInt(lastPart, 10);
+          return isNaN(num) ? 0 : num;
+        })
+        .filter((num) => num > 0);
+
+      const maxSeq = sequences.length > 0 ? Math.max(...sequences) : 0;
+      const nextSeq = (maxSeq + 1).toString().padStart(4, "0");
+
+      return nextSeq;
+    } catch (error) {
+      console.error("Failed to fetch quotation sequence", error);
+      return "0001";
+    }
+  }
+
+  // Generate quotation number when quotationType or tsm changes
+  useEffect(() => {
+    if (!quotationType || !tsm) return;
+
+    async function generateQuotationNumber() {
+      setIsGenerating(true);
+      const cleanQuotationType = quotationType.trim();
+      const prefixBase = `${getQuotationPrefix(cleanQuotationType)}-${extractTsmPrefix(tsm)}`;
+      const currentYear = new Date().getFullYear();
+
+      const nextSeq = await fetchNextQuotationSequence(prefixBase);
+      const newQuotationNumber = `${prefixBase}-${currentYear}-${nextSeq}`;
+
+      setLocalQuotationNumber(newQuotationNumber);
+      setQuotationNumber(newQuotationNumber);
+      setIsGenerating(false);
+    }
+
+    generateQuotationNumber();
+  }, [quotationType, tsm, setQuotationNumber]);
+
+  useEffect(() => {
+    setLocalQuotationNumber(quotationNumber);
+  }, [quotationNumber]);
 
   useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
@@ -146,6 +250,72 @@ export function QuotationSheet(props: Props) {
     setProductTitle,
   ]);
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, idx: number) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 3 * 1024 * 1024) {
+      alert("File size exceeds 3MB limit");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const base64String = reader.result as string; // full data URL
+
+      setManualProducts((prev) => {
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          images: [{ src: base64String }], // For image preview (data URL)
+          base64Attachment: base64String.split(",")[1], // base64 part only, for backend
+          imageFilename: file.name,
+        };
+        return copy;
+      });
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  async function submitProductToShopify(product: ManualProduct) {
+    try {
+      const payload = {
+        title: product.title,
+        sku: product.skus[0] || "",
+        description: product.description,
+        quantity: product.quantity ?? 1,
+        price: product.price !== undefined ? product.price.toString() : "0.00",
+        imageAttachment: product.base64Attachment,
+        imageFilename: product.imageFilename,
+      };
+
+      const res = await fetch("/api/manual-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let errorMessage = "Failed to submit product";
+        try {
+          const errorData = await res.json();
+          if (errorData?.message) errorMessage = errorData.message;
+          if (errorData?.details) errorMessage += ": " + errorData.details;
+        } catch {
+          const errorText = await res.text();
+          if (errorText) errorMessage += ": " + errorText;
+        }
+        throw new Error(errorMessage);
+      }
+
+      toast.success(`Product "${product.title}" submitted successfully!`);
+    } catch (error: any) {
+      toast.error(`Error submitting product: ${error.message || error.toString()}`);
+    }
+  }
+
   function extractTable(html: string): string {
     const match = html.match(/<table[\s\S]*?<\/table>/i);
     return match ? match[0] : "";
@@ -162,32 +332,10 @@ export function QuotationSheet(props: Props) {
 
   // Validation states
   const isStep2Valid = source.trim() !== "";
-
-  const isStep3Valid =
-    selectedProducts.length > 0 &&
-    selectedProducts.every((p) => p.quantity > 0 && p.price >= 0);
-
+  const isStep3Valid = selectedProducts.length > 0 && selectedProducts.every((p) => p.quantity > 0 && p.price >= 0);
   const isStep4Valid = projectType.trim() !== "";
-
-  const isStep5Valid =
-    quotationNumber.trim().length >= 6 &&
-    callType.trim() !== "";
-
+  const isStep5Valid = productCat.trim().length >= 6 && callType.trim() !== "";
   const isStep6Valid = status.trim() !== "";
-
-  // Handle next on step 5 with validation + error messages
-  const handleNextStep5 = () => {
-    if (quotationNumber.trim().length < 6) {
-      setQuotationNumberError("Quotation Number must be more than 5 characters.");
-      return;
-    }
-    if (callType.trim() === "") {
-      toast.error("Please select Call Type.");
-      return;
-    }
-    setQuotationNumberError("");
-    handleNext();
-  };
 
   // Save handler with validation
   const saveWithSelectedProducts = () => {
@@ -203,8 +351,19 @@ export function QuotationSheet(props: Props) {
       toast.error("Please select status.");
       return;
     }
+
+    setShowQuotationAlert(true);  // Show the Shadcn alert
+
     handleSave();
   };
+
+  function setDescriptionAtIndex(idx: number, newDesc: string) {
+    setManualProducts((prev) => {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], description: newDesc };
+      return copy;
+    });
+  }
 
   return (
     <>
@@ -216,9 +375,71 @@ export function QuotationSheet(props: Props) {
               <FieldLabel>Source</FieldLabel>
               <RadioGroup
                 value={source}
-                onValueChange={(value) => setSource(value)}
+                onValueChange={setSource}
               >
                 {Quotation_SOURCES.map(({ label, description }) => (
+                  <FieldLabel key={label}>
+                    <Field orientation="horizontal" className="w-full items-start">
+                      {/* LEFT */}
+                      <FieldContent className="flex-1">
+                        <FieldTitle>{label}</FieldTitle>
+                        <FieldDescription>{description}</FieldDescription>
+
+                        {/* Buttons only visible if selected */}
+                        {source === label && (
+                          <div className="mt-4 flex gap-2">
+                            <Button type="button" variant="outline" onClick={handleBack}>
+                              Back
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={handleNext}
+                              disabled={!isStep2Valid}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        )}
+                      </FieldContent>
+
+                      {/* RIGHT */}
+                      <RadioGroupItem value={label} />
+                    </Field>
+                  </FieldLabel>
+                ))}
+              </RadioGroup>
+
+            </FieldSet>
+          </FieldGroup>
+
+        </div>
+      )}
+
+      {/* STEP 3 — PRODUCT DETAILS */}
+      {step === 3 && (
+        <div>
+          <FieldGroup>
+            <FieldSet>
+              <FieldLabel className="mt-3">Type</FieldLabel>
+              <RadioGroup value={callType} onValueChange={setCallType}>
+                {[
+                  {
+                    label: "Sent Quotation Standard",
+                    description: "Standard quotation sent to client.",
+                  },
+                  {
+                    label: "Sent Quotation with Special Price",
+                    description: "Quotation with a special pricing offer.",
+                  },
+                  {
+                    label: "Sent Quotation with SPF",
+                    description: "Quotation including SPF (Special Pricing Framework).",
+                  },
+                  {
+                    label: "With SPFS",
+                    description: "Quotation with SPFS details included.",
+                  },
+                ].map(({ label, description }) => (
                   <FieldLabel key={label}>
                     <Field orientation="horizontal">
                       <FieldContent>
@@ -230,75 +451,205 @@ export function QuotationSheet(props: Props) {
                   </FieldLabel>
                 ))}
               </RadioGroup>
+
+              <FieldLabel className="mt-3">Quotation For</FieldLabel>
+              <RadioGroup
+                value={quotationType}
+                onValueChange={setQuotationType}
+                required
+                className="space-y-4"
+              >
+                {[
+                  {
+                    label: "Ecoshift Corporation",
+                    description:
+                      "The Fastest-Growing Provider of Innovative Lighting Solutions",
+                  },
+                  {
+                    label: "Disruptive Solutions Inc",
+                    description:
+                      "future-ready lighting solutions that brighten spaces, cut costs, and power smarter business",
+                  },
+                ].map(({ label, description }) => (
+                  <FieldLabel key={label}>
+                    <Field orientation="horizontal" className="w-full items-start">
+                      {/* LEFT */}
+                      <FieldContent className="flex-1">
+                        <FieldTitle>{label}</FieldTitle>
+                        <FieldDescription>{description}</FieldDescription>
+
+                        {/* Buttons only visible if selected */}
+                        {quotationType === label && (
+                          <div className="mt-4 flex gap-2">
+                            <Button type="button" onClick={handleBack} variant="outline">
+                              Back
+                            </Button>
+                            <Button type="button" onClick={handleNext} disabled={!quotationType}>
+                              Next
+                            </Button>
+                          </div>
+                        )}
+                      </FieldContent>
+
+                      {/* RIGHT */}
+                      <RadioGroupItem value={label} />
+                    </Field>
+                  </FieldLabel>
+                ))}
+              </RadioGroup>
             </FieldSet>
           </FieldGroup>
-
-          <div className="flex justify-between mt-4">
-            <Button onClick={handleBack}>Back</Button>
-            <Button onClick={handleNext} disabled={!isStep2Valid}>
-              Next
-            </Button>
-          </div>
         </div>
       )}
 
-      {/* STEP 3 — PRODUCT DETAILS */}
-      {step === 3 && (
+      {/* STEP 4 — PROJECT DETAILS */}
+      {step === 4 && (
         <div>
           <FieldGroup>
             <FieldSet>
-              <FieldLabel>Product Name</FieldLabel>
+              <FieldLabel className="mt-3">Project Name (Optional)</FieldLabel>
               <Input
                 type="text"
-                className="uppercase"
-                value={searchTerm}
-                placeholder="Search product..."
-                onChange={async (e) => {
-                  if (isManualEntry) return; // skip searching if manual
-                  const value = e.target.value.toLowerCase();
-                  setSearchTerm(value);
-
-                  if (value.length < 2) {
-                    setSearchResults([]);
-                    return;
-                  }
-
-                  setIsSearching(true);
-                  try {
-                    const res = await fetch(`/api/shopify/products?q=${value}`);
-                    let data = await res.json();
-                    let products: Product[] = data.products || [];
-
-                    // Filter client-side for SKU match as well
-                    products = products.filter((product) => {
-                      const titleMatch = product.title.toLowerCase().includes(value);
-                      const skuMatch = product.skus?.some((sku) =>
-                        sku.toLowerCase().includes(value)
-                      );
-                      return titleMatch || skuMatch;
-                    });
-
-                    setSearchResults(products);
-                  } catch (err) {
-                    console.error(err);
-                  }
-                  setIsSearching(false);
-                }}
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
               />
 
+              <FieldLabel className="mt-3">Project Type</FieldLabel>
+              <RadioGroup
+                value={projectType}
+                onValueChange={setProjectType}
+              >
+                {[
+                  {
+                    label: "B2B",
+                    description: "Business to Business transactions.",
+                  },
+                  {
+                    label: "B2C",
+                    description: "Business to Consumer transactions.",
+                  },
+                  {
+                    label: "B2G",
+                    description: "Business to Government contracts.",
+                  },
+                  {
+                    label: "Gentrade",
+                    description: "General trade activities.",
+                  },
+                  {
+                    label: "Modern Trade",
+                    description: "Retail and modern trade partners.",
+                  },
+                ].map(({ label, description }) => (
+                  <FieldLabel key={label}>
+                    <Field orientation="horizontal" className="w-full items-start">
+                      {/* LEFT */}
+                      <FieldContent className="flex-1">
+                        <FieldTitle>{label}</FieldTitle>
+                        <FieldDescription>{description}</FieldDescription>
+
+                        {/* Buttons only show if selected */}
+                        {projectType === label && (
+                          <div className="mt-4 flex gap-2">
+                            <Button type="button" onClick={handleBack} variant="outline">
+                              Back
+                            </Button>
+                            <Button type="button" onClick={handleNext} disabled={!isStep4Valid}>
+                              Next
+                            </Button>
+                          </div>
+                        )}
+                      </FieldContent>
+
+                      {/* RIGHT */}
+                      <RadioGroupItem value={label} />
+                    </Field>
+                  </FieldLabel>
+                ))}
+              </RadioGroup>
+            </FieldSet>
+          </FieldGroup>
+
+        </div>
+      )}
+
+      {/* STEP 5 — QUOTATION DETAILS */}
+      {step === 5 && (
+        <div>
+          <FieldGroup>
+            <FieldSet>
+              <Alert variant="default" className="p-4 flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="mb-1">
+                    <AlertTitle>Quotation Number</AlertTitle>
+                  </div>
+                  {isGenerating ? (
+                    <AlertDescription className="text-sm text-gray-700 flex items-center gap-2">
+                      <Spinner className="w-5 h-5 text-gray-500" />
+                      Generating your quotation number, please wait...
+                    </AlertDescription>
+                  ) : (
+                    <AlertDescription className="text-sm text-gray-700">
+                      Your quotation number is <strong className="text-black">{localQuotationNumber}</strong>
+                      <br />
+                      It is automatically generated based on the quotation type, TSM prefix, current year, and a sequential number.
+                    </AlertDescription>
+                  )}
+                </div>
+              </Alert>
+
+              {!isManualEntry && (
+                <>
+                  <FieldLabel>Product Name</FieldLabel>
+                  <Input
+                    type="text"
+                    className="uppercase"
+                    value={searchTerm}
+                    placeholder="Search product..."
+                    onChange={async (e) => {
+                      if (isManualEntry) return; // skip searching if manual
+                      const value = e.target.value.toLowerCase();
+                      setSearchTerm(value);
+
+                      if (value.length < 2) {
+                        setSearchResults([]);
+                        return;
+                      }
+
+                      setIsSearching(true);
+                      try {
+                        const res = await fetch(`/api/shopify/products?q=${value}`);
+                        let data = await res.json();
+                        let products: Product[] = data.products || [];
+
+                        // Filter client-side for SKU match as well
+                        products = products.filter((product) => {
+                          const titleMatch = product.title.toLowerCase().includes(value);
+                          const skuMatch = product.skus?.some((sku) =>
+                            sku.toLowerCase().includes(value)
+                          );
+                          return titleMatch || skuMatch;
+                        });
+
+                        setSearchResults(products);
+                      } catch (err) {
+                        console.error(err);
+                      }
+                      setIsSearching(false);
+                    }}
+                  />
+                </>
+              )}
+
               {/* Manual Entry Checkbox */}
-              <label className="flex items-center gap-2 mb-4">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={isManualEntry}
                   onChange={(e) => {
                     const manual = e.target.checked;
                     setIsManualEntry(manual);
-                    if (manual) {
-                      setSelectedProducts([]); // clear products when manual
-                      setSearchResults([]);
-                      setSearchTerm("");
-                    }
+                    if (!manual) setManualProducts([]);
                   }}
                 />
                 <span className="text-xs font-medium">No products available / Manual entry</span>
@@ -467,132 +818,171 @@ export function QuotationSheet(props: Props) {
                 </p>
               )}
 
-              {!isManualEntry && selectedProducts.length > 0 && (
-                <Alert variant="default">
-                  <AlertTitle>Grand Total:</AlertTitle>
-                  <AlertDescription>
-                    ₱{selectedProducts.reduce((acc, p) => acc + p.quantity * p.price, 0).toFixed(2)}
-                  </AlertDescription>
-                </Alert>
-              )}
+              <Dialog open={isManualEntry} onOpenChange={setIsManualEntry}>
+                <DialogContent style={{ maxWidth: "60vw", width: "90vw" }}
+                  className="mx-auto rounded-lg p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg font-semibold">Manual Product Entry</DialogTitle>
+                  </DialogHeader>
 
-            </FieldSet>
-          </FieldGroup>
+                  <div className="space-y-6 max-h-[75vh] overflow-auto">
+                    {manualProducts.map((p, idx) => (
+                      <div
+                        key={p.id}
+                        className="border rounded-md p-4 flex gap-8"
+                        style={{ minHeight: "400px" }}
+                      >
+                        {/* Left side */}
+                        <div className="flex flex-col gap-6 w-[40%]">
+                          {/* Product Title */}
+                          <div>
+                            <label htmlFor={`title-${p.id}`} className="block font-medium mb-1 text-sm">
+                              Product Title
+                            </label>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Enter the name of the product.
+                            </p>
+                            <Input
+                              id={`title-${p.id}`}
+                              placeholder="Product Title"
+                              className="input input-bordered w-full"
+                              value={p.title}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setManualProducts((prev) => {
+                                  const copy = [...prev];
+                                  copy[idx] = { ...copy[idx], title: val };
+                                  return copy;
+                                });
+                              }}
+                            />
+                          </div>
 
-          <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={handleBack}>
-              Back
-            </Button>
-            <Button onClick={handleNext} disabled={isManualEntry ? false : !isStep3Valid}>
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+                          {/* SKU */}
+                          <div>
+                            <label htmlFor={`sku-${p.id}`} className="block font-medium mb-1 text-sm">
+                              SKU
+                            </label>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Unique identifier for the product variant.
+                            </p>
+                            <Input
+                              id={`sku-${p.id}`}
+                              placeholder="SKU"
+                              className="input input-bordered w-full uppercase"
+                              value={p.skus[0] || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setManualProducts((prev) => {
+                                  const copy = [...prev];
+                                  copy[idx] = { ...copy[idx], skus: [val] };
+                                  return copy;
+                                });
+                              }}
+                            />
+                          </div>
 
-      {/* STEP 4 — PROJECT DETAILS */}
-      {step === 4 && (
-        <div>
-          <FieldGroup>
-            <FieldSet>
-              <FieldLabel className="mt-3">Project Type</FieldLabel>
-              <RadioGroup value={projectType} onValueChange={setProjectType}>
-                {[
-                  {
-                    label: "B2B",
-                    description: "Business to Business transactions.",
-                  },
-                  {
-                    label: "B2C",
-                    description: "Business to Consumer transactions.",
-                  },
-                  { label: "B2G", description: "Business to Government contracts." },
-                  { label: "Gentrade", description: "General trade activities." },
-                  {
-                    label: "Modern Trade",
-                    description: "Retail and modern trade partners.",
-                  },
-                ].map(({ label, description }) => (
-                  <FieldLabel key={label}>
-                    <Field orientation="horizontal">
-                      <FieldContent>
-                        <FieldTitle>{label}</FieldTitle>
-                        <FieldDescription>{description}</FieldDescription>
-                      </FieldContent>
-                      <RadioGroupItem value={label} />
-                    </Field>
-                  </FieldLabel>
-                ))}
-              </RadioGroup>
+                          {/* Photo Upload */}
+                          <div>
+                            <label htmlFor={`photo-${p.id}`} className="block font-medium mb-1 text-sm">
+                              Photo (max 3MB)
+                            </label>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Upload an image file. Maximum file size is 3MB.
+                            </p>
+                            <Input
+                              id={`photo-${p.id}`}
+                              type="file"
+                              accept="image/*"
+                              className="input input-bordered w-full p-1"
+                              onChange={(e) => handleFileChange(e, idx)}
+                            />
 
-              <FieldLabel className="mt-3">Project Name (Optional)</FieldLabel>
-              <Input
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-              />
-            </FieldSet>
-          </FieldGroup>
+                            {p.images?.[0]?.src && (
+                              <img
+                                src={p.images[0].src}
+                                alt={`Product ${p.title} preview`}
+                                className="mt-2 max-w-xs max-h-40 object-contain border rounded"
+                              />
+                            )}
+                          </div>
+                        </div>
 
-          <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={handleBack}>
-              Back
-            </Button>
-            <Button onClick={handleNext} disabled={!isStep4Valid}>
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+                        {/* Right side */}
+                        <div className="w-[60%] flex flex-col">
+                          <label
+                            htmlFor={`description-${p.id}`}
+                            className="block font-medium mb-1 text-sm"
+                          >
+                            Product Description
+                          </label>
+                          <p className="text-xs text-gray-500 mb-2">
+                            Provide a detailed description of the product.
+                          </p>
 
-      {/* STEP 5 — QUOTATION DETAILS */}
-      {step === 5 && (
-        <div>
-          <FieldGroup>
-            <FieldSet>
-              <FieldLabel className="mt-3">Quotation For</FieldLabel>
-              <RadioGroup value={quotationType} required onValueChange={setQuotationType}>
-                {[
-                  {
-                    label: "Ecoshift Corporation",
-                    description: "The Fastest-Growing Provider of Innovative Lighting Solutions",
-                  },
-                  {
-                    label: "Disruptive Solutions Inc",
-                    description: "future-ready lighting solutions that brighten spaces, cut costs, and power smarter business",
-                  },
-                ].map(({ label, description }) => (
-                  <FieldLabel key={label}>
-                    <Field orientation="horizontal">
-                      <FieldContent>
-                        <FieldTitle>{label}</FieldTitle>
-                        <FieldDescription>{description}</FieldDescription>
-                      </FieldContent>
-                      <RadioGroupItem value={label} />
-                    </Field>
-                  </FieldLabel>
-                ))}
-              </RadioGroup>
+                          <div className="flex-grow overflow-auto border rounded p-2">
+                            <EditableTable
+                              description={p.description}
+                              setDescription={(val) => setDescriptionAtIndex(idx, val)}
+                            />
+                          </div>
 
-              <FieldLabel>Quotation Number</FieldLabel>
-              <Input
-                type="text"
-                value={quotationNumber}
-                onChange={(e) => {
-                  setQuotationNumber(e.target.value);
-                  if (quotationNumberError) setQuotationNumberError("");
-                }}
-                placeholder="TSM-0000"
-                className="uppercase"
-              />
-              <FieldDescription className="text-sm text-muted-foreground">
-                Quotation Number Source from TSM
-              </FieldDescription>
-              {quotationNumberError && (
-                <p className="mt-1 text-sm text-red-600">{quotationNumberError}</p>
-              )}
+                          {/* Buttons below the description table */}
+                          <div className="flex gap-2 mt-4">
+                            <Button
+                              onClick={() => submitProductToShopify(p)}
+                              className="ml-auto"
+                            >
+                              Submit to Shopify
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                setManualProducts((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
 
-              <FieldLabel className="mt-3">Quotation Amount</FieldLabel>
+                  </div>
+
+                  <DialogFooter className="flex justify-between items-center gap-2">
+                    {/* Left side buttons */}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() =>
+                          setManualProducts((prev) => [
+                            ...prev,
+                            {
+                              id: Date.now(),
+                              title: "",
+                              skus: [""],
+                              description: "",
+                              images: [{ src: "" }],
+                              quantity: 1,
+                              price: 0,
+                            },
+                          ])
+                        }
+                      >
+                        Add More
+                      </Button>
+                    </div>
+
+                    {/* Right side close */}
+                    <Button variant="outline" onClick={() => setIsManualEntry(false)}>
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <FieldLabel>Quotation Amount</FieldLabel>
               <Input
                 type="number"
                 min={0}
@@ -601,38 +991,6 @@ export function QuotationSheet(props: Props) {
                 onChange={(e) => setQuotationAmount(e.target.value)}
                 placeholder="Enter quotation amount"
               />
-
-              <FieldLabel className="mt-3">Type</FieldLabel>
-              <RadioGroup value={callType} onValueChange={setCallType}>
-                {[
-                  {
-                    label: "Sent Quotation Standard",
-                    description: "Standard quotation sent to client.",
-                  },
-                  {
-                    label: "Sent Quotation with Special Price",
-                    description: "Quotation with a special pricing offer.",
-                  },
-                  {
-                    label: "Sent Quotation with SPF",
-                    description: "Quotation including SPF (Special Pricing Framework).",
-                  },
-                  {
-                    label: "With SPFS",
-                    description: "Quotation with SPFS details included.",
-                  },
-                ].map(({ label, description }) => (
-                  <FieldLabel key={label}>
-                    <Field orientation="horizontal">
-                      <FieldContent>
-                        <FieldTitle>{label}</FieldTitle>
-                        <FieldDescription>{description}</FieldDescription>
-                      </FieldContent>
-                      <RadioGroupItem value={label} />
-                    </Field>
-                  </FieldLabel>
-                ))}
-              </RadioGroup>
             </FieldSet>
           </FieldGroup>
 
@@ -640,10 +998,7 @@ export function QuotationSheet(props: Props) {
             <Button variant="outline" onClick={handleBack}>
               Back
             </Button>
-            <Button
-              onClick={handleNextStep5}
-              disabled={!isStep5Valid}
-            >
+            <Button onClick={handleNext}>
               Next
             </Button>
           </div>
@@ -673,33 +1028,45 @@ export function QuotationSheet(props: Props) {
               />
 
               <FieldLabel className="mt-3">Status</FieldLabel>
-              <RadioGroup value={status} onValueChange={setStatus}>
-                <FieldLabel>
-                  <Field orientation="horizontal">
-                    <FieldContent>
-                      <FieldTitle>Quote Done</FieldTitle>
-                      <FieldDescription>
-                        The quotation process is complete and finalized.
-                      </FieldDescription>
-                    </FieldContent>
-                    <RadioGroupItem value="Quote-Done" />
-                  </Field>
-                </FieldLabel>
+              <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                {[
+                  {
+                    value: "Quote-Done",
+                    title: "Quote-Done",
+                    desc: "The quotation process is complete and finalized.",
+                  },
+                ].map((item) => (
+                  <FieldLabel key={item.value}>
+                    <Field orientation="horizontal" className="w-full items-start">
+                      {/* LEFT */}
+                      <FieldContent className="flex-1">
+                        <FieldTitle>{item.title}</FieldTitle>
+                        <FieldDescription>{item.desc}</FieldDescription>
+
+                        {/* Buttons only visible if selected */}
+                        {status === item.value && (
+                          <div className="mt-4 flex gap-2">
+                            <Button type="button" variant="outline" onClick={handleBack}>
+                              Back
+                            </Button>
+                            <Button
+                              onClick={saveWithSelectedProducts}
+                              disabled={!isStep6Valid}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        )}
+                      </FieldContent>
+
+                      {/* RIGHT */}
+                      <RadioGroupItem value={item.value} />
+                    </Field>
+                  </FieldLabel>
+                ))}
               </RadioGroup>
             </FieldSet>
           </FieldGroup>
-
-          <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={handleBack}>
-              Back
-            </Button>
-            <Button
-              onClick={saveWithSelectedProducts}
-              disabled={!isStep6Valid}
-            >
-              Save
-            </Button>
-          </div>
         </div>
       )}
     </>

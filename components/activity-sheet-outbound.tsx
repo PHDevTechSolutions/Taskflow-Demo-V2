@@ -50,37 +50,51 @@ export function OutboundSheet({
             {/* STEP 2 */}
             {step === 2 && (
                 <div>
+                    <h2 className="text-sm font-semibold mb-3">Step 2 — Source</h2>
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
 
-                            <RadioGroup value={source} onValueChange={setSource}>
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Outbound - Touchbase</FieldTitle>
-                                            <FieldDescription>
-                                                Initial call to reconnect or update the client about ongoing
-                                                concerns.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Outbound - Touchbase" />
-                                    </Field>
-                                </FieldLabel>
+                            <RadioGroup value={source} onValueChange={setSource} className="space-y-4">
+                                {[
+                                    {
+                                        value: "Outbound - Touchbase",
+                                        title: "Outbound - Touchbase",
+                                        desc:
+                                            "Initial call to reconnect or update the client about ongoing concerns.",
+                                    },
+                                    {
+                                        value: "Outbound - Follow-up",
+                                        title: "Outbound - Follow-up",
+                                        desc:
+                                            "Follow-up call to check progress or request additional requirements.",
+                                    },
+                                ].map((item) => (
+                                    <FieldLabel key={item.value}>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
+                                                <FieldTitle>{item.title}</FieldTitle>
+                                                <FieldDescription>{item.desc}</FieldDescription>
 
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Outbound - Follow-up</FieldTitle>
-                                            <FieldDescription>
-                                                Follow-up call to check progress or request additional
-                                                requirements.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Outbound - Follow-up" />
-                                    </Field>
-                                </FieldLabel>
+                                                {/* Button lalabas lang sa selected */}
+                                                {source === item.value && (
+                                                    <div className="mt-4 flex gap-2 flex">
+                                                        <Button variant="outline" onClick={handleBack}>Back</Button>
+                                                        <Button onClick={handleNext}>
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </FieldContent>
+
+                                            {/* RIGHT */}
+                                            <RadioGroupItem value={item.value} />
+                                        </Field>
+                                    </FieldLabel>
+                                ))}
                             </RadioGroup>
+
                         </FieldSet>
                     </FieldGroup>
 
@@ -98,20 +112,13 @@ export function OutboundSheet({
                             calls are only counted in the source statistics.
                         </AlertDescription>
                     </Alert>
-
-                    <h2 className="text-sm font-semibold mt-3">Step 2 — Source</h2>
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext} disabled={!source}>
-                            Next
-                        </Button>
-                    </div>
                 </div>
             )}
 
             {/* STEP 3 */}
             {step === 3 && (
                 <div>
+                    <h2 className="text-sm font-semibold mb-3">Step 3 — Call Details</h2>
                     {/* CONTACT NUMBER DISPLAY */}
                     <Alert>
                         <CheckCircle2Icon />
@@ -133,152 +140,160 @@ export function OutboundSheet({
                         <FieldSet>
                             <FieldLabel>Call Status</FieldLabel>
 
-                            <RadioGroup value={callStatus} onValueChange={setCallStatus}>
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Successful</FieldTitle>
-                                            <FieldDescription>
-                                                Client was reached and conversation was completed.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Successful" />
-                                    </Field>
-                                </FieldLabel>
+                            <RadioGroup value={callStatus} onValueChange={setCallStatus} className="space-y-4">
+                                {[
+                                    {
+                                        value: "Successful",
+                                        title: "Successful",
+                                        desc: "Client was reached and conversation was completed.",
+                                    },
+                                    {
+                                        value: "Unsuccessful",
+                                        title: "Unsuccessful",
+                                        desc: "Client was not reached or call was not completed.",
+                                    },
+                                ].map((item) => (
+                                    <FieldLabel key={item.value}>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
+                                                <FieldTitle>{item.title}</FieldTitle>
+                                                <FieldDescription>{item.desc}</FieldDescription>
 
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Unsuccessful</FieldTitle>
-                                            <FieldDescription>
-                                                Client was not reached or call was not completed.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Unsuccessful" />
-                                    </Field>
-                                </FieldLabel>
+                                                {/* Buttons lalabas lang sa selected */}
+                                                {callStatus === item.value && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={handleBack}
+                                                        >
+                                                            Back
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleNext}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </FieldContent>
+
+                                            {/* RIGHT */}
+                                            <RadioGroupItem value={item.value} />
+                                        </Field>
+                                    </FieldLabel>
+                                ))}
                             </RadioGroup>
+
                         </FieldSet>
                     </FieldGroup>
-
-                    <h2 className="text-sm font-semibold mt-3">Step 3 — Call Details</h2>
-
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext}>Next</Button>
-                    </div>
                 </div>
             )}
 
             {/* STEP 4 */}
             {step === 4 && (
                 <div>
-                    <FieldGroup>
-                        <FieldSet>
-                            <FieldLabel>Call Type</FieldLabel>
-
-                            <RadioGroup value={callType} onValueChange={setCallType}>
-                                {callStatus === "Successful" ? (
-                                    <>
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>No Requirements</FieldTitle>
-                                                    <FieldDescription>
-                                                        Client states no requirements at the moment.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="No Requirements" />
-                                            </Field>
-                                        </FieldLabel>
-
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>Waiting for Future Projects</FieldTitle>
-                                                    <FieldDescription>
-                                                        Client may have upcoming projects but no current
-                                                        requirements.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="Waiting for Future Projects" />
-                                            </Field>
-                                        </FieldLabel>
-
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>With RFQ</FieldTitle>
-                                                    <FieldDescription>
-                                                        Client has a Request for Quotation.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="With RFQ" />
-                                            </Field>
-                                        </FieldLabel>
-                                    </>
-                                ) : callStatus === "Unsuccessful" ? (
-                                    <>
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>Ringing Only</FieldTitle>
-                                                    <FieldDescription>
-                                                        Phone rang but no one answered the call.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="Ringing Only" />
-                                            </Field>
-                                        </FieldLabel>
-
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>Cannot Be Reached</FieldTitle>
-                                                    <FieldDescription>
-                                                        Client is unreachable or phone is unattended.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="Cannot Be Reached" />
-                                            </Field>
-                                        </FieldLabel>
-
-                                        <FieldLabel>
-                                            <Field orientation="horizontal">
-                                                <FieldContent>
-                                                    <FieldTitle>Not Connected With The Company</FieldTitle>
-                                                    <FieldDescription>
-                                                        Client confirmed they are no longer associated with the
-                                                        company.
-                                                    </FieldDescription>
-                                                </FieldContent>
-                                                <RadioGroupItem value="Not Connected With The Company" />
-                                            </Field>
-                                        </FieldLabel>
-                                    </>
-                                ) : null}
-                            </RadioGroup>
-                        </FieldSet>
-                    </FieldGroup>
-
+                    <h2 className="text-sm font-semibold mb-3">Step 4 — Call Details</h2>
                     <Label className="mb-3 mt-3">Follow Up Date</Label>
                     <Input
                         type="date"
                         value={followUpDate}
                         onChange={(e) => setFollowUpDate(e.target.value)}
+                        className="mb-4"
                     />
 
-                    <h2 className="text-sm font-semibold mt-3">Step 4 — Call Details</h2>
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext}>Next</Button>
-                    </div>
+                    <FieldGroup>
+                        <FieldSet>
+                            <FieldLabel>Call Type</FieldLabel>
+                            <RadioGroup
+                                value={callType}
+                                onValueChange={setCallType}
+                                className="space-y-4"
+                            >
+                                {(callStatus === "Successful"
+                                    ? [
+                                        {
+                                            value: "No Requirements",
+                                            title: "No Requirements",
+                                            desc: "Client states no requirements at the moment.",
+                                        },
+                                        {
+                                            value: "Waiting for Future Projects",
+                                            title: "Waiting for Future Projects",
+                                            desc:
+                                                "Client may have upcoming projects but no current requirements.",
+                                        },
+                                        {
+                                            value: "With RFQ",
+                                            title: "With RFQ",
+                                            desc: "Client has a Request for Quotation.",
+                                        },
+                                    ]
+                                    : callStatus === "Unsuccessful"
+                                        ? [
+                                            {
+                                                value: "Ringing Only",
+                                                title: "Ringing Only",
+                                                desc: "Phone rang but no one answered the call.",
+                                            },
+                                            {
+                                                value: "Cannot Be Reached",
+                                                title: "Cannot Be Reached",
+                                                desc: "Client is unreachable or phone is unattended.",
+                                            },
+                                            {
+                                                value: "Not Connected With The Company",
+                                                title: "Not Connected With The Company",
+                                                desc:
+                                                    "Client confirmed they are no longer associated with the company.",
+                                            },
+                                        ]
+                                        : []
+                                ).map((item) => (
+                                    <FieldLabel key={item.value}>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
+                                                <FieldTitle>{item.title}</FieldTitle>
+                                                <FieldDescription>{item.desc}</FieldDescription>
+
+                                                {/* Buttons lalabas lang sa selected */}
+                                                {callType === item.value && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={handleBack}
+                                                        >
+                                                            Back
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleNext}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </FieldContent>
+
+                                            {/* RIGHT */}
+                                            <RadioGroupItem value={item.value} />
+                                        </Field>
+                                    </FieldLabel>
+                                ))}
+                            </RadioGroup>
+                        </FieldSet>
+                    </FieldGroup>
                 </div>
             )}
 
             {/* STEP 5 */}
             {step === 5 && (
                 <div>
+                    <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Remarks</FieldLabel>
@@ -296,40 +311,48 @@ export function OutboundSheet({
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
 
-                            <RadioGroup value={status} onValueChange={setStatus}>
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Assisted</FieldTitle>
-                                            <FieldDescription>
-                                                Client was assisted and provided with the needed
-                                                information or support.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Assisted" />
-                                    </Field>
-                                </FieldLabel>
+                            <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                                {[
+                                    {
+                                        value: "Assisted",
+                                        title: "Assisted",
+                                        desc: "Client was assisted and provided with the needed information or support.",
+                                    },
+                                    {
+                                        value: "Not Assisted",
+                                        title: "Not Assisted",
+                                        desc: "Unable to assist the client due to incomplete info, missed call, etc.",
+                                    },
+                                ].map((item) => (
+                                    <FieldLabel key={item.value}>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
+                                                <FieldTitle>{item.title}</FieldTitle>
+                                                <FieldDescription>{item.desc}</FieldDescription>
 
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Not Assisted</FieldTitle>
-                                            <FieldDescription>
-                                                Unable to assist the client due to incomplete info,
-                                                missed call, etc.
-                                            </FieldDescription>
-                                        </FieldContent>
-                                        <RadioGroupItem value="Not Assisted" />
-                                    </Field>
-                                </FieldLabel>
+                                                {/* Buttons only visible if selected */}
+                                                {status === item.value && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button type="button" variant="outline" onClick={handleBack}>
+                                                            Back
+                                                        </Button>
+                                                        <Button type="button" onClick={handleSave}>
+                                                            Save
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </FieldContent>
+
+                                            {/* RIGHT */}
+                                            <RadioGroupItem value={item.value} />
+                                        </Field>
+                                    </FieldLabel>
+                                ))}
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
-                    <h2 className="text-sm font-semibold mb-3 mt-3">Step 5 — Remarks & Status</h2>
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleSave}>Save</Button>
-                    </div>
+
                 </div>
             )}
         </>

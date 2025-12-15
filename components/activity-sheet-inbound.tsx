@@ -131,17 +131,40 @@ export function InboundSheet({
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
+
                             <RadioGroup
-                                defaultValue={source}
-                                onValueChange={(value) => setSource(value)}
+                                value={source}
+                                onValueChange={setSource}
                             >
                                 {INBOUND_SOURCES.map(({ label, description }) => (
                                     <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
                                                 <FieldTitle>{label}</FieldTitle>
                                                 <FieldDescription>{description}</FieldDescription>
+
+                                                {/* Buttons only visible if selected */}
+                                                {source === label && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button
+                                                            type="button" variant="outline"
+                                                            onClick={handleBack}
+                                                        >
+                                                            Back
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleNext}
+                                                            disabled={!source}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </FieldContent>
+
+                                            {/* RIGHT */}
                                             <RadioGroupItem value={label} />
                                         </Field>
                                     </FieldLabel>
@@ -149,13 +172,6 @@ export function InboundSheet({
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
-
-                    <div className="flex justify-between mt-4">
-                        <Button onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext} disabled={!source}>
-                            Next
-                        </Button>
-                    </div>
                 </>
             )}
 
@@ -165,32 +181,42 @@ export function InboundSheet({
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Call Type</FieldLabel>
+
                             <RadioGroup
-                                defaultValue={callType}
-                                onValueChange={(value) => setCallType(value)}
+                                value={callType}
+                                onValueChange={setCallType}
+                                className="space-y-4"
                             >
                                 {INBOUND_CALL_TYPES.map(({ label, description }) => (
                                     <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
                                                 <FieldTitle>{label}</FieldTitle>
                                                 <FieldDescription>{description}</FieldDescription>
+
+                                                {/* Buttons only show if selected */}
+                                                {callType === label && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button type="button" onClick={handleBack} variant="outline">
+                                                            Back
+                                                        </Button>
+                                                        <Button type="button" onClick={handleNext} disabled={!callType}>
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </FieldContent>
+
+                                            {/* RIGHT */}
                                             <RadioGroupItem value={label} />
                                         </Field>
                                     </FieldLabel>
                                 ))}
                             </RadioGroup>
                         </FieldSet>
-
                     </FieldGroup>
 
-                    <div className="flex justify-between mt-4">
-                        <Button onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext} disabled={!callType}>
-                            Next
-                        </Button>
-                    </div>
                 </>
             )}
 
@@ -213,17 +239,34 @@ export function InboundSheet({
                     <FieldGroup className="mt-4">
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
+
                             <RadioGroup
-                                defaultValue={status}
-                                onValueChange={(value) => setStatus(value)}
+                                value={status}
+                                onValueChange={setStatus}
+                                className="space-y-4"
                             >
                                 {STATUS_OPTIONS.map(({ label, description, value }) => (
                                     <FieldLabel key={value}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
                                                 <FieldTitle>{label}</FieldTitle>
                                                 <FieldDescription>{description}</FieldDescription>
+
+                                                {/* Buttons only visible if selected */}
+                                                {status === value && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button type="button" variant="outline" onClick={handleBack}>
+                                                            Back
+                                                        </Button>
+                                                        <Button type="button" onClick={handleSave}>
+                                                            Save
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </FieldContent>
+
+                                            {/* RIGHT */}
                                             <RadioGroupItem value={value} />
                                         </Field>
                                     </FieldLabel>
@@ -231,10 +274,6 @@ export function InboundSheet({
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleSave}>Save</Button>
-                    </div>
                 </>
             )}
         </>
