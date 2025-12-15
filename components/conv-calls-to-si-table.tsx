@@ -247,7 +247,7 @@ export const CallSI: React.FC<CallSIProps> = ({
           <p>
             <strong>Number of SI:</strong> Counted unique <code>si_date</code> where <code>actual_sales</code> &gt; 0.
           </p>
-          <p className="bg-gray-100 p-2 rounded text-sm">
+          <p className="bg-gray-100 p-2 rounded">
             Percentage of Calls to SI = (Number of Calls ÷ Number of SI) × 100
           </p>
         </CardContent>
