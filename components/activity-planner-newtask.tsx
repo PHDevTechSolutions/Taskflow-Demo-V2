@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
 import {
   Accordion,
@@ -8,12 +8,20 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { supabase } from "@/utils/supabase";
 
 interface Account {
   id: string;
@@ -36,7 +44,7 @@ interface NewTaskProps {
 }
 
 interface EndorsedTicket {
-  _id: string;
+  id: string; // updated from _id to id
   account_reference_number: string;
   company_name: string;
   contact_person: string;
@@ -46,7 +54,8 @@ interface EndorsedTicket {
   ticket_reference_number: string;
   wrap_up: string;
   inquiry: string;
-  manager: string;
+  tsm: string;
+  referenceid: string;
   agent: string;
   date_created: string;
   date_updated: string;
@@ -56,25 +65,36 @@ export const NewTask: React.FC<NewTaskProps> = ({
   referenceid,
   onEmptyStatusChange,
 }) => {
+  // State for Accounts
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // State for Endorsed Tickets
   const [endorsedTickets, setEndorsedTickets] = useState<EndorsedTicket[]>([]);
   const [loadingEndorsed, setLoadingEndorsed] = useState(false);
   const [errorEndorsed, setErrorEndorsed] = useState<string | null>(null);
 
+  // Search Term for filtering accounts
   const [searchTerm, setSearchTerm] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<EndorsedTicket | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
+  // 🔔 sound refs
+  const endorsedSoundRef = useRef<HTMLAudioElement | null>(null);
+  const playedTicketIdsRef = useRef<Set<string>>(new Set());
+
+  // Cluster order for grouping
   const clusterOrder = [
-    "TOP 50",
-    "NEXT 30",
-    "BALANCE 20",
-    "TSA CLIENT",
-    "CSR CLIENT",
-  ].map((c) => c.toLowerCase());
+    "top 50",
+    "next 30",
+    "balance 20",
+    "tsa client",
+    "csr client",
+  ];
 
-  // Generate Activity Reference Number
+  // Generate Activity Reference Number helper
   const generateActivityRef = (companyName: string, region: string) => {
     const words = companyName.trim().split(" ");
     const firstInitial = words[0]?.charAt(0).toUpperCase() || "X";
@@ -83,11 +103,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return `${firstInitial}${lastInitial}-${region}-${uniqueNumber}`;
   };
 
-  // Handle Add (POST to API)
+  // Add Account Handler
   const handleAdd = async (account: Account) => {
     const region = account.region || "NCR";
-    const tsm = (account as any).tsm;
-    const manager = (account as any).manager;
+    const tsm = account.tsm;
+    const manager = account.manager;
 
     if (!tsm || !manager) {
       alert("TSM or Manager information is missing. Please check the account data.");
@@ -114,6 +134,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       if (!res.ok) throw new Error(data.error || "Save failed");
 
+      // Calculate next available date
       const now = new Date();
       let newDate: Date;
 
@@ -138,6 +159,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       if (!updateRes.ok) throw new Error(updateData.error || "Update failed");
 
+      // Remove added account from state
       setAccounts((prev) => prev.filter((acc) => acc.id !== account.id));
 
       toast.success(`Successfully added and updated date for: ${account.company_name}`);
@@ -147,7 +169,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     }
   };
 
-  // Date Normalizer
+  // Normalize date string or return null
   const normalizeDate = (dateStr?: string | null): string | null => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -160,6 +182,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return `${year}-${month}-${day}`;
   };
 
+  // Group accounts by cluster with a date filter condition
   const groupByCluster = (
     accounts: Account[],
     dateCondition: (date: string | null) => boolean
@@ -176,7 +199,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return grouped;
   };
 
-  // Fetch Accounts
+  // Fetch Accounts from API
   useEffect(() => {
     if (!referenceid) {
       setAccounts([]);
@@ -213,53 +236,116 @@ export const NewTask: React.FC<NewTaskProps> = ({
     fetchAccounts();
   }, [referenceid, onEmptyStatusChange]);
 
-  // Fetch Endorsed Tickets
-  useEffect(() => {
+  const fetchEndorsedTickets = useCallback(async () => {
     if (!referenceid) {
       setEndorsedTickets([]);
       return;
     }
 
-    const fetchEndorsedTickets = async () => {
-      setErrorEndorsed(null);
-      setLoadingEndorsed(true);
-      try {
-        const response = await fetch(
-          `/api/act-endorsed-ticket?referenceid=${encodeURIComponent(referenceid)}`
-        );
-        if (!response.ok) {
-          setErrorEndorsed("Failed to fetch endorsed tickets");
-          setLoadingEndorsed(false);
-          return;
-        }
+    setLoadingEndorsed(true);
+    setErrorEndorsed(null);
 
-        const data = await response.json();
-        setEndorsedTickets(data.data || []);
-      } catch (err) {
-        console.error("Error fetching endorsed tickets:", err);
-        setErrorEndorsed("Error fetching endorsed tickets.");
-      } finally {
-        setLoadingEndorsed(false);
+    try {
+      const res = await fetch(`/api/act-fetch-endorsed-ticket?referenceid=${encodeURIComponent(referenceid)}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.message || json.error || "Failed to fetch endorsed tickets");
       }
-    };
 
-    fetchEndorsedTickets();
+      const json = await res.json();
+      setEndorsedTickets(json.activities || []);
+    } catch (err: any) {
+      setErrorEndorsed(err.message || "Error fetching endorsed tickets");
+    } finally {
+      setLoadingEndorsed(false);
+    }
   }, [referenceid]);
 
-  // Handle Use Endorsed Ticket
-  const handleUseEndorsed = async (ticket: EndorsedTicket) => {
+
+  useEffect(() => {
+    fetchEndorsedTickets();
+
+    // Setup Supabase realtime subscription
+    const channel = supabase
+      .channel(`public:endorsed-ticket:referenceid=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "endorsed-ticket",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        (payload) => {
+          const newRecord = payload.new as EndorsedTicket;
+          const oldRecord = payload.old as EndorsedTicket;
+
+          setEndorsedTickets((curr) => {
+            switch (payload.eventType) {
+              case "INSERT": {
+                // 🔔 play sound ONCE per ticket
+                if (!playedTicketIdsRef.current.has(newRecord.id)) {
+                  endorsedSoundRef.current?.play().catch(() => { });
+                  playedTicketIdsRef.current.add(newRecord.id);
+                }
+
+                if (!curr.some((t) => t.id === newRecord.id)) {
+                  return [...curr, newRecord];
+                }
+
+                return curr;
+              }
+              case "UPDATE":
+                return curr.map((t) => (t.id === newRecord.id ? newRecord : t));
+              case "DELETE":
+                return curr.filter((t) => t.id !== oldRecord.id);
+              default:
+                return curr;
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [referenceid, fetchEndorsedTickets]);
+
+
+  const openConfirmUseTicket = (ticket: EndorsedTicket) => {
+    setSelectedTicket(ticket);
+    setConfirmOpen(true);
+  };
+
+  // Use Endorsed Ticket handler
+  const handleConfirmUseEndorsed = async () => {
+    if (!selectedTicket) return;
+
     try {
+      setConfirmLoading(true);
+
+      const ticket = selectedTicket;
       const region = "NCR";
 
       const payload = {
         ticket_reference_number: ticket.ticket_reference_number,
         account_reference_number: ticket.account_reference_number,
-        tsm: ticket.manager,
-        referenceid: ticket.agent,
+        tsm: ticket.tsm,
+        referenceid: ticket.referenceid,
         status: "On-Progress",
         activity_reference_number: generateActivityRef(ticket.company_name, region),
       };
 
+      // 1. Save endorsed ticket to activity
       const res = await fetch("/api/act-save-endorsed-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -267,12 +353,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
       });
 
       const data = await res.json();
-
       if (!res.ok) {
         toast.error(data.error || "Failed to use endorsed ticket");
         return;
       }
 
+      // 2. Update endorsed ticket status
       const updateStatusRes = await fetch("/api/act-update-ticket-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -283,41 +369,59 @@ export const NewTask: React.FC<NewTaskProps> = ({
       });
 
       const updateStatusData = await updateStatusRes.json();
-
       if (!updateStatusRes.ok) {
         toast.error(updateStatusData.error || "Failed to update ticket status");
         return;
       }
 
-      toast.success(`Endorsed ticket used and status updated: ${ticket.company_name}`);
+      toast.success(`Ticket used successfully: ${ticket.company_name}`);
 
-      setEndorsedTickets((prev) => prev.filter((t) => t._id !== ticket._id));
+      // 3. Optimistic UI remove
+      toast.success(`Ticket used successfully: ${ticket.company_name}`);
+
+      // 3. Optimistic UI remove + cleanup sound memory
+      setEndorsedTickets((prev) => {
+        playedTicketIdsRef.current.delete(ticket.id);
+        return prev.filter((t) => t.id !== ticket.id);
+      });
+
+      // close dialog
+      setConfirmOpen(false);
+      setSelectedTicket(null);
+
+
+      // close dialog
+      setConfirmOpen(false);
+      setSelectedTicket(null);
     } catch (err) {
       console.error(err);
       toast.error("Error using endorsed ticket.");
+    } finally {
+      setConfirmLoading(false);
     }
   };
 
-  // Filtered Accounts Memo
+  // Filter accounts by search term
   const filteredAccounts = React.useMemo(() => {
     if (!searchTerm.trim()) return accounts;
-
     const lowerSearch = searchTerm.toLowerCase();
     return accounts.filter((acc) =>
       acc.company_name.toLowerCase().includes(lowerSearch)
     );
   }, [accounts, searchTerm]);
 
-  // Dates for grouping
+  // Dates for grouping accounts
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
     2,
     "0"
   )}-${String(now.getDate()).padStart(2, "0")}`;
 
+  // Group accounts by date condition
   const groupedToday = groupByCluster(filteredAccounts, (date) => date === todayStr);
   const groupedNull = groupByCluster(filteredAccounts, (date) => date === null);
 
+  // Totals for UI display
   const totalTodayCount = Object.values(groupedToday).reduce(
     (sum, arr) => sum + arr.length,
     0
@@ -327,20 +431,25 @@ export const NewTask: React.FC<NewTaskProps> = ({
     0
   );
 
+  // Find first non-empty cluster
   const getFirstNonEmptyCluster = (
     grouped: Record<string, Account[]>,
     orderedList: string[]
   ) => {
     for (const cluster of orderedList) {
-      const accounts = grouped[cluster];
-      if (accounts && accounts.length > 0) return cluster;
+      if (grouped[cluster]?.length) return cluster;
     }
     return null;
   };
 
   const firstAvailableCluster = getFirstNonEmptyCluster(groupedNull, clusterOrder);
 
-  // === HERE IS THE FIXED RENDER PART ===
+  useEffect(() => {
+    endorsedSoundRef.current = new Audio("/ticket-endorsed.mp3");
+    endorsedSoundRef.current.volume = 0.9;
+  }, []);
+
+  // === RENDER ===
   return (
     <div className="max-h-[400px] overflow-auto space-y-8 custom-scrollbar">
       {loading ? (
@@ -389,7 +498,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
               <Accordion type="single" collapsible className="w-full">
                 {endorsedTickets.map((ticket) => (
-                  <AccordionItem key={ticket._id} value={ticket._id}>
+                  <AccordionItem key={ticket.id} value={ticket.id}>
                     <div className="flex justify-between items-center p-2 cursor-pointer select-none">
                       <AccordionTrigger className="flex-1 text-xs font-semibold">
                         {ticket.company_name}
@@ -399,17 +508,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleUseEndorsed(ticket);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            handleUseEndorsed(ticket);
-                          }
+                          openConfirmUseTicket(ticket);
                         }}
                       >
                         Use Ticket
                       </Button>
+
                     </div>
                     <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
                       <p>
@@ -440,7 +544,38 @@ export const NewTask: React.FC<NewTaskProps> = ({
             </section>
           ) : null}
 
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogContent className="text-xs">
+              <DialogHeader>
+                <DialogTitle>Confirm Use Ticket</DialogTitle>
+              </DialogHeader>
+
+              <p>
+                Are you sure you want to use this endorsed ticket for
+                <strong> {selectedTicket?.company_name}</strong>?
+              </p>
+
+              <DialogFooter className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmOpen(false)}
+                  disabled={confirmLoading}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  onClick={handleConfirmUseEndorsed}
+                  disabled={confirmLoading}
+                >
+                  {confirmLoading ? "Processing..." : "Confirm"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Separator />
+
           {/* Search Input */}
           <Input
             type="search"
@@ -454,7 +589,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
           {/* OB Calls for Today */}
           {totalTodayCount > 0 && (
             <section>
-
               <h2 className="text-xs font-bold mb-4">
                 OB Calls Account for Today ({totalTodayCount})
               </h2>

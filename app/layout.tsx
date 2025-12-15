@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Reminders } from "@/components/reminders";
+import { OfflineDialog } from "@/components/offline-dialog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,7 @@ export default function RootLayout({
             <Reminders />
             <Analytics/>
             {children}
+            <OfflineDialog />
           </ThemeProvider>
           <Toaster />
         </UserProvider>
