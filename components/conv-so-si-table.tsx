@@ -273,9 +273,9 @@ export const SOSI: React.FC<SOSIProps> = ({
           <p>
             <strong>Number of SI:</strong> Counts unique <code>si_date</code> where <code>actual_sales</code> is &gt; 0.
           </p>
-          <pre className="bg-gray-100 p-2 rounded text-sm">
+          <p className="bg-gray-100 p-2 rounded text-sm">
             Percentage of SO to SI: Calculated as (Number of SO ÷ Number of SI) × 100.
-          </pre>
+          </p>
           <p>Data is filtered based on the selected month.</p>
         </CardContent>
       </Card>
