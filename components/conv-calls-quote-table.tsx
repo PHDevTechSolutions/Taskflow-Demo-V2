@@ -250,7 +250,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
             <strong>Percentage of Calls to Quote:</strong> This represents the ratio
             of successful quotes to total outbound calls. Calculated as:
           </p>
-          <p className="bg-gray-100 p-2 rounded text-sm">
+          <p className="bg-gray-100 p-2 rounded">
             Percentage of Calls to Quote = (Total Number of Quotes ÷ No. of Calls) × 100%
           </p>
         </CardContent>
