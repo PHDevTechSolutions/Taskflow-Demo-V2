@@ -246,7 +246,7 @@ export const QuoteSO: React.FC<QuoteSOProps> = ({
           <p>
             <strong>Number of SO:</strong> Counts all activities with status <code>SO-Done</code>.
           </p>
-          <p className="bg-gray-100 p-2 rounded text-sm">
+          <p className="bg-gray-100 p-2 rounded">
             Percentage of Quote to SO: Calculated as (Number of SO ÷ Number of Quotes) × 100.
           </p>
           <p>Data filtered by selected month from dropdown.</p>
