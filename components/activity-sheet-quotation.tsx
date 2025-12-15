@@ -819,34 +819,86 @@ export function QuotationSheet(props: Props) {
               )}
 
               <Dialog open={isManualEntry} onOpenChange={setIsManualEntry}>
-                <DialogContent style={{ maxWidth: "60vw", width: "90vw" }}
-                  className="mx-auto rounded-lg p-6">
+                <DialogContent
+                  style={{ maxWidth: "60vw", width: "90vw" }}
+                  className="mx-auto rounded-lg p-6"
+                >
                   <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold">Manual Product Entry</DialogTitle>
+                    <DialogTitle className="text-lg font-semibold">
+                      Manual Product Entry
+                    </DialogTitle>
                   </DialogHeader>
 
-                  <div className="space-y-6 max-h-[75vh] overflow-auto">
+                  {/* BODY */}
+                  <div className="max-h-[75vh] overflow-auto">
+
+                    {/* ================= EMPTY STATE ================= */}
+                    {manualProducts.length === 0 && (
+                      <div className="flex items-center justify-center min-h-[40vh]">
+                        <div className="text-center space-y-4">
+                          <h3 className="text-base font-semibold">
+                            No products added yet
+                          </h3>
+
+                          <p className="text-sm text-muted-foreground">
+                            You selected manual entry.
+                            Click below to add a new product and provide its details
+                            before submitting to Shopify.
+                          </p>
+
+                          <div className="flex justify-center gap-3 pt-2">
+                            <Button
+                              onClick={() =>
+                                setManualProducts([
+                                  {
+                                    id: Date.now(),
+                                    title: "",
+                                    skus: [""],
+                                    description: "",
+                                    images: [{ src: "" }],
+                                    quantity: 1,
+                                    price: 0,
+                                  },
+                                ])
+                              }
+                            >
+                              Add New Product
+                            </Button>
+
+                            <Button
+                              variant="destructive"
+                              onClick={() => {
+                                setManualProducts([]);
+                                setIsManualEntry(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ================= PRODUCT FORMS ================= */}
                     {manualProducts.map((p, idx) => (
                       <div
                         key={p.id}
-                        className="border rounded-md p-4 flex gap-8"
+                        className="border rounded-md p-4 flex gap-8 mb-6"
                         style={{ minHeight: "400px" }}
                       >
-                        {/* Left side */}
+                        {/* LEFT SIDE */}
                         <div className="flex flex-col gap-6 w-[40%]">
                           {/* Product Title */}
                           <div>
-                            <label htmlFor={`title-${p.id}`} className="block font-medium mb-1 text-sm">
+                            <label className="block font-medium mb-1 text-sm">
                               Product Title
                             </label>
                             <p className="text-xs text-gray-500 mb-1">
                               Enter the name of the product.
                             </p>
                             <Input
-                              id={`title-${p.id}`}
-                              placeholder="Product Title"
-                              className="input input-bordered w-full"
                               value={p.title}
+                              placeholder="Product Title"
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setManualProducts((prev) => {
@@ -860,17 +912,14 @@ export function QuotationSheet(props: Props) {
 
                           {/* SKU */}
                           <div>
-                            <label htmlFor={`sku-${p.id}`} className="block font-medium mb-1 text-sm">
-                              SKU
-                            </label>
+                            <label className="block font-medium mb-1 text-sm">SKU</label>
                             <p className="text-xs text-gray-500 mb-1">
                               Unique identifier for the product variant.
                             </p>
                             <Input
-                              id={`sku-${p.id}`}
-                              placeholder="SKU"
-                              className="input input-bordered w-full uppercase"
+                              className="uppercase"
                               value={p.skus[0] || ""}
+                              placeholder="SKU"
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setManualProducts((prev) => {
@@ -882,52 +931,41 @@ export function QuotationSheet(props: Props) {
                             />
                           </div>
 
-                          {/* Photo Upload */}
+                          {/* Photo */}
                           <div>
-                            <label htmlFor={`photo-${p.id}`} className="block font-medium mb-1 text-sm">
+                            <label className="block font-medium mb-1 text-sm">
                               Photo (max 3MB)
                             </label>
-                            <p className="text-xs text-gray-500 mb-1">
-                              Upload an image file. Maximum file size is 3MB.
-                            </p>
                             <Input
-                              id={`photo-${p.id}`}
                               type="file"
                               accept="image/*"
-                              className="input input-bordered w-full p-1"
                               onChange={(e) => handleFileChange(e, idx)}
                             />
-
                             {p.images?.[0]?.src && (
                               <img
                                 src={p.images[0].src}
-                                alt={`Product ${p.title} preview`}
-                                className="mt-2 max-w-xs max-h-40 object-contain border rounded"
+                                className="mt-2 max-h-40 object-contain border rounded"
                               />
                             )}
                           </div>
                         </div>
 
-                        {/* Right side */}
+                        {/* RIGHT SIDE */}
                         <div className="w-[60%] flex flex-col">
-                          <label
-                            htmlFor={`description-${p.id}`}
-                            className="block font-medium mb-1 text-sm"
-                          >
+                          <label className="block font-medium mb-1 text-sm">
                             Product Description
                           </label>
                           <p className="text-xs text-gray-500 mb-2">
                             Provide a detailed description of the product.
                           </p>
 
-                          <div className="flex-grow overflow-auto border rounded p-2">
+                          <div className="flex-grow border rounded p-2 overflow-auto">
                             <EditableTable
                               description={p.description}
                               setDescription={(val) => setDescriptionAtIndex(idx, val)}
                             />
                           </div>
 
-                          {/* Buttons below the description table */}
                           <div className="flex gap-2 mt-4">
                             <Button
                               onClick={() => submitProductToShopify(p)}
@@ -935,9 +973,9 @@ export function QuotationSheet(props: Props) {
                             >
                               Submit to Shopify
                             </Button>
+
                             <Button
                               variant="destructive"
-                              size="sm"
                               onClick={() =>
                                 setManualProducts((prev) => prev.filter((_, i) => i !== idx))
                               }
@@ -948,12 +986,11 @@ export function QuotationSheet(props: Props) {
                         </div>
                       </div>
                     ))}
-
                   </div>
 
-                  <DialogFooter className="flex justify-between items-center gap-2">
-                    {/* Left side buttons */}
-                    <div className="flex gap-2">
+                  {/* FOOTER (only show when may products na) */}
+                  {manualProducts.length > 0 && (
+                    <DialogFooter className="flex justify-between">
                       <Button
                         onClick={() =>
                           setManualProducts((prev) => [
@@ -972,15 +1009,15 @@ export function QuotationSheet(props: Props) {
                       >
                         Add More
                       </Button>
-                    </div>
 
-                    {/* Right side close */}
-                    <Button variant="outline" onClick={() => setIsManualEntry(false)}>
-                      Close
-                    </Button>
-                  </DialogFooter>
+                      <Button variant="outline" onClick={() => setIsManualEntry(false)}>
+                        Close
+                      </Button>
+                    </DialogFooter>
+                  )}
                 </DialogContent>
               </Dialog>
+
 
               <FieldLabel>Quotation Amount</FieldLabel>
               <Input

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, TrendingUp } from "lucide-react";
+import { AlertCircleIcon } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
   Table,
@@ -15,28 +15,20 @@ import {
 } from "@/components/ui/table";
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-} from "recharts";
-
-import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 
 import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CallSIHistory {
   id: number;
@@ -44,6 +36,8 @@ interface CallSIHistory {
   status?: string;
   date_created?: string;
   dr_number?: string;
+  si_date?: string;
+  actual_sales?: number;
 }
 
 interface CallSIProps {
@@ -63,6 +57,27 @@ export const CallSI: React.FC<CallSIProps> = ({
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
+  // Function to get "YYYY-MM" string from Date
+  const getYearMonth = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  // Derive selectedMonth from dateCreatedFilterRange.from (if exists)
+  const selectedMonth = React.useMemo(() => {
+    if (!dateCreatedFilterRange?.from) {
+      // fallback to current month if no date range selected
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+    return `${dateCreatedFilterRange.from.getFullYear()}-${String(
+      dateCreatedFilterRange.from.getMonth() + 1
+    ).padStart(2, "0")}`;
+  }, [dateCreatedFilterRange]);
+
+  // Fetch activities as before
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
@@ -130,91 +145,32 @@ export const CallSI: React.FC<CallSIProps> = ({
 
   const targetQuotaNumber = Number(target_quota) || 0;
 
-  const getYearMonth = (dateStr?: string) => {
-    if (!dateStr) return null;
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
+  // Filter activities based on selectedMonth (derived from dateCreatedFilterRange)
+  const activitiesFiltered = useMemo(() => {
+    return activities.filter(
+      (a) =>
+        getYearMonth(a.date_created) === selectedMonth || getYearMonth(a.si_date) === selectedMonth
+    );
+  }, [activities, selectedMonth]);
 
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
+  // Number of Calls (Outbound - Touchbase) for selected month
+  const totalCalls = useMemo(() => {
+    return activitiesFiltered.filter(
+      (a) => a.source === "Outbound - Touchbase" && getYearMonth(a.date_created) === selectedMonth
+    ).length;
+  }, [activitiesFiltered, selectedMonth]);
 
-  const lastMonth = useMemo(() => {
-    const now = new Date();
-    let year = now.getFullYear();
-    let month = now.getMonth();
-    if (month === 0) {
-      year--;
-      month = 12;
-    }
-    return `${year}-${String(month).padStart(2, "0")}`;
-  }, []);
-
-  const activitiesCurrentMonth = useMemo(() => {
-    return activities.filter((a) => getYearMonth(a.date_created) === currentMonth);
-  }, [activities, currentMonth]);
-
-  const activitiesLastMonth = useMemo(() => {
-    return activities.filter((a) => getYearMonth(a.date_created) === lastMonth);
-  }, [activities, lastMonth]);
-
-  // ✅ Number of Calls (Outbound - Touchbase)
-  const totalCallsCurrentMonth = activitiesCurrentMonth.filter(
-    (a) => a.source === "Outbound - Touchbase"
-  ).length;
-
-  const totalCallsLastMonth = activitiesLastMonth.filter(
-    (a) => a.source === "Outbound - Touchbase"
-  ).length;
-
-  // SI stays the same
-  const totalSICurrentMonth = activitiesCurrentMonth.filter(
-    (a) => a.dr_number && a.dr_number.trim() !== ""
-  ).length;
-
-  const totalSILastMonth = activitiesLastMonth.filter(
-    (a) => a.dr_number && a.dr_number.trim() !== ""
-  ).length;
+  // Number of SI based on unique si_date with actual_sales > 0 for selected month
+  const totalSI = useMemo(() => {
+    const filteredSI = activitiesFiltered.filter(
+      (a) => a.si_date && Number(a.actual_sales) > 0 && getYearMonth(a.si_date) === selectedMonth
+    );
+    const uniqueDates = new Set(filteredSI.map((a) => a.si_date));
+    return uniqueDates.size;
+  }, [activitiesFiltered, selectedMonth]);
 
   // Percentage of Calls to SI
-  const percentageCallsToSICurrentMonth =
-    totalSICurrentMonth === 0 ? 0 : (totalCallsCurrentMonth / totalSICurrentMonth) * 100;
-
-  const percentageCallsToSILastMonth =
-    totalSILastMonth === 0 ? 0 : (totalCallsLastMonth / totalSILastMonth) * 100;
-
-  const chartData = [
-    {
-      month: "Current",
-      Calls: totalCallsCurrentMonth,
-      SI: totalSICurrentMonth,
-      "Calls to SI %": Number(percentageCallsToSICurrentMonth.toFixed(2)),
-    },
-    {
-      month: "Last",
-      Calls: totalCallsLastMonth,
-      SI: totalSILastMonth,
-      "Calls to SI %": Number(percentageCallsToSILastMonth.toFixed(2)),
-    },
-  ];
-
-  const chartConfig = {
-    Calls: {
-      label: "Number of Calls",
-      color: "var(--color-desktop)",
-    },
-    SI: {
-      label: "SI (dr_number)",
-      color: "var(--color-mobile)",
-    },
-    "Calls to SI %": {
-      label: "Calls to SI %",
-      color: "var(--color-accent)",
-    },
-  } satisfies ChartConfig;
+  const percentageCallsToSI = totalSI === 0 ? 0 : (totalCalls / totalSI) * 100;
 
   if (loadingActivities) {
     return (
@@ -243,46 +199,44 @@ export const CallSI: React.FC<CallSIProps> = ({
         <CardHeader>
           <CardTitle>Calls and SI Summary</CardTitle>
           <CardDescription>
-            Current vs Last Month (Calls, SI & Conversion)
+            Data for:{" "}
+            {dateCreatedFilterRange?.from
+              ? dateCreatedFilterRange.from.toLocaleString("default", {
+                  year: "numeric",
+                  month: "long",
+                })
+              : selectedMonth}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Metric</TableHead>
-                <TableHead className="text-right">Current Month</TableHead>
-                <TableHead className="text-right">Last Month</TableHead>
+                <TableHead className="text-right">Value</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               <TableRow>
                 <TableCell>Target Quota</TableCell>
-                <TableCell className="text-right" colSpan={2}>
-                  {targetQuotaNumber.toLocaleString()}
-                </TableCell>
+                <TableCell className="text-right">{targetQuotaNumber.toLocaleString()}</TableCell>
               </TableRow>
 
               <TableRow>
                 <TableCell>Number of Calls (Outbound - Touchbase)</TableCell>
-                <TableCell className="text-right">{totalCallsCurrentMonth}</TableCell>
-                <TableCell className="text-right">{totalCallsLastMonth}</TableCell>
+                <TableCell className="text-right">{totalCalls}</TableCell>
               </TableRow>
 
               <TableRow>
                 <TableCell>Number of SI (Actual Sales)</TableCell>
-                <TableCell className="text-right">{totalSICurrentMonth}</TableCell>
-                <TableCell className="text-right">{totalSILastMonth}</TableCell>
+                <TableCell className="text-right">{totalSI}</TableCell>
               </TableRow>
 
               <TableRow>
                 <TableCell>Percentage of Calls to SI</TableCell>
-                <TableCell className="text-right">
-                  {percentageCallsToSICurrentMonth.toFixed(2)}%
-                </TableCell>
-                <TableCell className="text-right">
-                  {percentageCallsToSILastMonth.toFixed(2)}%
-                </TableCell>
+                <TableCell className="text-right">{percentageCallsToSI.toFixed(2)}%</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -295,67 +249,17 @@ export const CallSI: React.FC<CallSIProps> = ({
           <CardTitle>Computation Explanation</CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-gray-700">
-          <p><strong>Number of Calls:</strong> Counted where <code>source === "Outbound - Touchbase"</code>.</p>
-          <p><strong>Number of SI:</strong> Counted where <code>dr_number</code> is not empty.</p>
-
+          <p>
+            <strong>Number of Calls:</strong> Counted where <code>source === "Outbound - Touchbase"</code>.
+          </p>
+          <p>
+            <strong>Number of SI:</strong> Counted unique <code>si_date</code> where <code>actual_sales</code> &gt; 0.
+          </p>
           <pre className="bg-gray-100 p-2 rounded text-sm">
-Percentage of Calls to SI = (Number of Calls ÷ Number of SI) × 100
+            Percentage of Calls to SI = (Number of Calls ÷ Number of SI) × 100
           </pre>
-
-          <p>Comparison shows performance for current and last month.</p>
         </CardContent>
-      </Card>
-
-      {/* Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Comparison Chart</CardTitle>
-          <CardDescription>Calls, SI & Conversion Rate</CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          <ChartContainer config={chartConfig}>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={chartData}>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                />
-
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dashed" />}
-                />
-
-                {Object.keys(chartConfig).map((key) => (
-                  <Bar
-                    key={key}
-                    dataKey={key}
-                    fill={chartConfig[key as keyof typeof chartConfig].color}
-                    radius={4}
-                    maxBarSize={24}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-
-        <CardFooter className="flex-col items-start gap-2 text-sm">
-          <div className="flex gap-2 font-medium">
-            Trending by {(percentageCallsToSICurrentMonth - percentageCallsToSILastMonth).toFixed(2)}% this month
-            <TrendingUp className="h-4 w-4" />
-          </div>
-          <div className="text-muted-foreground">
-            Showing Calls, SI, and Calls-to-SI percentage for the last 2 months
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );
 };
-
-export default CallSI;

@@ -57,6 +57,7 @@ interface Activity {
     // sales order fields
     so_number?: string;
     so_amount?: string;
+    si_date?: string;
 
     actual_sales?: string;
     dr_number?: string;
@@ -166,6 +167,7 @@ export function CreateActivityDialog({
 
     const [soNumber, setSoNumber] = useState("");
     const [soAmount, setSoAmount] = useState("");
+    const [siDate, setSiDate] = useState("");
 
     const [drNumber, setDrNumber] = useState("");
     const [siAmount, setSiAmount] = useState("");
@@ -212,6 +214,7 @@ export function CreateActivityDialog({
         quotationType: "",
         soNumber: "",
         soAmount: "",
+        siDate: "",
         followUpDate: "",
         status: "",
         remarks: "",
@@ -240,6 +243,7 @@ export function CreateActivityDialog({
         setQuotationType(initialState.quotationType);
         setSoNumber(initialState.soNumber);
         setSoAmount(initialState.soAmount);
+        setSiDate(initialState.siDate);
         setFollowUpDate(initialState.followUpDate);
         setStatus(initialState.status);
         setRemarks(initialState.remarks);
@@ -435,6 +439,7 @@ export function CreateActivityDialog({
 
             so_number: soNumber || undefined,
             so_amount: soAmount || undefined,
+            si_date: siDate || undefined,
 
             dr_number: drNumber || undefined,
             actual_sales: siAmount || undefined,
@@ -849,12 +854,12 @@ export function CreateActivityDialog({
                                 <DRSheet
                                     step={step}
                                     setStep={setStep}
-                                    source={source}
-                                    setSource={setSource}
                                     drNumber={drNumber}
                                     setDrNumber={setDrNumber}
                                     siAmount={siAmount}
                                     setSiAmount={setSiAmount}
+                                    siDate={siDate}
+                                    setSiDate={setSiDate}
                                     paymentTerms={paymentTerms}
                                     setPaymentTerms={setPaymentTerms}
                                     deliveryDate={deliveryDate}

@@ -167,16 +167,35 @@ export function SOSheet(props: Props) {
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
                             <RadioGroup
-                                defaultValue={source}
-                                onValueChange={(value) => setSource(value)}
+                                value={source}
+                                onValueChange={setSource}
                             >
                                 {SO_SOURCES.map(({ label, description }) => (
                                     <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
                                                 <FieldTitle>{label}</FieldTitle>
                                                 <FieldDescription>{description}</FieldDescription>
+
+                                                {/* Buttons only visible if selected */}
+                                                {source === label && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button type="button" variant="outline" onClick={handleBack}>
+                                                            Back
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleNext}
+                                                            disabled={!isStep2Valid}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </FieldContent>
+
+                                            {/* RIGHT */}
                                             <RadioGroupItem value={label} />
                                         </Field>
                                     </FieldLabel>
@@ -184,13 +203,6 @@ export function SOSheet(props: Props) {
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
-
-                    <div className="flex justify-between mt-4">
-                        <Button onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext} disabled={!isStep2Valid}>
-                            Next
-                        </Button>
-                    </div>
                 </div>
             )}
 
@@ -198,19 +210,27 @@ export function SOSheet(props: Props) {
             {step === 3 && (
                 <div>
                     <FieldGroup>
+                        {/* SO Number */}
                         <FieldSet>
                             <FieldLabel>SO Number</FieldLabel>
+                            <p className="text-xs text-muted-foreground mb-1">
+                                Enter the official Sales Order number provided by the client or internal system.
+                            </p>
                             <Input
                                 type="text"
                                 value={soNumber}
                                 onChange={(e) => setSoNumber(e.target.value)}
-                                placeholder="Enter SO Number"
+                                placeholder="Enter SO Number ex. SO-0000-0000"
                                 className="uppercase"
                             />
                         </FieldSet>
 
+                        {/* SO Amount */}
                         <FieldSet className="mt-3">
                             <FieldLabel>SO Amount</FieldLabel>
+                            <p className="text-xs text-muted-foreground mb-1">
+                                Total amount of the Sales Order. This should match the approved SO value.
+                            </p>
                             <Input
                                 type="number"
                                 step="0.01"
@@ -239,33 +259,52 @@ export function SOSheet(props: Props) {
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Call Type</FieldLabel>
-                            <RadioGroup value={callType} onValueChange={setCallType}>
+
+                            <RadioGroup
+                                value={callType}
+                                onValueChange={setCallType}
+                            >
                                 {CALL_TYPES.map(({ label, description }) => (
                                     <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            {/* LEFT */}
+                                            <FieldContent className="flex-1">
                                                 <FieldTitle>{label}</FieldTitle>
                                                 <FieldDescription>{description}</FieldDescription>
+
+                                                {/* Buttons only visible if selected */}
+                                                {callType === label && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={handleBack}
+                                                        >
+                                                            Back
+                                                        </Button>
+
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleNextStep4}
+                                                            disabled={!isStep4Valid}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </FieldContent>
+
+                                            {/* RIGHT */}
                                             <RadioGroupItem value={label} />
                                         </Field>
                                     </FieldLabel>
                                 ))}
-
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
-
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>
-                            Back
-                        </Button>
-                        <Button onClick={handleNextStep4} disabled={!isStep4Valid}>
-                            Next
-                        </Button>
-                    </div>
                 </div>
             )}
+
 
             {/* STEP 5 — REMARKS & STATUS */}
             {step === 5 && (
@@ -286,18 +325,42 @@ export function SOSheet(props: Props) {
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
+
                             <RadioGroup
                                 value={status}
                                 onValueChange={setStatus}
                             >
                                 <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
+                                    <Field orientation="horizontal" className="w-full items-start">
+                                        {/* LEFT */}
+                                        <FieldContent className="flex-1">
                                             <FieldTitle>SO-Done</FieldTitle>
                                             <FieldDescription>
                                                 Sales Order process is complete.
                                             </FieldDescription>
+
+                                            {/* Buttons only visible if selected */}
+                                            {status === "SO-Done" && (
+                                                <div className="mt-4 flex gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={handleBack}
+                                                    >
+                                                        Back
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleSave}
+                                                    >
+                                                        Save
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </FieldContent>
+
+                                        {/* RIGHT */}
                                         <RadioGroupItem value="SO-Done" />
                                     </Field>
                                 </FieldLabel>
@@ -305,10 +368,6 @@ export function SOSheet(props: Props) {
                         </FieldSet>
                     </FieldGroup>
 
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleSave}>Save</Button>
-                    </div>
                 </div>
             )}
         </>

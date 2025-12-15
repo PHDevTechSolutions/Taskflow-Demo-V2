@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
+import React from "react";
+import {
+    Field,
+    FieldContent,
+    FieldDescription,
+    FieldGroup,
+    FieldLabel,
+    FieldSet,
+    FieldTitle,
+} from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,288 +19,216 @@ import { toast } from "sonner";
 interface Props {
     step: number;
     setStep: (step: number) => void;
-
-    source: string;
-    setSource: (v: string) => void;
-
     drNumber: string;
     setDrNumber: (v: string) => void;
-
     siAmount: string;
     setSiAmount: (v: string) => void;
-
+    siDate: string;
+    setSiDate: (v: string) => void;
     paymentTerms: string;
     setPaymentTerms: (v: string) => void;
-
     deliveryDate: string;
     setDeliveryDate: (v: string) => void;
-
     remarks: string;
     setRemarks: (v: string) => void;
-
     status: string;
     setStatus: (v: string) => void;
-
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
 }
 
-const SO_SOURCES = [
-    { label: "Existing Client", description: "Clients with active accounts or previous transactions." },
-    { label: "CSR Inquiry", description: "Customer Service Representative inquiries." },
-    { label: "Government", description: "Calls coming from government agencies." },
-    { label: "Philgeps Website", description: "Inquiries from Philgeps online platform." },
-    { label: "Philgeps", description: "Other Philgeps related contacts." },
-    { label: "Distributor", description: "Calls from product distributors or resellers." },
-    { label: "Modern Trade", description: "Contacts from retail or modern trade partners." },
-    { label: "Facebook Marketplace", description: "Leads or inquiries from Facebook Marketplace." },
-    { label: "Walk-in Showroom", description: "Visitors physically coming to showroom." },
-];
-
 const PAYMENT_TERMS = [
-  {
-    label: "COD",
-    description: "Customer pays the full amount upon delivery of the items.",
-  },
-  {
-    label: "Check",
-    description: "Payment will be made through dated or current check upon delivery or agreed schedule.",
-  },
-  {
-    label: "Cash",
-    description: "Customer pays in cash either upon order confirmation or delivery.",
-  },
-  {
-    label: "Bank Deposit",
-    description: "Payment is sent via bank transfer or direct deposit to the company account.",
-  },
-  {
-    label: "GCash",
-    description: "Customer pays via GCash wallet transfer prior to or during delivery.",
-  },
-  {
-    label: "Terms",
-    description: "Payment follows an agreed credit term (e.g., 30/45/60 days) after delivery.",
-  },
+    { label: "COD", description: "Payment is collected upon delivery." },
+    { label: "Check", description: "Payment through post-dated or current check." },
+    { label: "Cash", description: "Cash payment upon confirmation or delivery." },
+    { label: "Bank Deposit", description: "Payment via bank transfer or deposit." },
+    { label: "GCash", description: "Payment via GCash wallet transfer." },
+    { label: "Terms", description: "Credit terms apply (30/45/60 days)." },
 ];
 
 export function DRSheet(props: Props) {
     const {
-        step, setStep,
-        source, setSource,
-        drNumber, setDrNumber,
-        siAmount, setSiAmount,
-        paymentTerms, setPaymentTerms,
-        deliveryDate, setDeliveryDate,
-        remarks, setRemarks,
-        status, setStatus,
+        step,
+        drNumber,
+        setDrNumber,
+        siAmount,
+        setSiAmount,
+        siDate,
+        setSiDate,
+        paymentTerms,
+        setPaymentTerms,
+        deliveryDate,
+        setDeliveryDate,
+        remarks,
+        setRemarks,
+        status,
+        setStatus,
         handleBack,
         handleNext,
         handleSave,
     } = props;
 
-    // Step Validations
-    const isStep2Valid = source.trim() !== "";
-    const isStep3Valid =
+    /* ---------------- VALIDATIONS ---------------- */
+
+    const isStep2Valid =
         drNumber.trim() !== "" &&
         siAmount.trim() !== "" &&
-        !isNaN(Number(siAmount));
+        !isNaN(Number(siAmount)) &&
+        siDate.trim() !== "";
 
-    const isStep4Valid =
+    const isStep3Valid =
         paymentTerms.trim() !== "" &&
         deliveryDate.trim() !== "";
 
-    const isStep5Valid = remarks.trim() !== "";
+    const isStep4Valid =
+        remarks.trim() !== "" &&
+        status === "Delivered";
+
+    const handleNextStep2 = () => {
+        if (!drNumber.trim()) return toast.error("DR Number is required.");
+        if (!siAmount || isNaN(Number(siAmount))) return toast.error("Invalid SI Amount.");
+        if (!siDate) return toast.error("Sales Invoice Date is required.");
+        handleNext();
+    };
 
     const handleNextStep3 = () => {
-        if (drNumber.trim() === "") {
-            toast.error("Please enter DR Number.");
-            return;
-        }
-        if (siAmount.trim() === "" || isNaN(Number(siAmount))) {
-            toast.error("Please enter valid SI Amount.");
-            return;
-        }
+        if (!paymentTerms) return toast.error("Please select Payment Terms.");
+        if (!deliveryDate) return toast.error("Please select Delivery Date.");
         handleNext();
     };
 
-    const handleNextStep4 = () => {
-        if (paymentTerms.trim() === "") {
-            toast.error("Please select Payment Terms.");
-            return;
-        }
-        if (deliveryDate.trim() === "") {
-            toast.error("Please select Delivery Date.");
-            return;
-        }
-        handleNext();
-    };
+    /* ---------------- UI ---------------- */
 
     return (
         <>
-
-            {/* STEP 2 - SOURCE */}
+            {/* STEP 2 — DR & SI */}
             {step === 2 && (
-                <div>
-                    <FieldGroup>
-                        <FieldSet>
-                            <FieldLabel>Source</FieldLabel>
-                            <RadioGroup
-                                defaultValue={source}
-                                onValueChange={(value) => setSource(value)}
-                            >
-                                {SO_SOURCES.map(({ label, description }) => (
-                                    <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
-                                                <FieldTitle>{label}</FieldTitle>
-                                                <FieldDescription>{description}</FieldDescription>
-                                            </FieldContent>
-                                            <RadioGroupItem value={label} />
-                                        </Field>
-                                    </FieldLabel>
-                                ))}
-                            </RadioGroup>
-                        </FieldSet>
-                    </FieldGroup>
+                <FieldGroup>
+                    <FieldSet>
+                        <FieldLabel>DR Number</FieldLabel>
+                        <FieldDescription>Official Delivery Receipt reference.</FieldDescription>
+                        <Input
+                            className="uppercase"
+                            value={drNumber}
+                            onChange={(e) => setDrNumber(e.target.value)}
+                            placeholder="DR-000123"
+                        />
+                    </FieldSet>
+
+                    <FieldSet className="mt-3">
+                        <FieldLabel>Sales Invoice Amount</FieldLabel>
+                        <FieldDescription>Total amount reflected on the Sales Invoice.</FieldDescription>
+                        <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={siAmount}
+                            onChange={(e) => setSiAmount(e.target.value)}
+                            placeholder="0.00"
+                        />
+                    </FieldSet>
+
+                    <FieldSet className="mt-3">
+                        <FieldLabel>Sales Invoice Date</FieldLabel>
+                        <FieldDescription>Date the Sales Invoice was issued.</FieldDescription>
+                        <Input
+                            type="date"
+                            value={siDate}
+                            onChange={(e) => setSiDate(e.target.value)}
+                        />
+                    </FieldSet>
 
                     <div className="flex justify-between mt-4">
-                        <Button onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNext} disabled={!isStep2Valid}>
-                            Next
-                        </Button>
+                        <Button variant="outline" onClick={handleBack}>Back</Button>
+                        <Button onClick={handleNextStep2} disabled={!isStep2Valid}>Next</Button>
                     </div>
-                </div>
+                </FieldGroup>
             )}
 
-            {/* STEP 3 - DR Number & SI Amount */}
+            {/* STEP 3 — PAYMENT */}
             {step === 3 && (
-                <div>
-                    <FieldGroup>
-                        {/* DR Number */}
-                        <FieldSet>
-                            <FieldLabel>DR Number</FieldLabel>
-                            <Input
-                                type="text"
-                                value={drNumber}
-                                onChange={(e) => setDrNumber(e.target.value)}
-                                placeholder="Enter DR Number"
-                                className="uppercase"
-                            />
-                        </FieldSet>
+                <FieldGroup>
+                    <FieldSet className="mt-4">
+                        <FieldLabel>Delivery Date</FieldLabel>
+                        <FieldDescription>Actual date the items were delivered.</FieldDescription>
+                        <Input
+                            type="date"
+                            value={deliveryDate}
+                            onChange={(e) => setDeliveryDate(e.target.value)}
+                        />
+                    </FieldSet>
+                    <FieldSet>
+                        <FieldLabel>Payment Terms</FieldLabel>
 
-                        {/* SI Amount */}
-                        <FieldSet className="mt-3">
-                            <FieldLabel>SI (Actual Sales)</FieldLabel>
-                            <Input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={siAmount}
-                                onChange={(e) => setSiAmount(e.target.value)}
-                                placeholder="Enter SI Amount"
-                            />
-                        </FieldSet>
-                    </FieldGroup>
+                        <RadioGroup value={paymentTerms} onValueChange={setPaymentTerms}>
+                            {PAYMENT_TERMS.map(({ label, description }) => (
+                                <FieldLabel key={label}>
+                                    <Field orientation="horizontal" className="items-start">
+                                        <FieldContent className="flex-1">
+                                            <FieldTitle>{label}</FieldTitle>
+                                            <FieldDescription>{description}</FieldDescription>
 
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNextStep3} disabled={!isStep3Valid}>
-                            Next
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 4 - PAYMENT TERMS + DELIVERY DATE */}
-            {step === 4 && (
-                <div>
-                    <FieldGroup>
-                        {/* PAYMENT TERMS */}
-                        <FieldSet>
-                            <FieldLabel>Payment Terms</FieldLabel>
-                            <RadioGroup
-                                value={paymentTerms}
-                                onValueChange={setPaymentTerms}
-                            >
-                                {PAYMENT_TERMS.map(({ label, description }) => (
-                                    <FieldLabel key={label}>
-                                        <Field orientation="horizontal">
-                                            <FieldContent>
-                                                <FieldTitle>{label}</FieldTitle>
-                                                <FieldDescription>{description}</FieldDescription>
-                                            </FieldContent>
-                                            <RadioGroupItem value={label} />
-                                        </Field>
-                                    </FieldLabel>
-                                ))}
-                            </RadioGroup>
-                        </FieldSet>
-
-                        {/* DELIVERY DATE */}
-                        <FieldSet className="mt-4">
-                            <FieldLabel>Delivery Date</FieldLabel>
-                            <Input
-                                type="date"
-                                value={deliveryDate}
-                                onChange={(e) => setDeliveryDate(e.target.value)}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Select the actual date of delivery.
-                            </p>
-                        </FieldSet>
-                    </FieldGroup>
-
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleNextStep4} disabled={!isStep4Valid}>
-                            Next
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 5 — REMARKS & STATUS */}
-            {step === 5 && (
-                <div>
-                    <FieldGroup>
-                        <FieldSet>
-                            <FieldLabel>Remarks</FieldLabel>
-                            <Textarea
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                                placeholder="Enter remarks"
-                                required
-                                className="capitalize"
-                            />
-                        </FieldSet>
-                    </FieldGroup>
-
-                    <FieldGroup>
-                        <FieldSet>
-                            <FieldLabel>Status</FieldLabel>
-                            <RadioGroup value={status} onValueChange={setStatus}>
-                                <FieldLabel>
-                                    <Field orientation="horizontal">
-                                        <FieldContent>
-                                            <FieldTitle>Delivered</FieldTitle>
-                                            <FieldDescription>
-                                                All fields completed (DR, SI, Payment Terms & Delivery Date)
-                                            </FieldDescription>
+                                            {paymentTerms === label && (
+                                                <div className="mt-4 flex gap-2">
+                                                    <Button variant="outline" onClick={handleBack}>Back</Button>
+                                                    <Button onClick={handleNextStep3} disabled={!isStep3Valid}>
+                                                        Next
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </FieldContent>
-                                        <RadioGroupItem value="Delivered" />
+                                        <RadioGroupItem value={label} />
                                     </Field>
                                 </FieldLabel>
-                            </RadioGroup>
-                        </FieldSet>
-                    </FieldGroup>
+                            ))}
+                        </RadioGroup>
+                    </FieldSet>
+                </FieldGroup>
+            )}
 
-                    <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                        <Button onClick={handleSave}>Save</Button>
-                    </div>
-                </div>
+            {/* STEP 4 — REMARKS & STATUS */}
+            {step === 4 && (
+                <FieldGroup>
+                    <FieldSet>
+                        <FieldLabel>Remarks</FieldLabel>
+                        <FieldDescription>
+                            Additional notes regarding delivery or payment.
+                        </FieldDescription>
+                        <Textarea
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            placeholder="Enter remarks..."
+                        />
+                    </FieldSet>
+
+                    <FieldSet className="mt-6">
+                        <FieldLabel>Status</FieldLabel>
+
+                        <RadioGroup value={status} onValueChange={setStatus}>
+                            <FieldLabel>
+                                <Field orientation="horizontal" className="items-start">
+                                    <FieldContent className="flex-1">
+                                        <FieldTitle>Delivered</FieldTitle>
+                                        <FieldDescription>
+                                            Confirms that all required documents and delivery details are completed.
+                                        </FieldDescription>
+
+                                        {status === "Delivered" && (
+                                            <div className="mt-4 flex gap-2">
+                                                <Button variant="outline" onClick={handleBack}>Back</Button>
+                                                <Button onClick={handleSave} disabled={!isStep4Valid}>
+                                                    Save
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </FieldContent>
+                                    <RadioGroupItem value="Delivered" />
+                                </Field>
+                            </FieldLabel>
+                        </RadioGroup>
+                    </FieldSet>
+                </FieldGroup>
             )}
         </>
     );

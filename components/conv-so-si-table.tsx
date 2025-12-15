@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, TrendingUp } from "lucide-react";
+import { AlertCircleIcon } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
   Table,
@@ -15,28 +15,20 @@ import {
 } from "@/components/ui/table";
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-} from "recharts";
-
-import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 
 import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface SOSIHistory {
   id: number;
@@ -44,13 +36,15 @@ interface SOSIHistory {
   status?: string;
   date_created?: string;
   dr_number?: string;
+  si_date?: string;
+  actual_sales?: number;
 }
 
 interface SOSIProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: any;
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+  dateCreatedFilterRange: { from?: Date | null };
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<{ from?: Date | null }>>;
 }
 
 export const SOSI: React.FC<SOSIProps> = ({
@@ -63,6 +57,34 @@ export const SOSI: React.FC<SOSIProps> = ({
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
+  // Parse date string into "YYYY-MM"
+  const getYearMonth = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  // Derive selectedMonth from external dateCreatedFilterRange.from, fallback to current month
+  const selectedMonth = useMemo(() => {
+    if (!dateCreatedFilterRange?.from) {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+    return `${dateCreatedFilterRange.from.getFullYear()}-${String(dateCreatedFilterRange.from.getMonth() + 1).padStart(2, "0")}`;
+  }, [dateCreatedFilterRange]);
+
+  // Update external dateCreatedFilterRange when month is changed in dropdown
+  const onMonthChange = (monthValue: string) => {
+    // monthValue is "YYYY-MM"
+    const [yearStr, monthStr] = monthValue.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1;
+    const newDate = new Date(year, month, 1);
+    setDateCreatedFilterRangeAction({ from: newDate });
+  };
+
+  // Fetch activities from API
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
@@ -82,6 +104,7 @@ export const SOSI: React.FC<SOSIProps> = ({
       .finally(() => setLoadingActivities(false));
   }, [referenceid]);
 
+  // Setup Supabase realtime channel for updates
   useEffect(() => {
     void fetchActivities();
 
@@ -130,91 +153,47 @@ export const SOSI: React.FC<SOSIProps> = ({
 
   const targetQuotaNumber = Number(target_quota) || 0;
 
-  const getYearMonth = (dateStr?: string) => {
-    if (!dateStr) return null;
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
+  // Filter activities based on selectedMonth
+  const activitiesFiltered = useMemo(() => {
+    return activities.filter(
+      (a) =>
+        getYearMonth(a.date_created) === selectedMonth || getYearMonth(a.si_date) === selectedMonth
+    );
+  }, [activities, selectedMonth]);
 
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
+  // Filter SO activities for selected month
+  const activitiesSO = useMemo(() => {
+    return activitiesFiltered.filter(
+      (a) => a.status === "SO-Done" && getYearMonth(a.date_created) === selectedMonth
+    );
+  }, [activitiesFiltered, selectedMonth]);
 
-  const lastMonth = useMemo(() => {
+  // Calculate totals
+  const totalSO = activitiesSO.length;
+
+  const totalSI = useMemo(() => {
+    const filteredSI = activitiesFiltered.filter(
+      (a) => a.si_date && Number(a.actual_sales) > 0 && getYearMonth(a.si_date) === selectedMonth
+    );
+    const uniqueDates = new Set(filteredSI.map((a) => a.si_date));
+    return uniqueDates.size;
+  }, [activitiesFiltered, selectedMonth]);
+
+  const percentageSOToSI = totalSI === 0 ? 0 : (totalSO / totalSI) * 100;
+
+  // Last 12 months for dropdown options
+  const monthOptions = useMemo(() => {
+    const options = [];
     const now = new Date();
-    let year = now.getFullYear();
-    let month = now.getMonth();
-    if (month === 0) {
-      year--;
-      month = 12;
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      options.push({
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: d.toLocaleString("default", { year: "numeric", month: "long" }),
+      });
     }
-    return `${year}-${String(month).padStart(2, "0")}`;
+    return options;
   }, []);
-
-  const activitiesCurrentMonth = useMemo(() => {
-    return activities.filter((a) => getYearMonth(a.date_created) === currentMonth);
-  }, [activities, currentMonth]);
-
-  const activitiesLastMonth = useMemo(() => {
-    return activities.filter((a) => getYearMonth(a.date_created) === lastMonth);
-  }, [activities, lastMonth]);
-
-  // Remove all quote counting here
-
-  const totalSOCurrentMonth = activitiesCurrentMonth.filter(
-    (a) => a.status === "SO-Done"
-  ).length;
-
-  const totalSOLastMonth = activitiesLastMonth.filter(
-    (a) => a.status === "SO-Done"
-  ).length;
-
-  const totalSICurrentMonth = activitiesCurrentMonth.filter(
-    (a) => a.dr_number && a.dr_number.trim() !== ""
-  ).length;
-
-  const totalSILastMonth = activitiesLastMonth.filter(
-    (a) => a.dr_number && a.dr_number.trim() !== ""
-  ).length;
-
-  // Calculate percentage of SO to SI
-  const percentageSOToSICurrentMonth =
-    totalSICurrentMonth === 0 ? 0 : (totalSOCurrentMonth / totalSICurrentMonth) * 100;
-
-  const percentageSOToSILastMonth =
-    totalSILastMonth === 0 ? 0 : (totalSOLastMonth / totalSILastMonth) * 100;
-
-  const chartData = [
-    {
-      month: "Current",
-      SOs: totalSOCurrentMonth,
-      SI: totalSICurrentMonth,
-      "SO to SI %": Number(percentageSOToSICurrentMonth.toFixed(2)),
-    },
-    {
-      month: "Last",
-      SOs: totalSOLastMonth,
-      SI: totalSILastMonth,
-      "SO to SI %": Number(percentageSOToSILastMonth.toFixed(2)),
-    },
-  ];
-
-  const chartConfig = {
-    SOs: {
-      label: "SO Done",
-      color: "var(--color-desktop)",
-    },
-    SI: {
-      label: "SI (dr_number)",
-      color: "var(--color-mobile)",
-    },
-    "SO to SI %": {
-      label: "SO to SI %",
-      color: "var(--color-accent)",
-    },
-  } satisfies ChartConfig;
 
   if (loadingActivities) {
     return (
@@ -240,42 +219,39 @@ export const SOSI: React.FC<SOSIProps> = ({
     <div className="space-y-6">
       {/* Summary Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>SO and SI Summary</CardTitle>
-          <CardDescription>
-            Comparison of current and last month data based on status
-          </CardDescription>
+        <CardHeader className="flex items-center justify-between space-x-4">
+          <div>
+            <CardTitle>SO and SI Summary</CardTitle>
+            <CardDescription>
+              Data for: {monthOptions.find((opt) => opt.value === selectedMonth)?.label || selectedMonth}
+            </CardDescription>
+          </div>
         </CardHeader>
+
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Metric</TableHead>
-                <TableHead className="text-right">Current Month</TableHead>
-                <TableHead className="text-right">Last Month</TableHead>
+                <TableHead className="text-right">Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
                 <TableCell>Target Quota</TableCell>
-                <TableCell className="text-right" colSpan={2}>
-                  {targetQuotaNumber.toLocaleString()}
-                </TableCell>
+                <TableCell className="text-right">{targetQuotaNumber.toLocaleString()}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Number of SO</TableCell>
-                <TableCell className="text-right">{totalSOCurrentMonth}</TableCell>
-                <TableCell className="text-right">{totalSOLastMonth}</TableCell>
+                <TableCell className="text-right">{totalSO}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Number of SI (Actual Sales)</TableCell>
-                <TableCell className="text-right">{totalSICurrentMonth}</TableCell>
-                <TableCell className="text-right">{totalSILastMonth}</TableCell>
+                <TableCell className="text-right">{totalSI}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Percentage of SO to SI</TableCell>
-                <TableCell className="text-right">{percentageSOToSICurrentMonth.toFixed(2)}%</TableCell>
-                <TableCell className="text-right">{percentageSOToSILastMonth.toFixed(2)}%</TableCell>
+                <TableCell className="text-right">{percentageSOToSI.toFixed(2)}%</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -288,66 +264,20 @@ export const SOSI: React.FC<SOSIProps> = ({
           <CardTitle>Computation Explanation</CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-gray-700">
-          <p>The numbers represent counts of sales orders and SI completed, based on their status and presence of dr_number.</p>
+          <p>
+            The numbers represent counts of sales orders and SI completed, based on their status and presence of si_date with actual sales.
+          </p>
           <p>
             <strong>Number of SO:</strong> Counts all activities with status <code>SO-Done</code>.
           </p>
           <p>
-            <strong>Number of SI:</strong> Counts all activities with a non-empty <code>dr_number</code>.
+            <strong>Number of SI:</strong> Counts unique <code>si_date</code> where <code>actual_sales</code> is &gt; 0.
           </p>
           <pre className="bg-gray-100 p-2 rounded text-sm">
             Percentage of SO to SI: Calculated as (Number of SO ÷ Number of SI) × 100.
           </pre>
-          <p>Comparison is made between the current month and the last month for the given metrics.</p>
+          <p>Data is filtered based on the selected month.</p>
         </CardContent>
-      </Card>
-
-      {/* Bar Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Comparison Chart</CardTitle>
-          <CardDescription>Current vs Last Month</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig}>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart
-                data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dashed" />}
-                />
-                {Object.keys(chartConfig).map((key) => (
-                  <Bar
-                    key={key}
-                    dataKey={key}
-                    fill={chartConfig[key as keyof typeof chartConfig].color}
-                    radius={4}
-                    maxBarSize={24}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-        <CardFooter className="flex-col items-start gap-2 text-sm">
-          <div className="flex gap-2 leading-none font-medium">
-            Trending by {(percentageSOToSICurrentMonth - percentageSOToSILastMonth).toFixed(2)}% this month{" "}
-            <TrendingUp className="h-4 w-4" />
-          </div>
-          <div className="text-muted-foreground leading-none">
-            Showing SO, SI, and SO to SI percentage for the last 2 months
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );
