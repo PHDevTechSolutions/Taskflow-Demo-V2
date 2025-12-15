@@ -47,6 +47,10 @@ interface HistoryItem {
   activity_reference_number: string;
   callback?: string | null;
   date_followup?: string | null;
+  quotation_number?: string | null;
+  quotation_amount?: number | null;
+  so_number?: string | null;
+  so_amount?: number | null;
 }
 
 interface ScheduledProps {
@@ -299,18 +303,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const mergedActivities = activities
     .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
-    .filter((a) => isScheduledToday(a.scheduled_date)) // dito lang lalabas kung scheduled_date is today
+    .filter((a) => isScheduledToday(a.scheduled_date))
     .filter((a) => allowedStatuses.includes(a.status))
     .map((activity) => {
       const company = companies.find(
         (c) => c.account_reference_number === activity.account_reference_number
       );
 
+      // All history related to this activity
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
       );
-
-      const latestHistory = getLatestHistoryItem(relatedHistoryItems);
 
       return {
         ...activity,
@@ -320,13 +323,14 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         email_address: company?.email_address ?? "",
         contact_person: company?.contact_person ?? "",
         address: company?.address ?? "",
-        date_followup: latestHistory?.date_followup ?? null,
+        relatedHistoryItems, // pass all related histories here
       };
     })
     .sort(
       (a, b) =>
         new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
     );
+
 
   const isLoading = loadingCompanies || loadingActivities || loadingHistory;
   const error = errorCompanies || errorActivities || errorHistory;
@@ -470,17 +474,83 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                 <AccordionContent className="text-xs px-4 py-2">
                   <p>
-                    <strong>Contact Number:</strong> {item.contact_number}
+                    <strong>Contact Number:</strong> {item.contact_number || "-"}
                   </p>
-                  <p>
-                    <strong>Scheduled Date:</strong>{" "}
-                    {new Date(item.scheduled_date).toLocaleString()}
-                  </p>
+
+                  {item.relatedHistoryItems.length === 0 ? (
+                    <p>No quotation or SO history available.</p>
+                  ) : (
+                    <>
+                      {/* Quotation Number */}
+                      {item.relatedHistoryItems.some(h => h.quotation_number && h.quotation_number !== "-") && (
+                        <p>
+                          <strong>Quotation Number:</strong>{" "}
+                          <span className="uppercase">
+                            {item.relatedHistoryItems
+                              .map(h => h.quotation_number ?? "-")
+                              .filter(v => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {/* Quotation Amount */}
+                      {item.relatedHistoryItems.some(h => h.quotation_amount !== null && h.quotation_amount !== undefined) && (
+                        <p>
+                          <strong>Quotation Amount:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .map(h =>
+                              h.quotation_amount !== null && h.quotation_amount !== undefined
+                                ? h.quotation_amount.toLocaleString("en-PH", {
+                                  style: "currency",
+                                  currency: "PHP",
+                                })
+                                : null
+                            )
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      )}
+
+                      {/* SO Number */}
+                      {item.relatedHistoryItems.some(h => h.so_number && h.so_number !== "-") && (
+                        <p>
+                          <strong>SO Number:</strong>{" "}
+                          <span className="uppercase">
+                            {item.relatedHistoryItems
+                              .map(h => h.so_number ?? "-")
+                              .filter(v => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {/* SO Amount */}
+                      {item.relatedHistoryItems.some(h => h.so_amount !== null && h.so_amount !== undefined) && (
+                        <p>
+                          <strong>SO Amount:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .map(h =>
+                              h.so_amount !== null && h.so_amount !== undefined
+                                ? h.so_amount.toLocaleString("en-PH", {
+                                  style: "currency",
+                                  currency: "PHP",
+                                })
+                                : null
+                            )
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      )}
+                    </>
+                  )}
+
                   <p>
                     <strong>Date Created:</strong>{" "}
                     {new Date(item.date_created).toLocaleDateString()}
                   </p>
                 </AccordionContent>
+
               </AccordionItem>
             ))
           )}
