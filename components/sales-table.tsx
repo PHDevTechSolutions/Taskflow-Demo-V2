@@ -23,10 +23,7 @@ interface Sales {
 interface SalesProps {
     referenceid: string;
     target_quota?: string;
-    dateCreatedFilterRange: {
-        from?: Date | undefined;
-        to?: Date | undefined;
-    };
+    dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
