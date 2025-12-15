@@ -22,13 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface QuoteHistory {
   id: number;
@@ -40,8 +33,8 @@ interface QuoteHistory {
 interface QuoteSOProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: { from?: Date | null };
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<{ from?: Date | null }>>;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export const QuoteSO: React.FC<QuoteSOProps> = ({

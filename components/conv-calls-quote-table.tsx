@@ -40,8 +40,8 @@ interface CallHistory {
 interface CallQuoteProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: { from?: Date | null };
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<{ from?: Date | null }>>;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export const CallQuote: React.FC<CallQuoteProps> = ({

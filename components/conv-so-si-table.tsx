@@ -43,8 +43,8 @@ interface SOSIHistory {
 interface SOSIProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: { from?: Date | null };
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<{ from?: Date | null }>>;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export const SOSI: React.FC<SOSIProps> = ({
