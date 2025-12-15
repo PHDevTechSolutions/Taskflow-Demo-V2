@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-/* ===================== HELPERS ===================== */
+/* ================= TYPES ================= */
 
 interface Meeting {
   id: string;
@@ -36,12 +36,17 @@ interface NoteReminder {
   remind_at: Timestamp;
 }
 
+type DismissedByDate = Record<string, string[]>;
+type DismissedLogoutByDate = Record<string, boolean>;
+
+/* ================= HELPERS ================= */
+
 function formatTime(date: Date) {
-  let hours = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes} ${ampm}`;
+  let h = date.getHours();
+  const m = date.getMinutes().toString().padStart(2, "0");
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m} ${ap}`;
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -52,10 +57,10 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-function toDate(val: any): Date {
-  if (val?.toDate) return val.toDate();
-  if (val instanceof Date) return val;
-  return new Date(val);
+function toDate(v: any): Date {
+  if (v?.toDate) return v.toDate();
+  if (v instanceof Date) return v;
+  return new Date(v);
 }
 
 const MEETINGS_KEY = "dismissedMeetings";
@@ -67,19 +72,19 @@ const todayKey = () => new Date().toISOString().split("T")[0];
 function readLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
-    return JSON.parse(localStorage.getItem(key) || "") || fallback;
+    return JSON.parse(localStorage.getItem(key) || "") ?? fallback;
   } catch {
     return fallback;
   }
 }
 
-function writeLS(key: string, val: any) {
+function writeLS(key: string, value: unknown) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(key, JSON.stringify(val));
+    localStorage.setItem(key, JSON.stringify(value));
   }
 }
 
-/* ===================== COMPONENT ===================== */
+/* ================= COMPONENT ================= */
 
 export function Reminders() {
   const [now, setNow] = useState(new Date());
@@ -87,12 +92,12 @@ export function Reminders() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notes, setNotes] = useState<NoteReminder[]>([]);
 
+  const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
+  const [currentNote, setCurrentNote] = useState<NoteReminder | null>(null);
+
   const [showMeeting, setShowMeeting] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
-
-  const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
-  const [currentNote, setCurrentNote] = useState<NoteReminder | null>(null);
 
   const [dismissedMeetings, setDismissedMeetings] = useState<string[]>([]);
   const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
@@ -102,26 +107,31 @@ export function Reminders() {
   const prevMeeting = useRef(false);
   const prevNote = useRef(false);
 
-  /* ===================== INIT ===================== */
+  /* ================= INIT ================= */
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     audioRef.current = new Audio("/reminder-notification.mp3");
 
-    setDismissedMeetings(readLS(MEETINGS_KEY, {})[todayKey()] || []);
-    setDismissedNotes(readLS(NOTES_KEY, {})[todayKey()] || []);
-    setDismissedLogout(!!readLS(LOGOUT_KEY, {})[todayKey()]);
+    const meetingsLS = readLS<DismissedByDate>(MEETINGS_KEY, {});
+    const notesLS = readLS<DismissedByDate>(NOTES_KEY, {});
+    const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
 
-    /* Firebase Messaging (SAFE dynamic import) */
+    setDismissedMeetings(meetingsLS[todayKey()] || []);
+    setDismissedNotes(notesLS[todayKey()] || []);
+    setDismissedLogout(!!logoutLS[todayKey()]);
+
+    /* Firebase Messaging (SAFE) */
     (async () => {
       try {
         const messaging = await import("@/firebase/firebase-messaging");
 
-        const token = await messaging.requestFirebaseNotificationPermission();
+        const token =
+          await messaging.requestFirebaseNotificationPermission?.();
         if (token) console.log("FCM Token:", token);
 
-        const unsub = messaging.onMessageListener((payload: any) => {
+        const unsub = messaging.onMessageListener?.((payload: any) => {
           if (
             "Notification" in window &&
             Notification.permission === "granted" &&
@@ -135,13 +145,13 @@ export function Reminders() {
         });
 
         return () => typeof unsub === "function" && unsub();
-      } catch (e) {
-        console.warn("FCM not supported", e);
+      } catch {
+        console.warn("FCM not supported");
       }
     })();
   }, []);
 
-  /* ===================== FIRESTORE ===================== */
+  /* ================= FIRESTORE ================= */
 
   useEffect(() => {
     const unsubMeetings = onSnapshot(
@@ -181,14 +191,14 @@ export function Reminders() {
     };
   }, []);
 
-  /* ===================== CLOCK ===================== */
+  /* ================= CLOCK ================= */
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 10000);
     return () => clearInterval(t);
   }, []);
 
-  /* ===================== MATCH REMINDERS ===================== */
+  /* ================= MATCH ================= */
 
   useEffect(() => {
     const windowMs = 5 * 60 * 1000;
@@ -213,22 +223,19 @@ export function Reminders() {
     setCurrentNote(note || null);
     setShowNote(!!note);
 
-    if (
-      now.getHours() === 16 &&
-      now.getMinutes() === 30 &&
-      !dismissedLogout
-    ) {
+    if (now.getHours() === 16 && now.getMinutes() === 30 && !dismissedLogout) {
       setShowLogout(true);
     }
   }, [now, meetings, notes, dismissedMeetings, dismissedNotes, dismissedLogout]);
 
-  /* ===================== SOUND + NOTIF ===================== */
+  /* ================= SOUND ================= */
 
   useEffect(() => {
     const newMeeting = showMeeting && !prevMeeting.current;
     const newNote = showNote && !prevNote.current;
 
     if ((newMeeting || newNote) && audioRef.current) {
+      audioRef.current.currentTime = 0;
       audioRef.current.play().catch(() => {});
     }
 
@@ -236,40 +243,42 @@ export function Reminders() {
     prevNote.current = showNote;
   }, [showMeeting, showNote]);
 
-  /* ===================== DISMISS ===================== */
+  /* ================= DISMISS ================= */
 
   function dismissMeeting() {
-    const data = readLS(MEETINGS_KEY, {});
-    data[todayKey()] = [...(data[todayKey()] || []), currentMeeting!.id];
+    if (!currentMeeting) return;
+    const data = readLS<DismissedByDate>(MEETINGS_KEY, {});
+    data[todayKey()] = [...(data[todayKey()] || []), currentMeeting.id];
     writeLS(MEETINGS_KEY, data);
     setDismissedMeetings(data[todayKey()]);
     setShowMeeting(false);
   }
 
   function dismissNote() {
-    const data = readLS(NOTES_KEY, {});
-    data[todayKey()] = [...(data[todayKey()] || []), currentNote!.id];
+    if (!currentNote) return;
+    const data = readLS<DismissedByDate>(NOTES_KEY, {});
+    data[todayKey()] = [...(data[todayKey()] || []), currentNote.id];
     writeLS(NOTES_KEY, data);
     setDismissedNotes(data[todayKey()]);
     setShowNote(false);
   }
 
   function dismissLogout() {
-    const data = readLS(LOGOUT_KEY, {});
+    const data = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
     data[todayKey()] = true;
     writeLS(LOGOUT_KEY, data);
     setDismissedLogout(true);
     setShowLogout(false);
   }
 
-  /* ===================== UI ===================== */
+  /* ================= UI ================= */
 
   return (
     <>
       <div className="fixed top-4 right-4 space-y-2 z-50">
         {showMeeting && currentMeeting && (
           <div className="bg-white p-4 rounded shadow">
-            <b>Meeting Reminder</b>
+            <strong>Meeting Reminder</strong>
             <p>
               {currentMeeting.title} at{" "}
               {formatTime(toDate(currentMeeting.start_date))}
@@ -282,7 +291,7 @@ export function Reminders() {
 
         {showNote && currentNote && (
           <div className="bg-white p-4 rounded shadow">
-            <b>Note Reminder</b>
+            <strong>Note Reminder</strong>
             <p>{currentNote.type_activity}</p>
             <p>{currentNote.remarks}</p>
             <Button size="sm" onClick={dismissNote}>
