@@ -147,13 +147,28 @@ export function QuotationSheet(props: Props) {
     handleSave,
   } = props;
 
-  const [quotationNumberError, setQuotationNumberError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(true);
+
+  function addDaysToDate(days: number): string {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split("T")[0]; // YYYY-MM-DD format for input[type=date]
+  }
+
+  useEffect(() => {
+    if (callType === "Sent Quotation Standard" || callType === "Sent Quotation with Special Price") {
+      setFollowUpDate(addDaysToDate(1)); // after 1 day (tomorrow)
+    } else if (callType === "Sent Quotation with SPF") {
+      setFollowUpDate(addDaysToDate(5)); // after 5 days
+    } else {
+      setFollowUpDate(""); // clear or keep empty for others
+    }
+  }, [callType]);
 
   const [localQuotationNumber, setLocalQuotationNumber] = useState(quotationNumber);
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
@@ -1018,7 +1033,6 @@ export function QuotationSheet(props: Props) {
                 </DialogContent>
               </Dialog>
 
-
               <FieldLabel>Quotation Amount</FieldLabel>
               <Input
                 type="number"
@@ -1047,12 +1061,23 @@ export function QuotationSheet(props: Props) {
         <div>
           <FieldGroup>
             <FieldSet>
-              <FieldLabel>Follow-up Date</FieldLabel>
-              <Input
-                type="date"
-                value={followUpDate}
-                onChange={(e) => setFollowUpDate(e.target.value)}
-              />
+              {followUpDate ? (
+                <Alert variant="default" className="mb-4 flex items-center gap-2">
+                  <div>
+                    <AlertTitle>Follow Up Date:</AlertTitle>
+                    <AlertDescription>
+                      {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
+                    </AlertDescription>
+                  </div>
+                </Alert>
+              ) : (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTitle>No Follow Up Date set</AlertTitle>
+                  <AlertDescription>
+                    Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <FieldLabel className="mt-3">Remarks</FieldLabel>
               <Textarea

@@ -214,6 +214,12 @@ function DashboardContent() {
                             <CardContent>
                                 <Scheduled
                                     referenceid={userDetails.referenceid}
+                                    firstname={userDetails.firstname}
+                                    lastname={userDetails.lastname}
+                                    email={userDetails.email}
+                                    contact={userDetails.contact}
+                                    tsmname={userDetails.tsmname}
+                                    managername={userDetails.managername}
                                     target_quota={userDetails.target_quota}
                                     dateCreatedFilterRange={dateCreatedFilterRange}
                                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />

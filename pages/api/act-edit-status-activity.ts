@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const { activity_reference_number, status } = req.body;
+  const { activity_reference_number, status, scheduled_date } = req.body;
 
   if (!activity_reference_number) {
     return res.status(400).json({ error: "Missing activity_reference_number" });
@@ -17,12 +17,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Build update data object dynamically
+    const updateData: any = {
+      status,
+      date_updated: new Date().toISOString(),
+    };
+
+    if (scheduled_date) {
+      updateData.scheduled_date = scheduled_date;
+    }
+
     const { data, error } = await supabase
       .from("activity")
-      .update({
-        status,
-        date_updated: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("activity_reference_number", activity_reference_number)
       .select();
 

@@ -33,6 +33,7 @@ interface Activity {
     account_reference_number: string;
     status: string;
     date_updated: string;
+    scheduled_date: string;
     date_created: string;
 }
 
@@ -146,14 +147,15 @@ export const Progress: React.FC<NewTaskProps> = ({
 
         if (!referenceid) return;
 
+        // Gumawa ng channel na naka-subscribe sa activity table filtered by referenceid
         const channel = supabase
             .channel(`public:activity:referenceid=eq.${referenceid}`)
             .on(
-                "postgres_changes",
+                'postgres_changes',
                 {
-                    event: "*",
-                    schema: "public",
-                    table: "activity",
+                    event: '*',
+                    schema: 'public',
+                    table: 'activity',
                     filter: `referenceid=eq.${referenceid}`,
                 },
                 (payload) => {
@@ -162,14 +164,14 @@ export const Progress: React.FC<NewTaskProps> = ({
 
                     setActivities((curr) => {
                         switch (payload.eventType) {
-                            case "INSERT":
+                            case 'INSERT':
                                 if (!curr.some((a) => a.id === newRecord.id)) {
                                     return [...curr, newRecord];
                                 }
                                 return curr;
-                            case "UPDATE":
+                            case 'UPDATE':
                                 return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case "DELETE":
+                            case 'DELETE':
                                 return curr.filter((a) => a.id !== oldRecord.id);
                             default:
                                 return curr;
@@ -180,6 +182,7 @@ export const Progress: React.FC<NewTaskProps> = ({
             .subscribe();
 
         return () => {
+            // Proper way to unsubscribe sa bagong API:
             supabase.removeChannel(channel);
         };
     }, [referenceid, fetchActivities]);
@@ -199,6 +202,7 @@ export const Progress: React.FC<NewTaskProps> = ({
     const mergedData = activities
         .filter((a) => allowedStatuses.includes(a.status))
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
+        .filter((a) => !a.scheduled_date || a.scheduled_date === "")
         .map((activity) => {
             const company = companies.find(
                 (c) => c.account_reference_number === activity.account_reference_number

@@ -400,7 +400,6 @@ export function CreateActivityDialog({
         }, intervalTime);
     };
 
-
     const handleSave = async () => {
         setLoading(true);
 
@@ -419,7 +418,6 @@ export function CreateActivityDialog({
             manager,
 
             source,
-            callback: callback || undefined,
             call_status: callStatus,
             call_type: callType,
 
@@ -465,16 +463,21 @@ export function CreateActivityDialog({
 
             if (!res.ok) {
                 toast.error(result.error || "Failed to save activity.");
+                setLoading(false);
                 return;
             }
 
-            // Update status
+            // Prepare scheduled_date for update status API
+            const scheduled_date = followUpDate || null;
+
+            // Update status AND scheduled_date if available
             const statusRes = await fetch("/api/act-edit-status-activity", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     activity_reference_number: activityRef,
                     status,
+                    ...(scheduled_date && { scheduled_date }), // only add if scheduled_date is not null
                 }),
             });
 
@@ -482,6 +485,7 @@ export function CreateActivityDialog({
 
             if (!statusRes.ok) {
                 toast.error(statusResult.error || "Failed to update activity status.");
+                setLoading(false);
                 return;
             }
 
@@ -744,9 +748,7 @@ export function CreateActivityDialog({
                                     setStep={setStep}
                                     source={source}
                                     setSource={setSource}
-                                    callback={callback}
                                     contact_number={contact_number}
-                                    setCallback={setCallback}
                                     callStatus={callStatus}
                                     setCallStatus={setCallStatus}
                                     callType={callType}

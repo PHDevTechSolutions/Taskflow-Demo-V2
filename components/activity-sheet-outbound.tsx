@@ -1,26 +1,40 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { CheckCircle2Icon } from "lucide-react";
 
-import { FieldGroup, FieldSet, FieldLabel, Field, FieldContent, FieldDescription, FieldTitle, } from "@/components/ui/field";
+import {
+    FieldGroup,
+    FieldSet,
+    FieldLabel,
+    Field,
+    FieldContent,
+    FieldDescription,
+    FieldTitle,
+} from "@/components/ui/field";
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 interface OutboundSheetProps {
-    step: number; setStep: React.Dispatch<React.SetStateAction<number>>;
-    source: string; setSource: React.Dispatch<React.SetStateAction<string>>;
-    callback: string; setCallback: React.Dispatch<React.SetStateAction<string>>;
-    callStatus: string; setCallStatus: React.Dispatch<React.SetStateAction<string>>;
-    callType: string; setCallType: React.Dispatch<React.SetStateAction<string>>;
-    followUpDate: string; setFollowUpDate: React.Dispatch<React.SetStateAction<string>>;
-    status: string; setStatus: React.Dispatch<React.SetStateAction<string>>;
-    remarks: string; setRemarks: React.Dispatch<React.SetStateAction<string>>;
+    step: number;
+    setStep: React.Dispatch<React.SetStateAction<number>>;
+    source: string;
+    setSource: React.Dispatch<React.SetStateAction<string>>;
+    // Removed callback and setCallback here
+    callStatus: string;
+    setCallStatus: React.Dispatch<React.SetStateAction<string>>;
+    callType: string;
+    setCallType: React.Dispatch<React.SetStateAction<string>>;
+    followUpDate: string;
+    setFollowUpDate: React.Dispatch<React.SetStateAction<string>>;
+    status: string;
+    setStatus: React.Dispatch<React.SetStateAction<string>>;
+    remarks: string;
+    setRemarks: React.Dispatch<React.SetStateAction<string>>;
     loading: boolean;
 
     contact_number: string;
@@ -29,22 +43,122 @@ interface OutboundSheetProps {
     handleSave: () => void;
 }
 
-export function OutboundSheet({
-    step, setStep,
-    source, setSource,
-    callback, setCallback,
-    callStatus, setCallStatus,
-    callType, setCallType,
-    followUpDate, setFollowUpDate,
-    status, setStatus,
-    remarks, setRemarks,
-    loading,
-    contact_number,
-    handleBack,
-    handleNext,
-    handleSave,
+export function OutboundSheet(props: OutboundSheetProps) {
+    const {
+        step,
+        source,
+        callStatus,
+        callType,
+        followUpDate,
+        status,
+        remarks,
+        // handlers
+        handleNext,
+    } = props;
 
-}: OutboundSheetProps) {
+    // Removed useEffect that depended on callback
+
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogMessage, setDialogMessage] = useState("");
+
+    useEffect(() => {
+        if (!callType) {
+            props.setFollowUpDate("");
+            return;
+        }
+
+        const today = new Date();
+        let newDate: Date;
+
+        switch (callType) {
+            case "Ringing Only":
+                newDate = new Date(today);
+                newDate.setDate(today.getDate() + 10);
+                break;
+
+            case "No Requirements":
+                newDate = new Date(today);
+                newDate.setDate(today.getDate() + 15);
+                break;
+
+            case "Cannot Be Reached":
+            case "Not Connected With The Company":
+                newDate = new Date(today);
+                break;
+
+            case "Waiting for Future Projects":
+                newDate = new Date(today);
+                newDate.setDate(today.getDate() + 30);
+                break;
+
+            default:
+                return;
+        }
+
+        const formattedDate = newDate.toISOString().split("T")[0];
+        if (formattedDate !== followUpDate) {
+            props.setFollowUpDate(formattedDate);
+        }
+    }, [callType, followUpDate, props]);
+
+    // Validation function to check if current step inputs are filled
+    function validateStep() {
+        switch (step) {
+            case 2:
+                if (!source) {
+                    setDialogMessage("Please select a Source.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                return true;
+            case 3:
+                if (!callStatus) {
+                    setDialogMessage("Please select Call Status.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                return true;
+            case 4:
+                if (!callType) {
+                    setDialogMessage("Please select Call Type.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                if (!followUpDate) {
+                    setDialogMessage("Please enter Follow Up Date.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                return true;
+            case 5:
+                if (!remarks.trim()) {
+                    setDialogMessage("Please enter Remarks.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                if (!status) {
+                    setDialogMessage("Please select Status.");
+                    setDialogOpen(true);
+                    return false;
+                }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    function onSaveClick() {
+        if (validateStep()) {
+            props.handleSave();
+        }
+    }
+
+    function onNextClick() {
+        if (validateStep()) {
+            handleNext();
+        }
+    }
+
     return (
         <>
             {/* STEP 2 */}
@@ -54,8 +168,14 @@ export function OutboundSheet({
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
-
-                            <RadioGroup value={source} onValueChange={setSource} className="space-y-4">
+                            <FieldDescription>
+                                Select the source of the outbound call. This helps categorize the call type for reporting and analytics.
+                            </FieldDescription>
+                            <RadioGroup
+                                value={source}
+                                onValueChange={props.setSource}
+                                className="space-y-4"
+                            >
                                 {[
                                     {
                                         value: "Outbound - Touchbase",
@@ -72,46 +192,26 @@ export function OutboundSheet({
                                 ].map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
-                                            {/* LEFT */}
                                             <FieldContent className="flex-1">
                                                 <FieldTitle>{item.title}</FieldTitle>
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
-                                                {/* Button lalabas lang sa selected */}
                                                 {source === item.value && (
                                                     <div className="mt-4 flex gap-2 flex">
-                                                        <Button variant="outline" onClick={handleBack}>Back</Button>
-                                                        <Button onClick={handleNext}>
-                                                            Next
+                                                        <Button variant="outline" onClick={props.handleBack}>
+                                                            Back
                                                         </Button>
+                                                        <Button onClick={onNextClick}>Next</Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
-
-                                            {/* RIGHT */}
                                             <RadioGroupItem value={item.value} />
                                         </Field>
                                     </FieldLabel>
                                 ))}
                             </RadioGroup>
-
                         </FieldSet>
                     </FieldGroup>
-
-                    <Alert className="mt-6 flex flex-col space-y-2 border-blue-400 bg-blue-50 text-blue-900">
-                        <div className="flex items-center space-x-2">
-                            <CheckCircle2Icon className="w-6 h-6 text-blue-600" />
-                            <AlertTitle className="text-lg font-semibold">Note on Source Counting</AlertTitle>
-                        </div>
-                        <AlertDescription className="text-sm leading-relaxed">
-                            The{" "}
-                            <span className="font-semibold text-blue-700">Outbound - Touchbase</span>{" "}
-                            calls are counted in the dashboard, national sales, and conversion
-                            rates, whereas the{" "}
-                            <span className="font-semibold text-blue-700">Outbound - Follow-up</span>{" "}
-                            calls are only counted in the source statistics.
-                        </AlertDescription>
-                    </Alert>
                 </div>
             )}
 
@@ -119,28 +219,26 @@ export function OutboundSheet({
             {step === 3 && (
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 3 — Call Details</h2>
-                    {/* CONTACT NUMBER DISPLAY */}
                     <Alert>
                         <CheckCircle2Icon />
-                        <AlertTitle>{contact_number}</AlertTitle>
+                        <AlertTitle>{props.contact_number}</AlertTitle>
                         <AlertDescription>
-                            Use this number when calling the client. Ensure accuracy before proceeding.
+                            Use this number when calling the client. Ensure accuracy before
+                            proceeding.
                         </AlertDescription>
-
                     </Alert>
-
-                    <Label className="mb-3 mt-4">Callback (Optional)</Label>
-                    <Input
-                        type="datetime-local"
-                        value={callback}
-                        onChange={(e) => setCallback(e.target.value)}
-                    />
 
                     <FieldGroup className="mt-4">
                         <FieldSet>
                             <FieldLabel>Call Status</FieldLabel>
-
-                            <RadioGroup value={callStatus} onValueChange={setCallStatus} className="space-y-4">
+                            <FieldDescription>
+                                Select the status of the call to indicate if the client was reached or not.
+                            </FieldDescription>
+                            <RadioGroup
+                                value={callStatus}
+                                onValueChange={props.setCallStatus}
+                                className="space-y-4"
+                            >
                                 {[
                                     {
                                         value: "Successful",
@@ -155,38 +253,30 @@ export function OutboundSheet({
                                 ].map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
-                                            {/* LEFT */}
                                             <FieldContent className="flex-1">
                                                 <FieldTitle>{item.title}</FieldTitle>
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
-                                                {/* Buttons lalabas lang sa selected */}
                                                 {callStatus === item.value && (
                                                     <div className="mt-4 flex gap-2">
                                                         <Button
                                                             type="button"
                                                             variant="outline"
-                                                            onClick={handleBack}
+                                                            onClick={props.handleBack}
                                                         >
                                                             Back
                                                         </Button>
-                                                        <Button
-                                                            type="button"
-                                                            onClick={handleNext}
-                                                        >
+                                                        <Button type="button" onClick={onNextClick}>
                                                             Next
                                                         </Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
-
-                                            {/* RIGHT */}
                                             <RadioGroupItem value={item.value} />
                                         </Field>
                                     </FieldLabel>
                                 ))}
                             </RadioGroup>
-
                         </FieldSet>
                     </FieldGroup>
                 </div>
@@ -196,20 +286,33 @@ export function OutboundSheet({
             {step === 4 && (
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 4 — Call Details</h2>
-                    <Label className="mb-3 mt-3">Follow Up Date</Label>
-                    <Input
-                        type="date"
-                        value={followUpDate}
-                        onChange={(e) => setFollowUpDate(e.target.value)}
-                        className="mb-4"
-                    />
+                    {followUpDate ? (
+                        <Alert variant="default" className="mb-4 flex items-center gap-2">
+                            <div>
+                                <AlertTitle>Follow Up Date:</AlertTitle>
+                                <AlertDescription>
+                                    {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
+                                </AlertDescription>
+                            </div>
+                        </Alert>
+                    ) : (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertTitle>No Follow Up Date set</AlertTitle>
+                            <AlertDescription>
+                                Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Call Type</FieldLabel>
+                            <FieldDescription>
+                                Choose the type of call outcome based on the client's response and situation.
+                            </FieldDescription>
                             <RadioGroup
                                 value={callType}
-                                onValueChange={setCallType}
+                                onValueChange={props.setCallType}
                                 className="space-y-4"
                             >
                                 {(callStatus === "Successful"
@@ -254,32 +357,25 @@ export function OutboundSheet({
                                 ).map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
-                                            {/* LEFT */}
                                             <FieldContent className="flex-1">
                                                 <FieldTitle>{item.title}</FieldTitle>
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
-                                                {/* Buttons lalabas lang sa selected */}
                                                 {callType === item.value && (
                                                     <div className="mt-4 flex gap-2">
                                                         <Button
                                                             type="button"
                                                             variant="outline"
-                                                            onClick={handleBack}
+                                                            onClick={props.handleBack}
                                                         >
                                                             Back
                                                         </Button>
-                                                        <Button
-                                                            type="button"
-                                                            onClick={handleNext}
-                                                        >
+                                                        <Button type="button" onClick={onNextClick}>
                                                             Next
                                                         </Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
-
-                                            {/* RIGHT */}
                                             <RadioGroupItem value={item.value} />
                                         </Field>
                                     </FieldLabel>
@@ -297,9 +393,12 @@ export function OutboundSheet({
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Remarks</FieldLabel>
+                            <FieldDescription>
+                                Add any additional notes or important details about the call or client interaction.
+                            </FieldDescription>
                             <Textarea
                                 value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
+                                onChange={(e) => props.setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
                                 required
                                 className="capitalize"
@@ -307,11 +406,13 @@ export function OutboundSheet({
                         </FieldSet>
                     </FieldGroup>
 
-                    <FieldGroup>
+                    <FieldGroup className="mt-4">
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
-
-                            <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                            <FieldDescription>
+                                Select the final status to indicate if the client was assisted or not assisted during this call.
+                            </FieldDescription>
+                            <RadioGroup value={status} onValueChange={props.setStatus} className="space-y-4">
                                 {[
                                     {
                                         value: "Assisted",
@@ -326,25 +427,22 @@ export function OutboundSheet({
                                 ].map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
-                                            {/* LEFT */}
                                             <FieldContent className="flex-1">
                                                 <FieldTitle>{item.title}</FieldTitle>
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
-                                                {/* Buttons only visible if selected */}
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={handleBack}>
+                                                        <Button type="button" variant="outline" onClick={props.handleBack}>
                                                             Back
                                                         </Button>
-                                                        <Button type="button" onClick={handleSave}>
+                                                        <Button type="button" onClick={onSaveClick}>
                                                             Save
                                                         </Button>
+
                                                     </div>
                                                 )}
                                             </FieldContent>
-
-                                            {/* RIGHT */}
                                             <RadioGroupItem value={item.value} />
                                         </Field>
                                     </FieldLabel>
@@ -353,6 +451,17 @@ export function OutboundSheet({
                         </FieldSet>
                     </FieldGroup>
 
+                    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Validation Error</DialogTitle>
+                                <DialogDescription>{dialogMessage}</DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button onClick={() => setDialogOpen(false)}>OK</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             )}
         </>

@@ -1,12 +1,18 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner"
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { CreateActivityDialog } from "./activity-create-dialog";
 import { DoneDialog } from "./activity-done-dialog";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -17,26 +23,41 @@ interface Company {
   company_name: string;
   contact_number?: string;
   type_client?: string;
+  email_address?: string;
+  address?: string;
+  contact_person?: string;
 }
 
-interface Scheduled {
-  id: number;
+interface Activity {
+  id: string;
   referenceid: string;
   target_quota?: string;
   tsm: string;
   manager: string;
+  activity_reference_number: string;
   account_reference_number: string;
   status: string;
-  scheduled_status: string;
-  callback: string;
-  date_followup?: string | null;
   date_updated: string;
+  scheduled_date: string;
   date_created: string;
+}
+
+interface HistoryItem {
+  id: string;
+  activity_reference_number: string;
+  callback?: string | null;
+  date_followup?: string | null;
 }
 
 interface ScheduledProps {
   referenceid: string;
   target_quota?: string;
+  firstname: string;
+  lastname: string;
+  email: string;
+  contact: string;
+  tsmname: string;
+  managername: string;
   dateCreatedFilterRange: DateRange | undefined;
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
@@ -46,19 +67,28 @@ interface ScheduledProps {
 export const Scheduled: React.FC<ScheduledProps> = ({
   referenceid,
   target_quota,
+  firstname,
+  lastname,
+  email,
+  contact,
+  tsmname,
+  managername,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [activities, setActivities] = useState<Scheduled[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
   const [errorActivities, setErrorActivities] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedScheduledId, setSelectedScheduledId] = useState<number | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
   // Fetch companies
   useEffect(() => {
@@ -79,7 +109,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       .finally(() => setLoadingCompanies(false));
   }, [referenceid]);
 
-  const fetchActivities = useCallback(() => {
+  // Fetch activities
+  const fetchActivities = useCallback(async () => {
     if (!referenceid) {
       setActivities([]);
       return;
@@ -87,34 +118,82 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setLoadingActivities(true);
     setErrorActivities(null);
 
-    fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch activities");
-        return res.json();
-      })
-      .then((data) => setActivities(data.activities || []))
-      .catch((err) => setErrorActivities(err.message))
-      .finally(() => setLoadingActivities(false));
+    try {
+      const res = await fetch(
+        `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || "Failed to fetch activities");
+      }
+
+      const json = await res.json();
+      setActivities(json.data || []);
+    } catch (error: any) {
+      setErrorActivities(error.message || "Error fetching activities");
+    } finally {
+      setLoadingActivities(false);
+    }
+  }, [referenceid]);
+
+  // Fetch history data
+  const fetchHistory = useCallback(async () => {
+    if (!referenceid) {
+      setHistory([]);
+      return;
+    }
+    setLoadingHistory(true);
+    setErrorHistory(null);
+
+    try {
+      const res = await fetch(
+        `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
+      );
+
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || "Failed to fetch history");
+      }
+
+      const json = await res.json();
+      setHistory(json.activities || []);
+    } catch (error: any) {
+      setErrorHistory(error.message || "Error fetching history");
+    } finally {
+      setLoadingHistory(false);
+    }
   }, [referenceid]);
 
   useEffect(() => {
     fetchActivities();
+    fetchHistory();
 
     if (!referenceid) return;
 
-    const channel = supabase
-      .channel(`public:history:referenceid=eq.${referenceid}`)
+    // Subscribe realtime for activities
+    const activityChannel = supabase
+      .channel(`public:activity:referenceid=eq.${referenceid}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "history",
+          table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
         (payload) => {
-          const newRecord = payload.new as Scheduled;
-          const oldRecord = payload.old as Scheduled;
+          const newRecord = payload.new as Activity;
+          const oldRecord = payload.old as Activity;
 
           setActivities((curr) => {
             switch (payload.eventType) {
@@ -135,13 +214,52 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [referenceid, fetchActivities]);
+    // Subscribe realtime for history
+    const historyChannel = supabase
+      .channel(`public:history:referenceid=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "history",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        (payload) => {
+          const newRecord = payload.new as HistoryItem;
+          const oldRecord = payload.old as HistoryItem;
 
-  const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
+          setHistory((curr) => {
+            switch (payload.eventType) {
+              case "INSERT":
+                if (!curr.some((h) => h.id === newRecord.id)) {
+                  return [...curr, newRecord];
+                }
+                return curr;
+              case "UPDATE":
+                return curr.map((h) => (h.id === newRecord.id ? newRecord : h));
+              case "DELETE":
+                return curr.filter((h) => h.id !== oldRecord.id);
+              default:
+                return curr;
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(activityChannel);
+      supabase.removeChannel(historyChannel);
+    };
+  }, [referenceid, fetchActivities, fetchHistory]);
+
+  const isDateInRange = (
+    dateStr: string | undefined,
+    range: DateRange | undefined
+  ): boolean => {
     if (!range) return true;
+    if (!dateStr) return false;
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return false;
     const { from, to } = range;
@@ -150,88 +268,104 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     return true;
   };
 
-  const isToday = (dateStr: string | undefined | null) => {
-    if (!dateStr) return false;
-    const date = new Date(dateStr);
-    const today = new Date();
-    return (
-      date.getFullYear() === today.getFullYear() &&
-      date.getMonth() === today.getMonth() &&
-      date.getDate() === today.getDate()
-    );
-  };
+  function getLatestHistoryItem(historyItems: HistoryItem[]): HistoryItem | null {
+    if (historyItems.length === 0) return null;
 
-  // Prepare merged activities with company info
+    return historyItems.reduce((latest, current) => {
+      const latestCallback = latest.callback ? new Date(latest.callback).getTime() : 0;
+      const latestFollowup = latest.date_followup ? new Date(latest.date_followup).getTime() : 0;
+      const latestDate = Math.max(latestCallback, latestFollowup);
+
+      const currentCallback = current.callback ? new Date(current.callback).getTime() : 0;
+      const currentFollowup = current.date_followup ? new Date(current.date_followup).getTime() : 0;
+      const currentDate = Math.max(currentCallback, currentFollowup);
+
+      return currentDate > latestDate ? current : latest;
+    });
+  }
+
+  const allowedStatuses = ["Assisted", "Quote-Done", "SO-Done", "Not Assisted"];
+
+  function isScheduledToday(dateStr: string): boolean {
+    const scheduledDate = new Date(dateStr);
+    const today = new Date();
+
+    return (
+      scheduledDate.getFullYear() === today.getFullYear() &&
+      scheduledDate.getMonth() === today.getMonth() &&
+      scheduledDate.getDate() === today.getDate()
+    );
+  }
+
   const mergedActivities = activities
-    .map((history) => {
+    .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
+    .filter((a) => isScheduledToday(a.scheduled_date)) // dito lang lalabas kung scheduled_date is today
+    .filter((a) => allowedStatuses.includes(a.status))
+    .map((activity) => {
       const company = companies.find(
-        (c) => c.account_reference_number === history.account_reference_number
+        (c) => c.account_reference_number === activity.account_reference_number
       );
+
+      const relatedHistoryItems = history.filter(
+        (h) => h.activity_reference_number === activity.activity_reference_number
+      );
+
+      const latestHistory = getLatestHistoryItem(relatedHistoryItems);
+
       return {
-        ...history,
+        ...activity,
         company_name: company?.company_name ?? "Unknown Company",
         contact_number: company?.contact_number ?? "-",
         type_client: company?.type_client ?? "",
+        email_address: company?.email_address ?? "",
+        contact_person: company?.contact_person ?? "",
+        address: company?.address ?? "",
+        date_followup: latestHistory?.date_followup ?? null,
       };
     })
-    .filter((a) => a.scheduled_status !== "Done");
+    .sort(
+      (a, b) =>
+        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+    );
 
-  // Filter for callback activities (filtered by dateCreatedFilterRange or today)
-  const callbackActivities = mergedActivities.filter((a) => {
-    if (!a.callback) return false;
+  const isLoading = loadingCompanies || loadingActivities || loadingHistory;
+  const error = errorCompanies || errorActivities || errorHistory;
 
-    if (dateCreatedFilterRange) {
-      return isDateInRange(a.callback, dateCreatedFilterRange);
-    }
-
-    return isToday(a.callback);
-  });
-
-  // Filter for followup activities (date_followup present, is today, scheduled_status not Done, and status not Delivered)
-  const followupActivities = mergedActivities.filter(
-    (a) =>
-      isToday(a.date_followup) &&
-      a.scheduled_status !== "Done" &&
-      a.status !== "Delivered"
-  );
-
-
-  const isLoading = loadingCompanies || loadingActivities;
-  const error = errorCompanies || errorActivities;
-
-  const openDoneDialog = (id: number) => {
-    setSelectedScheduledId(id);
+  const openDoneDialog = (id: string) => {
+    setSelectedActivityId(id);
     setDialogOpen(true);
   };
 
   const handleConfirmDone = async () => {
-    if (!selectedScheduledId) return;
+    if (!selectedActivityId) return;
 
     try {
-      setUpdatingId(selectedScheduledId);
+      setUpdatingId(selectedActivityId);
       setDialogOpen(false);
 
-      const res = await fetch("/api/act-update-scheduled", {
+      const res = await fetch("/api/act-update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedScheduledId }),
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
       });
 
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error(`Failed to update status: ${result.error}`);
+        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
         setUpdatingId(null);
         return;
       }
-      setActivities((curr) => curr.filter((a) => a.id !== selectedScheduledId));
+
+      await fetchActivities();
 
       toast.success("Transaction marked as Done.");
     } catch {
       toast.error("An error occurred while updating status.");
     } finally {
       setUpdatingId(null);
-      setSelectedScheduledId(null);
+      setSelectedActivityId(null);
     }
   };
 
@@ -271,72 +405,18 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   return (
     <>
-      {/* CALLBACK ACTIVITIES */}
       <div className="mb-4 text-xs font-bold">
-        Total On-Callback Activities: {callbackActivities.length}
+        Total Follow Up: {mergedActivities.length}
       </div>
-      <div className="max-h-[300px] overflow-auto space-y-8 custom-scrollbar mb-6">
+      <div className="max-h-[600px] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {callbackActivities.map((item) => (
-            <AccordionItem key={item.id} value={String(item.id)}>
-              <div className="p-2 cursor-pointer select-none">
-                <div className="flex justify-between items-center">
-                  <AccordionTrigger className="flex-1 text-xs font-semibold">
-                    {item.company_name}
-                  </AccordionTrigger>
-
-                  <div className="flex gap-2 ml-4">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={updatingId === item.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDoneDialog(item.id);
-                      }}
-                    >
-                      {updatingId === item.id ? "Updating..." : "Done"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="ml-1">
-                  <Badge variant="default" className="text-[8px]">
-                    {item.status.replace("-", " ")}
-                  </Badge>
-                </div>
-              </div>
-
-              <AccordionContent className="text-xs px-4 py-2">
-                <p>
-                  <strong>Contact Number:</strong> {item.contact_number}
-                </p>
-                <p>
-                  <strong>Account Reference Number:</strong> {item.account_reference_number}
-                </p>
-                <p>
-                  <strong>Callback Date:</strong> {new Date(item.callback).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Date Created:</strong> {new Date(item.date_created).toLocaleDateString()}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </div>
-
-      {/* FOLLOWUP ACTIVITIES */}
-      <div className="mb-4 text-xs font-bold">
-        Total Followup Activities Today: {followupActivities.length}
-      </div>
-      <div className="max-h-[300px] overflow-auto space-y-8 custom-scrollbar">
-        <Accordion type="single" collapsible className="w-full">
-          {followupActivities.length === 0 ? (
-            <p className="text-muted-foreground text-xs px-2">No followups today.</p>
+          {mergedActivities.length === 0 ? (
+            <p className="text-muted-foreground text-xs px-2">
+              No scheduled activities found.
+            </p>
           ) : (
-            followupActivities.map((item) => (
-              <AccordionItem key={`followup-${item.id}`} value={`followup-${item.id}`}>
+            mergedActivities.map((item) => (
+              <AccordionItem key={item.id} value={item.id}>
                 <div className="p-2 cursor-pointer select-none">
                   <div className="flex justify-between items-center">
                     <AccordionTrigger className="flex-1 text-xs font-semibold">
@@ -344,6 +424,29 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </AccordionTrigger>
 
                     <div className="flex gap-2 ml-4">
+                      <CreateActivityDialog
+                        firstname={firstname}
+                        lastname={lastname}
+                        target_quota={target_quota}
+                        email={email}
+                        contact={contact}
+                        tsmname={tsmname}
+                        managername={managername}
+                        referenceid={item.referenceid}
+                        tsm={item.tsm}
+                        manager={item.manager}
+                        type_client={item.type_client}
+                        contact_number={item.contact_number}
+                        email_address={item.email_address}
+                        activityReferenceNumber={item.activity_reference_number}
+                        company_name={item.company_name}
+                        contact_person={item.contact_person}
+                        address={item.address}
+                        accountReferenceNumber={item.account_reference_number}
+                        onCreated={() => {
+                          fetchActivities();
+                        }}
+                      />
                       <Button
                         type="button"
                         variant="secondary"
@@ -366,9 +469,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 </div>
 
                 <AccordionContent className="text-xs px-4 py-2">
-                  <p><strong>Contact Number:</strong> {item.contact_number}</p>
-                  <p><strong>Followup Date:</strong>{" "}{item.date_followup ? new Date(item.date_followup).toLocaleString() : "-"}</p>
-                  <p><strong>Date Created:</strong> {new Date(item.date_created).toLocaleDateString()}</p>
+                  <p>
+                    <strong>Contact Number:</strong> {item.contact_number}
+                  </p>
+                  <p>
+                    <strong>Scheduled Date:</strong>{" "}
+                    {new Date(item.scheduled_date).toLocaleString()}
+                  </p>
+                  <p>
+                    <strong>Date Created:</strong>{" "}
+                    {new Date(item.date_created).toLocaleDateString()}
+                  </p>
                 </AccordionContent>
               </AccordionItem>
             ))
