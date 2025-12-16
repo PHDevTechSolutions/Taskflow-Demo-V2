@@ -140,12 +140,14 @@ export const TaskList: React.FC<CompletedProps> = ({
 
     // Real-time subscription using Supabase
     useEffect(() => {
-        fetchActivities();
-
         if (!referenceid) return;
 
+        // Initial fetch
+        fetchActivities();
+
+        // Subscribe realtime for history changes that affect activities
         const channel = supabase
-            .channel(`public:history:referenceid=eq.${referenceid}`)
+            .channel(`history-${referenceid}`)
             .on(
                 "postgres_changes",
                 {
@@ -154,25 +156,9 @@ export const TaskList: React.FC<CompletedProps> = ({
                     table: "history",
                     filter: `referenceid=eq.${referenceid}`,
                 },
-                (payload) => {
-                    const newRecord = payload.new as Completed;
-                    const oldRecord = payload.old as Completed;
-
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
-                            case "UPDATE":
-                                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
-                    });
+                () => {
+                    // Refetch activities on any history change
+                    fetchActivities();
                 }
             )
             .subscribe();

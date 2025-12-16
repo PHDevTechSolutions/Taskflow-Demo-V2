@@ -271,11 +271,14 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
 
   useEffect(() => {
+    if (!referenceid) return;
+
+    // Initial fetch
     fetchEndorsedTickets();
 
-    // Setup Supabase realtime subscription
+    // Setup Supabase realtime subscription for endorsed-ticket table
     const channel = supabase
-      .channel(`public:endorsed-ticket:referenceid=eq.${referenceid}`)
+      .channel(`endorsed-ticket-${referenceid}`)
       .on(
         "postgres_changes",
         {
@@ -284,33 +287,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
           table: "endorsed-ticket",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          const newRecord = payload.new as EndorsedTicket;
-          const oldRecord = payload.old as EndorsedTicket;
-
-          setEndorsedTickets((curr) => {
-            switch (payload.eventType) {
-              case "INSERT": {
-                // 🔔 play sound ONCE per ticket
-                if (!playedTicketIdsRef.current.has(newRecord.id)) {
-                  endorsedSoundRef.current?.play().catch(() => { });
-                  playedTicketIdsRef.current.add(newRecord.id);
-                }
-
-                if (!curr.some((t) => t.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
-
-                return curr;
-              }
-              case "UPDATE":
-                return curr.map((t) => (t.id === newRecord.id ? newRecord : t));
-              case "DELETE":
-                return curr.filter((t) => t.id !== oldRecord.id);
-              default:
-                return curr;
-            }
-          });
+        () => {
+          fetchEndorsedTickets();
         }
       )
       .subscribe();
@@ -319,7 +297,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
       supabase.removeChannel(channel);
     };
   }, [referenceid, fetchEndorsedTickets]);
-
 
   const openConfirmUseTicket = (ticket: EndorsedTicket) => {
     setSelectedTicket(ticket);
