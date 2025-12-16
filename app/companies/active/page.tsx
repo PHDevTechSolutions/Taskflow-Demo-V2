@@ -116,7 +116,7 @@ function DashboardContent() {
       setLoadingAccounts(true);
       try {
         const response = await fetch(
-          `/api/com-fetch-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+          `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
         );
         const data = await response.json();
         setPosts(data.data || []);
