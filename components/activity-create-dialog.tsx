@@ -134,6 +134,7 @@ export function CreateActivityDialog({
     managername,
     activityReferenceNumber,
     accountReferenceNumber,
+    
 }: CreateActivityDialogProps) {
     const [sheetOpen, setSheetOpen] = useState(false);
     // Confirmation dialog state
@@ -488,6 +489,8 @@ export function CreateActivityDialog({
                 setLoading(false);
                 return;
             }
+            
+            onCreated(newActivity);
 
             // Success save + status update toast
             toast.success("Activity created and status updated successfully!");
