@@ -212,7 +212,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`
+          `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`
         );
         if (!response.ok) {
           setError("Failed to fetch accounts");

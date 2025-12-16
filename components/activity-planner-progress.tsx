@@ -143,46 +143,28 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     // Initial fetch + realtime subscription to keep UI fresh
     useEffect(() => {
-        fetchActivities();
-
         if (!referenceid) return;
 
-        // Gumawa ng channel na naka-subscribe sa activity table filtered by referenceid
+        fetchActivities(); // initial
+
         const channel = supabase
-            .channel(`public:activity:referenceid=eq.${referenceid}`)
+            .channel(`activity-${referenceid}`)
             .on(
-                'postgres_changes',
+                "postgres_changes",
                 {
-                    event: '*',
-                    schema: 'public',
-                    table: 'activity',
+                    event: "*",
+                    schema: "public",
+                    table: "activity",
                     filter: `referenceid=eq.${referenceid}`,
                 },
-                (payload) => {
-                    const newRecord = payload.new as Activity;
-                    const oldRecord = payload.old as Activity;
-
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case 'INSERT':
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
-                            case 'UPDATE':
-                                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case 'DELETE':
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
-                    });
+                () => {
+                    // 🔥 Realtime trigger ONLY
+                    fetchActivities();
                 }
             )
             .subscribe();
 
         return () => {
-            // Proper way to unsubscribe sa bagong API:
             supabase.removeChannel(channel);
         };
     }, [referenceid, fetchActivities]);

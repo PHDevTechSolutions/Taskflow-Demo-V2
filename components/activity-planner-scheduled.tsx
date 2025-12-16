@@ -179,14 +179,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   }, [referenceid]);
 
   useEffect(() => {
+    if (!referenceid) return;
+
+    // Initial fetch
     fetchActivities();
     fetchHistory();
 
-    if (!referenceid) return;
-
     // Subscribe realtime for activities
     const activityChannel = supabase
-      .channel(`public:activity:referenceid=eq.${referenceid}`)
+      .channel(`activity-${referenceid}`)
       .on(
         "postgres_changes",
         {
@@ -195,32 +196,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          const newRecord = payload.new as Activity;
-          const oldRecord = payload.old as Activity;
-
-          setActivities((curr) => {
-            switch (payload.eventType) {
-              case "INSERT":
-                if (!curr.some((a) => a.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
-                return curr;
-              case "UPDATE":
-                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-              case "DELETE":
-                return curr.filter((a) => a.id !== oldRecord.id);
-              default:
-                return curr;
-            }
-          });
+        () => {
+          fetchActivities();
         }
       )
       .subscribe();
 
     // Subscribe realtime for history
     const historyChannel = supabase
-      .channel(`public:history:referenceid=eq.${referenceid}`)
+      .channel(`history-${referenceid}`)
       .on(
         "postgres_changes",
         {
@@ -229,25 +213,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          const newRecord = payload.new as HistoryItem;
-          const oldRecord = payload.old as HistoryItem;
-
-          setHistory((curr) => {
-            switch (payload.eventType) {
-              case "INSERT":
-                if (!curr.some((h) => h.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
-                return curr;
-              case "UPDATE":
-                return curr.map((h) => (h.id === newRecord.id ? newRecord : h));
-              case "DELETE":
-                return curr.filter((h) => h.id !== oldRecord.id);
-              default:
-                return curr;
-            }
-          });
+        () => {
+          fetchHistory();
         }
       )
       .subscribe();
@@ -257,6 +224,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       supabase.removeChannel(historyChannel);
     };
   }, [referenceid, fetchActivities, fetchHistory]);
+
 
   const isDateInRange = (
     dateStr: string | undefined,
@@ -482,66 +450,68 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                   ) : (
                     <>
                       {/* Quotation Number */}
-                      {item.relatedHistoryItems.some(h => h.quotation_number && h.quotation_number !== "-") && (
-                        <p>
-                          <strong>Quotation Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map(h => h.quotation_number ?? "-")
-                              .filter(v => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.quotation_number && h.quotation_number !== "-"
+                      ) && (
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.quotation_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
-                      {/* Quotation Amount */}
-                      {item.relatedHistoryItems.some(h => h.quotation_amount !== null && h.quotation_amount !== undefined) && (
-                        <p>
-                          <strong>Quotation Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .map(h =>
-                              h.quotation_amount !== null && h.quotation_amount !== undefined
-                                ? h.quotation_amount.toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })
-                                : null
-                            )
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                      )}
+                      {/* TOTAL Quotation Amount */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
+                      ) && (
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.quotation_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {/* SO Number */}
-                      {item.relatedHistoryItems.some(h => h.so_number && h.so_number !== "-") && (
-                        <p>
-                          <strong>SO Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map(h => h.so_number ?? "-")
-                              .filter(v => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.so_number && h.so_number !== "-"
+                      ) && (
+                          <p>
+                            <strong>SO Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.so_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
-                      {/* SO Amount */}
-                      {item.relatedHistoryItems.some(h => h.so_amount !== null && h.so_amount !== undefined) && (
-                        <p>
-                          <strong>SO Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .map(h =>
-                              h.so_amount !== null && h.so_amount !== undefined
-                                ? h.so_amount.toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })
-                                : null
-                            )
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                      )}
+                      {/* TOTAL SO Amount */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.so_amount !== null && h.so_amount !== undefined
+                      ) && (
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.so_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
                     </>
                   )}
 
@@ -550,6 +520,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     {new Date(item.date_created).toLocaleDateString()}
                   </p>
                 </AccordionContent>
+
 
               </AccordionItem>
             ))
