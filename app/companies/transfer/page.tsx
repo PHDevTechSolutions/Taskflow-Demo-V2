@@ -22,21 +22,20 @@ import { type DateRange } from "react-day-picker";
 
 interface Account {
     id: string;
-    tsm: string;
     referenceid: string;
+    tsm: string;
     company_name: string;
-    type_client: string;
-    date_created: string;
-    date_updated: string;
     contact_person: string;
     contact_number: string;
     email_address: string;
     address: string;
     delivery_address: string;
     region: string;
+    type_client: string;
+    date_created: string;
     industry: string;
     status?: string;
-    company_group?: string;
+    transfer_to: string;
 }
 
 interface UserDetails {
