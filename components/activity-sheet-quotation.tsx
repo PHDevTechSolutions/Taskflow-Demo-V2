@@ -152,7 +152,7 @@ export function QuotationSheet(props: Props) {
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
-  const [isManualEntry, setIsManualEntry] = useState(true);
+  const [isManualEntry, setIsManualEntry] = useState(false);
 
   function addDaysToDate(days: number): string {
     const date = new Date();
