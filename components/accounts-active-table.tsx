@@ -78,6 +78,8 @@ export function AccountsTable({
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
   // For bulk remove
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
   const [removeRemarks, setRemoveRemarks] = useState("");
@@ -89,7 +91,7 @@ export function AccountsTable({
 
   // Filter out removed accounts immediately
   const filteredData = useMemo(() => {
-    const allowedTypes = ["TOP 50", "NEXT 30", "BALANCE 20"];
+    const allowedTypes = ["TOP 50", "NEXT 30", "BALANCE 20", "TSA Client", "CSR Client"];
     const normalizedAllowedTypes = allowedTypes.map(t => t.toLowerCase());
 
     let data = localPosts.filter(item =>
@@ -443,7 +445,15 @@ export function AccountsTable({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         {/* Left side: Add Account + Search */}
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex-grow w-full max-w-lg">
+          <AccountDialog
+            mode="create"
+            userDetails={userDetails}
+            onSaveAction={onSaveAccountAction}
+            open={isCreateDialogOpen}
+            onOpenChangeAction={setIsCreateDialogOpen}
+          />
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
             <AccountsActiveSearch
               globalFilter={globalFilter}
               setGlobalFilterAction={setGlobalFilter}

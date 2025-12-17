@@ -226,7 +226,7 @@ function DashboardContent() {
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbPage className="line-clamp-1">
-                    Customer Database - Active
+                    Customer Database
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
