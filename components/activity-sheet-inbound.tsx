@@ -96,6 +96,8 @@ interface InboundSheetProps {
     setRemarks: (value: string) => void;
     status: string;
     setStatus: (value: string) => void;
+    typeClient: string;
+    setTypeClient: (value: string) => void;
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
@@ -112,6 +114,8 @@ export function InboundSheet({
     setRemarks,
     status,
     setStatus,
+    typeClient,
+    setTypeClient,
     handleBack,
     handleNext,
     handleSave,
@@ -123,6 +127,19 @@ export function InboundSheet({
         }
     }, [status, setStatus]);
 
+    const filteredSources =
+        typeClient === "CSR Client"
+            ? [
+                {
+                    label: "CSR Inquiry",
+                    description: "Customer Service Representative inquiries.",
+                },
+            ]
+            : INBOUND_SOURCES.filter(
+                (source) => source.label !== "CSR Inquiry"
+            );
+
+
     return (
         <>
             {/* Step 2: Source */}
@@ -132,11 +149,9 @@ export function InboundSheet({
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
 
-                            <RadioGroup
-                                value={source}
-                                onValueChange={setSource}
-                            >
-                                {INBOUND_SOURCES.map(({ label, description }) => (
+
+                            <RadioGroup value={source} onValueChange={setSource}>
+                                {filteredSources.map(({ label, description }) => (
                                     <FieldLabel key={label}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             {/* LEFT */}
@@ -147,17 +162,10 @@ export function InboundSheet({
                                                 {/* Buttons only visible if selected */}
                                                 {source === label && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button
-                                                            type="button" variant="outline"
-                                                            onClick={handleBack}
-                                                        >
+                                                        <Button type="button" variant="outline" onClick={handleBack}>
                                                             Back
                                                         </Button>
-                                                        <Button
-                                                            type="button"
-                                                            onClick={handleNext}
-                                                            disabled={!source}
-                                                        >
+                                                        <Button type="button" onClick={handleNext} disabled={!source}>
                                                             Next
                                                         </Button>
                                                     </div>

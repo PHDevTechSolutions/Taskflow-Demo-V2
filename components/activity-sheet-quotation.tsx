@@ -60,6 +60,8 @@ interface Props {
   setStatus: (v: string) => void;
   tsm: string;
   setTSM: (v: string) => void;
+  typeClient: string;
+  setTypeClient: (value: string) => void;
   handleBack: () => void;
   handleNext: () => void;
   handleSave: () => void;
@@ -108,7 +110,6 @@ function getQuotationPrefix(type: string): string {
   return map[type.trim()] || "";
 }
 
-
 interface ManualProduct {
   id: number;
   title: string;
@@ -142,6 +143,7 @@ export function QuotationSheet(props: Props) {
     remarks, setRemarks,
     status, setStatus,
     tsm, setTSM,
+    typeClient, setTypeClient,
     handleBack,
     handleNext,
     handleSave,
@@ -380,6 +382,18 @@ export function QuotationSheet(props: Props) {
     });
   }
 
+  const filteredSources =
+        typeClient === "CSR Client"
+            ? [
+                {
+                    label: "CSR Inquiry",
+                    description: "Customer Service Representative inquiries.",
+                },
+            ]
+            : Quotation_SOURCES.filter(
+                (source) => source.label !== "CSR Inquiry"
+            );
+
   return (
     <>
       {/* STEP 2 — SOURCE */}
@@ -392,7 +406,7 @@ export function QuotationSheet(props: Props) {
                 value={source}
                 onValueChange={setSource}
               >
-                {Quotation_SOURCES.map(({ label, description }) => (
+                {filteredSources.map(({ label, description }) => (
                   <FieldLabel key={label}>
                     <Field orientation="horizontal" className="w-full items-start">
                       {/* LEFT */}

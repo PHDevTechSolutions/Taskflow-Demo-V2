@@ -17,6 +17,7 @@ import { DoneDialog } from "./activity-done-dialog";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
+import { Input } from "@/components/ui/input";
 
 interface Company {
   account_reference_number: string;
@@ -36,6 +37,7 @@ interface Activity {
   manager: string;
   activity_reference_number: string;
   account_reference_number: string;
+  ticket_reference_number: string;
   status: string;
   date_updated: string;
   scheduled_date: string;
@@ -51,6 +53,10 @@ interface HistoryItem {
   quotation_amount?: number | null;
   so_number?: string | null;
   so_amount?: number | null;
+  call_type?: string;
+  ticket_reference_number?: string;
+  source?: string;
+  call_status?: string;
 }
 
 interface ScheduledProps {
@@ -93,6 +99,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch companies
   useEffect(() => {
@@ -274,6 +281,33 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
     );
 
+  const term = searchTerm.toLowerCase();
+
+  const filteredActivities = mergedActivities.filter((item) => {
+    // Check company_name safely
+    if (item.company_name?.toLowerCase().includes(term)) return true;
+
+    // Check ticket_reference_number safely
+    if (item.ticket_reference_number?.toLowerCase().includes(term)) return true;
+
+    // Check quotation_number(s) inside relatedHistoryItems safely
+    if (
+      item.relatedHistoryItems.some((h) =>
+        h.quotation_number?.toLowerCase().includes(term)
+      )
+    )
+      return true;
+
+    // Check so_number(s) inside relatedHistoryItems safely
+    if (
+      item.relatedHistoryItems.some((h) =>
+        h.so_number?.toLowerCase().includes(term)
+      )
+    )
+      return true;
+
+    return false;
+  });
 
   const isLoading = loadingCompanies || loadingActivities || loadingHistory;
   const error = errorCompanies || errorActivities || errorHistory;
@@ -352,17 +386,29 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   return (
     <>
-      <div className="mb-4 text-xs font-bold">
-        Total Follow Up: {mergedActivities.length}
+      <div className="flex items-center gap-2 mb-4">
+        <Input
+          type="search"
+          placeholder="Search company, ticket ref, quotation no, so no..."
+          className="text-xs flex-grow"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+
       </div>
-      <div className="max-h-[600px] overflow-auto space-y-8 custom-scrollbar">
+
+      <div className="mb-4 text-xs font-bold">
+        Total Follow Up: {filteredActivities.length}
+      </div>
+      <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {mergedActivities.length === 0 ? (
+          {filteredActivities.length === 0 ? (
             <p className="text-muted-foreground text-xs px-2">
               No scheduled activities found.
             </p>
           ) : (
-            mergedActivities.map((item) => (
+            filteredActivities.map((item) => (
               <AccordionItem key={item.id} value={item.id}>
                 <div className="p-2 cursor-pointer select-none">
                   <div className="flex justify-between items-center">
@@ -386,6 +432,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         contact_number={item.contact_number}
                         email_address={item.email_address}
                         activityReferenceNumber={item.activity_reference_number}
+                        ticket_reference_number={item.ticket_reference_number}
                         company_name={item.company_name}
                         contact_person={item.contact_person}
                         address={item.address}
@@ -408,10 +455,45 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </div>
                   </div>
 
-                  <div className="ml-1">
+                  <div className="ml-1 flex flex-wrap gap-1">
+                    {/* Status Badge */}
                     <Badge variant="default" className="text-[8px]">
-                      {item.status.replace("-", " ")}
+                      {item.status.replace("-", " ")} | {(() => {
+                        if (item.status === "SO-Done") return "Sales Order Preparation";
+                        if (item.status === "Quote-Done") return "Quotation Preparation";
+                        if (item.status === "Assisted") return "Outbound Calls";
+                        if (item.status === "Not Assisted") return "Outbound Calls";
+                        return item.status.replace("-", " ");
+                      })()}
                     </Badge>
+
+                    {/* SO Number Badge — only if there's at least one valid SO number */}
+                    {item.relatedHistoryItems.some(
+                      (h) => h.so_number && h.so_number !== "-" && h.so_number.trim() !== ""
+                    ) && (
+                        <Badge variant="default" className="text-[8px]">
+                          <strong>SO:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .map((h) => h.so_number ?? "")
+                            .filter((v) => v && v !== "-")
+                            .join(", ")
+                            .toUpperCase()}
+                        </Badge>
+                      )}
+
+                    {/* Quotation Number Badge — only if there's at least one valid Quotation number */}
+                    {item.relatedHistoryItems.some(
+                      (h) => h.quotation_number && h.quotation_number !== "-" && h.quotation_number.trim() !== ""
+                    ) && (
+                        <Badge variant="default" className="text-[8px]">
+                          <strong>Quotation Number:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .map((h) => h.quotation_number ?? "")
+                            .filter((v) => v && v !== "-")
+                            .join(", ")
+                            .toUpperCase()}
+                        </Badge>
+                      )}
                   </div>
                 </div>
 
@@ -424,6 +506,48 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     <p>No quotation or SO history available.</p>
                   ) : (
                     <>
+                      {item.relatedHistoryItems.some(
+                        (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
+                      ) && (
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.ticket_reference_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.call_type && h.call_type !== "-"
+                      ) && (
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.source && h.source !== "-"
+                      ) && (
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.source ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
+
                       {/* Quotation Number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.quotation_number && h.quotation_number !== "-"
@@ -487,6 +611,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                               })}
                           </p>
                         )}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.call_status && h.call_status !== "-"
+                      ) && (
+                          <p>
+                            <strong>Call Status:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                     </>
                   )}
 
@@ -495,6 +632,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     {new Date(item.date_created).toLocaleDateString()}
                   </p>
                 </AccordionContent>
+
 
 
               </AccordionItem>

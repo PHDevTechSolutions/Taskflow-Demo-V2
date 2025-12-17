@@ -98,9 +98,8 @@ const data = {
       icon: Briefcase,
       pages: [
         { name: "Activity Planner", url: "/activity/planner", icon: Target },
-        { name: "Task List", url: "/activity/tasklist", icon: ClipboardList },
-        { name: "Manual Task", url: "/activity/manual", icon: Edit2 },
-        { name: "Notes", url: "/activity/notes", icon: FileText },
+        { name: "Historical Data (TaskList)", url: "/activity/tasklist", icon: ClipboardList },
+        { name: "Daily Admin Task", url: "/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/activity/ccg", icon: Compass },
       ],
     },

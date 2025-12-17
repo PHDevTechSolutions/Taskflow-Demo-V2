@@ -134,24 +134,62 @@ function DashboardContent() {
 
     const loading = loadingUser || loadingAccounts;
 
-    // Filter accounts by created date range (optional)
-    const filteredData = useMemo(() => {
-        if (
-            !dateCreatedFilterRange ||
-            !dateCreatedFilterRange.from ||
-            !dateCreatedFilterRange.to
-        ) {
-            return posts;
+    async function handleSaveAccount(data: Account & UserDetails) {
+        const payload = {
+            ...data,
+            contactperson: Array.isArray(data.contact_person)
+                ? data.contact_person
+                : typeof data.contact_person === 'string'
+                    ? data.contact_person.split(',').map((v) => v.trim())
+                    : [],
+            contactnumber: Array.isArray(data.contact_number)
+                ? data.contact_number
+                : typeof data.contact_number === 'string'
+                    ? data.contact_number.split(',').map((v) => v.trim())
+                    : [],
+            emailaddress: Array.isArray(data.email_address)
+                ? data.email_address
+                : typeof data.email_address === 'string'
+                    ? data.email_address.split(',').map((v) => v.trim())
+                    : [],
+        };
+
+        try {
+            const isEdit = Boolean(payload.id);
+            const url = isEdit ? "/api/com-edit-account" : "/api/com-save-account";
+            const method = isEdit ? "PUT" : "POST";
+
+            const response = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) throw new Error("Failed to save account");
+
+            toast.success(`Account ${isEdit ? "updated" : "created"} successfully!`);
+
+            // Refresh accounts after save
+            await refreshAccounts();
+        } catch (error) {
+            toast.error((error as Error).message || "Failed to save account.");
         }
+    }
 
-        const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
-        const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
-
-        return posts.filter((item) => {
-            const createdDate = new Date(item.date_created).getTime();
-            return createdDate >= fromTime && createdDate <= toTime;
-        });
-    }, [posts, dateCreatedFilterRange]);
+    // Refresh accounts list from API
+    async function refreshAccounts() {
+        try {
+            const response = await fetch(
+                `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+            );
+            if (!response.ok) throw new Error("Failed to fetch accounts");
+            const data = await response.json();
+            setPosts(data.data || []);
+            toast.success("Accounts loaded successfully!");
+        } catch (error) {
+            toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+        }
+    }
 
     return (
         <>
@@ -184,7 +222,11 @@ function DashboardContent() {
                                 <CardTitle>New Task</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <NewTask referenceid={userDetails.referenceid} />
+                                <NewTask
+                                    referenceid={userDetails.referenceid}
+                                    userDetails={userDetails}
+                                    onSaveAccountAction={handleSaveAccount}
+                                    onRefreshAccountsAction={refreshAccounts} />
                             </CardContent>
                         </Card>
 
@@ -241,7 +283,6 @@ function DashboardContent() {
                             </Card>
                         )}
                     </div>
-
                 </main>
             </SidebarInset>
 

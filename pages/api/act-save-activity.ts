@@ -13,6 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const {
       activity_reference_number,
       account_reference_number,
+      ticket_reference_number,
       status,
       type_activity,
       referenceid,
@@ -129,6 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         type_client: safe(type_client),
         activity_reference_number,
         account_reference_number,
+        ticket_reference_number,
         status,
         type_activity,
         source: safe(source),

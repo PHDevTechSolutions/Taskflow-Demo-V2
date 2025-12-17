@@ -23,6 +23,7 @@ interface Activity {
     type_client: string; // now required
     activity_reference_number: string;
     account_reference_number: string;
+    ticket_reference_number: string;
     type_activity: string;
     status: string;
     date_created: string;
@@ -89,6 +90,7 @@ interface CreateActivityDialogProps {
     company_name: string;
     tsmname: string;
     managername: string;
+    ticket_reference_number: string;
     activityReferenceNumber?: string;
     accountReferenceNumber?: string;
 }
@@ -122,6 +124,7 @@ export function CreateActivityDialog({
     email,
     contact,
     target_quota,
+    ticket_reference_number,
     tsm,
     manager,
     type_client,
@@ -146,6 +149,7 @@ export function CreateActivityDialog({
     // FORM STATES (all required except callback)
     const [activityRef, setActivityRef] = useState(activityReferenceNumber || "");
     const [accountRef, setAccountRef] = useState(accountReferenceNumber || "");
+    const [typeClient, setTypeClient] = useState(type_client || "");
     const [typeActivity, setTypeActivity] = useState("");
     const [source, setSource] = useState("");
     const [callback, setCallback] = useState(""); // optional
@@ -417,7 +421,7 @@ export function CreateActivityDialog({
             referenceid,
             tsm,
             manager,
-
+            ticket_reference_number,
             source,
             call_status: callStatus,
             call_type: callType,
@@ -653,7 +657,7 @@ export function CreateActivityDialog({
 
                 <SheetContent side="right" className="w-full sm:w-[600px] overflow-auto custom-scrollbar">
                     <SheetHeader>
-                        <SheetTitle>Create New Activity</SheetTitle>
+                        <SheetTitle>Create New Activity for <br/>{company_name}</SheetTitle>
                         <SheetDescription>
                             Fill out the steps to create a new activity.
                         </SheetDescription>
@@ -781,6 +785,9 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}
@@ -825,6 +832,9 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
                                     tsm={tsmState}
                                     setTSM={setTSMState}
                                     handleBack={handleBack}
@@ -849,6 +859,9 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+                                    
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}

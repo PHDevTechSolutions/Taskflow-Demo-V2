@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
+import { AccountDialog } from "./accounts-active-dialog";
 
 interface Account {
   id: string;
@@ -38,9 +39,18 @@ interface Account {
   status: string;
 }
 
+interface UserDetails {
+  referenceid: string;
+  tsm: string;
+  manager: string;
+}
+
 interface NewTaskProps {
   referenceid: string;
   onEmptyStatusChange?: (isEmpty: boolean) => void;
+  userDetails: UserDetails;
+  onSaveAccountAction: (data: any) => void;
+  onRefreshAccountsAction: () => Promise<void>;
 }
 
 interface EndorsedTicket {
@@ -64,6 +74,9 @@ interface EndorsedTicket {
 export const NewTask: React.FC<NewTaskProps> = ({
   referenceid,
   onEmptyStatusChange,
+  userDetails,
+  onSaveAccountAction,
+  onRefreshAccountsAction
 }) => {
   // State for Accounts
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -80,7 +93,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<EndorsedTicket | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   // 🔔 sound refs
   const endorsedSoundRef = useRef<HTMLAudioElement | null>(null);
   const playedTicketIdsRef = useRef<Set<string>>(new Set());
@@ -430,7 +443,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // === RENDER ===
   return (
-    <div className="max-h-[400px] overflow-auto space-y-8 custom-scrollbar">
+    <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
       {loading ? (
         <div className="flex justify-center items-center h-40">
           <Spinner className="size-8" />
@@ -556,13 +569,27 @@ export const NewTask: React.FC<NewTaskProps> = ({
           <Separator />
 
           {/* Search Input */}
-          <Input
-            type="search"
-            placeholder="Search accounts by company name..."
-            className="text-xs"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search accounts"
+          <div className="flex items-center gap-2">
+            <Input
+              type="search"
+              placeholder="Search accounts by company name..."
+              className="text-xs flex-grow"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search accounts"
+            />
+            <Button onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
+          </div>
+
+          <AccountDialog
+            mode="create"
+            userDetails={userDetails}
+            onSaveAction={async (data) => {
+              await onSaveAccountAction(data); // original save logic
+              await onRefreshAccountsAction(); // re-fetch accounts para mag-refresh list
+            }}
+            open={isCreateDialogOpen}
+            onOpenChangeAction={setIsCreateDialogOpen}
           />
 
           {/* OB Calls for Today */}

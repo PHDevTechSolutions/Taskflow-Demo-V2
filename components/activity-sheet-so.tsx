@@ -11,25 +11,20 @@ import { toast } from "sonner";
 interface Props {
     step: number;
     setStep: (step: number) => void;
-
     source: string;
     setSource: (v: string) => void;
-
     soNumber: string;
     setSoNumber: (v: string) => void;
-
     soAmount: string;
     setSoAmount: (v: string) => void;
-
     callType: string;
     setCallType: (v: string) => void;
-
     remarks: string;
     setRemarks: (v: string) => void;
-
     status: string;
     setStatus: (v: string) => void;
-
+    typeClient: string;
+    setTypeClient: (value: string) => void;
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
@@ -125,6 +120,8 @@ export function SOSheet(props: Props) {
         setRemarks,
         status,
         setStatus,
+        typeClient,
+        setTypeClient,
         handleBack,
         handleNext,
         handleSave,
@@ -158,6 +155,18 @@ export function SOSheet(props: Props) {
         handleNext();
     };
 
+    const filteredSources =
+        typeClient === "CSR Client"
+            ? [
+                {
+                    label: "CSR Inquiry",
+                    description: "Customer Service Representative inquiries.",
+                },
+            ]
+            : SO_SOURCES.filter(
+                (source) => source.label !== "CSR Inquiry"
+            );
+
     return (
         <>
             {/* STEP 2 — SOURCE */}
@@ -170,7 +179,7 @@ export function SOSheet(props: Props) {
                                 value={source}
                                 onValueChange={setSource}
                             >
-                                {SO_SOURCES.map(({ label, description }) => (
+                                {filteredSources.map(({ label, description }) => (
                                     <FieldLabel key={label}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             {/* LEFT */}

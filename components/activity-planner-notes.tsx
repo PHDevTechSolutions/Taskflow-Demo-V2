@@ -17,7 +17,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { type DateRange } from "react-day-picker";
-import { Badge } from "@/components/ui/badge";
 import {
   Field,
   FieldGroup,
@@ -410,7 +409,7 @@ export const Notes: React.FC<NotesProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left side with search, filter, tabs, notes */}
         <div className="max-h-[600px] overflow-auto space-y-4 custom-scrollbar">
-          <h2 className="text-lg font-semibold mb-2">Notes</h2>
+          <h2 className="text-lg font-semibold mb-2">Daily Admin Task</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* LEFT — Search bar */}
