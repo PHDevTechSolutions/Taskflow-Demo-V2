@@ -407,14 +407,14 @@ export function AccountsTable({
         return null;
     }
 
-    async function handleBulkTransfer(agentRefId: string, accountIds: string[]) {
-        if (accountIds.length === 0 || !agentRefId) return;
+    async function handleBulkTransfer(transferTo: string, accountIds: string[]) {
+        if (accountIds.length === 0 || !transferTo) return;
 
-        // Optimistic UI update
+        // Optimistic UI update — update status and transfer_to field locally
         setLocalPosts((prev) =>
             prev.map((item) =>
                 accountIds.includes(item.id)
-                    ? { ...item, status: "Transferred", referenceid: agentRefId }
+                    ? { ...item, status: "Subject for Transfer", transfer_to: transferTo }
                     : item
             )
         );
@@ -425,8 +425,8 @@ export function AccountsTable({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ids: accountIds,
-                    status: "Transferred",
-                    newReferenceId: agentRefId,
+                    status: "Subject for Transfer",
+                    transfer_to: transferTo,
                 }),
             });
 
@@ -435,7 +435,9 @@ export function AccountsTable({
                 throw new Error(errorData?.error || "Failed to transfer accounts");
             }
 
-            toast.success("Accounts transferred successfully! Need approval from your Territory Sales Manager.");
+            toast.success(
+                "Accounts transferred successfully! Need approval from your Territory Sales Manager."
+            );
 
             await onRefreshAccountsAction();
 

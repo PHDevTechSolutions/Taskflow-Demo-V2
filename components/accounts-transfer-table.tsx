@@ -1,14 +1,26 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
-import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, ColumnDef, flexRender, } from "@tanstack/react-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AccountsActiveSearch } from "./accounts-active-search";
 import { AccountsActiveFilter } from "./accounts-all-filter";
-import { AccountsActivePagination } from "./accounts-active-pagination";
 import { AccountsApproveDialog } from "./accounts-transfer-approve-dialog";
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
@@ -28,6 +40,7 @@ interface Account {
     date_created: string;
     industry: string;
     status?: string;
+    transfer_to: string;
 }
 
 interface UserDetails {
@@ -58,18 +71,33 @@ export function AccountsTable({
     const [agents, setAgents] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    // ** ADDITION: filter state for agent **
     const [agentFilter, setAgentFilter] = useState("all");
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // For bulk remove
+    // Filters states
+    const [globalFilter, setGlobalFilter] = useState("");
+    const [isFiltering, setIsFiltering] = useState(false);
+    const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [industryFilter, setIndustryFilter] = useState<string>("all");
+    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(
+        null
+    );
+    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(
+        null
+    );
+
+    // Transfer dialog
     const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
-    const [rowSelection, setRowSelection] = useState<{ [key: string]: boolean }>({});
+
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     useEffect(() => {
         setLocalPosts(posts);
+        setCurrentPage(1); // reset page when posts change
     }, [posts]);
 
-    // FETCH AGENTS based on userDetails.referenceid (TSM)
     useEffect(() => {
         if (!userDetails.referenceid) return;
 
@@ -91,7 +119,7 @@ export function AccountsTable({
         fetchAgents();
     }, [userDetails.referenceid]);
 
-    // Map ReferenceID -> agent fullname for display and filtering
+    // Map ReferenceID -> agent fullname
     const agentMap = useMemo(() => {
         const map: Record<string, string> = {};
         agents.forEach((agent) => {
@@ -100,18 +128,7 @@ export function AccountsTable({
         return map;
     }, [agents]);
 
-    const [globalFilter, setGlobalFilter] = useState("");
-    const [isFiltering, setIsFiltering] = useState(false);
-    const [typeFilter, setTypeFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [industryFilter, setIndustryFilter] = useState<string>("all");
-    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(
-        null
-    );
-    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(
-        null
-    );
-
+    // Filtering data
     const filteredData = useMemo(() => {
         let data = localPosts.filter((item) => item.status !== "Removed");
 
@@ -126,16 +143,13 @@ export function AccountsTable({
 
             const matchesType = typeFilter === "all" || item.type_client === typeFilter;
 
-            // Force status === "Transfer" filter
-            const matchesStatus = item.status === "Transferred";
+            const matchesStatus = item.status === "Subject for Transfer";
 
             const matchesIndustry =
                 industryFilter === "all" || item.industry === industryFilter;
 
-            // Get agent fullname from map using account referenceid
             const agentFullname = agentMap[item.referenceid] || "";
 
-            // Match agent filter (all or exact fullname)
             const matchesAgent = agentFilter === "all" || agentFullname === agentFilter;
 
             return (
@@ -147,7 +161,7 @@ export function AccountsTable({
             );
         });
 
-        // Sorting logic
+        // Sorting
         data = data.sort((a, b) => {
             if (alphabeticalFilter === "asc") {
                 return a.company_name.localeCompare(b.company_name);
@@ -180,129 +194,63 @@ export function AccountsTable({
         agentMap,
     ]);
 
-    const columns = useMemo<ColumnDef<Account>[]>(
-        () => [
-            {
-                id: "select",
-                header: ({ table }) => (
-                    <Checkbox
-                        checked={table.getIsAllPageRowsSelected()}
-                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                        aria-label="Select all accounts"
-                    />
-                ),
-                cell: ({ row }) => (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label={`Select account ${row.original.company_name}`}
-                    />
-                ),
-                enableSorting: false,
-                enableHiding: false,
-            },
-            {
-                accessorKey: "agent_name",
-                header: "Transfered To",
-                cell: ({ row }) => {
-                    const accountRefId = row.original.referenceid;
-                    const agent = agents.find((a) => a.ReferenceID === accountRefId);
-                    if (!agent) return "-";
-                    return `${agent.Firstname} ${agent.Lastname}`;
-                },
-            },
-            {
-                accessorKey: "company_name",
-                header: "Company Name",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "contact_person",
-                header: "Contact Person",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "email_address",
-                header: "Email Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "address",
-                header: "Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "type_client",
-                header: "Type of Client",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "industry",
-                header: "Industry",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "status",
-                header: "Status",
-                cell: (info) => {
-                    const value = info.getValue() as string;
-                    let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
-                    if (value === "Active") variant = "default";
-                    else if (value === "Pending") variant = "secondary";
-                    else if (value === "Inactive") variant = "destructive";
-                    return <Badge variant={variant}>{value ?? "-"}</Badge>;
-                },
-            },
-            {
-                accessorKey: "date_created",
-                header: "Date Created",
-                cell: (info) =>
-                    new Date(info.getValue() as string).toLocaleDateString(),
-            },
-        ],
-        [agents]
-    );
+    // Calculate pagination values
+    const totalItems = filteredData.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
 
+    // Ensure current page is not out of range after filters change
     useEffect(() => {
-        if (!globalFilter) {
-            setIsFiltering(false);
-            return;
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages || 1);
         }
-        setIsFiltering(true);
-        const timeout = setTimeout(() => setIsFiltering(false), 300);
-        return () => clearTimeout(timeout);
-    }, [globalFilter]);
+    }, [currentPage, totalPages]);
 
-    const table = useReactTable({
-        data: filteredData,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
+    // Paginate filtered data
+    const paginatedData = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return filteredData.slice(startIndex, startIndex + pageSize);
+    }, [filteredData, currentPage, pageSize]);
 
-        state: {
-            rowSelection,
-        },
-        onRowSelectionChange: setRowSelection,
-    });
+    // Selection handlers
+    const isAllSelected = paginatedData.length > 0 && paginatedData.every((a) => selectedIds.has(a.id));
 
-    // Extract selected account IDs for bulk removal
-    const selectedAccountIds = table
-        .getSelectedRowModel()
-        .rows
-        .map(row => row.original.id);
+    const toggleSelectAll = () => {
+        if (isAllSelected) {
+            // Remove all ids on current page
+            setSelectedIds((prev) => {
+                const copy = new Set(prev);
+                paginatedData.forEach((a) => copy.delete(a.id));
+                return copy;
+            });
+        } else {
+            // Add all ids on current page
+            setSelectedIds((prev) => {
+                const copy = new Set(prev);
+                paginatedData.forEach((a) => copy.add(a.id));
+                return copy;
+            });
+        }
+    };
 
+    const toggleSelectOne = (id: string) => {
+        setSelectedIds((prev) => {
+            const copy = new Set(prev);
+            if (copy.has(id)) copy.delete(id);
+            else copy.add(id);
+            return copy;
+        });
+    };
 
-    // Handle bulk remove action
+    // Bulk approve transfer
     async function handleBulkTransfer() {
-        if (selectedAccountIds.length === 0) return;
+        if (selectedIds.size === 0) return;
 
         try {
             const res = await fetch("/api/com-bulk-approve-account", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    ids: selectedAccountIds,
+                    ids: Array.from(selectedIds),
                     status: "Approval for Transfer",
                 }),
             });
@@ -315,22 +263,22 @@ export function AccountsTable({
             const result = await res.json();
 
             if (result.success && result.updatedCount > 0) {
-                // Update localPosts to reflect the change
                 setLocalPosts((prev) =>
                     prev.map((item) =>
-                        selectedAccountIds.includes(item.id)
+                        selectedIds.has(item.id)
                             ? { ...item, status: "Approval for Transfer" }
                             : item
                     )
                 );
 
-                toast.success("Accounts transfer successfully! Subject for Approval on IT Department");
+                toast.success(
+                    "Accounts transfer successfully! Subject for Approval on IT Department"
+                );
 
                 await onRefreshAccountsAction();
 
-                setRowSelection({});
+                setSelectedIds(new Set());
                 setIsTransferDialogOpen(false);
-                table.setPageIndex(0);
             } else {
                 toast.error("No accounts updated. IDs may not exist.");
             }
@@ -341,11 +289,20 @@ export function AccountsTable({
         }
     }
 
+    useEffect(() => {
+        if (!globalFilter) {
+            setIsFiltering(false);
+            return;
+        }
+        setIsFiltering(true);
+        const timeout = setTimeout(() => setIsFiltering(false), 300);
+        return () => clearTimeout(timeout);
+    }, [globalFilter]);
+
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-
                 <div className="flex-grow max-w-lg">
                     <AccountsActiveSearch
                         globalFilter={globalFilter}
@@ -358,8 +315,8 @@ export function AccountsTable({
                     <AccountsActiveFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilterAction={setStatusFilter}
+                        statusFilter={"Subject for Transfer"} // fixed filter as in original logic
+                        setStatusFilterAction={() => { }}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
                         industryFilter={industryFilter}
@@ -370,10 +327,8 @@ export function AccountsTable({
                         setAgentFilterAction={setAgentFilter}
                         agents={agents}
                     />
-                    {selectedAccountIds.length > 0 && (
-                        <Button
-                            onClick={() => setIsTransferDialogOpen(true)}
-                        >
+                    {selectedIds.size > 0 && (
+                        <Button onClick={() => setIsTransferDialogOpen(true)}>
                             Approved Selected
                         </Button>
                     )}
@@ -394,43 +349,134 @@ export function AccountsTable({
 
                 <Table>
                     <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => (
-                                    <TableHead key={header.id}>
-                                        {flexRender(
-                                            header.column.columnDef.header,
-                                            header.getContext()
-                                        )}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        ))}
+                        <TableRow className="whitespace-nowrap">
+                            <TableHead>
+                                <Checkbox
+                                    checked={isAllSelected}
+                                    onCheckedChange={toggleSelectAll}
+                                    aria-label="Select all accounts on current page"
+                                />
+                            </TableHead>
+                            <TableHead>Transferred From</TableHead>
+                            <TableHead>Transferred To</TableHead>
+                            <TableHead>Company Name</TableHead>
+                            <TableHead>Contact Person</TableHead>
+                            <TableHead>Email Address</TableHead>
+                            <TableHead>Address</TableHead>
+                            <TableHead>Type of Client</TableHead>
+                            <TableHead>Industry</TableHead>
+                            <TableHead>Remarks</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Date Created</TableHead>
+                        </TableRow>
                     </TableHeader>
 
                     <TableBody>
-                        {table.getRowModel().rows.length === 0 ? (
+                        {paginatedData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="text-center py-4">
+                                <TableCell colSpan={12} className="text-center py-4">
                                     No accounts found.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            table.getRowModel().rows.map((row) => (
-                                <TableRow key={row.id}>
-                                    {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id} className="whitespace-nowrap">
-                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            paginatedData.map((account) => {
+                                const agentFrom = agents.find(
+                                    (a) => a.ReferenceID === account.referenceid
+                                );
+                                const agentTo = agents.find(
+                                    (a) => a.ReferenceID === account.transfer_to
+                                );
+
+                                return (
+                                    <TableRow key={account.id} className="whitespace-nowrap">
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={selectedIds.has(account.id)}
+                                                onCheckedChange={() => toggleSelectOne(account.id)}
+                                                aria-label={`Select account ${account.company_name}`}
+                                            />
                                         </TableCell>
-                                    ))}
-                                </TableRow>
-                            ))
+
+                                        <TableCell className="capitalize">
+                                            {agentFrom
+                                                ? `${agentFrom.Firstname} ${agentFrom.Lastname}`
+                                                : "-"}
+                                        </TableCell>
+
+                                        <TableCell className="capitalize">
+                                            {agentTo
+                                                ? `${agentTo.Firstname} ${agentTo.Lastname}`
+                                                : "-"}
+                                        </TableCell>
+
+                                        <TableCell>{account.company_name}</TableCell>
+                                        <TableCell className="capitalize">{account.contact_person}</TableCell>
+                                        <TableCell>{account.email_address}</TableCell>
+                                        <TableCell className="capitalize">{account.address}</TableCell>
+                                        <TableCell>{account.type_client}</TableCell>
+                                        <TableCell>{account.industry}</TableCell>
+                                        <TableCell>{account.status ?? "-"}</TableCell>
+
+                                        <TableCell>
+                                            <Badge
+                                                variant={
+                                                    account.status === "Active"
+                                                        ? "default"
+                                                        : account.status === "Pending"
+                                                            ? "secondary"
+                                                            : account.status === "Inactive"
+                                                                ? "destructive"
+                                                                : "outline"
+                                                }
+                                            >
+                                                {account.status ?? "-"}
+                                            </Badge>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            {new Date(account.date_created).toLocaleDateString()}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
             </div>
 
-            <AccountsActivePagination table={table} />
+            {/* Pagination controls */}
+            <Pagination>
+                <PaginationContent className="flex items-center space-x-4">
+                    <PaginationItem>
+                        <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (currentPage > 1) setCurrentPage(currentPage - 1);
+                            }}
+                            aria-disabled={currentPage <= 1}
+                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                        />
+                    </PaginationItem>
+
+                    {/* Current page / total pages */}
+                    <div className="px-4 font-medium">
+                        {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
+                    </div>
+
+                    <PaginationItem>
+                        <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                            }}
+                            aria-disabled={currentPage >= totalPages}
+                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                        />
+                    </PaginationItem>
+                </PaginationContent>
+            </Pagination>
 
             <AccountsApproveDialog
                 open={isTransferDialogOpen}

@@ -10,7 +10,7 @@ const Xchire_sql = neon(Xchire_databaseUrl);
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { ids, status, newReferenceId } = body;
+    const { ids, status, transfer_to } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -26,23 +26,18 @@ export async function PUT(req: Request) {
       );
     }
 
-    if (typeof newReferenceId !== "string" || !newReferenceId.trim()) {
+    if (typeof transfer_to !== "string" || !transfer_to.trim()) {
       return NextResponse.json(
-        { success: false, error: "newReferenceId is required." },
+        { success: false, error: "transfer_to is required." },
         { status: 400 }
       );
     }
 
-    // Build parameterized SQL for updating multiple accounts by their ids
-    // We use the PostgreSQL ANY() with array syntax to update all at once
-    const updateResult = await Xchire_sql`
+    await Xchire_sql`
       UPDATE accounts
-      SET status = ${status}, referenceid = ${newReferenceId}, date_transferred = NOW()
+      SET status = ${status}, transfer_to = ${transfer_to}, date_transferred = NOW()
       WHERE id = ANY(${ids});
     `;
-
-    // Note: neon currently returns empty object for UPDATE, no matchedCount info
-    // So, we can either trust query success or run a select afterward to confirm if needed.
 
     return NextResponse.json(
       { success: true, message: "Accounts transferred successfully" },

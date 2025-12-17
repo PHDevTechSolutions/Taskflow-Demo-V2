@@ -43,7 +43,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
         setLoading(true);
         setError(null);
 
-        fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`, {
+        fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`, {
             cache: "no-store",
             headers: {
                 "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -82,7 +82,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
         setLoadingBreakdown(true);
         setBreakdownError(null);
 
-        fetch(`/api/com-fetch-account?referenceid=${encodeURIComponent(referenceid)}`, {
+        fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`, {
             cache: "no-store",
             headers: {
                 "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
