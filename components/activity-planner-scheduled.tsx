@@ -181,7 +181,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   useEffect(() => {
     if (!referenceid) return;
 
-    // Initial fetch
+    // Initial fetches
     fetchActivities();
     fetchHistory();
 
@@ -196,7 +196,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => {
+        (payload) => {
+          console.log("Activity realtime update:", payload);
           fetchActivities();
         }
       )
@@ -213,48 +214,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => {
+        (payload) => {
+          console.log("History realtime update:", payload);
           fetchHistory();
         }
       )
       .subscribe();
 
+    // Cleanup subscriptions properly
     return () => {
+      activityChannel.unsubscribe();
       supabase.removeChannel(activityChannel);
+
+      historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
   }, [referenceid, fetchActivities, fetchHistory]);
-
-
-  const isDateInRange = (
-    dateStr: string | undefined,
-    range: DateRange | undefined
-  ): boolean => {
-    if (!range) return true;
-    if (!dateStr) return false;
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return false;
-    const { from, to } = range;
-    if (from && date < from) return false;
-    if (to && date > to) return false;
-    return true;
-  };
-
-  function getLatestHistoryItem(historyItems: HistoryItem[]): HistoryItem | null {
-    if (historyItems.length === 0) return null;
-
-    return historyItems.reduce((latest, current) => {
-      const latestCallback = latest.callback ? new Date(latest.callback).getTime() : 0;
-      const latestFollowup = latest.date_followup ? new Date(latest.date_followup).getTime() : 0;
-      const latestDate = Math.max(latestCallback, latestFollowup);
-
-      const currentCallback = current.callback ? new Date(current.callback).getTime() : 0;
-      const currentFollowup = current.date_followup ? new Date(current.date_followup).getTime() : 0;
-      const currentDate = Math.max(currentCallback, currentFollowup);
-
-      return currentDate > latestDate ? current : latest;
-    });
-  }
 
   const allowedStatuses = ["Assisted", "Quote-Done", "SO-Done", "Not Assisted"];
 

@@ -143,31 +143,32 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     // Initial fetch + realtime subscription to keep UI fresh
     useEffect(() => {
-        if (!referenceid) return;
+  if (!referenceid) return;
 
-        fetchActivities(); // initial
+  fetchActivities(); // initial fetch
 
-        const channel = supabase
-            .channel(`activity-${referenceid}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "activity",
-                    filter: `referenceid=eq.${referenceid}`,
-                },
-                () => {
-                    // 🔥 Realtime trigger ONLY
-                    fetchActivities();
-                }
-            )
-            .subscribe();
+  const channel = supabase
+    .channel(`activity-${referenceid}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "activity",
+        filter: `referenceid=eq.${referenceid}`,
+      },
+      (payload) => {
+        console.log("Realtime payload received:", payload);
+        fetchActivities();
+      }
+    )
+    .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [referenceid, fetchActivities]);
+  return () => {
+    channel.unsubscribe();
+    supabase.removeChannel(channel);
+  };
+}, [referenceid, fetchActivities]);
 
     const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
         if (!range) return true;

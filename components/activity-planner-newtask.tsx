@@ -287,13 +287,15 @@ export const NewTask: React.FC<NewTaskProps> = ({
           table: "endorsed-ticket",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => {
+        (payload) => {
+          console.log("Realtime endorsed-ticket update:", payload);
           fetchEndorsedTickets();
         }
       )
       .subscribe();
 
     return () => {
+      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [referenceid, fetchEndorsedTickets]);
