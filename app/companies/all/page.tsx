@@ -226,6 +226,7 @@ function DashboardContent() {
                                 dateCreatedFilterRange={dateCreatedFilterRange}
                                 setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                 userDetails={userDetails}
+
                             />
                         </>
                     )}
@@ -242,15 +243,15 @@ function DashboardContent() {
 }
 
 export default function Page() {
-  return (
-    <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
-    </UserProvider>
-  );
+    return (
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
+    );
 }
