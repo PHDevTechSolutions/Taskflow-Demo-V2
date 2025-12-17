@@ -74,16 +74,17 @@ const data = {
     { title: "Calendar", url: "/calendar", icon: CalendarDays },
     { title: "Settings", url: "/settings", icon: Settings },
   ],
-  //favorites: [
-    //{ name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
-    //{ name: "National Call Ranking", url: "#", icon: Phone },
-  //],
+  favorites: [
+    { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
+    { name: "National Call Ranking", url: "#", icon: Phone },
+  ],
   workspaces: [
     {
       name: "Customer Database",
       icon: Home,
       pages: [
         { name: "All", url: "/companies/all", icon: BookOpen }, // For TSM and Manager
+        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen },
         { name: "Active", url: "/companies/active", icon: BookOpen },
         { name: "Non-Buying", url: "/companies/nonbuying", icon: Slash },
         { name: "Inactive", url: "/companies/inactive", icon: Clock },
@@ -92,41 +93,41 @@ const data = {
         { name: "Account Deletion", url: "/companies/approval", icon: Trash2 },
       ],
     },
-    //{
-      //name: "Work Management",
-      //icon: Briefcase,
-      //pages: [
-        //{ name: "Activity Planner", url: "/activity/planner", icon: Target },
-        //{ name: "Historical Data (TaskList)", url: "/activity/tasklist", icon: ClipboardList },
-        //{ name: "Daily Admin Task", url: "/activity/notes", icon: FileText },
-        //{ name: "Client Coverage Guide", url: "/activity/ccg", icon: Compass },
-      //],
-    //},
-    //{
-      //name: "Reports",
-      //icon: BarChart2,
-      //pages: [
-        //{ name: "Account Sales Summary", url: "/reports/am", icon: DollarSign },
-        //{ name: "Quotation Summary", url: "/reports/quotation", icon: FileText },
-        //{ name: "Sales Order Summary", url: "/reports/so", icon: ShoppingCart },
-        //{ name: "Pending Sales Order", url: "/reports/pending", icon: XCircle  },
-        //{ name: "Sales Invoice Summary", url: "/reports/si", icon: File },
-        //{ name: "CSR Inquiry Summary", url: "/reports/csr", icon: Phone },
-        //{ name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
-        //{ name: "New Client Summary", url: "/reports/ncs", icon: Leaf },
-        //{ name: "FB Marketplace Summary", url: "/reports/fb", icon: ShoppingBag },
-      //],
-    //},
-    //{
-      //name: "Conversion Rates",
-      //icon: TrendingUp,
-      //pages: [
-        //{ name: "Calls to Quote", url: "/conversion/calls-to-quote", icon: PhoneCall },
-        //{ name: "Quote To SO", url: "/conversion/quote-to-so", icon: FileText },
-        //{ name: "SO To SI", url: "/conversion/so-to-si", icon: CreditCard },
-        //{ name: "Calls to SI", url: "/conversion/calls-to-si", icon: Rocket },
-      //],
-    //},
+    {
+      name: "Work Management",
+      icon: Briefcase,
+      pages: [
+        { name: "Activity Planner", url: "/activity/planner", icon: Target },
+        { name: "Historical Data (TaskList)", url: "/activity/tasklist", icon: ClipboardList },
+        { name: "Daily Admin Task", url: "/activity/notes", icon: FileText },
+        { name: "Client Coverage Guide", url: "/activity/ccg", icon: Compass },
+      ],
+    },
+    {
+      name: "Reports",
+      icon: BarChart2,
+      pages: [
+        { name: "Account Sales Summary", url: "/reports/am", icon: DollarSign },
+        { name: "Quotation Summary", url: "/reports/quotation", icon: FileText },
+        { name: "Sales Order Summary", url: "/reports/so", icon: ShoppingCart },
+        { name: "Pending Sales Order", url: "/reports/pending", icon: XCircle  },
+        { name: "Sales Invoice Summary", url: "/reports/si", icon: File },
+        { name: "CSR Inquiry Summary", url: "/reports/csr", icon: Phone },
+        { name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
+        { name: "New Client Summary", url: "/reports/ncs", icon: Leaf },
+        { name: "FB Marketplace Summary", url: "/reports/fb", icon: ShoppingBag },
+      ],
+    },
+    {
+      name: "Conversion Rates",
+      icon: TrendingUp,
+      pages: [
+        { name: "Calls to Quote", url: "/conversion/calls-to-quote", icon: PhoneCall },
+        { name: "Quote To SO", url: "/conversion/quote-to-so", icon: FileText },
+        { name: "SO To SI", url: "/conversion/so-to-si", icon: CreditCard },
+        { name: "Calls to SI", url: "/conversion/calls-to-si", icon: Rocket },
+      ],
+    },
   ],
 };
 
@@ -286,14 +287,14 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     });
   }, [userDetails.Role]);
 
-  //const favoritesWithId = React.useMemo(
-    //() =>
-      //data.favorites.map((favorite) => ({
-        //...favorite,
-        //url: withUserId(favorite.url),
-      //})),
-    //[data.favorites, withUserId]
-  //);
+  const favoritesWithId = React.useMemo(
+    () =>
+      data.favorites.map((favorite) => ({
+        ...favorite,
+        url: withUserId(favorite.url),
+      })),
+    [data.favorites, withUserId]
+  );
 
   // Append userId to URLs in filtered workspaces
   const workspacesWithId = React.useMemo(
@@ -326,7 +327,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
       </SidebarHeader>
 
       <SidebarContent>
-        {/*<NavFavorites favorites={favoritesWithId} />*/}
+        <NavFavorites favorites={favoritesWithId} />
         <NavWorkspaces
           workspaces={workspacesWithId}
           openSections={openSections}
