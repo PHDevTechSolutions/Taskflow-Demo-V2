@@ -26,7 +26,7 @@ import { AccountCard } from "@/components/dashboard-accounts-card";
 import { OutboundTouchbaseCard } from "@/components/dashboard-outbound-touchbase-card";
 
 // Assuming you will create these two cards as components
-import { SuccessfulCallsCard } from "@/components/dashboard-successful-calls-card";
+import { TimemotionCard } from "@/components/dashboard-timemotion";
 import { UnsuccessfulCallsCard } from "@/components/dashboard-unsuccessful-calls-card";
 
 import { SourceCard } from "@/components/dashboard-source-card";
@@ -39,9 +39,14 @@ interface UserDetails {
 }
 
 interface Activity {
+  referenceid: string;
   source?: string;
   call_status?: string;
-  date_created?: string; // ISO string or similar
+  date_created?: string;
+  start_date?: string;
+  end_date?: string;
+  type_activity: string;
+  status: string;
 }
 
 function DashboardContent() {
@@ -195,10 +200,11 @@ function DashboardContent() {
               error={errorActivities}
             />
 
-            <SuccessfulCallsCard
+            <TimemotionCard
               activities={filteredActivities}
               loading={loadingActivities}
               error={errorActivities}
+              referenceid={userDetails.referenceid} // <-- idagdag ito
             />
 
             <UnsuccessfulCallsCard

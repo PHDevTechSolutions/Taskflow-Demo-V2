@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 
 interface Company {
     type_client?: string;
+    status?: string;
 }
 
 interface AccountCardProps {
@@ -31,7 +32,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
     // Sheet open state (controlled)
     const [open, setOpen] = useState(false);
 
-    // Fetch total accounts
+    // Fetch total accounts excluding status "removed" and "subject for approval"
     useEffect(() => {
         if (!referenceid) {
             setTotalAccounts(null);
@@ -60,7 +61,11 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
             })
             .then((data) => {
                 if (Array.isArray(data.data)) {
-                    setTotalAccounts(data.data.length);
+                    const filteredData = data.data.filter((company: Company) => {
+                        const status = (company.status || "").toLowerCase();
+                        return status !== "removed" && status !== "subject for approval";
+                    });
+                    setTotalAccounts(filteredData.length);
                 } else {
                     setTotalAccounts(0);
                 }
@@ -74,7 +79,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
             });
     }, [referenceid]);
 
-    // Fetch breakdown when sheet opens
+    // Fetch breakdown when sheet opens, excluding status "removed" and "subject for approval"
     useEffect(() => {
         if (!open) return; // fetch only when sheet opens
         if (!referenceid) return;
@@ -99,18 +104,23 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
             })
             .then((data) => {
                 if (Array.isArray(data.data)) {
-                    // Aggregate counts by type_client, lowercase to avoid duplicates due to case differences
+                    const filteredData = data.data.filter((company: Company) => {
+                        const status = (company.status || "").toLowerCase();
+                        return status !== "removed" && status !== "subject for approval";
+                    });
+
                     const counts: Record<string, number> = {};
-                    data.data.forEach((company: Company) => {
-                        const type = (company.type_client || "Unknown").toLowerCase();
+                    filteredData.forEach((company: Company) => {
+                        // group by type_client for breakdown display (or change if needed)
+                        const type = (company.type_client || "unknown").toLowerCase();
                         counts[type] = (counts[type] ?? 0) + 1;
                     });
+
                     setBreakdownData(counts);
                 } else {
                     setBreakdownData(null);
                 }
             })
-
             .catch((err) => {
                 setBreakdownError(err.message || "Error fetching breakdown");
                 setBreakdownData(null);
