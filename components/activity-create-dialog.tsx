@@ -137,7 +137,7 @@ export function CreateActivityDialog({
     managername,
     activityReferenceNumber,
     accountReferenceNumber,
-    
+
 }: CreateActivityDialogProps) {
     const [sheetOpen, setSheetOpen] = useState(false);
     // Confirmation dialog state
@@ -268,9 +268,9 @@ export function CreateActivityDialog({
         const past = new Date(dateString);
         const diff = Math.floor((now.getTime() - past.getTime()) / 1000); // seconds
 
-        if (diff < 60) return `${diff} second${diff !== 1 ? 's' : ''} ago`;
-        if (diff < 3600) return `${Math.floor(diff / 60)} minute${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`;
+        if (diff < 60) return `${diff} sec${diff !== 1 ? 's' : ''} ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)} min${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} hr${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`;
         return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) !== 1 ? 's' : ''} ago`;
     }
 
@@ -493,7 +493,7 @@ export function CreateActivityDialog({
                 setLoading(false);
                 return;
             }
-            
+
             onCreated(newActivity);
 
             // Success save + status update toast
@@ -656,18 +656,35 @@ export function CreateActivityDialog({
                     </Button>
                 </SheetTrigger>
 
+
                 <SheetContent side="right" className="w-full sm:w-[600px] overflow-auto custom-scrollbar">
                     <SheetHeader>
-                        <SheetTitle>Create New Activity for <br/>{company_name}</SheetTitle>
+                        <SheetTitle>Create New Activity for <br />{company_name}</SheetTitle>
                         <SheetDescription>
                             Fill out the steps to create a new activity.
                         </SheetDescription>
-                        {/* Show floating elapsed time */}
+
                         {startDate && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Started: <span className="font-medium">{elapsedTime}</span>
-                            </p>
+                            <div
+                                className="
+      fixed top-20 left-1/2 z-50
+      bg-gray-900 text-green-400
+      rounded-xl px-8 py-4
+      shadow-[0_0_15px_rgba(16,185,129,0.7)]
+      -translate-x-1/2
+      font-mono font-bold
+      text-[3rem]
+      select-none
+      flex items-center
+      space-x-2
+      cursor-default
+    "
+                            >
+                                <span>Started:</span>
+                                <span className="tracking-widest">{elapsedTime}</span>
+                            </div>
                         )}
+
                     </SheetHeader>
 
                     {loading ? (
@@ -860,7 +877,7 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
-                                    
+
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
                                     handleBack={handleBack}

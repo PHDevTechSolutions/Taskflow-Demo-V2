@@ -13,14 +13,6 @@ export function UnsuccessfulCallsCard({ activities, loading, error }: Props) {
 
   return (
     <div className="bg-white rounded-lg shadow p-6 flex flex-col justify-center items-center">
-      <h3 className="text-sm font-medium text-gray-500 mb-2">Total Unsuccessful Calls</h3>
-      {loading ? (
-        <div className="text-lg font-semibold text-gray-700">Loading...</div>
-      ) : error ? (
-        <div className="text-red-500 text-xs text-center">{error}</div>
-      ) : (
-        <div className="text-3xl font-bold text-gray-900">{total}</div>
-      )}
     </div>
   );
 }
