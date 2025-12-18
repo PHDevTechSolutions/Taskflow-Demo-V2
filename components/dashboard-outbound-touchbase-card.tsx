@@ -1,15 +1,14 @@
 "use client";
 
 import React from "react";
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge";
 import {
   Item,
-  ItemActions,
   ItemContent,
   ItemTitle,
   ItemDescription,
-  ItemMedia,
 } from "@/components/ui/item";
+import { Card } from "@/components/ui/card";
 
 interface Activity {
   call_status?: string;
@@ -29,28 +28,28 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 text-center">
+      <Card className="p-6 text-center">
         <div className="text-lg font-semibold text-gray-700">Loading...</div>
-      </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 text-center">
+      <Card className="p-6 text-center">
         <div className="text-red-500 text-xs">{error}</div>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-2 justify-center  items-center space-y-2">
-      <Item variant="outline" size="sm">
-        <ItemContent>
+    <Card className="p-2 gap-2">
+      <Item variant="outline" className="w-full">
+        <ItemContent className="w-full">
           <div className="flex justify-between w-full">
-            <ItemTitle className="text-xs font-medium text-gray-700">Total Outbound - Touchbase</ItemTitle>
-            <ItemDescription className="text-xs font-semibold text-gray-900">
-              <Badge className="h-5 min-w-5 rounded-full px-1 font-mono tabular-nums bg-blue-500">
+            <ItemTitle className="text-xs font-medium">Total Outbound - Touchbase</ItemTitle>
+            <ItemDescription className="text-xs font-semibold">
+              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums bg-blue-500">
                 {totalOutboundTouchbase}
               </Badge>
             </ItemDescription>
@@ -58,12 +57,12 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
         </ItemContent>
       </Item>
 
-      <Item variant="outline" size="sm">
-        <ItemContent>
+      <Item variant="outline" size="sm" className="w-full">
+        <ItemContent className="w-full">
           <div className="flex justify-between w-full">
-            <ItemTitle className="text-xs font-medium text-gray-700">Total Successful Calls</ItemTitle>
-            <ItemDescription className="text-xs font-semibold text-gray-900">
-              <Badge className="h-5 min-w-5 rounded-full px-1 font-mono tabular-nums bg-green-500">
+            <ItemTitle className="text-xs font-medium">Total Successful Calls</ItemTitle>
+            <ItemDescription className="text-xs font-semibold">
+              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums bg-green-500">
                 {totalSuccessful}
               </Badge>
             </ItemDescription>
@@ -71,18 +70,18 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
         </ItemContent>
       </Item>
 
-      <Item variant="outline" size="sm">
-        <ItemContent>
+      <Item variant="outline" size="sm" className="w-full">
+        <ItemContent className="w-full">
           <div className="flex justify-between w-full">
-            <ItemTitle className="text-xs font-medium text-gray-700">Total Unsuccessful Calls</ItemTitle>
-            <ItemDescription className="text-xs font-semibold text-gray-900">
-              <Badge className="h-5 min-w-5 rounded-full px-1 font-mono tabular-nums" variant="destructive">
+            <ItemTitle className="text-xs font-medium">Total Unsuccessful Calls</ItemTitle>
+            <ItemDescription className="text-xs font-semibold">
+              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums" variant="destructive">
                 {totalUnsuccessful}
               </Badge>
             </ItemDescription>
           </div>
         </ItemContent>
       </Item>
-    </div>
+    </Card>
   );
 }

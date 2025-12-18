@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { TrendingUp } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { TrendingUp, Info } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 
 import {
@@ -45,26 +45,24 @@ const ALLOWED_SOURCES = [
 ];
 
 export function SourceCard({ activities, loading, error }: SourceCardProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   const data = useMemo(() => {
     if (!activities || activities.length === 0) {
-      // 👉 walang ididisplay kapag walang activities
       return [];
     }
 
-    // initialize all allowed sources with 0
     const counts: Record<string, number> = {};
     ALLOWED_SOURCES.forEach((label) => {
       counts[label] = 0;
     });
 
-    // count only allowed sources
     activities.forEach((act) => {
       if (act.source && counts.hasOwnProperty(act.source)) {
         counts[act.source]++;
       }
     });
 
-    // 👉 FILTER OUT ZERO VALUES HERE
     return ALLOWED_SOURCES
       .map((label) => ({
         source: label,
@@ -82,11 +80,35 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Activities by Source</CardTitle>
-        <CardDescription>
-          Counts based on predefined source labels only
-        </CardDescription>
+      <CardHeader className="flex justify-between items-center">
+        <div>
+          <CardTitle>Activities by Source</CardTitle>
+          <CardDescription>
+            Counts based on predefined source labels only
+          </CardDescription>
+        </div>
+
+        {/* Info Icon */}
+        <div
+          className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          onFocus={() => setShowTooltip(true)}
+          onBlur={() => setShowTooltip(false)}
+          tabIndex={0}
+          aria-label="Information about source labels"
+        >
+          <Info className="h-5 w-5 text-gray-400" />
+
+          {showTooltip && (
+            <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
+              <p>
+                This chart only counts activities with sources predefined in the
+                list. Activities from other or unknown sources are excluded.
+              </p>
+            </div>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent>

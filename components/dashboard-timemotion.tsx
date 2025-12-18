@@ -102,7 +102,6 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [errorNotes, setErrorNotes] = useState<string | null>(null);
 
-  // Fetch meetings
   useEffect(() => {
     if (!referenceid) return;
 
@@ -145,7 +144,6 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     fetchMeetings();
   }, [referenceid]);
 
-  // Fetch notes
   useEffect(() => {
     if (!referenceid) return;
 
@@ -169,7 +167,6 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
           } as NoteItem;
         });
 
-        // Optional: filter upcoming or ongoing notes, if relevant
         const today = new Date().toISOString().split("T")[0];
 
         const upcomingNotes = fetchedNotes.filter(
@@ -189,10 +186,8 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     fetchNotes();
   }, [referenceid]);
 
-  // Combine all entries
   const combinedEntries = [...activities, ...meetings, ...notes];
 
-  // Calculate total duration
   const totalDurationMs = combinedEntries.reduce((total, entry) => {
     if (entry.start_date && entry.end_date) {
       const start = new Date(entry.start_date).getTime();
@@ -204,13 +199,11 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     return total;
   }, 0);
 
-  // Convert total duration to h/m/s
   const totalSeconds = Math.floor(totalDurationMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  // Duration per type_activity
   const durationPerType = combinedEntries.reduce((acc, entry) => {
     if (entry.start_date && entry.end_date && entry.type_activity) {
       const start = new Date(entry.start_date).getTime();
@@ -222,7 +215,6 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     return acc;
   }, {} as Record<string, number>);
 
-  // Count occurrences
   const countPerType = combinedEntries.reduce((acc, entry) => {
     const type = entry.type_activity || "Unknown";
     acc[type] = (acc[type] || 0) + 1;
@@ -289,56 +281,59 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 flex flex-col justify-center items-center space-y-4">
-      <h3 className="text-sm font-medium text-gray-500">Total Work Time</h3>
-      {(loading || loadingMeetings || loadingNotes) ? (
-        <div className="text-lg font-semibold text-gray-700">Loading...</div>
-      ) : error || errorMeetings || errorNotes ? (
-        <div className="text-red-500 text-xs text-center">{error || errorMeetings || errorNotes}</div>
-      ) : (
-        <>
-          <div className="text-3xl font-bold text-gray-900">
-            {hours}h {minutes}m {seconds}s (of 8h)
-          </div>
+    <Card className="p-4 flex flex-col items-center space-y-2 w-full max-w-lg mx-auto">
+      <CardHeader className="w-full">
+        <h3 className="text-sm font-medium">Total Work Time</h3>
+      </CardHeader>
 
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" aria-label="Show Breakdown">
-                Show Breakdown
-              </Button>
-            </SheetTrigger>
+      <CardContent className="w-full flex flex-col items-center">
+        {(loading || loadingMeetings || loadingNotes) ? (
+          <div className="text-lg font-semibold">Loading...</div>
+        ) : error || errorMeetings || errorNotes ? (
+          <div className="text-red-500 text-xs text-center w-full">{error || errorMeetings || errorNotes}</div>
+        ) : (
+          <>
+            <div className="text-3xl font-bold mb-4">
+              {hours}h {minutes}m {seconds}s (of 8h)
+            </div>
 
-            <SheetContent side="right" className="p-2">
-              <SheetHeader>
-                <SheetTitle>Work Hours per Activity</SheetTitle>
-                <SheetDescription>
-                  Breakdown of total work hours by activity type.
-                </SheetDescription>
-              </SheetHeader>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" aria-label="Show Breakdown" className="w-full">
+                  Show Breakdown
+                </Button>
+              </SheetTrigger>
 
-              <div>
+              <SheetContent side="right" className="p-4 max-w-md">
+                <SheetHeader>
+                  <SheetTitle>Work Hours per Activity</SheetTitle>
+                  <SheetDescription>
+                    Breakdown of total work hours by activity type.
+                  </SheetDescription>
+                </SheetHeader>
+
                 <ChartPieDonutActive />
-              </div>
 
-              <div className="p-2">
-                {Object.keys(durationPerType).length === 0 ? (
-                  <p className="text-sm text-gray-500">No activities with time recorded.</p>
-                ) : (
-                  Object.entries(durationPerType).map(([type, ms], i) => (
-                    <React.Fragment key={type}>
-                      {i > 0 && <Separator className="my-2" />}
-                      <div className="flex justify-between text-xs font-medium py-1">
-                        <span>{type}</span>
-                        <span>{formatDuration(ms)}</span>
-                      </div>
-                    </React.Fragment>
-                  ))
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-        </>
-      )}
-    </div>
+                <div className="mt-4">
+                  {Object.keys(durationPerType).length === 0 ? (
+                    <p className="text-sm text-gray-500">No activities with time recorded.</p>
+                  ) : (
+                    Object.entries(durationPerType).map(([type, ms], i) => (
+                      <React.Fragment key={type}>
+                        {i > 0 && <Separator className="my-2" />}
+                        <div className="flex justify-between text-xs font-medium py-1 w-full">
+                          <span>{type}</span>
+                          <span>{formatDuration(ms)}</span>
+                        </div>
+                      </React.Fragment>
+                    ))
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

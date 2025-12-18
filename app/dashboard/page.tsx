@@ -27,7 +27,7 @@ import { OutboundTouchbaseCard } from "@/components/dashboard-outbound-touchbase
 
 // Assuming you will create these two cards as components
 import { TimemotionCard } from "@/components/dashboard-timemotion";
-import { UnsuccessfulCallsCard } from "@/components/dashboard-unsuccessful-calls-card";
+import { ActivityCard } from "@/components/dashboard-activity-card";
 
 import { SourceCard } from "@/components/dashboard-source-card";
 import { CSRMetricsCard } from "@/components/dashboard-csr-metrics-card";
@@ -47,6 +47,9 @@ interface Activity {
   end_date?: string;
   type_activity: string;
   status: string;
+  actual_sales: string;
+  quotation_number: string;
+  so_number: string;
 }
 
 function DashboardContent() {
@@ -204,10 +207,10 @@ function DashboardContent() {
               activities={filteredActivities}
               loading={loadingActivities}
               error={errorActivities}
-              referenceid={userDetails.referenceid} // <-- idagdag ito
+              referenceid={userDetails.referenceid}
             />
 
-            <UnsuccessfulCallsCard
+            <ActivityCard
               activities={filteredActivities}
               loading={loadingActivities}
               error={errorActivities}

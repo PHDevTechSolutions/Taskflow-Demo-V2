@@ -7,7 +7,14 @@ import {
     SheetHeader,
     SheetTitle,
     SheetDescription,
-} from "@/components/ui/sheet"; // Adjust path as needed
+} from "@/components/ui/sheet";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 interface Company {
@@ -131,23 +138,26 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
     }, [open, referenceid]);
 
     return (
-        <div className="bg-white rounded-lg shadow p-6 flex flex-col justify-center items-center">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Total Accounts</h3>
-            {loading ? (
-                <div className="text-lg font-semibold text-gray-700">Loading...</div>
-            ) : error ? (
-                <div className="text-red-500 text-xs text-center">{error}</div>
-            ) : (
-                <div className="text-3xl font-bold text-gray-900 mb-4">{totalAccounts ?? "-"}</div>
-            )}
+        <Card className="flex flex-col justify-center items-center">
+            <CardTitle className="text-center">Total Accounts</CardTitle>
+            <div className="text-3xl font-bold mb-1">
+                {loading
+                    ? "Loading..."
+                    : error
+                        ? error
+                        : totalAccounts !== null
+                            ? `${totalAccounts}`
+                            : "-"}
+            </div>
 
-            {/* Show Breakdown Button */}
-            <Button
-                onClick={() => setOpen(true)}
-                disabled={loading || !!error || !totalAccounts}
-            >
-                Show Breakdown
-            </Button>
+            <CardContent className="flex justify-center">
+                <Button
+                    onClick={() => setOpen(true)}
+                    disabled={loading || !!error || !totalAccounts}
+                >
+                    Show Breakdown
+                </Button>
+            </CardContent>
 
             {/* Sheet */}
             <Sheet open={open} onOpenChange={setOpen}>
@@ -168,13 +178,13 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
                             <>
                                 <ul className="divide-y divide-gray-200 text-xs uppercase">
                                     {Object.entries(breakdownData).map(([type, count]) => (
-                                        <li key={type} className="flex justify-between py-2 text-gray-700">
+                                        <li key={type} className="flex justify-between py-2">
                                             <span>{type}</span>
                                             <span className="font-semibold">{count}</span>
                                         </li>
                                     ))}
                                 </ul>
-                                <div className="mt-4 flex justify-between font-semibold border-t border-gray-300 pt-2 text-gray-900 text-xs">
+                                <div className="mt-4 flex justify-between font-semibold border-t border-gray-300 pt-2 text-xs">
                                     <span>TOTAL</span>
                                     <span>{Object.values(breakdownData).reduce((a, b) => a + b, 0)}</span>
                                 </div>
@@ -187,6 +197,6 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
                     </div>
                 </SheetContent>
             </Sheet>
-        </div>
+        </Card>
     );
 };
