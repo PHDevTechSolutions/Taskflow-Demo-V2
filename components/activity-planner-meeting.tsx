@@ -147,7 +147,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" className="inline-flex items-center">
+          <Button variant="outline" className="inline-flex items-center cursor-pointer">
             <Plus className="mr-1 h-4 w-4" />
             Create
           </Button>
