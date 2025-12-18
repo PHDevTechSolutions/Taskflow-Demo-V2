@@ -29,24 +29,50 @@ interface SourceCardProps {
   error?: string | null;
 }
 
-export function SourceCard({ activities, loading, error }: SourceCardProps) {
-  // Prepare data grouped by source with counts
-  const data = useMemo(() => {
-    if (!activities || activities.length === 0) return [];
+/** 🔒 Allowed sources (LABELS ONLY) */
+const ALLOWED_SOURCES = [
+  "Outbound - Touchbase",
+  "Outbound - Follow-up",
+  "Existing Client",
+  "CSR Inquiry",
+  "Government",
+  "Philgeps Website",
+  "Philgeps",
+  "Distributor",
+  "Modern Trade",
+  "Facebook Marketplace",
+  "Walk-in Showroom",
+];
 
+export function SourceCard({ activities, loading, error }: SourceCardProps) {
+  const data = useMemo(() => {
+    if (!activities || activities.length === 0) {
+      // 👉 walang ididisplay kapag walang activities
+      return [];
+    }
+
+    // initialize all allowed sources with 0
     const counts: Record<string, number> = {};
-    activities.forEach((act) => {
-      const src = act.source || "Unknown";
-      counts[src] = (counts[src] || 0) + 1;
+    ALLOWED_SOURCES.forEach((label) => {
+      counts[label] = 0;
     });
 
-    return Object.entries(counts).map(([source, count]) => ({
-      source,
-      count,
-    }));
+    // count only allowed sources
+    activities.forEach((act) => {
+      if (act.source && counts.hasOwnProperty(act.source)) {
+        counts[act.source]++;
+      }
+    });
+
+    // 👉 FILTER OUT ZERO VALUES HERE
+    return ALLOWED_SOURCES
+      .map((label) => ({
+        source: label,
+        count: counts[label],
+      }))
+      .filter((item) => item.count > 0);
   }, [activities]);
 
-  // Chart config for styling labels and colors
   const chartConfig = {
     count: {
       label: "Count",
@@ -58,22 +84,23 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
     <Card>
       <CardHeader>
         <CardTitle>Activities by Source</CardTitle>
-        <CardDescription>Counts of activities grouped by source</CardDescription>
+        <CardDescription>
+          Counts based on predefined source labels only
+        </CardDescription>
       </CardHeader>
+
       <CardContent>
         {loading ? (
           <div className="text-center py-12 text-lg font-semibold">Loading...</div>
         ) : error ? (
           <div className="text-center py-12 text-red-500 text-sm">{error}</div>
-        ) : data.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No data available</div>
         ) : (
           <ChartContainer config={chartConfig}>
             <BarChart
               data={data}
               layout="vertical"
               margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-              height={300}
+              height={360}
               barCategoryGap="20%"
             >
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -89,6 +116,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
                 dataKey="source"
                 tickLine={false}
                 axisLine={false}
+                width={160}
                 stroke="var(--muted-foreground)"
               />
               <ChartTooltip
@@ -111,12 +139,10 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
           </ChartContainer>
         )}
       </CardContent>
+
       <CardFooter className="flex-col items-start gap-2 text-sm">
-        <div className="flex gap-2 leading-none font-medium">
-          Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
-        </div>
         <div className="text-muted-foreground leading-none">
-          Showing activity counts grouped by source
+          Only predefined sources are displayed
         </div>
       </CardFooter>
     </Card>
