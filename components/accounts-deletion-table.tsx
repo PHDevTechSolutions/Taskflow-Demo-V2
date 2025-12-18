@@ -234,7 +234,7 @@ export function AccountsTable({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center gap-1 text-green-700 border-green-300 hover:bg-green-50"
+            className="flex items-center gap-1 text-green-700 border-green-300 hover:bg-green-50 cursor-pointer"
             onClick={() => {
               setSelectedAccount(row.original);
               setOpenDialog(true);

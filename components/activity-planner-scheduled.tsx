@@ -410,9 +410,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           ) : (
             filteredActivities.map((item) => (
               <AccordionItem key={item.id} value={item.id}>
-                <div className="p-2 cursor-pointer select-none">
+                <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
-                    <AccordionTrigger className="flex-1 text-xs font-semibold">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
                       {item.company_name}
                     </AccordionTrigger>
 
@@ -443,6 +443,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       />
                       <Button
                         type="button"
+                        className="cursor-pointer"
                         variant="secondary"
                         disabled={updatingId === item.id}
                         onClick={(e) => {

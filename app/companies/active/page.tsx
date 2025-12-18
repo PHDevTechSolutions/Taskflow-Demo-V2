@@ -8,11 +8,16 @@ import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertTitle } from "@/components/ui/alert"
-import { AlertCircleIcon } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
@@ -26,9 +31,9 @@ interface Account {
   type_client: string;
   date_created: string;
   date_updated: string;
-  contact_person: string;
-  contact_number: string;
-  email_address: string;
+  contact_person: string | string[];
+  contact_number: string | string[];
+  email_address: string | string[];
   address: string;
   delivery_address: string;
   region: string;
@@ -109,8 +114,6 @@ function DashboardContent() {
       return;
     }
 
-    // Sa loob ng fetchAccounts useEffect:
-
     const fetchAccounts = async () => {
       setError(null);
       setLoadingAccounts(true);
@@ -118,9 +121,10 @@ function DashboardContent() {
         const response = await fetch(
           `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
         );
+        if (!response.ok) throw new Error("Failed to fetch accounts");
         const data = await response.json();
         setPosts(data.data || []);
-        toast.success("Accounts loaded successfully!");
+        // Removed toast here to avoid spam when just fetching accounts on load or refresh
       } catch (err) {
         console.error("Error fetching accounts:", err);
         toast.error("Failed to connect to server. Please try again later or refresh your network connection");
@@ -153,21 +157,39 @@ function DashboardContent() {
     });
   }, [posts, dateCreatedFilterRange]);
 
+  // Refresh accounts list from API
+  async function refreshAccounts() {
+    if (!userDetails.referenceid) return;
+    try {
+      setLoadingAccounts(true);
+      const response = await fetch(
+        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch accounts");
+      const data = await response.json();
+      setPosts(data.data || []);
+    } catch (error) {
+      toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }
+
   // Save account handler (for create & update)
   async function handleSaveAccount(data: Account & UserDetails) {
     const payload = {
       ...data,
-      contactperson: Array.isArray(data.contact_person)
+      contact_person: Array.isArray(data.contact_person)
         ? data.contact_person
         : typeof data.contact_person === 'string'
           ? data.contact_person.split(',').map((v) => v.trim())
           : [],
-      contactnumber: Array.isArray(data.contact_number)
+      contact_number: Array.isArray(data.contact_number)
         ? data.contact_number
         : typeof data.contact_number === 'string'
           ? data.contact_number.split(',').map((v) => v.trim())
           : [],
-      emailaddress: Array.isArray(data.email_address)
+      email_address: Array.isArray(data.email_address)
         ? data.email_address
         : typeof data.email_address === 'string'
           ? data.email_address.split(',').map((v) => v.trim())
@@ -189,27 +211,25 @@ function DashboardContent() {
 
       toast.success(`Account ${isEdit ? "updated" : "created"} successfully!`);
 
-      // Refresh accounts after save
+      // Refresh accounts after save to reflect latest data
       await refreshAccounts();
     } catch (error) {
       toast.error((error as Error).message || "Failed to save account.");
     }
   }
 
-  // Refresh accounts list from API
-  async function refreshAccounts() {
-    try {
-      const response = await fetch(
-        `/api/com-fetch-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch accounts");
-      const data = await response.json();
-      setPosts(data.data || []);
-      toast.success("Accounts loaded successfully!");
-    } catch (error) {
-      toast.error("Failed to connect to server. Please try again later or refresh your network connection");
-    }
-  }
+  const normalizedPosts = filteredData.map(post => ({
+    ...post,
+    contact_person: Array.isArray(post.contact_person)
+      ? post.contact_person.join(", ")
+      : post.contact_person,
+    contact_number: Array.isArray(post.contact_number)
+      ? post.contact_number.join(", ")
+      : post.contact_number,
+    email_address: Array.isArray(post.email_address)
+      ? post.email_address.join(", ")
+      : post.email_address,
+  }));
 
   return (
     <>
@@ -218,10 +238,7 @@ function DashboardContent() {
         <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
           <div className="flex flex-1 items-center gap-2 px-3">
             <SidebarTrigger />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
+            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -235,16 +252,7 @@ function DashboardContent() {
         </header>
 
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-          {loadingUser ? (
-            <div className="flex items-center space-x-4">
-              <Skeleton className="h-12 w-12 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-[250px]" />
-                <Skeleton className="h-4 w-[200px]" />
-              </div>
-            </div>
-
-          ) : loadingAccounts ? (
+          {loading ? (
             <div className="flex items-center space-x-4">
               <Skeleton className="h-12 w-12 rounded-full" />
               <div className="space-y-2">
@@ -262,7 +270,7 @@ function DashboardContent() {
               )}
 
               <AccountsTable
-                posts={filteredData}
+                posts={normalizedPosts}
                 dateCreatedFilterRange={dateCreatedFilterRange}
                 setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 userDetails={userDetails}
@@ -272,7 +280,6 @@ function DashboardContent() {
             </>
           )}
         </main>
-
       </SidebarInset>
 
       <SidebarRight

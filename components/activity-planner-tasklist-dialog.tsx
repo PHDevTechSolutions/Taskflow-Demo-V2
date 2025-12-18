@@ -47,7 +47,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
       <Button
         variant="outline"
         aria-label="Open filters"
-        className="ml-auto flex items-center justify-center"
+        className="ml-auto flex items-center justify-center cursor-pointer"
         onClick={() => setOpen(true)}
       >
         <FilterIcon className="h-5 w-5" />

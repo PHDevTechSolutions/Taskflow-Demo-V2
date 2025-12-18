@@ -299,9 +299,9 @@ export const Progress: React.FC<NewTaskProps> = ({
 
                         return (
                             <AccordionItem key={item.id} value={item.id}>
-                                <div className="p-2 cursor-pointer select-none">
+                                <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
-                                        <AccordionTrigger className="flex-1 text-xs font-semibold">
+                                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
                                             {item.company_name}
                                         </AccordionTrigger>
 
@@ -339,6 +339,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                     e.stopPropagation();
                                                     openDoneDialog(item.id);
                                                 }}
+                                                className="cursor-pointer"
                                             >
                                                 {updatingId === item.id ? "Updating..." : "Done"}
                                             </Button>

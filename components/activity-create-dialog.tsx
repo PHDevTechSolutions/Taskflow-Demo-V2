@@ -645,6 +645,7 @@ export function CreateActivityDialog({
                 <SheetTrigger asChild>
                     <Button
                         variant="outline"
+                        className="cursor-pointer"
                         onClick={() => {
                             setActivityRef(activityReferenceNumber || "");
                             setAccountRef(accountReferenceNumber || "");

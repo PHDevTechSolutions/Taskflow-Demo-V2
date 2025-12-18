@@ -395,11 +395,22 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Filter accounts by search term
   const filteredAccounts = React.useMemo(() => {
-    if (!searchTerm.trim()) return accounts;
-    const lowerSearch = searchTerm.toLowerCase();
-    return accounts.filter((acc) =>
-      acc.company_name.toLowerCase().includes(lowerSearch)
+    if (!searchTerm.trim()) return accounts.filter(acc =>
+      acc.status?.toLowerCase() !== "subject for transfer" &&
+      acc.status?.toLowerCase() !== "removed"
     );
+
+    const lowerSearch = searchTerm.toLowerCase();
+    return accounts.filter((acc) => {
+      const status = acc.status?.toLowerCase();
+      const isStatusAllowed =
+        status !== "subject for transfer" && status !== "removed";
+
+      return (
+        isStatusAllowed &&
+        acc.company_name.toLowerCase().includes(lowerSearch)
+      );
+    });
   }, [accounts, searchTerm]);
 
   // Dates for grouping accounts
@@ -491,12 +502,13 @@ export const NewTask: React.FC<NewTaskProps> = ({
               <Accordion type="single" collapsible className="w-full">
                 {endorsedTickets.map((ticket) => (
                   <AccordionItem key={ticket.id} value={ticket.id}>
-                    <div className="flex justify-between items-center p-2 cursor-pointer select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold">
+                    <div className="flex justify-between items-center p-2 select-none">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
                         {ticket.company_name}
                       </AccordionTrigger>
                       <Button
                         type="button"
+                        className="cursor-pointer"
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -578,15 +590,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
               onChange={(e) => setSearchTerm(e.target.value)}
               aria-label="Search accounts"
             />
-            <Button onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
+            <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
           </div>
 
           <AccountDialog
             mode="create"
             userDetails={userDetails}
             onSaveAction={async (data) => {
-              await onSaveAccountAction(data); // original save logic
-              await onRefreshAccountsAction(); // re-fetch accounts para mag-refresh list
+              await onSaveAccountAction(data); // save the account
+              await onRefreshAccountsAction(); // refresh accounts to update the table
+              setIsCreateDialogOpen(false);
             }}
             open={isCreateDialogOpen}
             onOpenChangeAction={setIsCreateDialogOpen}
@@ -612,8 +625,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           value={account.id}
                           className="bg-green-100 border border-green-300 rounded mb-2"
                         >
-                          <div className="flex justify-between items-center p-2 cursor-pointer select-none">
-                            <AccordionTrigger className="flex-1 text-xs font-semibold">
+                          <div className="flex justify-between items-center p-2 select-none">
+                            <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
                               {account.company_name}
                             </AccordionTrigger>
 
@@ -621,6 +634,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                               <Button
                                 type="button"
                                 variant="outline"
+                                className="cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleAdd(account);
@@ -681,8 +695,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
               <Accordion type="single" collapsible className="w-full">
                 {groupedNull[firstAvailableCluster].map((account) => (
                   <AccordionItem key={account.id} value={account.id}>
-                    <div className="flex justify-between items-center p-2 cursor-pointer select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold">
+                    <div className="flex justify-between items-center p-2 select-none">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
                         {account.company_name}
                       </AccordionTrigger>
 
@@ -690,6 +704,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                         <Button
                           type="button"
                           variant="outline"
+                          className="cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleAdd(account);

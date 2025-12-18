@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle, } from "@/components/ui/alert"
 import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
-import { Spinner } from "@/components/ui/spinner"
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -409,7 +408,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         <Button
                             variant="destructive"
                             onClick={() => setDeleteDialogOpen(true)}
-                            className="flex items-center space-x-1"
+                            className="flex items-center space-x-1 cursor-pointer"
                         >
                             <span>Delete Selected ({selectedIds.size})</span>
                         </Button>
@@ -444,7 +443,7 @@ export const TaskList: React.FC<CompletedProps> = ({
 
             {filteredActivities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length}
+                    Total Historical Records: {filteredActivities.length}
                 </div>
             )}
 
@@ -497,10 +496,14 @@ export const TaskList: React.FC<CompletedProps> = ({
                                 return (
                                     <TableRow key={item.id}>
                                         <TableCell>
-                                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)} />
+                                            <Checkbox
+                                                className="w-6 h-6 hover:bg-gray-100 rounded cursor-pointer"
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleSelect(item.id)}
+                                            />
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                                            <Button variant="outline" className="cursor-pointer" size="sm" onClick={() => openEditDialog(item)}>
                                                 Edit
                                             </Button>
                                         </TableCell>

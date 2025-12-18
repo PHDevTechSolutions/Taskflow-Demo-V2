@@ -212,7 +212,7 @@ function DashboardContent() {
                 <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                     {/* BUTTON TOGGLE VIEW COMPLETED */}
                     <div className="flex justify-start">
-                        <Button type="button" onClick={() => setShowCompleted((v) => !v)} variant="outline"><Eye size={16} />
+                        <Button className="cursor-pointer" type="button" onClick={() => setShowCompleted((v) => !v)} variant="outline"><Eye size={16} />
                             {showCompleted ? "Hide Completed" : "View Completed"}</Button>
                     </div>
 

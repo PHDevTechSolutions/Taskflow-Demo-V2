@@ -30,6 +30,7 @@ interface Account {
     region: string;
     type_client: string;
     date_created: string;
+    date_updated: string;
     industry: string;
     company_group: string;
     status?: string;
@@ -128,21 +129,24 @@ export function AccountsTable({
             return matchesSearch && matchesType && matchesStatus && matchesIndustry;
         });
 
-        // Sorting logic unchanged
+        // Sorting logic
         data = data.sort((a, b) => {
+            // Alphabetical sorting (overrides date sorting)
             if (alphabeticalFilter === "asc") {
                 return a.company_name.localeCompare(b.company_name);
             } else if (alphabeticalFilter === "desc") {
                 return b.company_name.localeCompare(a.company_name);
             }
 
+            // dateCreatedFilter sorting
             if (dateCreatedFilter === "asc") {
                 return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
             } else if (dateCreatedFilter === "desc") {
                 return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
             }
 
-            return 0;
+            // DEFAULT: sort by date_updated descending
+            return new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime();
         });
 
         return data;
@@ -155,6 +159,7 @@ export function AccountsTable({
         alphabeticalFilter,
         dateCreatedFilter,
     ]);
+
 
     // Download
     function convertToCSV(data: Account[]) {
@@ -220,14 +225,18 @@ export function AccountsTable({
                         checked={table.getIsAllPageRowsSelected()}
                         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
                         aria-label="Select all accounts"
+                        className="hover:bg-gray-200 rounded w-6 h-6"
                     />
                 ),
                 cell: ({ row }) => (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label={`Select account ${row.original.company_name}`}
-                    />
+                    <div className="hover:bg-gray-100 rounded"> {/* added hover wrapper */}
+                        <Checkbox
+                            checked={row.getIsSelected()}
+                            onCheckedChange={(value) => row.toggleSelected(!!value)}
+                            aria-label={`Select account ${row.original.company_name}`}
+                            className="w-6 h-6"
+                        />
+                    </div>
                 ),
                 enableSorting: false,
                 enableHiding: false,
@@ -275,18 +284,12 @@ export function AccountsTable({
                 },
             },
             {
-                accessorKey: "date_created",
-                header: "Date Created",
-                cell: (info) =>
-                    new Date(info.getValue() as string).toLocaleDateString(),
-            },
-            {
                 id: "actions",
                 header: "Actions",
                 cell: ({ row }) => (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="cursor-pointer">
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -298,6 +301,7 @@ export function AccountsTable({
                                     setEditingAccount(row.original);
                                     setIsEditDialogOpen(true);
                                 }}
+                                className="cursor-pointer"
                             >
                                 <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
@@ -457,13 +461,17 @@ export function AccountsTable({
                     <AccountDialog
                         mode="create"
                         userDetails={userDetails}
-                        onSaveAction={onSaveAccountAction}
+                        onSaveAction={async (data) => {
+                            await onSaveAccountAction(data);
+                            setIsCreateDialogOpen(false);
+                        }}
                         open={isCreateDialogOpen}
                         onOpenChangeAction={setIsCreateDialogOpen}
                     />
 
+
                     <div className="flex-grow w-full max-w-lg flex items-center gap-3">
-                        <Button onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
+                        <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
                         <AccountsActiveSearch
                             globalFilter={globalFilter}
                             setGlobalFilterAction={setGlobalFilter}
@@ -484,7 +492,7 @@ export function AccountsTable({
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
                     />
 
-                    <Button variant="outline" onClick={handleDownloadCSV}>
+                    <Button variant="outline" className="cursor-pointer" onClick={handleDownloadCSV}>
                         Download CSV
                     </Button>
 
@@ -492,6 +500,7 @@ export function AccountsTable({
                         <>
                             <Button
                                 variant="outline"
+                                className="cursor-pointer"
                                 onClick={() => setIsTransferDialogOpen(true)}
                             >
                                 Transfer Selected
@@ -499,6 +508,7 @@ export function AccountsTable({
 
                             <Button
                                 variant="destructive"
+                                className="cursor-pointer"
                                 onClick={() => setIsRemoveDialogOpen(true)}
                             >
                                 Remove Selected

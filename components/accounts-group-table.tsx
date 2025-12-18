@@ -182,6 +182,7 @@ export function AccountsTable({
           <Button
             variant="ghost"
             size="sm"
+            className="cursor-pointer"
             onClick={() => openGroupDialog(info.row.original)}
           >
             View Companies

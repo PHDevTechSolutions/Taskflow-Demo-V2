@@ -32,7 +32,7 @@ export function AccountsActiveFilter({
         variant="outline"
         onClick={() => setOpen(true)}
         aria-label="Open filters"
-        className="flex items-center justify-center"
+        className="flex items-center justify-center cursor-pointer"
       >
         <Filter />
       </Button>

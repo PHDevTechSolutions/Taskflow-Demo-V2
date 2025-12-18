@@ -154,14 +154,18 @@ export function AccountsTable({
                         checked={table.getIsAllPageRowsSelected()}
                         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
                         aria-label="Select all accounts"
+                        className="hover:bg-gray-200 rounded w-6 h-6"
                     />
                 ),
                 cell: ({ row }) => (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label={`Select account ${row.original.company_name}`}
-                    />
+                    <div className="hover:bg-gray-100 rounded"> {/* added hover wrapper */}
+                        <Checkbox
+                            checked={row.getIsSelected()}
+                            onCheckedChange={(value) => row.toggleSelected(!!value)}
+                            aria-label={`Select account ${row.original.company_name}`}
+                            className="w-6 h-6"
+                        />
+                    </div>
                 ),
                 enableSorting: false,
                 enableHiding: false,
@@ -220,7 +224,7 @@ export function AccountsTable({
                 cell: ({ row }) => (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="cursor-pointer">
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -232,6 +236,7 @@ export function AccountsTable({
                                     setEditingAccount(row.original);
                                     setIsEditDialogOpen(true);
                                 }}
+                                className="cursor-pointer"
                             >
                                 <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
