@@ -76,7 +76,7 @@ const data = {
   ],
   favorites: [
     { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
-    { name: "National Call Ranking", url: "#", icon: Phone },
+    { name: "National Call Ranking", url: "/national-call-ranking", icon: Phone },
   ],
   workspaces: [
     {
