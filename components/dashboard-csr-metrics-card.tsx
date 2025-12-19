@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { TrendingUp, Info } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-
+import { Spinner } from "@/components/ui/spinner"
 import {
   Card,
   CardContent,
@@ -228,7 +228,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
 
         {/* Chart */}
         {loading ? (
-          <div className="py-12 text-center font-medium">Loading metrics…</div>
+          <div className="py-12 text-center font-medium"><Spinner /></div>
         ) : error ? (
           <div className="py-12 text-center text-red-500">{error}</div>
         ) : chartData.length === 0 ? (

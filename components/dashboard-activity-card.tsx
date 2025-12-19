@@ -9,6 +9,7 @@ import {
   ItemDescription,
 } from "@/components/ui/item";
 import { Card, CardContent } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner"
 
 interface Activity {
   type_activity?: string;
@@ -47,20 +48,16 @@ export function ActivityCard({ activities, loading, error }: Props) {
 
   if (loading) {
     return (
-      <Card className="p-6 text-center">
-        <CardContent>
-          <div className="text-lg font-semibold text-gray-700">Loading...</div>
-        </CardContent>
+      <Card className="p-6 flex justify-center items-center">
+        <Spinner />
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card className="p-6 text-center">
-        <CardContent>
-          <div className="text-red-500 text-xs">{error}</div>
-        </CardContent>
+      <Card className="p-6 flex justify-center items-center">
+        <Spinner />
       </Card>
     );
   }

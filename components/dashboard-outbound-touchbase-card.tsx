@@ -8,6 +8,7 @@ import {
   ItemTitle,
   ItemDescription,
 } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner"
 import { Card } from "@/components/ui/card";
 
 interface Activity {
@@ -28,16 +29,16 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
 
   if (loading) {
     return (
-      <Card className="p-6 text-center">
-        <div className="text-lg font-semibold text-gray-700">Loading...</div>
+      <Card className="p-6 flex justify-center items-center">
+        <Spinner />
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card className="p-6 text-center">
-        <div className="text-red-500 text-xs">{error}</div>
+      <Card className="p-6 flex justify-center items-center">
+        <Spinner />
       </Card>
     );
   }

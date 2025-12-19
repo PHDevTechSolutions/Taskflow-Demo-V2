@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { TrendingUp, Info } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
-
+import { Spinner } from "@/components/ui/spinner"
 import {
   Card,
   CardContent,
@@ -113,7 +113,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
 
       <CardContent>
         {loading ? (
-          <div className="text-center py-12 text-lg font-semibold">Loading...</div>
+          <div className="text-center py-12 text-lg font-semibold"><Spinner /></div>
         ) : error ? (
           <div className="text-center py-12 text-red-500 text-sm">{error}</div>
         ) : (

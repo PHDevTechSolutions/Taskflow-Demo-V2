@@ -18,6 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Spinner } from "@/components/ui/spinner"
 
 import {
   Sheet,
@@ -450,7 +451,9 @@ export function TimemotionCard({
 
       <CardContent className="w-full flex flex-col items-center">
         {(loading || loadingMeetings || loadingNotes || loadingSiteVisits) ? (
-          <div className="text-lg font-semibold">Loading...</div>
+          < div className="flex justify-center items-center w-full min-h-[100px]">
+            <Spinner />
+          </div>
         ) : error || errorMeetings || errorNotes || errorSiteVisits ? (
           <div className="text-red-500 text-xs text-center w-full">{error || errorMeetings || errorNotes || errorSiteVisits}</div>
         ) : (
