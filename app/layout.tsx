@@ -1,3 +1,5 @@
+import React, { Suspense } from "react";
+
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -53,8 +55,13 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <Reminders />
-            <TransferAlertDialog />
-            <Analytics/>
+            <Suspense fallback={null}>
+              <TransferAlertDialog />
+              <ApproveDeletionDialog />
+              <TicketEndorsed />
+              <ActivityToday />
+            </Suspense>
+            <Analytics />
             {children}
             <OfflineDialog />
           </ThemeProvider>
