@@ -34,6 +34,7 @@ import { CSRMetricsCard } from "@/components/dashboard-csr-metrics-card";
 import { OutboundCard } from "@/components/dashboard-outbound-card";
 import { QuotationCard } from "@/components/dashboard-quotation-card";
 import { SOCard } from "@/components/dashboard-so-card";
+import { SiteVisitCard } from "@/components/dashboard-site-visit-card";
 
 interface UserDetails {
   referenceid: string;
@@ -256,6 +257,11 @@ function DashboardContent() {
               activities={filteredActivities}
               loading={loadingActivities}
               error={errorActivities}
+              dateRange={dateCreatedFilterRange}
+            />
+
+            <SiteVisitCard
+              referenceid={userDetails.referenceid}
               dateRange={dateCreatedFilterRange}
             />
 
