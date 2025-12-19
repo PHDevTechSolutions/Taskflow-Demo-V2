@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Reminders } from "@/components/reminders";
+import { TransferAlertDialog } from "@/components/popup-transfer";
 import { OfflineDialog } from "@/components/offline-dialog";
 
 const geistSans = Geist({
@@ -49,6 +50,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <Reminders />
+            <TransferAlertDialog />
             <Analytics/>
             {children}
             <OfflineDialog />

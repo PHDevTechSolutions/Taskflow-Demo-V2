@@ -98,7 +98,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
           tabIndex={0}
           aria-label="Information about source labels"
         >
-          <Info className="h-5 w-5 text-gray-400" />
+          <Info className="h-4 w-4 text-gray-400" />
 
           {showTooltip && (
             <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
