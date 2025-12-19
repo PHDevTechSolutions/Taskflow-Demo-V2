@@ -141,7 +141,7 @@ export function Reminders() {
               body: payload.notification.body || "",
             });
           }
-          audioRef.current?.play().catch(() => {});
+          audioRef.current?.play().catch(() => { });
         });
 
         return () => typeof unsub === "function" && unsub();
@@ -201,20 +201,26 @@ export function Reminders() {
   /* ================= MATCH ================= */
 
   useEffect(() => {
-    const windowMs = 5 * 60 * 1000;
+    const THIRTY_MINUTES = 30 * 60 * 1000;
+    const FIVE_MINUTES = 5 * 60 * 1000;
 
     const meeting = meetings.find((m) => {
       if (dismissedMeetings.includes(m.id)) return false;
       const d = toDate(m.start_date);
-      const diff = now.getTime() - d.getTime();
-      return isSameDay(now, d) && diff >= 0 && diff <= windowMs;
+      const diff = d.getTime() - now.getTime();
+
+      return (
+        isSameDay(now, d) &&
+        diff <= THIRTY_MINUTES &&
+        diff >= -FIVE_MINUTES
+      );
     });
 
     const note = notes.find((n) => {
       if (dismissedNotes.includes(n.id)) return false;
       const d = toDate(n.remind_at);
       const diff = now.getTime() - d.getTime();
-      return isSameDay(now, d) && diff >= 0 && diff <= windowMs;
+      return isSameDay(now, d) && diff >= 0 && diff <= FIVE_MINUTES;
     });
 
     setCurrentMeeting(meeting || null);
@@ -236,7 +242,7 @@ export function Reminders() {
 
     if ((newMeeting || newNote) && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch(() => { });
     }
 
     prevMeeting.current = showMeeting;

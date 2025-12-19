@@ -513,10 +513,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           <p>
                             <strong>Ticket Reference Number:</strong>{" "}
                             <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.ticket_reference_number ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.ticket_reference_number ?? "-")
+                                    .filter((v) => v !== "-")
+                                )
+                              ).join(", ")}
                             </span>
                           </p>
                         )}
@@ -541,10 +544,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           <p>
                             <strong>Source:</strong>{" "}
                             <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.source ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-")
+                                )
+                              ).join(", ")}
                             </span>
                           </p>
                         )}

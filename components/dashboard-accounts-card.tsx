@@ -154,6 +154,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
                 <Button
                     onClick={() => setOpen(true)}
                     disabled={loading || !!error || !totalAccounts}
+                    className="cursor-pointer"
                 >
                     Show Breakdown
                 </Button>

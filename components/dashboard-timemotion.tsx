@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { TrendingUp } from "lucide-react";
 import { PieChart, Pie, Sector } from "recharts";
 import { type PieSectorDataItem } from "recharts/types/polar/Pie";
 
@@ -31,7 +30,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-
+import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
 // Firebase imports
@@ -49,6 +48,7 @@ interface MeetingItem {
   start_date: string;
   end_date: string;
   type_activity: string;
+  date_created?: any; // timestamp or string
   [key: string]: any;
 }
 
@@ -57,6 +57,7 @@ interface NoteItem {
   start_date: string;
   end_date: string;
   type_activity: string;
+  date_created?: any; // timestamp or string
   [key: string]: any;
 }
 
@@ -65,6 +66,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   referenceid: string;
+  dateRange?: DateRange;
 }
 
 const chartConfig = {
@@ -93,7 +95,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function TimemotionCard({ activities, loading, error, referenceid }: Props) {
+export function TimemotionCard({
+  activities,
+  loading,
+  error,
+  referenceid,
+  dateRange,
+}: Props) {
   const [meetings, setMeetings] = useState<MeetingItem[]>([]);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [errorMeetings, setErrorMeetings] = useState<string | null>(null);
@@ -102,12 +110,42 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [errorNotes, setErrorNotes] = useState<string | null>(null);
 
+  // Convert Firestore timestamp or string to JS Date
+  const toDate = (value: any): Date | null => {
+    if (!value) return null;
+
+    if (typeof value === "object" && "seconds" in value) {
+      return new Date(value.seconds * 1000);
+    }
+
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // Check if date is in the selected date range
+  const isInRange = (value?: any) => {
+    if (!dateRange?.from || !dateRange?.to) return true;
+
+    const date = toDate(value);
+    if (!date) return false;
+
+    const from = new Date(dateRange.from);
+    const to = new Date(dateRange.to);
+
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+
+    return date >= from && date <= to;
+  };
+
+  // Fetch meetings from Firestore and filter by dateRange
   useEffect(() => {
     if (!referenceid) return;
 
     async function fetchMeetings() {
       setLoadingMeetings(true);
       setErrorMeetings(null);
+
       try {
         const q = query(
           collection(db, "meetings"),
@@ -117,23 +155,18 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
 
         const querySnapshot = await getDocs(q);
 
-        const fetchedMeetings = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-          } as MeetingItem;
-        });
+        const fetchedMeetings = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as MeetingItem[];
 
-        const today = new Date().toISOString().split("T")[0];
-
-        const upcomingMeetings = fetchedMeetings.filter(
-          (m) => m.end_date >= today
+        const filteredMeetings = fetchedMeetings.filter((m) =>
+          isInRange(m.date_created)
         );
 
-        setMeetings(upcomingMeetings);
+        setMeetings(filteredMeetings);
       } catch (err) {
-        console.error("Error loading meetings:", err);
+        console.error(err);
         setErrorMeetings("Failed to load meetings.");
         toast.error("Failed to load meetings.");
       } finally {
@@ -142,14 +175,16 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     }
 
     fetchMeetings();
-  }, [referenceid]);
+  }, [referenceid, dateRange]);
 
+  // Fetch notes from Firestore and filter by dateRange
   useEffect(() => {
     if (!referenceid) return;
 
     async function fetchNotes() {
       setLoadingNotes(true);
       setErrorNotes(null);
+
       try {
         const q = query(
           collection(db, "notes"),
@@ -159,23 +194,18 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
 
         const querySnapshot = await getDocs(q);
 
-        const fetchedNotes = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-          } as NoteItem;
-        });
+        const fetchedNotes = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as NoteItem[];
 
-        const today = new Date().toISOString().split("T")[0];
-
-        const upcomingNotes = fetchedNotes.filter(
-          (n) => n.end_date >= today
+        const filteredNotes = fetchedNotes.filter((n) =>
+          isInRange(n.date_created)
         );
 
-        setNotes(upcomingNotes);
+        setNotes(filteredNotes);
       } catch (err) {
-        console.error("Error loading notes:", err);
+        console.error(err);
         setErrorNotes("Failed to load notes.");
         toast.error("Failed to load notes.");
       } finally {
@@ -184,10 +214,12 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     }
 
     fetchNotes();
-  }, [referenceid]);
+  }, [referenceid, dateRange]);
 
+  // Combine all activities, meetings, and notes
   const combinedEntries = [...activities, ...meetings, ...notes];
 
+  // Calculate total duration in milliseconds
   const totalDurationMs = combinedEntries.reduce((total, entry) => {
     if (entry.start_date && entry.end_date) {
       const start = new Date(entry.start_date).getTime();
@@ -204,6 +236,7 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
+  // Duration aggregated per activity type
   const durationPerType = combinedEntries.reduce((acc, entry) => {
     if (entry.start_date && entry.end_date && entry.type_activity) {
       const start = new Date(entry.start_date).getTime();
@@ -215,6 +248,7 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
     return acc;
   }, {} as Record<string, number>);
 
+  // Count of entries per activity type
   const countPerType = combinedEntries.reduce((acc, entry) => {
     const type = entry.type_activity || "Unknown";
     acc[type] = (acc[type] || 0) + 1;
@@ -299,7 +333,7 @@ export function TimemotionCard({ activities, loading, error, referenceid }: Prop
 
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" aria-label="Show Breakdown" className="w-full">
+                <Button variant="outline" aria-label="Show Breakdown" className="w-full cursor-pointer">
                   Show Breakdown
                 </Button>
               </SheetTrigger>

@@ -82,7 +82,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
     <Card>
       <CardHeader className="flex justify-between items-center">
         <div>
-          <CardTitle>Activities by Source</CardTitle>
+          <CardTitle>Source Breakdown</CardTitle>
           <CardDescription>
             Counts based on predefined source labels only
           </CardDescription>

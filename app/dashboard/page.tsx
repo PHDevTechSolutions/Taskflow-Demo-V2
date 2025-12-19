@@ -31,6 +31,9 @@ import { ActivityCard } from "@/components/dashboard-activity-card";
 
 import { SourceCard } from "@/components/dashboard-source-card";
 import { CSRMetricsCard } from "@/components/dashboard-csr-metrics-card";
+import { OutboundCard } from "@/components/dashboard-outbound-card";
+import { QuotationCard } from "@/components/dashboard-quotation-card";
+import { SOCard } from "@/components/dashboard-so-card";
 
 interface UserDetails {
   referenceid: string;
@@ -49,7 +52,9 @@ interface Activity {
   status: string;
   actual_sales: string;
   quotation_number: string;
+  quotation_amount: string;
   so_number: string;
+  so_amount: string;
 }
 
 function DashboardContent() {
@@ -208,6 +213,7 @@ function DashboardContent() {
               loading={loadingActivities}
               error={errorActivities}
               referenceid={userDetails.referenceid}
+              dateRange={dateCreatedFilterRange}
             />
 
             <ActivityCard
@@ -230,6 +236,27 @@ function DashboardContent() {
               activities={filteredActivities}
               loading={loadingActivities}
               error={errorActivities}
+            />
+
+            <OutboundCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+              dateRange={dateCreatedFilterRange}
+            />
+
+            <QuotationCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+              dateRange={dateCreatedFilterRange}
+            />
+
+            <SOCard
+              activities={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+              dateRange={dateCreatedFilterRange}
             />
 
           </div>
