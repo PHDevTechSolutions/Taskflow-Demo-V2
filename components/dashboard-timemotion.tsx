@@ -48,7 +48,7 @@ interface MeetingItem {
   start_date: string;
   end_date: string;
   type_activity: string;
-  date_created?: any; // timestamp or string
+  date_created?: any;
   [key: string]: any;
 }
 
@@ -57,7 +57,14 @@ interface NoteItem {
   start_date: string;
   end_date: string;
   type_activity: string;
-  date_created?: any; // timestamp or string
+  date_created?: any;
+  [key: string]: any;
+}
+
+interface SiteVisitItem {
+  Type?: string;
+  Status?: string;
+  date_created: string;
   [key: string]: any;
 }
 
@@ -110,14 +117,19 @@ export function TimemotionCard({
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [errorNotes, setErrorNotes] = useState<string | null>(null);
 
+  const [siteVisits, setSiteVisits] = useState<SiteVisitItem[]>([]);
+  const [loadingSiteVisits, setLoadingSiteVisits] = useState(false);
+  const [errorSiteVisits, setErrorSiteVisits] = useState<string | null>(null);
+
+  // Store site visit durations per Type
+  const [siteVisitDurations, setSiteVisitDurations] = useState<Record<string, number>>({});
+
   // Convert Firestore timestamp or string to JS Date
   const toDate = (value: any): Date | null => {
     if (!value) return null;
-
     if (typeof value === "object" && "seconds" in value) {
       return new Date(value.seconds * 1000);
     }
-
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   };
@@ -138,7 +150,7 @@ export function TimemotionCard({
     return date >= from && date <= to;
   };
 
-  // Fetch meetings from Firestore and filter by dateRange
+  // Fetch meetings
   useEffect(() => {
     if (!referenceid) return;
 
@@ -177,7 +189,7 @@ export function TimemotionCard({
     fetchMeetings();
   }, [referenceid, dateRange]);
 
-  // Fetch notes from Firestore and filter by dateRange
+  // Fetch notes
   useEffect(() => {
     if (!referenceid) return;
 
@@ -216,10 +228,116 @@ export function TimemotionCard({
     fetchNotes();
   }, [referenceid, dateRange]);
 
-  // Combine all activities, meetings, and notes
+  // Fetch site visits from API
+  useEffect(() => {
+    if (!referenceid) return;
+
+    async function fetchSiteVisits() {
+      setLoadingSiteVisits(true);
+      setErrorSiteVisits(null);
+
+      try {
+        const res = await fetch(`/api/fetch-tasklog?referenceid=${encodeURIComponent(referenceid)}`);
+        if (!res.ok) throw new Error("Failed to fetch site visits");
+        const data = await res.json();
+
+        const filteredSiteVisits = (data.siteVisits || []).filter((visit: SiteVisitItem) => {
+          if (!dateRange || !dateRange.from || !dateRange.to) return true;
+          if (!visit.date_created) return false;
+          const visitDate = new Date(visit.date_created);
+          return visitDate >= dateRange.from && visitDate <= dateRange.to;
+        });
+
+        setSiteVisits(filteredSiteVisits);
+      } catch (err: any) {
+        setErrorSiteVisits(err.message);
+        toast.error(err.message);
+      } finally {
+        setLoadingSiteVisits(false);
+      }
+    }
+
+    fetchSiteVisits();
+  }, [referenceid, dateRange]);
+
+  // Calculate site visit durations per Type (Login-Logout pairs)
+  // Calculate site visit durations per Type (Login-Logout pairs) with defaults
+  useEffect(() => {
+    if (!siteVisits.length) {
+      setSiteVisitDurations({});
+      return;
+    }
+
+    // Group visits by Type, for each Type compute Login-Logout duration pairs
+    const visitsByType: Record<string, SiteVisitItem[]> = {};
+
+    for (const visit of siteVisits) {
+      if (visit.Status === "Login" || visit.Status === "Logout") {
+        const type = visit.Type || "Unknown";
+        if (!visitsByType[type]) visitsByType[type] = [];
+        visitsByType[type].push(visit);
+      }
+    }
+
+    const durations: Record<string, number> = {};
+
+    Object.entries(visitsByType).forEach(([type, visits]) => {
+      // Sort visits by date_created asc
+      const sortedVisits = visits.sort(
+        (a, b) => new Date(a.date_created).getTime() - new Date(b.date_created).getTime()
+      );
+
+      let totalMs = 0;
+      let loginTime: Date | null = null;
+
+      for (let i = 0; i < sortedVisits.length; i++) {
+        const visit = sortedVisits[i];
+        const currentDate = new Date(visit.date_created);
+
+        if (visit.Status === "Login") {
+          loginTime = currentDate;
+        } else if (visit.Status === "Logout") {
+          if (!loginTime) {
+            // No login before logout -> use default login time 8:00 AM of logout day
+            loginTime = new Date(currentDate);
+            loginTime.setHours(8, 0, 0, 0);
+          }
+
+          // Calculate duration between loginTime and logout (currentDate)
+          let diff = currentDate.getTime() - loginTime.getTime();
+
+          // If logout time earlier than login (maybe bad data), skip
+          if (diff > 0) {
+            totalMs += diff;
+          }
+
+          loginTime = null;
+        }
+      }
+
+      // After loop: if there's a login without logout, add default logout at 5:00 PM same day
+      if (loginTime) {
+        const defaultLogout = new Date(loginTime);
+        defaultLogout.setHours(17, 0, 0, 0); // 5:00 PM
+
+        let diff = defaultLogout.getTime() - loginTime.getTime();
+
+        if (diff > 0) {
+          totalMs += diff;
+        }
+      }
+
+      durations[type] = totalMs;
+    });
+
+    setSiteVisitDurations(durations);
+  }, [siteVisits]);
+
+
+  // Combine all activities, meetings, notes
   const combinedEntries = [...activities, ...meetings, ...notes];
 
-  // Calculate total duration in milliseconds
+  // Calculate total duration in ms for activities, meetings, notes
   const totalDurationMs = combinedEntries.reduce((total, entry) => {
     if (entry.start_date && entry.end_date) {
       const start = new Date(entry.start_date).getTime();
@@ -231,10 +349,28 @@ export function TimemotionCard({
     return total;
   }, 0);
 
+  // Total combined time (activities + site visits)
+  const grandTotalMs = totalDurationMs + Object.values(siteVisitDurations).reduce((a, b) => a + b, 0);
+
+  // Format total durations for display
   const totalSeconds = Math.floor(totalDurationMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+
+  // Grand total with site visits included
+  const grandTotalSeconds = Math.floor(grandTotalMs / 1000);
+  const grandHours = Math.floor(grandTotalSeconds / 3600);
+  const grandMinutes = Math.floor((grandTotalSeconds % 3600) / 60);
+  const grandSeconds = grandTotalSeconds % 60;
+
+  const formatDuration = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${h}h ${m}m ${s}s`;
+  };
 
   // Duration aggregated per activity type
   const durationPerType = combinedEntries.reduce((acc, entry) => {
@@ -268,14 +404,6 @@ export function TimemotionCard({
     visitors: count,
     fill: getColor(type, i),
   }));
-
-  const formatDuration = (ms: number) => {
-    const totalSec = Math.floor(ms / 1000);
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    return `${h}h ${m}m ${s}s`;
-  };
 
   function ChartPieDonutActive() {
     return (
@@ -321,14 +449,15 @@ export function TimemotionCard({
       </CardHeader>
 
       <CardContent className="w-full flex flex-col items-center">
-        {(loading || loadingMeetings || loadingNotes) ? (
+        {(loading || loadingMeetings || loadingNotes || loadingSiteVisits) ? (
           <div className="text-lg font-semibold">Loading...</div>
-        ) : error || errorMeetings || errorNotes ? (
-          <div className="text-red-500 text-xs text-center w-full">{error || errorMeetings || errorNotes}</div>
+        ) : error || errorMeetings || errorNotes || errorSiteVisits ? (
+          <div className="text-red-500 text-xs text-center w-full">{error || errorMeetings || errorNotes || errorSiteVisits}</div>
         ) : (
           <>
+            {/* Display GRAND TOTAL (activities + site visits) here */}
             <div className="text-3xl font-bold mb-4">
-              {hours}h {minutes}m {seconds}s (of 8h)
+              {grandHours}h {grandMinutes}m {grandSeconds}s (of 8h)
             </div>
 
             <Sheet>
@@ -360,6 +489,19 @@ export function TimemotionCard({
                           <span>{formatDuration(ms)}</span>
                         </div>
                       </React.Fragment>
+                    ))
+                  )}
+                </div>
+                <Separator />
+                <div>
+                  {Object.keys(siteVisitDurations).length === 0 ? (
+                    <p className="text-sm text-gray-500">No site visits found.</p>
+                  ) : (
+                    Object.entries(siteVisitDurations).map(([type, ms]) => (
+                      <div key={type} className="flex justify-between text-xs font-medium py-1 border-b border-gray-200">
+                        <span>{type}</span>
+                        <span>{formatDuration(ms)}</span>
+                      </div>
                     ))
                   )}
                 </div>
