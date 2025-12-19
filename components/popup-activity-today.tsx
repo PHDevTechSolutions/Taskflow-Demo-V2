@@ -45,7 +45,7 @@ interface UserDetails {
     referenceid: string;
 }
 
-const allowedStatuses = ["Assisted", "Quote-Done"]; // example, adjust as needed
+const allowedStatuses = ["Assisted", "Quote-Done"];
 
 export function ActivityToday() {
     const searchParams = useSearchParams();

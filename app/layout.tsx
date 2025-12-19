@@ -53,10 +53,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <Reminders />
-            <TransferAlertDialog />
-            <ApproveDeletionDialog />
-            <TicketEndorsed />
-            <ActivityToday />
+            
             <Analytics/>
             {children}
             <OfflineDialog />
