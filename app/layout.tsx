@@ -8,6 +8,8 @@ import "./globals.css";
 import { Reminders } from "@/components/reminders";
 import { TransferAlertDialog } from "@/components/popup-transfer";
 import { ApproveDeletionDialog } from "@/components/popup-deletion";
+import { TicketEndorsed } from "@/components/popup-ticket-endorsed";
+import { ActivityToday } from "@/components/popup-activity-today";
 import { OfflineDialog } from "@/components/offline-dialog";
 
 const geistSans = Geist({
@@ -53,6 +55,8 @@ export default function RootLayout({
             <Reminders />
             <TransferAlertDialog />
             <ApproveDeletionDialog />
+            <TicketEndorsed />
+            <ActivityToday />
             <Analytics/>
             {children}
             <OfflineDialog />
