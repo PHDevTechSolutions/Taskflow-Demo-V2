@@ -45,7 +45,7 @@ export function MeetingDialog({
   const [open, setOpen] = useState(false);
 
   // Form state
-  const [typeActivity, setTypeActivity] = useState("Site Visit");
+  const [typeActivity, setTypeActivity] = useState("Client Meeting");
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -53,7 +53,7 @@ export function MeetingDialog({
   // Reset form on dialog open
   useEffect(() => {
     if (open) {
-      setTypeActivity("Site Visit");
+      setTypeActivity("Client Meeting");
       setRemarks("");
       setStartDate("");
       setEndDate("");
@@ -116,7 +116,6 @@ export function MeetingDialog({
                 <SelectValue placeholder="Select an activity type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Site Visit">Site Visit</SelectItem>
                 <SelectItem value="Client Meeting">Client Meeting</SelectItem>
                 <SelectItem value="Group Meeting">Group Meeting</SelectItem>
               </SelectContent>
