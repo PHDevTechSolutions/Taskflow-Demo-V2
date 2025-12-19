@@ -7,6 +7,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Reminders } from "@/components/reminders";
 import { TransferAlertDialog } from "@/components/popup-transfer";
+import { ApproveDeletionDialog } from "@/components/popup-deletion";
 import { OfflineDialog } from "@/components/offline-dialog";
 
 const geistSans = Geist({
@@ -51,6 +52,7 @@ export default function RootLayout({
           >
             <Reminders />
             <TransferAlertDialog />
+            <ApproveDeletionDialog />
             <Analytics/>
             {children}
             <OfflineDialog />

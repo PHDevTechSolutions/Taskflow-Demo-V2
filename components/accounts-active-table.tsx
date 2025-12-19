@@ -99,8 +99,11 @@ export function AccountsTable({
         // Start filtering, exclude removed (case-insensitive)
         let data = localPosts.filter(
             (item) =>
-                item.status?.toLowerCase() !== "removed" &&
-                normalizedAllowedTypes.includes(item.type_client?.toLowerCase() ?? "")
+                item.status &&
+                item.type_client &&
+                // Exclude items where status is either "removed" or "approved for deletion"
+                !["removed", "approved for deletion", "subject for transfer"].includes(item.status.toLowerCase()) &&
+                normalizedAllowedTypes.includes(item.type_client.toLowerCase())
         );
 
         data = data.filter((item) => {
