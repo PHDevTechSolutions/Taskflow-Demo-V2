@@ -267,7 +267,7 @@ export function SOSheet(props: Props) {
                 <div>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Call Type</FieldLabel>
+                            <FieldLabel>Type</FieldLabel>
 
                             <RadioGroup
                                 value={callType}
