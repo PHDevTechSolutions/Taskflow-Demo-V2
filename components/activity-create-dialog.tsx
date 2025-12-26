@@ -361,7 +361,7 @@ export function CreateActivityDialog({
         setProgress(0);
         setExportStatusMessage("Initializing product table creation...");
 
-        const duration = 20000; // 20 seconds total progress duration
+        const duration = 1000; // 20 seconds total progress duration
         const intervalTime = 50; // update every 50ms
         const totalSteps = duration / intervalTime;
         let step = 0;
