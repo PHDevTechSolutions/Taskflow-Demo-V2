@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -15,334 +15,223 @@ import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/utils/supabase";
 
+/* ================= TYPES ================= */
+
 interface Activity {
-    id: string;
-    scheduled_date: string;
-    account_reference_number: string;
-    status: string;
-    date_updated: string;
-    activity_reference_number: string;
-    // Add other fields as needed
+  id: string;
+  scheduled_date: string;
+  account_reference_number: string;
+  status: string;
+  date_updated: string;
+  activity_reference_number: string;
 }
 
 interface Company {
-    account_reference_number: string;
-    company_name: string;
-    contact_number?: string;
-    type_client?: string;
-    email_address?: string;
-    contact_person?: string;
-    address?: string;
-    // Add other fields as needed
-}
-
-interface HistoryItem {
-    activity_reference_number: string;
-    // other fields
+  account_reference_number: string;
+  company_name: string;
 }
 
 interface UserDetails {
-    referenceid: string;
+  referenceid: string;
 }
 
 const allowedStatuses = ["Assisted", "Quote-Done"];
 
+/* ================= HELPERS ================= */
+
+const isScheduledToday = (dateStr: string) => {
+  const today = new Date();
+  const date = new Date(dateStr);
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+};
+
+const getDismissedActivities = (): string[] => {
+  if (typeof window === "undefined") return [];
+  return JSON.parse(localStorage.getItem("dismissedActivities") || "[]");
+};
+
+/* ================= COMPONENT ================= */
+
 export function ActivityToday() {
-    const searchParams = useSearchParams();
-    const { userId, setUserId } = useUser();
-    const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "" });
-    const [companies, setCompanies] = useState<Company[]>([]);
-    const [activities, setActivities] = useState<Activity[]>([]);
-    const [history, setHistory] = useState<HistoryItem[]>([]);
-    const [open, setOpen] = useState(false);
-    const [showDismissConfirm, setShowDismissConfirm] = useState(false);
-    const [loadingUser, setLoadingUser] = useState(false);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [loadingHistory, setLoadingHistory] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
-    const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const { userId, setUserId } = useUser();
 
-    const queryUserId = searchParams?.get("id") ?? "";
-    const referenceid = userDetails.referenceid;
+  const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "" });
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
-    // Helper: check if date string is today (local)
-    const isScheduledToday = (dateStr: string) => {
-        const today = new Date();
-        const date = new Date(dateStr);
-        return (
-            date.getFullYear() === today.getFullYear() &&
-            date.getMonth() === today.getMonth() &&
-            date.getDate() === today.getDate()
-        );
-    };
+  const [open, setOpen] = useState(false);
+  const [showDismissConfirm, setShowDismissConfirm] = useState(false);
 
-    // Sync URL param with userId context
-    useEffect(() => {
-        if (queryUserId && queryUserId !== userId) {
-            setUserId(queryUserId);
-        }
-    }, [queryUserId, userId, setUserId]);
+  const queryUserId = searchParams?.get("id") ?? "";
+  const referenceid = userDetails.referenceid;
 
-    // Fetch user details
-    useEffect(() => {
-        if (!userId) {
-            setError("User ID is missing.");
-            setLoadingUser(false);
-            return;
-        }
-        const fetchUserData = async () => {
-            setError(null);
-            setLoadingUser(true);
-            try {
-                const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-                if (!response.ok) throw new Error("Failed to fetch user data");
-                const data = await response.json();
+  /* ================= SYNC USER ID ================= */
 
-                setUserDetails({
-                    referenceid: data.ReferenceID || "",
-                });
-
-                toast.success("User data loaded successfully!");
-            } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error("Failed to connect to server. Please try again later or refresh your network connection");
-            } finally {
-                setLoadingUser(false);
-            }
-        };
-        fetchUserData();
-    }, [userId]);
-
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
-
-    // Fetch activities
-    const fetchActivities = useCallback(async () => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
-        setLoadingActivities(true);
-        setErrorActivities(null);
-
-        try {
-            const res = await fetch(
-                `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
-                {
-                    cache: "no-store",
-                    headers: {
-                        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                        Pragma: "no-cache",
-                        Expires: "0",
-                    },
-                }
-            );
-
-            if (!res.ok) {
-                const json = await res.json();
-                throw new Error(json.error || "Failed to fetch activities");
-            }
-
-            const json = await res.json();
-            setActivities(json.data || []);
-        } catch (error: any) {
-            setErrorActivities(error.message || "Error fetching activities");
-        } finally {
-            setLoadingActivities(false);
-        }
-    }, [referenceid]);
-
-    // Fetch history
-    const fetchHistory = useCallback(async () => {
-        if (!referenceid) {
-            setHistory([]);
-            return;
-        }
-        setLoadingHistory(true);
-        setErrorHistory(null);
-
-        try {
-            const res = await fetch(
-                `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
-            );
-
-            if (!res.ok) {
-                const json = await res.json();
-                throw new Error(json.error || "Failed to fetch history");
-            }
-
-            const json = await res.json();
-            setHistory(json.activities || []);
-        } catch (error: any) {
-            setErrorHistory(error.message || "Error fetching history");
-        } finally {
-            setLoadingHistory(false);
-        }
-    }, [referenceid]);
-
-    // Initial fetch + realtime subscriptions
-    useEffect(() => {
-        if (!referenceid) return;
-
-        fetchActivities();
-        fetchHistory();
-
-        const activityChannel = supabase
-            .channel(`activity-${referenceid}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "activity",
-                    filter: `referenceid=eq.${referenceid}`,
-                },
-                () => {
-                    fetchActivities();
-                }
-            )
-            .subscribe();
-
-        const historyChannel = supabase
-            .channel(`history-${referenceid}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "history",
-                    filter: `referenceid=eq.${referenceid}`,
-                },
-                () => {
-                    fetchHistory();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            activityChannel.unsubscribe();
-            supabase.removeChannel(activityChannel);
-
-            historyChannel.unsubscribe();
-            supabase.removeChannel(historyChannel);
-        };
-    }, [referenceid, fetchActivities, fetchHistory]);
-
-    // Merge activities with company info and filter for today & allowed status
-    const mergedActivities = activities
-        .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
-        .filter((a) => isScheduledToday(a.scheduled_date))
-        .filter((a) => allowedStatuses.includes(a.status))
-        .map((activity) => {
-            const company = companies.find(
-                (c) => c.account_reference_number === activity.account_reference_number
-            );
-
-            return {
-                ...activity,
-                company_name: company?.company_name ?? "Unknown Company",
-            };
-        });
-
-    // Show dialog if there are activities today
-    useEffect(() => {
-        if (mergedActivities.length > 0) {
-            setOpen(true);
-        } else {
-            setOpen(false);
-        }
-    }, [mergedActivities]);
-
-    function handleDismiss() {
-        setShowDismissConfirm(true);
+  useEffect(() => {
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
     }
+  }, [queryUserId, userId, setUserId]);
 
-    function confirmDismiss() {
-        // For example, save dismissed activity IDs in localStorage to prevent re-showing
-        const dismissedActivities: string[] = JSON.parse(localStorage.getItem("dismissedActivities") || "[]");
-        const newDismissed = [...dismissedActivities, ...mergedActivities.map((a) => a.id)];
-        localStorage.setItem("dismissedActivities", JSON.stringify(newDismissed));
+  /* ================= FETCH USER ================= */
 
-        setShowDismissConfirm(false);
-        setOpen(false);
-    }
+  useEffect(() => {
+    if (!userId) return;
 
-    function cancelDismiss() {
-        setShowDismissConfirm(false);
-    }
+    (async () => {
+      try {
+        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
 
-    if (loadingUser || loadingCompanies || loadingActivities || loadingHistory) return null;
-    if (error || errorCompanies || errorActivities || errorHistory) return null;
+        setUserDetails({ referenceid: data.ReferenceID });
+      } catch {
+        toast.error("Failed to load user");
+      }
+    })();
+  }, [userId]);
 
-    return (
-        <>
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Activities Scheduled for Today</DialogTitle>
-                        <DialogDescription>
-                            {mergedActivities.length > 0 ? (
-                                <>
-                                    <p>
-                                        You have {mergedActivities.length} {mergedActivities.length === 1 ? "activity" : "activities"} scheduled for today:
-                                    </p>
-                                    <ul className="list-disc pl-6 space-y-2 mt-3 max-h-60 overflow-y-auto">
-                                        {mergedActivities.map((activity) => (
-                                            <li key={activity.id}>
-                                                <strong>{activity.company_name}</strong><br /> Scheduled on:{" "}
-                                                {new Date(activity.scheduled_date).toLocaleDateString(undefined, {
-                                                    year: "numeric",
-                                                    month: "long",
-                                                    day: "numeric",
-                                                })}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </>
-                            ) : (
-                                <p>No activities scheduled for today.</p>
-                            )}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button onClick={handleDismiss}>Dismiss</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+  /* ================= FETCH COMPANIES ================= */
 
-            <Dialog open={showDismissConfirm} onOpenChange={setShowDismissConfirm}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Confirm Dismiss</DialogTitle>
-                        <DialogDescription>
-                            Once you dismiss this alert, you won't see it again until new activities are scheduled for today.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={cancelDismiss}>Cancel</Button>
-                        <Button onClick={confirmDismiss}>Confirm</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </>
+  useEffect(() => {
+    if (!referenceid) return;
+
+    fetch("/api/com-fetch-companies")
+      .then((r) => r.json())
+      .then((d) => setCompanies(d.data || []));
+  }, [referenceid]);
+
+  /* ================= FETCH ACTIVITIES ================= */
+
+  const fetchActivities = useCallback(async () => {
+    if (!referenceid) return;
+
+    const res = await fetch(
+      `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
+      { cache: "no-store" }
     );
+
+    const json = await res.json();
+    setActivities(json.data || []);
+  }, [referenceid]);
+
+  /* ================= REALTIME ================= */
+
+  useEffect(() => {
+    if (!referenceid) return;
+
+    fetchActivities();
+
+    const channel = supabase
+      .channel(`activity-${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "activity",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        fetchActivities
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, [referenceid, fetchActivities]);
+
+  /* ================= MERGED + FILTERED ================= */
+
+  const dismissedIds = getDismissedActivities();
+
+  const mergedActivities = activities
+    .filter((a) => isScheduledToday(a.scheduled_date))
+    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => !dismissedIds.includes(a.id))
+    .map((activity) => {
+      const company = companies.find(
+        (c) => c.account_reference_number === activity.account_reference_number
+      );
+
+      return {
+        ...activity,
+        company_name: company?.company_name ?? "Unknown Company",
+      };
+    });
+
+  /* ================= AUTO OPEN ================= */
+
+  useEffect(() => {
+    setOpen(mergedActivities.length > 0);
+  }, [mergedActivities]);
+
+  /* ================= DISMISS ================= */
+
+  function handleDismiss() {
+    setShowDismissConfirm(true);
+  }
+
+  function confirmDismiss() {
+    const stored = getDismissedActivities();
+    const updated = Array.from(
+      new Set([...stored, ...mergedActivities.map((a) => a.id)])
+    );
+
+    localStorage.setItem("dismissedActivities", JSON.stringify(updated));
+
+    setShowDismissConfirm(false);
+    setOpen(false);
+  }
+
+  /* ================= RENDER ================= */
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activities Scheduled for Today</DialogTitle>
+            <DialogDescription>
+              <ul className="list-disc pl-6 space-y-2 mt-3 max-h-60 overflow-y-auto">
+                {mergedActivities.map((a) => (
+                  <li key={a.id}>
+                    <strong>{a.company_name}</strong>
+                    <br />
+                    Scheduled today
+                  </li>
+                ))}
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={handleDismiss}>Dismiss</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDismissConfirm} onOpenChange={setShowDismissConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Dismiss</DialogTitle>
+            <DialogDescription>
+              This alert will only reappear if new activities are scheduled today.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDismissConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDismiss}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
