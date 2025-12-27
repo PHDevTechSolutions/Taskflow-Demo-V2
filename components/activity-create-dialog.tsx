@@ -14,6 +14,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { CancelDialog } from "./activity-cancel-dialog";
 import { OutboundSheet } from "./activity-sheet-outbound";
 import { InboundSheet } from "./activity-sheet-inbound";
+import { ViberRepliesSheet } from "./activity-sheet-viber-replies";
+import { FBMarketplaceSheet } from "./activity-sheet-fb-marketplace";
 import { QuotationSheet } from "./activity-sheet-quotation";
 import { SOSheet } from "./activity-sheet-so";
 import { DRSheet } from "./activity-sheet-dr";
@@ -741,6 +743,96 @@ export function CreateActivityDialog({
                                                         desc:
                                                             "Handle completed transactions including delivery confirmation, closing documentation, and final client coordination.",
                                                     },
+                                                    {
+                                                        value: "Viber Replies / Messages",
+                                                        title: "Viber Replies / Messages",
+                                                        desc:
+                                                            "Handle Viber replies and messages from clients.",
+                                                    },
+                                                    {
+                                                        value: "Admin - Supplier Accreditation",
+                                                        title: "Admin - Supplier Accreditation",
+                                                        desc:
+                                                            "Handle supplier accreditation tasks.",
+                                                    },
+                                                    {
+                                                        value: "Admin - Credit Terms Application",
+                                                        title: "Admin - Credit Terms Application",
+                                                        desc:
+                                                            "Handle credit terms application tasks.",
+                                                    },
+                                                    {
+                                                        value: "Accounting Concerns",
+                                                        title: "Accounting Concerns",
+                                                        desc:
+                                                            "Handle accounting concerns.",
+                                                    },
+                                                    {
+                                                        value: "After Sales Refunds",
+                                                        title: "After Sales Refunds",
+                                                        desc:
+                                                            "Handle after sales refunds.",
+                                                    },
+                                                    {
+                                                        value: "After Sales Repair / Replacement",
+                                                        title: "After Sales Repair / Replacement",
+                                                        desc:
+                                                            "Handle after sales repair or replacement.",
+                                                    },
+                                                    {
+                                                        value: "Bidding Preparations",
+                                                        title: "Bidding Preparations",
+                                                        desc:
+                                                            "Handle bidding preparations.",
+                                                    },
+                                                    {
+                                                        value: "Customer Orders",
+                                                        title: "Customer Orders",
+                                                        desc:
+                                                            "Handle customer orders.",
+                                                    },
+                                                    {
+                                                        value: "Customer Inquiry Sales",
+                                                        title: "Customer Inquiry Sales",
+                                                        desc:
+                                                            "Handle customer inquiry sales.",
+                                                    },
+                                                    {
+                                                        value: "Delivery Concern",
+                                                        title: "Delivery Concern",
+                                                        desc:
+                                                            "Handle delivery concerns.",
+                                                    },
+                                                    {
+                                                        value: "FB Marketplace Replies / Messages",
+                                                        title: "FB Marketplace Replies / Messages",
+                                                        desc:
+                                                            "Handle FB Marketplace replies and messages from clients.",
+                                                    },
+                                                    {
+                                                        value: "Follow Up",
+                                                        title: "Follow Up",
+                                                        desc:
+                                                            "Handle follow-up activities.",
+                                                    },
+                                                    {
+                                                        value: "Sample Requests",
+                                                        title: "Sample Requests",
+                                                        desc:
+                                                            "Handle sample requests.",
+                                                    },
+                                                    {
+                                                        value: "Site Visits / Demos",
+                                                        title: "Site Visits / Demos",
+                                                        desc:
+                                                            "Handle site visits and demos.",
+                                                    },
+                                                    {
+                                                        value: "Technical Concerns",
+                                                        title: "Technical Concerns",
+                                                        desc:
+                                                            "Handle technical concerns.",
+                                                    },
                                                 ].map((item) => (
                                                     <FieldLabel key={item.value}>
                                                         <Field orientation="horizontal">
@@ -904,6 +996,62 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+                                    handleBack={handleBack}
+                                    handleNext={handleNext}
+                                    handleSave={handleSave}
+                                />
+                            )}
+
+                            {
+                                (
+                                    typeActivity === "Viber Replies / Messages" ||
+                                    typeActivity === "Admin - Supplier Accreditation" ||
+                                    typeActivity === "Admin - Credit Terms Application" ||
+                                    typeActivity === "Accounting Concerns" ||
+                                    typeActivity === "After Sales Refunds" ||
+                                    typeActivity === "After Sales Repair / Replacement" ||
+                                    typeActivity === "Bidding Preparations" ||
+                                    typeActivity === "Customer Orders" ||
+                                    typeActivity === "Customer Inquiry Sales" ||
+                                    typeActivity === "Delivery Concern" ||
+                                    typeActivity === "Follow Up" ||
+                                    typeActivity === "Sample Requests" ||
+                                    typeActivity === "Site Visits / Demos" ||
+                                    typeActivity === "Technical Concerns"
+                                ) && (
+                                    <ViberRepliesSheet
+                                        step={step}
+                                        setStep={setStep}
+                                        source={source}
+                                        setSource={setSource}
+                                        remarks={remarks}
+                                        setRemarks={setRemarks}
+                                        status={status}
+                                        setStatus={setStatus}
+                                        typeClient={typeClient}
+                                        setTypeClient={setTypeClient}
+                                        handleBack={handleBack}
+                                        handleNext={handleNext}
+                                        handleSave={handleSave}
+                                    />
+                                )
+                            }
+
+                            {typeActivity === "FB Marketplace Replies / Messages" && (
+                                <FBMarketplaceSheet
+                                    step={step}
+                                    setStep={setStep}
+                                    source={source}
+                                    setSource={setSource}
+                                    callType={callType}
+                                    setCallType={setCallType}
+                                    remarks={remarks}
+                                    setRemarks={setRemarks}
+                                    status={status}
+                                    setStatus={setStatus}
+
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}

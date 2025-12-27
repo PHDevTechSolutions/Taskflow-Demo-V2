@@ -69,7 +69,7 @@ interface Props {
 
 const Quotation_SOURCES = [
   { label: "Existing Client", description: "Clients with active accounts or previous transactions.", },
-  { label: "CSR Inquiry", description: "Customer Service Representative inquiries.", },
+  { label: "CSR Endorsement", description: "Customer Service Representative inquiries.", },
   { label: "Government", description: "Calls coming from government agencies.", },
   { label: "Philgeps Website", description: "Inquiries from Philgeps online platform.", },
   { label: "Philgeps", description: "Other Philgeps related contacts.", },
@@ -391,12 +391,12 @@ export function QuotationSheet(props: Props) {
     typeClient === "CSR Client"
       ? [
         {
-          label: "CSR Inquiry",
+          label: "CSR Endorsement",
           description: "Customer Service Representative inquiries.",
         },
       ]
       : Quotation_SOURCES.filter(
-        (source) => source.label !== "CSR Inquiry"
+        (source) => source.label !== "CSR Endorsement"
       );
 
   return (

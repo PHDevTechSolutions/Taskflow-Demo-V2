@@ -38,6 +38,22 @@ interface Activity {
     date_created: string;
 }
 
+interface HistoryItem {
+    id: string;
+    activity_reference_number: string;
+    callback?: string | null;
+    date_followup?: string | null;
+    quotation_number?: string | null;
+    quotation_amount?: number | null;
+    so_number?: string | null;
+    so_amount?: number | null;
+    call_type?: string;
+    ticket_reference_number?: string;
+    source?: string;
+    call_status?: string;
+    type_activity: string;
+}
+
 interface NewTaskProps {
     referenceid: string;
     target_quota?: string;
@@ -75,6 +91,9 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+    const [errorHistory, setErrorHistory] = useState<string | null>(null);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [history, setHistory] = useState<HistoryItem[]>([]);
 
     // Fetch companies with no cache
     useEffect(() => {
@@ -142,34 +161,86 @@ export const Progress: React.FC<NewTaskProps> = ({
         }
     }, [referenceid]);
 
+    const fetchHistory = useCallback(async () => {
+        if (!referenceid) {
+            setHistory([]);
+            return;
+        }
+        setLoadingHistory(true);
+        setErrorHistory(null);
+
+        try {
+            const res = await fetch(
+                `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
+            );
+
+            if (!res.ok) {
+                const json = await res.json();
+                throw new Error(json.error || "Failed to fetch history");
+            }
+
+            const json = await res.json();
+            setHistory(json.activities || []);
+        } catch (error: any) {
+            setErrorHistory(error.message || "Error fetching history");
+        } finally {
+            setLoadingHistory(false);
+        }
+    }, [referenceid]);
+
     // Initial fetch + realtime subscription to keep UI fresh
     useEffect(() => {
-  if (!referenceid) return;
+        if (!referenceid) return;
 
-  fetchActivities(); // initial fetch
-
-  const channel = supabase
-    .channel(`activity-${referenceid}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "activity",
-        filter: `referenceid=eq.${referenceid}`,
-      },
-      (payload) => {
-        console.log("Realtime payload received:", payload);
+        // Initial fetches
         fetchActivities();
-      }
-    )
-    .subscribe();
+        fetchHistory();
 
-  return () => {
-    channel.unsubscribe();
-    supabase.removeChannel(channel);
-  };
-}, [referenceid, fetchActivities]);
+        // Subscribe realtime for activities
+        const activityChannel = supabase
+            .channel(`activity-${referenceid}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "activity",
+                    filter: `referenceid=eq.${referenceid}`,
+                },
+                (payload) => {
+                    console.log("Activity realtime update:", payload);
+                    fetchActivities();
+                }
+            )
+            .subscribe();
+
+        // Subscribe realtime for history
+        const historyChannel = supabase
+            .channel(`history-${referenceid}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "history",
+                    filter: `referenceid=eq.${referenceid}`,
+                },
+                (payload) => {
+                    console.log("History realtime update:", payload);
+                    fetchHistory();
+                }
+            )
+            .subscribe();
+
+        // Cleanup subscriptions properly
+        return () => {
+            activityChannel.unsubscribe();
+            supabase.removeChannel(activityChannel);
+
+            historyChannel.unsubscribe();
+            supabase.removeChannel(historyChannel);
+        };
+    }, [referenceid, fetchActivities, fetchHistory]);
 
     const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
         if (!range) return true;
@@ -191,6 +262,12 @@ export const Progress: React.FC<NewTaskProps> = ({
             const company = companies.find(
                 (c) => c.account_reference_number === activity.account_reference_number
             );
+
+            // All history related to this activity
+            const relatedHistoryItems = history.filter(
+                (h) => h.activity_reference_number === activity.activity_reference_number
+            );
+
             return {
                 ...activity,
                 company_name: company?.company_name ?? "Unknown Company",
@@ -199,6 +276,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                 contact_person: company?.contact_person ?? "",
                 email_address: company?.email_address ?? "",
                 address: company?.address ?? "",
+                relatedHistoryItems,
             };
         })
         .sort(
@@ -350,6 +428,19 @@ export const Progress: React.FC<NewTaskProps> = ({
                                         <Badge variant={badgeColor} className="text-[8px]">
                                             {item.status.replace("-", " ")}
                                         </Badge>
+                                        {
+                                            item.relatedHistoryItems.some(
+                                                (h: HistoryItem) =>
+                                                    !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
+                                            ) && (
+                                                <Badge variant="default" className="text-[8px]">
+                                                    {item.relatedHistoryItems
+                                                        .map((h: HistoryItem) => h.type_activity ?? "")
+                                                        .filter((v) => v && v !== "-")
+                                                        .join(", ")
+                                                        .toUpperCase()}
+                                                </Badge>
+                                            )}
                                     </div>
                                 </div>
 

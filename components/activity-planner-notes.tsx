@@ -588,39 +588,7 @@ export const Notes: React.FC<NotesProps> = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Admin-Supplier Accreditation">
-                      Admin-Supplier Accreditation
-                    </SelectItem>
-                    <SelectItem value="Admin-Credit Terms Application">
-                      Admin-Credit Terms Application
-                    </SelectItem>
-                    <SelectItem value="Accounting Concern">
-                      Accounting Concern
-                    </SelectItem>
-                    <SelectItem value="After Sales Refund">
-                      After Sales Refund
-                    </SelectItem>
-                    <SelectItem value="After Sales Repair/Replacement">
-                      After Sales Repair/Replacement
-                    </SelectItem>
-                    <SelectItem value="Bidding Preparation">
-                      Bidding Preparation
-                    </SelectItem>
-                    <SelectItem value="Customer Order">Customer Order</SelectItem>
-                    <SelectItem value="Customer Inquiry Sales">
-                      Customer Inquiry Sales
-                    </SelectItem>
-                    <SelectItem value="Delivery Concern">
-                      Delivery Concern
-                    </SelectItem>
                     <SelectItem value="Documentation">Documentation</SelectItem>
-                    <SelectItem value="FB Marketplace">FB Marketplace</SelectItem>
-                    <SelectItem value="Follow Up">Follow Up</SelectItem>
-                    <SelectItem value="Sample Request">Sample Request</SelectItem>
-                    <SelectItem value="Technical Concern">
-                      Technical Concern
-                    </SelectItem>
-                    <SelectItem value="Viber Replies">Viber Replies</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>

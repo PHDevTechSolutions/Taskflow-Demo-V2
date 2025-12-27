@@ -8,72 +8,20 @@ import { Textarea } from "@/components/ui/textarea";
 
 const INBOUND_SOURCES = [
     {
-        label: "Existing Client",
-        description: "Clients with active accounts or previous transactions.",
-    },
-    {
-        label: "CSR Endorsement",
-        description: "Customer Service Representative inquiries.",
-    },
-    {
-        label: "Government",
-        description: "Calls coming from government agencies.",
-    },
-    {
-        label: "Philgeps Website",
-        description: "Inquiries from Philgeps online platform.",
-    },
-    {
-        label: "Philgeps",
-        description: "Other Philgeps related contacts.",
-    },
-    {
-        label: "Distributor",
-        description: "Calls from product distributors or resellers.",
-    },
-    {
-        label: "Modern Trade",
-        description: "Contacts from retail or modern trade partners.",
-    },
-    {
         label: "Facebook Marketplace",
         description: "Leads or inquiries from Facebook Marketplace.",
-    },
-    {
-        label: "Walk-in Showroom",
-        description: "Visitors physically coming to showroom.",
     },
 ];
 
 const INBOUND_CALL_TYPES = [
     {
-        label: "After Sales",
-        description: "Support after purchase or service completion — including warranty, replacement, certificates.",
+        label: "Reply Message Concern",
+        description: "Issues or questions regarding reply messages.",
     },
 
     {
-        label: "Delivery Concern",
-        description: "Issues or questions regarding delivery.",
-    },
-    {
-        label: "Accounting Concern",
-        description: "Billing or payment related inquiries.",
-    },
-    {
-        label: "Technical / Product Concern",
-        description: "Product or service technical support.",
-    },
-    {
-        label: "Request for Quotation",
-        description: "Potential client requesting price info.",
-    },
-    {
-        label: "Inquiries",
-        description: "General questions or information requests.",
-    },
-    {
-        label: "Follow Up",
-        description: "Following up on previous communication.",
+        label: "Posting",
+        description: "Assistance with creating or managing postings.",
     },
 ];
 
@@ -103,7 +51,7 @@ interface InboundSheetProps {
     handleSave: () => void;
 }
 
-export function InboundSheet({
+export function FBMarketplaceSheet({
     step,
     setStep,
     source,

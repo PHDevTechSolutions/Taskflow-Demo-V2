@@ -8,6 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 const INBOUND_SOURCES = [
     {
+        label: "New Client",
+        description: "Clients with new accounts.",
+    },
+    {
         label: "Existing Client",
         description: "Clients with active accounts or previous transactions.",
     },
@@ -45,53 +49,24 @@ const INBOUND_SOURCES = [
     },
 ];
 
-const INBOUND_CALL_TYPES = [
-    {
-        label: "After Sales",
-        description: "Support after purchase or service completion — including warranty, replacement, certificates.",
-    },
-
-    {
-        label: "Delivery Concern",
-        description: "Issues or questions regarding delivery.",
-    },
-    {
-        label: "Accounting Concern",
-        description: "Billing or payment related inquiries.",
-    },
-    {
-        label: "Technical / Product Concern",
-        description: "Product or service technical support.",
-    },
-    {
-        label: "Request for Quotation",
-        description: "Potential client requesting price info.",
-    },
-    {
-        label: "Inquiries",
-        description: "General questions or information requests.",
-    },
-    {
-        label: "Follow Up",
-        description: "Following up on previous communication.",
-    },
-];
-
 const STATUS_OPTIONS = [
     {
         label: "Assisted",
-        description: "Call handled successfully.",
+        description: "Client was assisted and provided with the needed information or support.",
         value: "Assisted",
+    },
+    {
+        label: "Not Assisted",
+        description: "Unable to assist the client due to incomplete info, missed call, no response, seen, etc.",
+        value: "Not Assisted",
     },
 ];
 
-interface InboundSheetProps {
+interface ViberRepliesSheetProps {
     step: number;
     setStep: React.Dispatch<React.SetStateAction<number>>;
     source: string;
     setSource: (value: string) => void;
-    callType: string;
-    setCallType: (value: string) => void;
     remarks: string;
     setRemarks: (value: string) => void;
     status: string;
@@ -103,13 +78,11 @@ interface InboundSheetProps {
     handleSave: () => void;
 }
 
-export function InboundSheet({
+export function ViberRepliesSheet({
     step,
     setStep,
     source,
     setSource,
-    callType,
-    setCallType,
     remarks,
     setRemarks,
     status,
@@ -119,7 +92,7 @@ export function InboundSheet({
     handleBack,
     handleNext,
     handleSave,
-}: InboundSheetProps) {
+}: ViberRepliesSheetProps) {
     // If status empty, default to "Assisted"
     useEffect(() => {
         if (!status) {
@@ -148,8 +121,6 @@ export function InboundSheet({
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Source</FieldLabel>
-
-
                             <RadioGroup value={source} onValueChange={setSource}>
                                 {filteredSources.map(({ label, description }) => (
                                     <FieldLabel key={label}>
@@ -183,53 +154,8 @@ export function InboundSheet({
                 </>
             )}
 
-            {/* Step 3: Call Type */}
+            {/* Step 3: Remarks and Status */}
             {step === 3 && (
-                <>
-                    <FieldGroup>
-                        <FieldSet>
-                            <FieldLabel>Call Type</FieldLabel>
-
-                            <RadioGroup
-                                value={callType}
-                                onValueChange={setCallType}
-                                className="space-y-4"
-                            >
-                                {INBOUND_CALL_TYPES.map(({ label, description }) => (
-                                    <FieldLabel key={label}>
-                                        <Field orientation="horizontal" className="w-full items-start">
-                                            {/* LEFT */}
-                                            <FieldContent className="flex-1">
-                                                <FieldTitle>{label}</FieldTitle>
-                                                <FieldDescription>{description}</FieldDescription>
-
-                                                {/* Buttons only show if selected */}
-                                                {callType === label && (
-                                                    <div className="mt-4 flex gap-2">
-                                                        <Button type="button" onClick={handleBack} variant="outline">
-                                                            Back
-                                                        </Button>
-                                                        <Button type="button" onClick={handleNext} disabled={!callType}>
-                                                            Next
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </FieldContent>
-
-                                            {/* RIGHT */}
-                                            <RadioGroupItem value={label} />
-                                        </Field>
-                                    </FieldLabel>
-                                ))}
-                            </RadioGroup>
-                        </FieldSet>
-                    </FieldGroup>
-
-                </>
-            )}
-
-            {/* Step 4: Remarks and Status */}
-            {step === 4 && (
                 <>
                     <FieldGroup>
                         <FieldSet>
