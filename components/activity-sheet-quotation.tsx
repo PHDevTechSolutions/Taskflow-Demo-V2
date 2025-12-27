@@ -382,17 +382,22 @@ export function QuotationSheet(props: Props) {
     });
   }
 
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFollowUpDate(e.target.value);
+  };
+
+
   const filteredSources =
-        typeClient === "CSR Client"
-            ? [
-                {
-                    label: "CSR Inquiry",
-                    description: "Customer Service Representative inquiries.",
-                },
-            ]
-            : Quotation_SOURCES.filter(
-                (source) => source.label !== "CSR Inquiry"
-            );
+    typeClient === "CSR Client"
+      ? [
+        {
+          label: "CSR Inquiry",
+          description: "Customer Service Representative inquiries.",
+        },
+      ]
+      : Quotation_SOURCES.filter(
+        (source) => source.label !== "CSR Inquiry"
+      );
 
   return (
     <>
@@ -1076,20 +1081,34 @@ export function QuotationSheet(props: Props) {
           <FieldGroup>
             <FieldSet>
               {followUpDate ? (
-                <Alert variant="default" className="mb-4 flex items-center gap-2">
+                <Alert variant="default" className="mb-4 flex flex-col gap-2">
                   <div>
                     <AlertTitle>Follow Up Date:</AlertTitle>
                     <AlertDescription>
                       {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
                     </AlertDescription>
                   </div>
+                  <p className="font-semibold text-red-600">Try Using Manual?</p>
+                  <Input
+                    type="date"
+                    value={followUpDate}
+                    onChange={handleDateChange}
+                    aria-label="Edit follow up date"
+                    className="max-w-xs"
+                  />
                 </Alert>
               ) : (
-                <Alert variant="destructive" className="mb-4">
+                <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
                   <AlertTitle>No Follow Up Date set</AlertTitle>
                   <AlertDescription>
                     Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
                   </AlertDescription>
+                  <Input
+                    type="date"
+                    onChange={handleDateChange}
+                    aria-label="Set follow up date"
+                    className="max-w-xs"
+                  />
                 </Alert>
               )}
 
