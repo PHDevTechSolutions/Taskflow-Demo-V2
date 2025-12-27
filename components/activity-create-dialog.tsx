@@ -673,7 +673,7 @@ export function CreateActivityDialog({
       shadow-[0_0_10px_rgba(16,185,129,0.7)]
       -translate-x-1/2
       font-mono font-semibold
-      text-xl
+      text-sm
       select-none
       flex items-center
       space-x-1
