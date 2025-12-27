@@ -651,67 +651,136 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {/* OB Calls for Today */}
               {totalTodayCount > 0 && (
                 <section>
-                  <h2 className="text-xs font-bold mb-2">OB Calls for Today ({totalTodayCount})</h2>
-                  <Separator />
-                  <Accordion type="single" collapsible className="w-full">
-                    {clusterOrder.map((cluster) =>
-                      groupedToday[cluster]?.length ? (
-                        <AccordionItem key={cluster} value={cluster}>
-                          <AccordionTrigger className="text-xs font-semibold capitalize">
-                            {cluster} ({groupedToday[cluster].length})
-                          </AccordionTrigger>
-                          <AccordionContent className="flex flex-col gap-2 p-2 text-xs text-gray-700">
-                            {groupedToday[cluster].map((account) => (
-                              <div key={account.id} className="flex justify-between items-center p-1">
-                                <div className="truncate">{account.company_name}</div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="cursor-pointer"
-                                  onClick={() => handleAdd(account)}
-                                >
-                                  Add
-                                </Button>
+                  <h2 className="text-xs font-bold mb-4">
+                    OB Calls Account for Today ({totalTodayCount})
+                  </h2>
+
+                  {clusterOrder.map((cluster) => {
+                    const clusterAccounts = groupedToday[cluster];
+                    if (!clusterAccounts || clusterAccounts.length === 0) return null;
+
+                    return (
+                      <div key={cluster} className="mb-4">
+                        <Accordion type="single" collapsible className="w-full">
+                          {clusterAccounts.map((account) => (
+                            <AccordionItem
+                              key={account.id}
+                              value={account.id}
+                              className="bg-green-100 border border-green-300 rounded mb-2"
+                            >
+                              <div className="flex justify-between items-center p-2 select-none">
+                                <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                                  {account.company_name}
+                                </AccordionTrigger>
+
+                                <div className="flex gap-2 ml-4">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdd(account);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        handleAdd(account);
+                                      }
+                                    }}
+                                  >
+                                    Add
+                                  </Button>
+                                </div>
                               </div>
-                            ))}
-                          </AccordionContent>
-                        </AccordionItem>
-                      ) : null
-                    )}
-                  </Accordion>
+
+                              <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-green-800">
+                                <p>
+                                  <strong>Contact:</strong> {account.contact_number}
+                                </p>
+                                <p>
+                                  <strong>Email:</strong> {account.email_address}
+                                </p>
+                                <p>
+                                  <strong>Client Type:</strong> {account.type_client}
+                                </p>
+                                <p>
+                                  <strong>Address:</strong> {account.address}
+                                </p>
+                                <p className="text-[8px]">{account.account_reference_number}</p>
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      </div>
+                    );
+                  })}
                 </section>
               )}
 
               {/* Available OB Calls */}
               {totalAvailableCount > 0 && firstAvailableCluster && (
                 <section>
-                  <h2 className="text-xs font-bold mb-2">
-                    Available OB Call ({totalAvailableCount})
+                  <h2 className="text-xs font-bold mb-4">
+                    Available OB Calls ({groupedNull[firstAvailableCluster].length})
                   </h2>
-                  <Separator />
+
+                  <Alert>
+                    <CheckCircle2Icon />
+                    <AlertTitle className="text-xs">
+                      Cluster Series: {firstAvailableCluster.toUpperCase()}
+                    </AlertTitle>
+                    <AlertDescription className="text-xs">
+                      This alert provides important information about the selected cluster.
+                    </AlertDescription>
+                  </Alert>
+
                   <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value={firstAvailableCluster}>
-                      <AccordionTrigger className="text-xs font-semibold capitalize">
-                        {firstAvailableCluster} ({groupedNull[firstAvailableCluster].length})
-                      </AccordionTrigger>
-                      <AccordionContent className="flex flex-col gap-2 p-2 text-xs text-gray-700">
-                        {groupedNull[firstAvailableCluster].map((account) => (
-                          <div key={account.id} className="flex justify-between items-center p-1">
-                            <div className="truncate">{account.company_name}</div>
+                    {groupedNull[firstAvailableCluster].map((account) => (
+                      <AccordionItem key={account.id} value={account.id}>
+                        <div className="flex justify-between items-center p-2 select-none">
+                          <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                            {account.company_name}
+                          </AccordionTrigger>
+
+                          <div className="flex gap-2 ml-4">
                             <Button
                               type="button"
                               variant="outline"
-                              size="sm"
                               className="cursor-pointer"
-                              onClick={() => handleAdd(account)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAdd(account);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  handleAdd(account);
+                                }
+                              }}
                             >
                               Add
                             </Button>
                           </div>
-                        ))}
-                      </AccordionContent>
-                    </AccordionItem>
+                        </div>
+
+                        <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                          <p>
+                            <strong>Contact:</strong> {account.contact_number}
+                          </p>
+                          <p>
+                            <strong>Email:</strong> {account.email_address}
+                          </p>
+                          <p>
+                            <strong>Client Type:</strong> {account.type_client}
+                          </p>
+                          <p>
+                            <strong>Address:</strong> {account.address}
+                          </p>
+                          <p className="text-[8px]">{account.account_reference_number}</p>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
                   </Accordion>
                 </section>
               )}
