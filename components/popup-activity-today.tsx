@@ -199,7 +199,7 @@ export function ActivityToday() {
           <DialogHeader>
             <DialogTitle>Activities Scheduled for Today</DialogTitle>
             <DialogDescription>
-              <ul className="list-disc pl-6 space-y-2 mt-3 max-h-60 overflow-y-auto">
+              <ul className="list-disc pl-6 space-y-2 mt-3 max-h-60 overflow-y-auto uppercase">
                 {mergedActivities.map((a) => (
                   <li key={a.id}>
                     <strong>{a.company_name}</strong>

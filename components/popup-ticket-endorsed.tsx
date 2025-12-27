@@ -19,10 +19,17 @@ interface EndorsedTicket {
   id: string;
   company_name: string;
   date_created: string;
+  agent: string; // Assuming this holds ReferenceID of agent who sent the ticket
 }
 
 interface UserDetails {
   referenceid: string;
+}
+
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
 }
 
 export function TicketEndorsed() {
@@ -36,6 +43,8 @@ export function TicketEndorsed() {
   const [error, setError] = useState<string | null>(null);
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [errorTickets, setErrorTickets] = useState<string | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [soundPlayed, setSoundPlayed] = useState(false);
 
@@ -79,6 +88,25 @@ export function TicketEndorsed() {
 
     fetchUserData();
   }, [userId]);
+
+  // Fetch agents once on mount
+  useEffect(() => {
+    async function fetchAgents() {
+      setAgentsLoading(true);
+      try {
+        const res = await fetch("/api/fetch-agent");
+        if (!res.ok) throw new Error("Failed to fetch agents");
+        const data = await res.json();
+        setAgents(data);
+      } catch (err) {
+        console.error(err);
+        setAgents([]);
+      } finally {
+        setAgentsLoading(false);
+      }
+    }
+    fetchAgents();
+  }, []);
 
   // Fetch endorsed tickets
   const fetchEndorsedTickets = useCallback(async () => {
@@ -210,7 +238,7 @@ export function TicketEndorsed() {
     setShowDismissConfirm(false);
   }
 
-  if (loadingUser || loadingTickets) return null;
+  if (loadingUser || loadingTickets || agentsLoading) return null;
   if (error || errorTickets) return null;
 
   const formatDate = (dateStr: string) => {
@@ -228,7 +256,7 @@ export function TicketEndorsed() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Ticket Endorsed</DialogTitle>
+            <DialogTitle>New Ticket Endorsed From Ecodesk</DialogTitle>
             <DialogDescription>
               {endorsedTickets.length > 0 ? (
                 <>
@@ -236,13 +264,19 @@ export function TicketEndorsed() {
                     {endorsedTickets.length} {endorsedTickets.length === 1 ? "ticket has" : "tickets have"} been endorsed to your account recently:
                   </div>
                   <div className="max-h-[300px] overflow-y-auto mt-2">
-                    <ul className="list-disc pl-5 space-y-4">
-                      {endorsedTickets.map((t, i) => (
-                        <li key={t.id || i}>
-                          <strong>{t.company_name || "No subject"}</strong>
-                          <div>Created on: {formatDate(t.date_created)}</div>
-                        </li>
-                      ))}
+                    <ul className="list-disc pl-5 space-y-4 text-black">
+                      {endorsedTickets.map((t, i) => {
+                        // Find agent details based on ticket.agent (ReferenceID)
+                        const agentDetails = agents.find((a) => a.ReferenceID === t.agent);
+                        const fullName = agentDetails ? `${agentDetails.Firstname} ${agentDetails.Lastname}` : "(Unknown Agent)";
+                        return (
+                          <li key={t.id || i}>
+                            <strong>{t.company_name || "No subject"}</strong>
+                            <div>Created on: {formatDate(t.date_created)}</div>
+                            <div className="capitalize font-semibold">Sent by CSR Agent: {fullName}</div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </>
