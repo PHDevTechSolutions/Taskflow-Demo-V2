@@ -687,7 +687,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {totalAvailableCount > 0 && firstAvailableCluster && (
                 <section>
                   <h2 className="text-xs font-bold mb-2">
-                    Available OB Calls ({totalAvailableCount})
+                    Available OB Call ({totalAvailableCount})
                   </h2>
                   <Separator />
                   <Accordion type="single" collapsible className="w-full">
