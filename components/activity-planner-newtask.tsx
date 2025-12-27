@@ -54,7 +54,7 @@ interface NewTaskProps {
 }
 
 interface EndorsedTicket {
-  id: string; // updated from _id to id
+  id: string;
   account_reference_number: string;
   company_name: string;
   contact_person: string;
@@ -368,19 +368,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       toast.success(`Ticket used successfully: ${ticket.company_name}`);
 
-      // 3. Optimistic UI remove
-      toast.success(`Ticket used successfully: ${ticket.company_name}`);
-
-      // 3. Optimistic UI remove + cleanup sound memory
+      // Optimistic UI remove + cleanup sound memory
       setEndorsedTickets((prev) => {
         playedTicketIdsRef.current.delete(ticket.id);
         return prev.filter((t) => t.id !== ticket.id);
       });
-
-      // close dialog
-      setConfirmOpen(false);
-      setSelectedTicket(null);
-
 
       // close dialog
       setConfirmOpen(false);
@@ -393,8 +385,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
     }
   };
 
-  // Filter accounts by search term
-  const filteredAccounts = React.useMemo(() => {
+  // Filter accounts by search term - includes all regardless of date
+  const filteredBySearch = React.useMemo(() => {
     if (!searchTerm.trim()) return accounts.filter(acc =>
       acc.status?.toLowerCase() !== "subject for transfer" &&
       acc.status?.toLowerCase() !== "removed"
@@ -420,21 +412,29 @@ export const NewTask: React.FC<NewTaskProps> = ({
     "0"
   )}-${String(now.getDate()).padStart(2, "0")}`;
 
-  // Group accounts by date condition
-  const groupedToday = groupByCluster(filteredAccounts, (date) => date === todayStr);
-  const groupedNull = groupByCluster(filteredAccounts, (date) => date === null);
+  // Group accounts by date condition (only when no search term)
+  const groupedToday = React.useMemo(() => {
+    if (searchTerm.trim()) return {};
+    return groupByCluster(filteredBySearch, (date) => date === todayStr);
+  }, [filteredBySearch, searchTerm, todayStr]);
 
-  // Totals for UI display
-  const totalTodayCount = Object.values(groupedToday).reduce(
-    (sum, arr) => sum + arr.length,
-    0
-  );
-  const totalAvailableCount = Object.values(groupedNull).reduce(
-    (sum, arr) => sum + arr.length,
-    0
-  );
+  const groupedNull = React.useMemo(() => {
+    if (searchTerm.trim()) return {};
+    return groupByCluster(filteredBySearch, (date) => date === null);
+  }, [filteredBySearch, searchTerm]);
 
-  // Find first non-empty cluster
+  // Totals for UI display when no search term
+  const totalTodayCount = React.useMemo(() => {
+    if (searchTerm.trim()) return 0;
+    return Object.values(groupedToday).reduce((sum, arr) => sum + arr.length, 0);
+  }, [groupedToday, searchTerm]);
+
+  const totalAvailableCount = React.useMemo(() => {
+    if (searchTerm.trim()) return 0;
+    return Object.values(groupedNull).reduce((sum, arr) => sum + arr.length, 0);
+  }, [groupedNull, searchTerm]);
+
+  // Find first non-empty cluster for available OB calls
   const getFirstNonEmptyCluster = (
     grouped: Record<string, Account[]>,
     orderedList: string[]
@@ -551,15 +551,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
           <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
             <DialogContent className="text-xs">
               <DialogHeader>
-                <DialogTitle>Confirm Use Ticket</DialogTitle>
+                <DialogTitle>Use Endorsed Ticket</DialogTitle>
               </DialogHeader>
-
-              <p>
-                Are you sure you want to use this endorsed ticket for
-                <strong> {selectedTicket?.company_name}</strong>?
-              </p>
-
-              <DialogFooter className="flex gap-2">
+              <div>
+                Are you sure you want to use this ticket? This action cannot be undone.
+              </div>
+              <DialogFooter className="flex gap-4 mt-4 justify-end">
                 <Button
                   variant="outline"
                   onClick={() => setConfirmOpen(false)}
@@ -567,8 +564,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 >
                   Cancel
                 </Button>
-
                 <Button
+                  variant="default"
                   onClick={handleConfirmUseEndorsed}
                   disabled={confirmLoading}
                 >
@@ -578,168 +575,147 @@ export const NewTask: React.FC<NewTaskProps> = ({
             </DialogContent>
           </Dialog>
 
-          <Separator />
-
-          {/* Search Input */}
-          <div className="flex items-center gap-2">
-            <Input
-              type="search"
-              placeholder="Search accounts by company name..."
-              className="text-xs flex-grow"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Search accounts"
-            />
-            <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
-          </div>
-
-          <AccountDialog
-            mode="create"
-            userDetails={userDetails}
-            onSaveAction={async (data) => {
-              await onSaveAccountAction(data); // save the account
-              await onRefreshAccountsAction(); // refresh accounts to update the table
-              setIsCreateDialogOpen(false);
-            }}
-            open={isCreateDialogOpen}
-            onOpenChangeAction={setIsCreateDialogOpen}
+          {/* Search input */}
+          <Input
+            type="search"
+            placeholder="Search Company Name"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="w-full rounded-md p-2 border border-gray-300 text-xs"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
 
-          {/* OB Calls for Today */}
-          {totalTodayCount > 0 && (
+          {/* Show results based on search or grouped */}
+
+          {searchTerm.trim() ? (
             <section>
               <h2 className="text-xs font-bold mb-4">
-                OB Calls Account for Today ({totalTodayCount})
+                Search Results ({filteredBySearch.length})
               </h2>
+              {filteredBySearch.length === 0 ? (
+                <p className="text-xs text-gray-500">No companies found.</p>
+              ) : (
+                <Accordion type="single" collapsible className="w-full">
+                  {filteredBySearch.map((account) => (
+                    <AccordionItem key={account.id} value={account.id}>
+                      <div className="flex justify-between items-center p-2 select-none">
+                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                          {account.company_name}
+                        </AccordionTrigger>
 
-              {clusterOrder.map((cluster) => {
-                const clusterAccounts = groupedToday[cluster];
-                if (!clusterAccounts || clusterAccounts.length === 0) return null;
+                        <div className="flex gap-2 ml-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAdd(account);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleAdd(account);
+                              }
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
 
-                return (
-                  <div key={cluster} className="mb-4">
-                    <Accordion type="single" collapsible className="w-full">
-                      {clusterAccounts.map((account) => (
-                        <AccordionItem
-                          key={account.id}
-                          value={account.id}
-                          className="bg-green-100 border border-green-300 rounded mb-2"
-                        >
-                          <div className="flex justify-between items-center p-2 select-none">
-                            <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
-                              {account.company_name}
-                            </AccordionTrigger>
-
-                            <div className="flex gap-2 ml-4">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAdd(account);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    handleAdd(account);
-                                  }
-                                }}
-                              >
-                                Add
-                              </Button>
-                            </div>
-                          </div>
-
-                          <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-green-800">
-                            <p>
-                              <strong>Contact:</strong> {account.contact_number}
-                            </p>
-                            <p>
-                              <strong>Email:</strong> {account.email_address}
-                            </p>
-                            <p>
-                              <strong>Client Type:</strong> {account.type_client}
-                            </p>
-                            <p>
-                              <strong>Address:</strong> {account.address}
-                            </p>
-                            <p className="text-[8px]">{account.account_reference_number}</p>
+                      <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                        <p>
+                          <strong>Contact:</strong> {account.contact_number}
+                        </p>
+                        <p>
+                          <strong>Email:</strong> {account.email_address}
+                        </p>
+                        <p>
+                          <strong>Client Type:</strong> {account.type_client}
+                        </p>
+                        <p>
+                          <strong>Address:</strong> {account.address}
+                        </p>
+                        <p className="text-[8px]">{account.account_reference_number}</p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </section>
+          ) : (
+            <>
+              {/* OB Calls for Today */}
+              {totalTodayCount > 0 && (
+                <section>
+                  <h2 className="text-xs font-bold mb-2">OB Calls for Today ({totalTodayCount})</h2>
+                  <Separator />
+                  <Accordion type="single" collapsible className="w-full">
+                    {clusterOrder.map((cluster) =>
+                      groupedToday[cluster]?.length ? (
+                        <AccordionItem key={cluster} value={cluster}>
+                          <AccordionTrigger className="text-xs font-semibold capitalize">
+                            {cluster} ({groupedToday[cluster].length})
+                          </AccordionTrigger>
+                          <AccordionContent className="flex flex-col gap-2 p-2 text-xs text-gray-700">
+                            {groupedToday[cluster].map((account) => (
+                              <div key={account.id} className="flex justify-between items-center p-1">
+                                <div className="truncate">{account.company_name}</div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="cursor-pointer"
+                                  onClick={() => handleAdd(account)}
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                            ))}
                           </AccordionContent>
                         </AccordionItem>
-                      ))}
-                    </Accordion>
-                  </div>
-                );
-              })}
-            </section>
-          )}
+                      ) : null
+                    )}
+                  </Accordion>
+                </section>
+              )}
 
-          {/* Available OB Calls */}
-          {totalAvailableCount > 0 && firstAvailableCluster && (
-            <section>
-              <h2 className="text-xs font-bold mb-4">
-                Available OB Calls ({groupedNull[firstAvailableCluster].length})
-              </h2>
-
-              <Alert>
-                <CheckCircle2Icon />
-                <AlertTitle className="text-xs">
-                  Cluster Series: {firstAvailableCluster.toUpperCase()}
-                </AlertTitle>
-                <AlertDescription className="text-xs">
-                  This alert provides important information about the selected cluster.
-                </AlertDescription>
-              </Alert>
-
-              <Accordion type="single" collapsible className="w-full">
-                {groupedNull[firstAvailableCluster].map((account) => (
-                  <AccordionItem key={account.id} value={account.id}>
-                    <div className="flex justify-between items-center p-2 select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
-                        {account.company_name}
+              {/* Available OB Calls */}
+              {totalAvailableCount > 0 && firstAvailableCluster && (
+                <section>
+                  <h2 className="text-xs font-bold mb-2">
+                    Available OB Calls ({totalAvailableCount})
+                  </h2>
+                  <Separator />
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value={firstAvailableCluster}>
+                      <AccordionTrigger className="text-xs font-semibold capitalize">
+                        {firstAvailableCluster} ({groupedNull[firstAvailableCluster].length})
                       </AccordionTrigger>
-
-                      <div className="flex gap-2 ml-4">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAdd(account);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              handleAdd(account);
-                            }
-                          }}
-                        >
-                          Add
-                        </Button>
-                      </div>
-                    </div>
-
-                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
-                      <p>
-                        <strong>Contact:</strong> {account.contact_number}
-                      </p>
-                      <p>
-                        <strong>Email:</strong> {account.email_address}
-                      </p>
-                      <p>
-                        <strong>Client Type:</strong> {account.type_client}
-                      </p>
-                      <p>
-                        <strong>Address:</strong> {account.address}
-                      </p>
-                      <p className="text-[8px]">{account.account_reference_number}</p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </section>
+                      <AccordionContent className="flex flex-col gap-2 p-2 text-xs text-gray-700">
+                        {groupedNull[firstAvailableCluster].map((account) => (
+                          <div key={account.id} className="flex justify-between items-center p-1">
+                            <div className="truncate">{account.company_name}</div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer"
+                              onClick={() => handleAdd(account)}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </section>
+              )}
+            </>
           )}
         </>
       )}
