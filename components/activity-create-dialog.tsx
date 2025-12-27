@@ -665,25 +665,25 @@ export function CreateActivityDialog({
                         </SheetDescription>
 
                         {startDate && (
-                            <div
-                                className="
-      fixed top-20 left-1/2 z-50
+  <div
+    className="
+      fixed top-16 left-1/2 z-50
       bg-gray-900 text-green-400
-      rounded-xl px-8 py-4
-      shadow-[0_0_15px_rgba(16,185,129,0.7)]
+      rounded-lg px-4 py-2
+      shadow-[0_0_10px_rgba(16,185,129,0.7)]
       -translate-x-1/2
-      font-mono font-bold
-      text-[3rem]
+      font-mono font-semibold
+      text-xl
       select-none
       flex items-center
-      space-x-2
+      space-x-1
       cursor-default
     "
-                            >
-                                <span>Started:</span>
-                                <span className="tracking-widest">{elapsedTime}</span>
-                            </div>
-                        )}
+  >
+    <span>Started:</span>
+    <span className="tracking-wide">{elapsedTime}</span>
+  </div>
+)}
 
                     </SheetHeader>
 
