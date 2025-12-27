@@ -376,22 +376,16 @@ export async function POST(req: Request) {
   addFooterRow(sheet, "  ₱15,000 in Bulacan and Cavite,");
   addFooterRow(sheet, "  ₱25,000 in Laguna, Pampanga, and Batangas.");
 
-  addFooterRow(sheet, "");
-
   addFooterRow(sheet, [{ text: "Excluded:", font: { bold: true } }]);
   addFooterRow(sheet, "- All lamp poles are subject to a delivery charge.");
   addFooterRow(sheet, "- Installation and all hardware/accessories not indicated above.");
   addFooterRow(sheet, "- Freight charges, arrastre, and other processing fees.");
-
-  addFooterRow(sheet, "");
 
   addFooterRow(sheet, [{ text: "Notes:", font: { bold: true } }]);
   addFooterRow(sheet, "- Deliveries are up to the vehicle unloading point only.");
   addFooterRow(sheet, "- Additional shipping fee applies for other areas not mentioned above.");
   addFooterRow(sheet, "- Subject to confirmation upon getting the actual weight and dimensions of the items.");
   addFooterRow(sheet, "- In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.");
-
-  addFooterRow(sheet, "");
 
   addFooterRow(sheet, [{ text: "TERMS AND CONDITIONS:", font: { bold: true } }]);
   addFooterRow(sheet, [{ text: "AVAILABILITY:", font: { bold: true } }]);
@@ -401,7 +395,6 @@ export async function POST(req: Request) {
   addFooterRow(sheet, "*In the event of a conflict or inconsistency in estimated days under Availability");
   addFooterRow(sheet, "and another estimate indicated elsewhere in this quotation, ");
   addFooterRow(sheet, "the latter will prevail.");
-  addFooterRow(sheet, "");
 
   addFooterRow(sheet, [{ text: "WARRANTY:", font: { bold: true } }]);
   addFooterRow(sheet, "One (1) year from the time of delivery for all busted lights except the damaged fixture.");
@@ -414,7 +407,6 @@ export async function POST(req: Request) {
   addFooterRow(sheet, "*Shipping costs for warranty claims are for customers' account.");
   addFooterRow(sheet, "*If the product purchased is already phased out when the warranty is claimed, ");
   addFooterRow(sheet, "the latest model or closest product SKU will be given as a replacement.");
-  addFooterRow(sheet, "");
 
   addFooterRow(sheet, [{ text: "SO VALIDITY:", font: { bold: true } }]);
   addFooterRow(sheet, [
@@ -429,22 +421,16 @@ export async function POST(req: Request) {
     { text: "will be automatically cancelled." },
   ]);
 
-  addFooterRow(sheet, "");
-
   addFooterRow(sheet, [{ text: "STORAGE:", font: { bold: true } }]);
   addFooterRow(sheet, [{ text: "Orders with confirmation/verified payment but undelivered after 14 working days " }]);
   addFooterRow(sheet, [{ text: "(excluding holidays and Sundays starting from picking date)" }]);
   addFooterRow(sheet, [{ text: "due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month " }]);
   addFooterRow(sheet, [{ text: "(10% / 30 days =  0.33% per day)", font: { bold: true, color: { argb: "FFFF0000" } } }]);
 
-  addFooterRow(sheet, "");
-
   addFooterRow(sheet, [{ text: "RETURN:", font: { bold: true } }]);
   addFooterRow(sheet, [{ text: "7 days return policy", font: { bold: true, color: { argb: "FFFF0000" } } }]);
   addFooterRow(sheet, [{ text: "- if the product received is defective, damaged, or incomplete. This must be communicated to Ecoshift, " }]);
   addFooterRow(sheet, [{ text: "and Ecoshift has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.", font: { bold: false } }]);
-
-  addFooterRow(sheet, "");
 
   addFooterRow(sheet, [{ text: "PAYMENT:", font: { bold: true } }]);
   addFooterRow(sheet, "Cash on Delivery (COD)");
@@ -456,22 +442,17 @@ export async function POST(req: Request) {
     { text: "For special items,  Seventy Percent (70%) down payment, 30% upon delivery.", font: { bold: true } }
   ]);
 
-  addFooterRow(sheet, "");
-  addFooterRow(sheet, "");
   addFooterRow(sheet, [{ text: "BANK DETAILS", font: { bold: true } }]);
   addFooterRow(sheet, [{ text: "Payee to: ECOSHIFT CORPORATION", font: { bold: true } }]);
-  addFooterRow(sheet, "");
-  addFooterRow(sheet, "");
+
   addFooterRow(sheet, [{ text: "Bank: Metrobank", font: { bold: true } }]);
   addFooterRow(sheet, "Account Name: Ecoshift Corporation.");
   addFooterRow(sheet, "Account number: 243-7-243805100");
-  addFooterRow(sheet, "");
-  addFooterRow(sheet, "");
+
   addFooterRow(sheet, [{ text: "Bank: BDO", font: { bold: true } }]);
   addFooterRow(sheet, "Account Name: Ecoshift Corporation");
   addFooterRow(sheet, "Account number:  0021-8801-7271");
-  addFooterRow(sheet, "");
-  addFooterRow(sheet, "");
+
   addFooterRow(sheet, [{ text: "DELIVERY", font: { bold: true } }]);
   addFooterRow(sheet, "Delivery/Pick up is subject to confirmation.");
   addFooterRow(sheet, "");
@@ -490,7 +471,7 @@ export async function POST(req: Request) {
   ]);
   addFooterRow(sheet, "In the event of changes in prevailing market conditions, duties, taxes,");
   addFooterRow(sheet, "and all other importation charges, quoted prices are subject to change.");
-  addFooterRow(sheet, "");
+
   addFooterRow(sheet, [{ text: "CANCELLATION:", font: { bold: true } }]);
   addFooterRow(sheet, "1. Above quoted items are non-cancellable.");
   addFooterRow(sheet, "2. If the customer cancels the order under any circumstances, the client");
@@ -502,10 +483,9 @@ export async function POST(req: Request) {
   addFooterRow(sheet, "the transaction is automatically canceled.");
   addFooterRow(sheet, "5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.");
 
-  addFooterRow(sheet, "");
   addFooterRowFullWidth(sheet, "Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.");
   addFooterRowFullWidth(sheet, "Unless otherwise indicated in your Approved Purchase Order, you are deemed to have accepted the Terms and Conditions of this Quotation.");
-  addFooterRow(sheet, "");
+
 
   // === Ecoshift Corporation Inc Footer ===
   addFooterRowFullWidth(sheet, "Ecoshift Corporation");

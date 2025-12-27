@@ -99,6 +99,7 @@ const data = {
       pages: [
         { name: "Activity Planner", url: "/activity/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/activity/tasklist", icon: ClipboardList },
+        { name: "Revised Quotations", url: "/activity/revised-quotation", icon: Compass },
         { name: "Daily Admin Task", url: "/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/activity/ccg", icon: Compass },
       ],
