@@ -255,6 +255,11 @@ export function AccountsTable({
                 cell: (info) => info.getValue(),
             },
             {
+                accessorKey: "contact_number",
+                header: "Contact Number",
+                cell: (info) => info.getValue(),
+            },
+            {
                 accessorKey: "email_address",
                 header: "Email Address",
                 cell: (info) => info.getValue(),
