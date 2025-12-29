@@ -1,7 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
@@ -17,9 +20,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data, error } = await supabase
       .from("endorsed-ticket")
-      .update({ status })
+      .update({
+        status,
+        date_updated: new Date().toISOString(), // ✅ ADDED
+      })
       .eq("ticket_reference_number", ticket_reference_number)
-      .select(); // ✅ IMPORTANT
+      .select();
 
     if (error) {
       console.error("Supabase update error:", error);
