@@ -32,6 +32,7 @@ interface Activity {
     activity_reference_number: string;
     account_reference_number: string;
     ticket_reference_number: string;
+    agent: string;
     status: string;
     date_updated: string;
     scheduled_date: string;
@@ -400,6 +401,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 email_address={item.email_address}
                                                 activityReferenceNumber={item.activity_reference_number}
                                                 ticket_reference_number={item.ticket_reference_number}
+                                                agent={item.agent}
                                                 company_name={item.company_name}
                                                 contact_person={item.contact_person}
                                                 address={item.address}

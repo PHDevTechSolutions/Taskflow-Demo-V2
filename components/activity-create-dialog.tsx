@@ -69,6 +69,8 @@ interface Activity {
 
     date_followup?: string;
     remarks: string;
+    // CSR
+    agent: string;
 
     start_date?: string;
     end_date?: string;
@@ -93,6 +95,7 @@ interface CreateActivityDialogProps {
     tsmname: string;
     managername: string;
     ticket_reference_number: string;
+    agent: string;
     activityReferenceNumber?: string;
     accountReferenceNumber?: string;
 }
@@ -127,6 +130,7 @@ export function CreateActivityDialog({
     contact,
     target_quota,
     ticket_reference_number,
+    agent,
     tsm,
     manager,
     type_client,
@@ -424,6 +428,7 @@ export function CreateActivityDialog({
             tsm,
             manager,
             ticket_reference_number,
+            agent,
             source,
             call_status: callStatus,
             call_type: callType,

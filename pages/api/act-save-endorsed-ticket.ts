@@ -14,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tsm,                    // manager
       ticket_reference_number,
       status,
+      agent,
       activity_reference_number
     } = req.body;
 
@@ -36,6 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tsm,                     // manager
       ticket_reference_number,
       status,
+      agent,
       activity_reference_number
     });
 

@@ -39,6 +39,7 @@ interface Activity {
   account_reference_number: string;
   ticket_reference_number: string;
   status: string;
+  agent: string;
   date_updated: string;
   scheduled_date: string;
   date_created: string;
@@ -433,6 +434,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         email_address={item.email_address}
                         activityReferenceNumber={item.activity_reference_number}
                         ticket_reference_number={item.ticket_reference_number}
+                        agent={item.agent}
                         company_name={item.company_name}
                         contact_person={item.contact_person}
                         address={item.address}

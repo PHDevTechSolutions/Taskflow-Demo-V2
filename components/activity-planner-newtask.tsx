@@ -334,6 +334,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         tsm: ticket.tsm,
         referenceid: ticket.referenceid,
         status: "On-Progress",
+        agent: ticket.agent,
         activity_reference_number: generateActivityRef(ticket.company_name, region),
       };
 
@@ -363,6 +364,22 @@ export const NewTask: React.FC<NewTaskProps> = ({
       const updateStatusData = await updateStatusRes.json();
       if (!updateStatusRes.ok) {
         toast.error(updateStatusData.error || "Failed to update ticket status");
+        return;
+      }
+
+      // 3. Update company ticket referenceid using new API
+      const updateCompanyRefRes = await fetch("/api/com-update-company-ticket", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_reference_number: ticket.account_reference_number,
+          referenceid: ticket.referenceid,
+        }),
+      });
+
+      const updateCompanyRefData = await updateCompanyRefRes.json();
+      if (!updateCompanyRefRes.ok) {
+        toast.error(updateCompanyRefData.error || "Failed to update company referenceid");
         return;
       }
 

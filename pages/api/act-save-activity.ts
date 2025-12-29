@@ -46,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       delivery_date,
       date_followup,
       remarks,
+      agent,
       start_date,
       end_date,
       date_created,
@@ -162,6 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         remarks: safe(remarks),
         start_date: safe(start_date),
         end_date: safe(end_date),
+        agent: safe(agent),
         date_created: safe(date_created),
         date_updated: safe(date_updated),
       })
