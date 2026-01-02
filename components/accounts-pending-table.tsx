@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AccountsActiveSearch } from "./accounts-active-search";
-import { AccountsActiveFilter } from "./accounts-all-filter";
+import { AccountsAllFilter } from "./accounts-all-filter";
 import { AccountsActivePagination } from "./accounts-active-pagination";
 import { AccountsApproveDialog } from "./accounts-all-approve-dialog";
 import { type DateRange } from "react-day-picker";
@@ -355,7 +355,7 @@ export function AccountsTable({
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <AccountsActiveFilter
+                    <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
                         statusFilter={statusFilter}
