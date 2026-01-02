@@ -1,31 +1,30 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { type DateRange } from "react-day-picker";
+import { toast } from "sonner";
 import {
-    useReactTable,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    ColumnDef,
-    flexRender,
-} from "@tanstack/react-table";
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
+
+import { AccountsActiveSearch } from "./accounts-active-search";
+import { AccountsAllFilter } from "./accounts-all-filter";
+// Removed AccountsActivePagination import since we're doing pagination here directly
 import {
     Table,
     TableBody,
+    TableCaption,
     TableCell,
     TableHead,
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { type DateRange } from "react-day-picker";
-import { toast } from "sonner";
-
-import { AccountsActiveSearch } from "./accounts-active-search";
-import { AccountsActiveFilter } from "./accounts-active-filter";
-import { AccountsActivePagination } from "./accounts-active-pagination";
 
 interface Account {
     id: string;
@@ -50,6 +49,8 @@ interface UserDetails {
     referenceid: string;
     tsm: string;
     manager: string;
+    firstname: string;
+    lastname: string;
 }
 
 interface AccountsTableProps {
@@ -77,9 +78,60 @@ export function AccountsTable({
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [industryFilter, setIndustryFilter] = useState<string>("all");
     const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    // Advanced filters states
     const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
+    const [agents, setAgents] = useState<any[]>([]);
+    const [agentFilter, setAgentFilter] = useState("all");
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 20;
+
+    useEffect(() => {
+        if (!userDetails.referenceid) return;
+
+        const fetchAgents = async () => {
+            try {
+                const response = await fetch(
+                    `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
+                );
+                if (!response.ok) throw new Error("Failed to fetch agents");
+
+                const data = await response.json();
+                setAgents(data);
+            } catch (err) {
+                console.error("Error fetching agents:", err);
+                setError("Failed to load agents.");
+            }
+        };
+
+        fetchAgents();
+    }, [userDetails.referenceid]);
+
+    const agentMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        agents.forEach((agent) => {
+            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
+                map[agent.ReferenceID.toLowerCase()] = `${agent.Firstname} ${agent.Lastname}`;
+            }
+        });
+        return map;
+    }, [agents]);
+
+    // Reset to first page when filters/search change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [
+        globalFilter,
+        typeFilter,
+        statusFilter,
+        industryFilter,
+        alphabeticalFilter,
+        dateCreatedFilter,
+        agentFilter,
+        localPosts,
+    ]);
 
     const filteredData = useMemo(() => {
         const allowedTypes = [
@@ -118,7 +170,17 @@ export function AccountsTable({
             const matchesIndustry =
                 industryFilter === "all" || item.industry === industryFilter;
 
-            return matchesSearch && matchesType && matchesStatus && matchesIndustry;
+            const agentFullname =
+                agentMap[item.referenceid?.toLowerCase() ?? ""] || "";
+            const matchesAgent = agentFilter === "all" || agentFullname === agentFilter;
+
+            return (
+                matchesSearch &&
+                matchesType &&
+                matchesStatus &&
+                matchesIndustry &&
+                matchesAgent
+            );
         });
 
         data = data.sort((a, b) => {
@@ -130,11 +192,13 @@ export function AccountsTable({
 
             if (dateCreatedFilter === "asc") {
                 return (
-                    new Date(a.date_created).getTime() - new Date(b.date_created).getTime()
+                    new Date(a.date_created).getTime() -
+                    new Date(b.date_created).getTime()
                 );
             } else if (dateCreatedFilter === "desc") {
                 return (
-                    new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
+                    new Date(b.date_created).getTime() -
+                    new Date(a.date_created).getTime()
                 );
             }
 
@@ -150,12 +214,21 @@ export function AccountsTable({
         industryFilter,
         alphabeticalFilter,
         dateCreatedFilter,
+        agentFilter,
+        agentMap,
     ]);
+
+    // Paginated data for current page
+    const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredData.slice(start, start + pageSize);
+    }, [filteredData, currentPage]);
 
     function convertToCSV(data: Account[]) {
         if (data.length === 0) return "";
 
         const header = [
+            "Agent Name",
             "Company Name",
             "Contact Person",
             "Contact Number",
@@ -165,12 +238,15 @@ export function AccountsTable({
             "Region",
             "Type of Client",
             "Industry",
+            "Status",
+            "Date Created",
         ];
 
         const csvRows = [
             header.join(","),
             ...data.map((item) =>
                 [
+                    agentMap[item.referenceid?.toLowerCase() ?? ""] || "-",
                     item.company_name,
                     item.contact_person,
                     item.contact_number,
@@ -180,6 +256,8 @@ export function AccountsTable({
                     item.region,
                     item.type_client,
                     item.industry,
+                    item.status || "-",
+                    new Date(item.date_created).toLocaleDateString(),
                 ]
                     .map((field) => `"${String(field).replace(/"/g, '""')}"`)
                     .join(",")
@@ -190,7 +268,7 @@ export function AccountsTable({
     }
 
     function handleDownloadCSV() {
-        const csv = convertToCSV(filteredData);
+        const csv = convertToCSV(filteredData); // use full filteredData to download all filtered records
         if (!csv) {
             toast.error("No data to download.");
             return;
@@ -206,59 +284,6 @@ export function AccountsTable({
         URL.revokeObjectURL(url);
     }
 
-    const columns = useMemo<ColumnDef<Account>[]>(
-        () => [
-            {
-                accessorKey: "company_name",
-                header: "Company Name",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "contact_person",
-                header: "Contact Person",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "email_address",
-                header: "Email Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "address",
-                header: "Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "type_client",
-                header: "Type of Client",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "industry",
-                header: "Industry",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "status",
-                header: "Status",
-                cell: (info) => {
-                    const value = info.getValue() as string;
-                    let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
-                    if (value === "Active") variant = "default";
-                    else if (value === "Pending") variant = "secondary";
-                    else if (value === "Inactive") variant = "destructive";
-                    return <Badge variant={variant}>{value ?? "-"}</Badge>;
-                },
-            },
-            {
-                accessorKey: "date_created",
-                header: "Date Created",
-                cell: (info) => new Date(info.getValue() as string).toLocaleDateString(),
-            },
-        ],
-        []
-    );
-
     useEffect(() => {
         if (!globalFilter) {
             setIsFiltering(false);
@@ -269,21 +294,13 @@ export function AccountsTable({
         return () => clearTimeout(timeout);
     }, [globalFilter]);
 
-    const table = useReactTable({
-        data: filteredData,
-        columns,
-        state: {},
-        getRowId: (row) => row.id,
-        getCoreRowModel: getCoreRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-    });
+    // Calculate total pages
+    const totalPages = Math.ceil(filteredData.length / pageSize);
 
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                {/* Left side: Search */}
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <div className="flex-grow w-full max-w-lg flex items-center gap-3">
                         <AccountsActiveSearch
@@ -294,15 +311,21 @@ export function AccountsTable({
                     </div>
                 </div>
 
-                {/* Right side: Filter + Download */}
                 <div className="flex items-center gap-3">
-                    <AccountsActiveFilter
+                    <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
+                        statusFilter={statusFilter}
+                        setStatusFilterAction={setStatusFilter}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
+                        industryFilter={industryFilter}
+                        setIndustryFilterAction={setIndustryFilter}
                         alphabeticalFilter={alphabeticalFilter}
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
+                        agentFilter={agentFilter}
+                        setAgentFilterAction={setAgentFilter}
+                        agents={agents}
                     />
 
                     <Button variant="outline" onClick={handleDownloadCSV}>
@@ -312,7 +335,7 @@ export function AccountsTable({
             </div>
 
             {/* Table */}
-            <div className="rounded-md border p-4 space-y-2">
+            <div className="rounded-md border p-4 space-y-2 overflow-x-auto">
                 <Badge
                     className="h-5 min-w-5 rounded-full px-2 font-mono tabular-nums"
                     variant="outline"
@@ -322,49 +345,111 @@ export function AccountsTable({
 
                 <Table>
                     <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => (
-                                    <TableHead key={header.id}>
-                                        {flexRender(header.column.columnDef.header, header.getContext())}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        ))}
+                        <TableRow>
+                            <TableHead>Agent Name</TableHead>
+                            <TableHead>Company Name</TableHead>
+                            <TableHead>Contact Person</TableHead>
+                            <TableHead>Contact Number</TableHead>
+                            <TableHead>Email Address</TableHead>
+                            <TableHead>Address</TableHead>
+                            <TableHead>Delivery Address</TableHead>
+                            <TableHead>Region</TableHead>
+                            <TableHead>Type of Client</TableHead>
+                            <TableHead>Industry</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Date Created</TableHead>
+                        </TableRow>
                     </TableHeader>
 
                     <TableBody>
-                        {table.getRowModel().rows.length === 0 ? (
+                        {paginatedData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="text-center py-4">
+                                <TableCell colSpan={12} className="text-center py-4">
                                     No accounts found.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            table.getRowModel().rows.map((row) => (
-                                <TableRow key={row.id}>
-                                    {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id} className="whitespace-nowrap">
-                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            paginatedData.map((account) => {
+                                const agentName =
+                                    agentMap[account.referenceid?.toLowerCase() ?? ""] || "-";
+
+                                let badgeVariant:
+                                    | "default"
+                                    | "secondary"
+                                    | "destructive"
+                                    | "outline" = "outline";
+                                if (account.status === "Active") badgeVariant = "default";
+                                else if (account.status === "Pending") badgeVariant = "secondary";
+                                else if (account.status === "Inactive") badgeVariant = "destructive";
+
+                                return (
+                                    <TableRow key={account.id} className="hover:bg-gray-50">
+                                        <TableCell className="capitalize">{agentName}</TableCell>
+                                        <TableCell>{account.company_name}</TableCell>
+                                        <TableCell className="capitalize">
+                                            {account.contact_person}
                                         </TableCell>
-                                    ))}
-                                </TableRow>
-                            ))
+                                        <TableCell>{account.contact_number}</TableCell>
+                                        <TableCell>{account.email_address}</TableCell>
+                                        <TableCell className="capitalize">{account.address}</TableCell>
+                                        <TableCell className="capitalize">
+                                            {account.delivery_address}
+                                        </TableCell>
+                                        <TableCell>{account.region}</TableCell>
+                                        <TableCell className="uppercase">{account.type_client}</TableCell>
+                                        <TableCell>{account.industry}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={badgeVariant}>{account.status ?? "-"}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(account.date_created).toLocaleDateString()}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
 
-                {/* Pending status note */}
-                {filteredData.some((account) => account.status === "Pending") && (
-                    <div className="mt-2 text-sm text-yellow-700 bg-yellow-100 border border-yellow-300 rounded p-2">
-                        The account with the status <strong>"Pending"</strong> needs approval from
-                        your Territory Sales Manager (TSM) to be verified before using it in creation
-                        of activity.
-                    </div>
-                )}
-            </div>
 
-            <AccountsActivePagination table={table} />
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <Pagination>
+                        <PaginationContent className="flex items-center space-x-4 justify-center mt-4">
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+                                    }}
+                                    aria-disabled={currentPage === 1}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                                />
+                            </PaginationItem>
+
+                            {/* Current page / total pages */}
+                            <div className="px-4 font-medium">
+                                {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
+                            </div>
+
+                            <PaginationItem>
+                                <PaginationNext
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                                    }}
+                                    aria-disabled={currentPage === totalPages}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                )}
+
+            </div>
         </div>
     );
 }

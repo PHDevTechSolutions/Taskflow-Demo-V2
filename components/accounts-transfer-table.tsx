@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AccountsActiveSearch } from "./accounts-active-search";
-import { AccountsActiveFilter } from "./accounts-all-filter";
+import { AccountsAllFilter } from "./accounts-all-filter";
 import { AccountsApproveDialog } from "./accounts-transfer-approve-dialog";
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
@@ -312,7 +312,7 @@ export function AccountsTable({
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <AccountsActiveFilter
+                    <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
                         statusFilter={"Subject for Transfer"} // fixed filter as in original logic

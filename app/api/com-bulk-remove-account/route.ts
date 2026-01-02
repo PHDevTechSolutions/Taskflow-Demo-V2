@@ -35,7 +35,9 @@ export async function PUT(req: Request) {
 
     const query = `
       UPDATE accounts
-      SET status = $${ids.length + 1}, remarks = $${ids.length + 2}
+      SET status = $${ids.length + 1}, 
+          remarks = $${ids.length + 2}, 
+          date_removed = now()
       WHERE id IN (${placeholders})
       RETURNING *;
     `;

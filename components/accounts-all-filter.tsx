@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Filter } from "lucide-react";
 
-interface AccountsActiveFilterProps {
+interface AccountsAllFilterProps {
     typeFilter: string;
     setTypeFilterAction: (value: string) => void;
     statusFilter: string;
@@ -36,7 +36,7 @@ interface AccountsActiveFilterProps {
     agents: { ReferenceID: string; Firstname: string; Lastname: string }[];
 }
 
-export function AccountsActiveFilter({
+export function AccountsAllFilter({
     typeFilter,
     setTypeFilterAction,
     statusFilter,
@@ -50,17 +50,8 @@ export function AccountsActiveFilter({
     agentFilter,
     setAgentFilterAction,
     agents,
-}: AccountsActiveFilterProps) {
+}: AccountsAllFilterProps) {
     const [open, setOpen] = useState(false);
-
-    const industries = [
-        "all",
-        "Manufacturing",
-        "Retail",
-        "Technology",
-        "Finance",
-        "Healthcare",
-    ];
 
     // Prepare agent options (unique fullnames sorted)
     const agentOptions = React.useMemo(() => {
@@ -144,23 +135,6 @@ export function AccountsActiveFilter({
                                     <SelectItem value="New Client">New Client</SelectItem>
                                     <SelectItem value="Non-Buying">Non-Buying</SelectItem>
                                     <SelectItem value="Inactive">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Industry Filter */}
-                        <div>
-                            <label className="block mb-1 font-medium text-xs">Industry</label>
-                            <Select value={industryFilter} onValueChange={setIndustryFilterAction}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Industry" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {industries.map((industry) => (
-                                        <SelectItem key={industry} value={industry}>
-                                            {industry === "all" ? "All Industries" : industry}
-                                        </SelectItem>
-                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

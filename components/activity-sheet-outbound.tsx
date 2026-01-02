@@ -305,38 +305,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
             {step === 4 && (
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 4 — Call Details</h2>
-                    {followUpDate ? (
-                        <Alert variant="default" className="mb-4 flex flex-col gap-2">
-                            <div>
-                                <AlertTitle>Follow Up Date:</AlertTitle>
-                                <AlertDescription>
-                                    {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
-                                </AlertDescription>
-                            </div>
-                            <p className="font-semibold text-red-600">Try Using Manual?</p>
-                            <Input
-                                type="date"
-                                value={followUpDate}
-                                onChange={handleDateChange}
-                                aria-label="Edit follow up date"
-                                className="max-w-xs"
-                            />
-                        </Alert>
-                    ) : (
-                        <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
-                            <AlertTitle>No Follow Up Date set</AlertTitle>
-                            <AlertDescription>
-                                Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
-                            </AlertDescription>
-                            <Input
-                                type="date"
-                                onChange={handleDateChange}
-                                aria-label="Set follow up date"
-                                className="max-w-xs"
-                            />
-                        </Alert>
-                    )}
-
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Call Type</FieldLabel>
@@ -346,7 +314,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             <RadioGroup
                                 value={callType}
                                 onValueChange={props.setCallType}
-                                className="space-y-4"
                             >
                                 {(callStatus === "Successful"
                                     ? [
@@ -416,6 +383,39 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
+
+                    {followUpDate ? (
+                        <Alert variant="default" className="mt-4 flex flex-col gap-2">
+                            <div>
+                                <AlertTitle>Follow Up Date:</AlertTitle>
+                                <AlertDescription>
+                                    {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
+                                </AlertDescription>
+                            </div>
+                            <p className="font-semibold text-red-600">Try Using Manual?</p>
+                            <Input
+                                type="date"
+                                value={followUpDate}
+                                onChange={handleDateChange}
+                                aria-label="Edit follow up date"
+                                className="max-w-xs"
+                            />
+                        </Alert>
+                    ) : (
+                        <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
+                            <AlertTitle>No Follow Up Date set</AlertTitle>
+                            <AlertDescription>
+                                Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
+                            </AlertDescription>
+                            <Input
+                                type="date"
+                                onChange={handleDateChange}
+                                aria-label="Set follow up date"
+                                className="max-w-xs"
+                            />
+                        </Alert>
+                    )}
+
                 </div>
             )}
 

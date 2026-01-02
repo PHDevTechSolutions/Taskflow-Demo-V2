@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AccountsActiveSearch } from "./accounts-active-search";
-import { AccountsActiveFilter } from "./accounts-all-filter";
+import { AccountsAllFilter } from "./accounts-all-filter";
 import { AccountsActivePagination } from "./accounts-active-pagination";
 import { AccountsApproveDialog } from "./accounts-all-approve-dialog";
 import { type DateRange } from "react-day-picker";
@@ -26,6 +26,7 @@ interface Account {
     region: string;
     type_client: string;
     date_created: string;
+    date_removed: string;
     industry: string;
     status?: string;
 }
@@ -57,8 +58,6 @@ export function AccountsTable({
     const [localPosts, setLocalPosts] = useState<Account[]>(posts);
     const [agents, setAgents] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
-
-    // ** ADDITION: filter state for agent **
     const [agentFilter, setAgentFilter] = useState("all");
 
     // For bulk remove
@@ -254,8 +253,8 @@ export function AccountsTable({
                 },
             },
             {
-                accessorKey: "date_created",
-                header: "Date Created",
+                accessorKey: "date_removed",
+                header: "Date Removed",
                 cell: (info) =>
                     new Date(info.getValue() as string).toLocaleDateString(),
             },
@@ -355,7 +354,7 @@ export function AccountsTable({
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <AccountsActiveFilter
+                    <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
                         statusFilter={statusFilter}
