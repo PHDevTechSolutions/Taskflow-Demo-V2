@@ -36,6 +36,7 @@ interface Account {
     industry: string;
     status?: string;
     transfer_to: string;
+    date_transferred: string;
 }
 
 interface UserDetails {

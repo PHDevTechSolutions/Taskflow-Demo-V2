@@ -10,6 +10,7 @@ import "./globals.css";
 import { Reminders } from "@/components/reminders";
 import { TransferAlertDialog } from "@/components/popup-transfer";
 import { ApproveDeletionDialog } from "@/components/popup-deletion";
+import { ApproveTransferDialog } from "@/components/popup-approval-transferred";
 import { RemoveDeletionDialog } from "@/components/popup-approval-deletion";
 import { TicketEndorsed } from "@/components/popup-ticket-endorsed";
 import { ActivityToday } from "@/components/popup-activity-today";
@@ -59,6 +60,7 @@ export default function RootLayout({
               <Reminders />
               <TransferAlertDialog />
               <ApproveDeletionDialog />
+              <ApproveTransferDialog />
               <RemoveDeletionDialog />
               <TicketEndorsed />
               <ActivityToday />

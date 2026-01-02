@@ -41,6 +41,7 @@ interface Account {
     industry: string;
     status?: string;
     transfer_to: string;
+    date_transferred: string;
 }
 
 interface UserDetails {
@@ -367,7 +368,7 @@ export function AccountsTable({
                             <TableHead>Industry</TableHead>
                             <TableHead>Remarks</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>Date Created</TableHead>
+                            <TableHead>Date Transferred</TableHead>
                         </TableRow>
                     </TableHeader>
 
@@ -434,7 +435,7 @@ export function AccountsTable({
                                         </TableCell>
 
                                         <TableCell>
-                                            {new Date(account.date_created).toLocaleDateString()}
+                                            {new Date(account.date_transferred).toLocaleDateString()}
                                         </TableCell>
                                     </TableRow>
                                 );

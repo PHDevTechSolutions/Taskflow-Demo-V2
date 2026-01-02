@@ -37,6 +37,7 @@ interface Account {
     industry: string;
     status?: string;
     company_group?: string;
+    date_removed: string;
 }
 
 interface UserDetails {
