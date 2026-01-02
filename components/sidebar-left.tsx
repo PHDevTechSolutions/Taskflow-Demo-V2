@@ -83,12 +83,12 @@ const data = {
       name: "Customer Database",
       icon: Home,
       pages: [
-        { name: "All", url: "/companies/all", icon: BookOpen }, // For TSM and Manager
-        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen },
         { name: "Active", url: "/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/companies/remove", icon: Trash2 },
         { name: "Group Affiliate", url: "/companies/group", icon: Users },
-        { name: "Account Deletion", url: "/companies/approval", icon: Trash2 },
+        { name: "All", url: "/companies/all", icon: BookOpen }, // For TSM 
+        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen }, // For TSM 
+        { name: "Account Deletion", url: "/companies/approval", icon: Trash2 }, // For TSM 
       ],
     },
     {

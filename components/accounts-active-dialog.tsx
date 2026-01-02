@@ -447,6 +447,7 @@ export function AccountDialog({
         return (
           <>
             {/* Company Name */}
+            {/* Company Name */}
             <div>
               <FieldContent>
                 <FieldLabel>Company Name</FieldLabel>
@@ -454,12 +455,8 @@ export function AccountDialog({
                   Enter the official registered name of the company.
                 </FieldDescription>
               </FieldContent>
+
               {mode === "edit" ? (
-                <>
-                  <p className="uppercase font-semibold">{formData.company_name}</p>
-                  <input type="hidden" value={formData.company_name} readOnly />
-                </>
-              ) : (
                 <Input
                   required
                   value={formData.company_name}
@@ -472,6 +469,10 @@ export function AccountDialog({
                   placeholder="Company Name"
                   className="uppercase"
                 />
+              ) : (
+                <p className="uppercase font-semibold">
+                  {formData.company_name || "-"}
+                </p>
               )}
 
               {isCheckingDuplicate && (
@@ -501,17 +502,19 @@ export function AccountDialog({
                           <span>—</span>
                           <span className="capitalize text-[10px]">{dup.owner_firstname}</span>
                         </AlertDescription>
-
                       </div>
                     </Alert>
                   ))}
 
                   {duplicateInfo.length > 2 && (
                     <button
+                      type="button"
                       className="mt-2 text-blue-600 hover:underline text-xs"
                       onClick={() => setShowAllDuplicates((prev) => !prev)}
                     >
-                      {showAllDuplicates ? "View Less" : `View More (${duplicateInfo.length - 2} more)`}
+                      {showAllDuplicates
+                        ? "View Less"
+                        : `View More (${duplicateInfo.length - 2} more)`}
                     </button>
                   )}
                 </>
