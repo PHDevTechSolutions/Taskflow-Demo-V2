@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner"; // make sure you have this or replace with your toast lib
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -79,14 +80,11 @@ function writeLS(key: string, value: unknown) {
 
 /* ================= COMPONENT ================= */
 
-interface RemindersProps {
-  referenceId: string; // pass this from parent or auth context
-}
-
-export function Reminders({ referenceId }: RemindersProps) {
+export function Reminders() {
   const [now, setNow] = useState(new Date());
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [referenceId, setReferenceId] = useState<string>("");
 
   const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
 
@@ -98,6 +96,26 @@ export function Reminders({ referenceId }: RemindersProps) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
+
+  // ====== ADD your userId fetching logic here ======
+  // Replace 'userId' below with your actual user ID from auth context or similar
+  const userId = "CURRENT_USER_ID";
+
+  useEffect(() => {
+    if (!userId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        setReferenceId(data.ReferenceID); // assign to lowercase referenceId state
+      } catch {
+        toast.error("Failed to load user");
+      }
+    })();
+  }, [userId]);
 
   /* ================= INIT ================= */
 
