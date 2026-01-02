@@ -26,6 +26,7 @@ interface Meeting {
   id: string;
   title: string;
   start_date: Timestamp | Date | string | number;
+  remarks: string;
 }
 
 type DismissedByDate = Record<string, string[]>;
@@ -197,6 +198,7 @@ export function Reminders() {
         snap.docs.map((d) => ({
           id: d.id,
           title: d.data().type_activity,
+          remarks: d.data().remarks,
           start_date: d.data().start_date,
         }))
       );
@@ -270,19 +272,23 @@ export function Reminders() {
 
   return (
     <>
-      <div className="fixed top-4 right-4 space-y-2 z-50">
-        {showMeeting && currentMeeting && (
-          <div className="bg-white p-4 rounded shadow">
-            <strong>Meeting Reminder</strong>
-            <p>
-              {currentMeeting.title} at {formatTime(toDate(currentMeeting.start_date))}
+      <Dialog open={showMeeting} onOpenChange={setShowMeeting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{currentMeeting?.title} at {formatTime(toDate(currentMeeting?.start_date))}</DialogTitle>
+          </DialogHeader>
+          <div className="my-4 text-center">
+            <p className="text-lg uppercase">
+              {currentMeeting?.remarks}
             </p>
-            <Button size="sm" onClick={dismissMeeting}>
+          </div>
+          <DialogFooter>
+            <Button onClick={dismissMeeting}>
               Dismiss
             </Button>
-          </div>
-        )}
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showLogout} onOpenChange={setShowLogout}>
         <DialogContent>
