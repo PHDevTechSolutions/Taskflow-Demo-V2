@@ -189,8 +189,7 @@ export function Reminders() {
 
     const q = query(
       collection(db, "meetings"),
-      where("referenceid", "==", referenceId),
-      orderBy("start_date")
+      where("referenceid", "==", referenceId)
     );
 
     const unsubMeetings = onSnapshot(q, (snap) => {
