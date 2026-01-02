@@ -140,6 +140,12 @@ export function Reminders() {
   }, [userId]);
 
   useEffect(() => {
+    if (userDetails.referenceid) {
+      setReferenceId(userDetails.referenceid);
+    }
+  }, [userDetails.referenceid]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     audioRef.current = new Audio("/reminder-notification.mp3");
