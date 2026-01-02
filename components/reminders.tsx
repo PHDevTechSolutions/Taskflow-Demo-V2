@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner"; // make sure you have this or replace with your toast lib
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -11,7 +10,7 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-
+import { useSearchParams } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -21,20 +20,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
-/* ================= TYPES ================= */
+import { useUser } from "@/contexts/UserContext";
 
 interface Meeting {
   id: string;
   title: string;
   start_date: Timestamp | Date | string | number;
-  referenceid: string;
 }
 
 type DismissedByDate = Record<string, string[]>;
 type DismissedLogoutByDate = Record<string, boolean>;
-
-/* ================= HELPERS ================= */
 
 function formatTime(date: Date) {
   let h = date.getHours();
@@ -78,14 +73,21 @@ function writeLS(key: string, value: unknown) {
   }
 }
 
-/* ================= COMPONENT ================= */
+interface UserDetails {
+  referenceid: string;
+}
 
 export function Reminders() {
+  const searchParams = useSearchParams();
+  const { userId, setUserId } = useUser();
+
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [referenceId, setReferenceId] = useState<string>("");
+
   const [now, setNow] = useState(new Date());
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [referenceId, setReferenceId] = useState<string>("");
-
   const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
 
   const [showMeeting, setShowMeeting] = useState(false);
@@ -96,28 +98,46 @@ export function Reminders() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
+  const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "", });
 
-  // ====== ADD your userId fetching logic here ======
-  // Replace 'userId' below with your actual user ID from auth context or similar
-  const userId = "CURRENT_USER_ID";
+  const queryUserId = searchParams?.get("id") ?? "";
 
+  // Sync URL query param with userId context
   useEffect(() => {
-    if (!userId) return;
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
+    }
+  }, [queryUserId, userId, setUserId]);
 
-    (async () => {
+  // Fetch user details including referenceId
+  useEffect(() => {
+    if (!userId) {
+      setError("User ID is missing.");
+      setLoadingUser(false);
+      return;
+    }
+
+    const fetchUserData = async () => {
+      setError(null);
+      setLoadingUser(true);
       try {
-        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
+        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!response.ok) throw new Error("Failed to fetch user data");
+        const data = await response.json();
 
-        setReferenceId(data.ReferenceID); // assign to lowercase referenceId state
-      } catch {
-        toast.error("Failed to load user");
+        setUserDetails({
+          referenceid: data.ReferenceID || "",
+        });
+
+      } catch (err) {
+        console.error("Error fetching user data:", err);
+      } finally {
+        setLoadingUser(false);
       }
-    })();
-  }, [userId]);
+    };
 
-  /* ================= INIT ================= */
+    fetchUserData();
+  }, [userId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -130,13 +150,11 @@ export function Reminders() {
     setDismissedMeetings(meetingsLS[todayKey()] || []);
     setDismissedLogout(!!logoutLS[todayKey()]);
 
-    /* Firebase Messaging (SAFE) */
     (async () => {
       try {
         const messaging = await import("@/firebase/firebase-messaging");
 
-        const token =
-          await messaging.requestFirebaseNotificationPermission?.();
+        const token = await messaging.requestFirebaseNotificationPermission?.();
         if (token) console.log("FCM Token:", token);
 
         const unsub = messaging.onMessageListener?.((payload: any) => {
@@ -149,7 +167,7 @@ export function Reminders() {
               body: payload.notification.body || "",
             });
           }
-          audioRef.current?.play().catch(() => {});
+          audioRef.current?.play().catch(() => { });
         });
 
         return () => typeof unsub === "function" && unsub();
@@ -159,25 +177,22 @@ export function Reminders() {
     })();
   }, []);
 
-  /* ================= FIRESTORE ================= */
-
+  // Fetch meetings once we have referenceId
   useEffect(() => {
     if (!referenceId) return;
 
-    // Filter meetings by referenceid = current referenceId
-    const qMeetings = query(
+    const q = query(
       collection(db, "meetings"),
       where("referenceid", "==", referenceId),
       orderBy("start_date")
     );
 
-    const unsubMeetings = onSnapshot(qMeetings, (snap) => {
+    const unsubMeetings = onSnapshot(q, (snap) => {
       setMeetings(
         snap.docs.map((d) => ({
           id: d.id,
           title: d.data().type_activity,
           start_date: d.data().start_date,
-          referenceid: d.data().referenceid,
         }))
       );
     });
@@ -187,33 +202,21 @@ export function Reminders() {
     };
   }, [referenceId]);
 
-  /* ================= CLOCK ================= */
-
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 10000);
     return () => clearInterval(t);
   }, []);
 
-  /* ================= MATCH ================= */
-
   useEffect(() => {
     const THIRTY_MINUTES = 30 * 60 * 1000;
     const FIVE_MINUTES = 5 * 60 * 1000;
 
-    // Find current meeting that:
-    // - is not dismissed today
-    // - is on the same day
-    // - starts within 30 minutes in future or 5 minutes past
     const meeting = meetings.find((m) => {
       if (dismissedMeetings.includes(m.id)) return false;
       const d = toDate(m.start_date);
       const diff = d.getTime() - now.getTime();
 
-      return (
-        isSameDay(now, d) &&
-        diff <= THIRTY_MINUTES &&
-        diff >= -FIVE_MINUTES
-      );
+      return isSameDay(now, d) && diff <= THIRTY_MINUTES && diff >= -FIVE_MINUTES;
     });
 
     setCurrentMeeting(meeting || null);
@@ -224,20 +227,16 @@ export function Reminders() {
     }
   }, [now, meetings, dismissedMeetings, dismissedLogout]);
 
-  /* ================= SOUND ================= */
-
   useEffect(() => {
     const newMeeting = showMeeting && !prevMeeting.current;
 
     if (newMeeting && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch(() => { });
     }
 
     prevMeeting.current = showMeeting;
   }, [showMeeting]);
-
-  /* ================= DISMISS ================= */
 
   function dismissMeeting() {
     if (!currentMeeting) return;
@@ -256,7 +255,13 @@ export function Reminders() {
     setShowLogout(false);
   }
 
-  /* ================= UI ================= */
+  if (loadingUser) {
+    return <div>Loading user data...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-600">Error: {error}</div>;
+  }
 
   return (
     <>
@@ -265,8 +270,7 @@ export function Reminders() {
           <div className="bg-white p-4 rounded shadow">
             <strong>Meeting Reminder</strong>
             <p>
-              {currentMeeting.title} at{" "}
-              {formatTime(toDate(currentMeeting.start_date))}
+              {currentMeeting.title} at {formatTime(toDate(currentMeeting.start_date))}
             </p>
             <Button size="sm" onClick={dismissMeeting}>
               Dismiss
@@ -279,9 +283,7 @@ export function Reminders() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Logout Reminder</DialogTitle>
-            <DialogDescription>
-              Don&apos;t forget to logout Taskflow.
-            </DialogDescription>
+            <DialogDescription>Don&apos;t forget to logout Taskflow.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button onClick={dismissLogout}>Dismiss</Button>
