@@ -54,8 +54,8 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <Reminders />
             <Suspense fallback={null}>
+              <Reminders />
               <TransferAlertDialog />
               <ApproveDeletionDialog />
               <TicketEndorsed />
