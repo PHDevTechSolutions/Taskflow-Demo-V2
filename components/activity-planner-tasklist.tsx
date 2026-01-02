@@ -18,6 +18,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+
 import { TaskListDialog } from "@/components/activity-planner-tasklist-dialog";
 import TaskListEditDialog from "./activity-planner-tasklist-edit-dialog";
 import { AccountsActiveDeleteDialog } from "./accounts-active-delete-dialog";
@@ -98,6 +105,12 @@ export const TaskList: React.FC<CompletedProps> = ({
     // Delete dialog states
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [removeRemarks, setRemoveRemarks] = useState("");
+
+    const [reSoOpen, setReSoOpen] = useState(false);
+    const [reSoItem, setReSoItem] = useState<Completed | null>(null);
+    const [editSoNumber, setEditSoNumber] = useState("");
+    const [editSoAmount, setEditSoAmount] = useState<number | "">("");
+    const [isEditingSo, setIsEditingSo] = useState(false);
 
     // Fetch companies
     useEffect(() => {
@@ -503,10 +516,36 @@ export const TaskList: React.FC<CompletedProps> = ({
                                             />
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Button variant="outline" className="cursor-pointer" size="sm" onClick={() => openEditDialog(item)}>
-                                                Edit
-                                            </Button>
+                                            <div className="flex items-center justify-start gap-1">
+                                                {/* Edit Button */}
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="cursor-pointer"
+                                                    onClick={() => openEditDialog(item)}
+                                                >
+                                                    Edit
+                                                </Button>
+
+                                                {/* RE-SO Info Button (only for Sales Order Preparation) */}
+                                                {item.type_activity === "Sales Order Preparation" && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="cursor-pointer text-[10px]"
+                                                        onClick={() => {
+                                                            setReSoItem(item);
+                                                            setEditSoNumber(item.so_number || "");
+                                                            setEditSoAmount(item.so_amount ?? "");
+                                                            setIsEditingSo(false);
+                                                            setReSoOpen(true);
+                                                        }}
+                                                    >
+                                                        RE-SO ?
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
+
                                         <TableCell>{new Date(item.date_updated ?? item.date_created).toLocaleDateString()}</TableCell>
                                         <TableCell>
                                             {new Date(item.date_updated ?? item.date_created).toLocaleTimeString([], {
@@ -558,6 +597,119 @@ export const TaskList: React.FC<CompletedProps> = ({
                     </Table>
                 </div>
             )}
+
+            <Dialog open={reSoOpen} onOpenChange={setReSoOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Sales Order Information</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 text-sm">
+                        {/* SO Number */}
+                        <div className="space-y-1">
+                            <label className="font-semibold">SO Number</label>
+
+                            {!isEditingSo ? (
+                                <span className="block rounded border px-3 py-2 bg-muted uppercase">
+                                    {reSoItem?.so_number || "-"}
+                                </span>
+                            ) : (
+                                <Input
+                                    value={editSoNumber}
+                                    onChange={(e) =>
+                                        setEditSoNumber(e.target.value.toUpperCase())
+                                    }
+                                    placeholder="Enter SO Number"
+                                    className="uppercase"
+                                />
+                            )}
+                        </div>
+
+                        {/* SO Amount */}
+                        <div className="space-y-1">
+                            <label className="font-semibold">SO Amount</label>
+
+                            {!isEditingSo ? (
+                                <span className="block rounded border px-3 py-2 bg-muted">
+                                    {reSoItem?.so_amount
+                                        ? Number(reSoItem.so_amount).toLocaleString()
+                                        : "-"}
+                                </span>
+                            ) : (
+                                <Input
+                                    type="number"
+                                    value={editSoAmount}
+                                    onChange={(e) =>
+                                        setEditSoAmount(
+                                            e.target.value === ""
+                                                ? ""
+                                                : Number(e.target.value)
+                                        )
+                                    }
+                                    placeholder="Enter SO Amount"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                        {/* Cancel / Close */}
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                if (isEditingSo) {
+                                    // balik view mode, wag isara dialog
+                                    setIsEditingSo(false);
+                                    setEditSoNumber(reSoItem?.so_number || "");
+                                    setEditSoAmount(reSoItem?.so_amount ?? "");
+                                } else {
+                                    setReSoOpen(false);
+                                }
+                            }}
+                        >
+                            Cancel
+                        </Button>
+
+                        {/* Update / Save */}
+                        {!isEditingSo ? (
+                            <Button onClick={() => {
+                                setEditSoNumber("");
+                                setEditSoAmount("");
+                                setIsEditingSo(true);
+                            }}>
+                                Update
+                            </Button>
+                        ) : (
+                            <Button
+                                onClick={async () => {
+                                    if (!reSoItem) return;
+
+                                    try {
+                                        await fetch("/api/act-update-so", {
+                                            method: "PUT",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                                id: reSoItem.id,
+                                                so_number: editSoNumber,
+                                                so_amount: editSoAmount,
+                                            }),
+                                        });
+
+                                        setIsEditingSo(false);
+                                        setReSoOpen(false);
+                                        fetchActivities();
+                                    } catch (err) {
+                                        console.error("Failed to update SO", err);
+                                    }
+                                }}
+                                disabled={!editSoNumber || !editSoAmount}
+                            >
+                                Save
+                            </Button>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Edit Dialog */}
             {editOpen && editItem && (
