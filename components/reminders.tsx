@@ -27,13 +27,7 @@ interface Meeting {
   id: string;
   title: string;
   start_date: Timestamp | Date | string | number;
-}
-
-interface NoteReminder {
-  id: string;
-  type_activity: string;
-  remarks: string;
-  remind_at: Timestamp;
+  referenceid: string;
 }
 
 type DismissedByDate = Record<string, string[]>;
@@ -64,7 +58,6 @@ function toDate(v: any): Date {
 }
 
 const MEETINGS_KEY = "dismissedMeetings";
-const NOTES_KEY = "dismissedNoteReminders";
 const LOGOUT_KEY = "dismissedLogoutReminders";
 
 const todayKey = () => new Date().toISOString().split("T")[0];
@@ -86,26 +79,25 @@ function writeLS(key: string, value: unknown) {
 
 /* ================= COMPONENT ================= */
 
-export function Reminders() {
+interface RemindersProps {
+  referenceId: string; // pass this from parent or auth context
+}
+
+export function Reminders({ referenceId }: RemindersProps) {
   const [now, setNow] = useState(new Date());
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [notes, setNotes] = useState<NoteReminder[]>([]);
 
   const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
-  const [currentNote, setCurrentNote] = useState<NoteReminder | null>(null);
 
   const [showMeeting, setShowMeeting] = useState(false);
-  const [showNote, setShowNote] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
 
   const [dismissedMeetings, setDismissedMeetings] = useState<string[]>([]);
-  const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
   const [dismissedLogout, setDismissedLogout] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
-  const prevNote = useRef(false);
 
   /* ================= INIT ================= */
 
@@ -115,11 +107,9 @@ export function Reminders() {
     audioRef.current = new Audio("/reminder-notification.mp3");
 
     const meetingsLS = readLS<DismissedByDate>(MEETINGS_KEY, {});
-    const notesLS = readLS<DismissedByDate>(NOTES_KEY, {});
     const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
 
     setDismissedMeetings(meetingsLS[todayKey()] || []);
-    setDismissedNotes(notesLS[todayKey()] || []);
     setDismissedLogout(!!logoutLS[todayKey()]);
 
     /* Firebase Messaging (SAFE) */
@@ -141,7 +131,7 @@ export function Reminders() {
               body: payload.notification.body || "",
             });
           }
-          audioRef.current?.play().catch(() => { });
+          audioRef.current?.play().catch(() => {});
         });
 
         return () => typeof unsub === "function" && unsub();
@@ -154,42 +144,30 @@ export function Reminders() {
   /* ================= FIRESTORE ================= */
 
   useEffect(() => {
-    const unsubMeetings = onSnapshot(
-      query(collection(db, "meetings"), orderBy("start_date")),
-      (snap) => {
-        setMeetings(
-          snap.docs.map((d) => ({
-            id: d.id,
-            title: d.data().type_activity,
-            start_date: d.data().start_date,
-          }))
-        );
-      }
+    if (!referenceId) return;
+
+    // Filter meetings by referenceid = current referenceId
+    const qMeetings = query(
+      collection(db, "meetings"),
+      where("referenceid", "==", referenceId),
+      orderBy("start_date")
     );
 
-    const unsubNotes = onSnapshot(
-      query(
-        collection(db, "notes"),
-        where("remind_at", ">", Timestamp.fromDate(new Date(0))),
-        orderBy("remind_at")
-      ),
-      (snap) => {
-        setNotes(
-          snap.docs.map((d) => ({
-            id: d.id,
-            type_activity: d.data().type_activity,
-            remarks: d.data().remarks,
-            remind_at: d.data().remind_at,
-          }))
-        );
-      }
-    );
+    const unsubMeetings = onSnapshot(qMeetings, (snap) => {
+      setMeetings(
+        snap.docs.map((d) => ({
+          id: d.id,
+          title: d.data().type_activity,
+          start_date: d.data().start_date,
+          referenceid: d.data().referenceid,
+        }))
+      );
+    });
 
     return () => {
       unsubMeetings();
-      unsubNotes();
     };
-  }, []);
+  }, [referenceId]);
 
   /* ================= CLOCK ================= */
 
@@ -204,6 +182,10 @@ export function Reminders() {
     const THIRTY_MINUTES = 30 * 60 * 1000;
     const FIVE_MINUTES = 5 * 60 * 1000;
 
+    // Find current meeting that:
+    // - is not dismissed today
+    // - is on the same day
+    // - starts within 30 minutes in future or 5 minutes past
     const meeting = meetings.find((m) => {
       if (dismissedMeetings.includes(m.id)) return false;
       const d = toDate(m.start_date);
@@ -216,38 +198,26 @@ export function Reminders() {
       );
     });
 
-    const note = notes.find((n) => {
-      if (dismissedNotes.includes(n.id)) return false;
-      const d = toDate(n.remind_at);
-      const diff = now.getTime() - d.getTime();
-      return isSameDay(now, d) && diff >= 0 && diff <= FIVE_MINUTES;
-    });
-
     setCurrentMeeting(meeting || null);
     setShowMeeting(!!meeting);
-
-    setCurrentNote(note || null);
-    setShowNote(!!note);
 
     if (now.getHours() === 16 && now.getMinutes() === 30 && !dismissedLogout) {
       setShowLogout(true);
     }
-  }, [now, meetings, notes, dismissedMeetings, dismissedNotes, dismissedLogout]);
+  }, [now, meetings, dismissedMeetings, dismissedLogout]);
 
   /* ================= SOUND ================= */
 
   useEffect(() => {
     const newMeeting = showMeeting && !prevMeeting.current;
-    const newNote = showNote && !prevNote.current;
 
-    if ((newMeeting || newNote) && audioRef.current) {
+    if (newMeeting && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => { });
+      audioRef.current.play().catch(() => {});
     }
 
     prevMeeting.current = showMeeting;
-    prevNote.current = showNote;
-  }, [showMeeting, showNote]);
+  }, [showMeeting]);
 
   /* ================= DISMISS ================= */
 
@@ -258,15 +228,6 @@ export function Reminders() {
     writeLS(MEETINGS_KEY, data);
     setDismissedMeetings(data[todayKey()]);
     setShowMeeting(false);
-  }
-
-  function dismissNote() {
-    if (!currentNote) return;
-    const data = readLS<DismissedByDate>(NOTES_KEY, {});
-    data[todayKey()] = [...(data[todayKey()] || []), currentNote.id];
-    writeLS(NOTES_KEY, data);
-    setDismissedNotes(data[todayKey()]);
-    setShowNote(false);
   }
 
   function dismissLogout() {
@@ -290,17 +251,6 @@ export function Reminders() {
               {formatTime(toDate(currentMeeting.start_date))}
             </p>
             <Button size="sm" onClick={dismissMeeting}>
-              Dismiss
-            </Button>
-          </div>
-        )}
-
-        {showNote && currentNote && (
-          <div className="bg-white p-4 rounded shadow">
-            <strong>Note Reminder</strong>
-            <p>{currentNote.type_activity}</p>
-            <p>{currentNote.remarks}</p>
-            <Button size="sm" onClick={dismissNote}>
               Dismiss
             </Button>
           </div>

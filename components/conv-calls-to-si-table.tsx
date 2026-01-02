@@ -69,6 +69,19 @@ export const CallSI: React.FC<CallSIProps> = ({
     ).padStart(2, "0")}`;
   }, [dateCreatedFilterRange]);
 
+  const monthOptions = useMemo(() => {
+    const options = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      options.push({
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: d.toLocaleString("default", { year: "numeric", month: "long" }),
+      });
+    }
+    return options;
+  }, []);
+
   // Fetch activities as before
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
@@ -188,19 +201,15 @@ export const CallSI: React.FC<CallSIProps> = ({
     <div className="space-y-6">
       {/* Summary Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Calls and SI Summary</CardTitle>
-          <CardDescription>
-            Data for:{" "}
-            {dateCreatedFilterRange?.from
-              ? dateCreatedFilterRange.from.toLocaleString("default", {
-                  year: "numeric",
-                  month: "long",
-                })
-              : selectedMonth}
-          </CardDescription>
+        <CardHeader className="flex items-center justify-between space-x-4">
+          <div>
+            <CardTitle>Calls and SI Summary</CardTitle>
+            <CardDescription>
+              Data for:{" "}
+              {monthOptions.find((opt) => opt.value === selectedMonth)?.label || selectedMonth}
+            </CardDescription>
+          </div>
         </CardHeader>
-
         <CardContent>
           <Table>
             <TableHeader>
