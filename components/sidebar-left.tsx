@@ -1,42 +1,9 @@
 "use client";
 
 import * as React from "react";
-import {
-  Bot,
-  LayoutDashboard,
-  Mail,
-  CalendarDays,
-  Settings,
-  Building,
-  BarChart2,
-  Phone,
-  Home,
-  BookOpen,
-  PlusCircle,
-  Slash,
-  Clock,
-  Trash2,
-  Repeat,
-  Users,
-  Briefcase,
-  Target,
-  Edit2,
-  FileText,
-  MessageSquare,
-  Compass,
-  DollarSign,
-  ShoppingCart,
-  XCircle,
-  File,
-  Leaf,
-  ShoppingBag,
-  TrendingUp,
-  PhoneCall,
-  CreditCard,
-  Rocket,
-  ClipboardList,
-  ClipboardPenLine,
-  UserCheck
+import { 
+  Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home, BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
+  XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, CreditCard, Rocket, ClipboardList, ClipboardPenLine
 } from "lucide-react";
 
 import { NavFavorites } from "@/components/nav-favorites";
@@ -44,12 +11,7 @@ import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavWorkspaces } from "@/components/nav-workspaces";
 import { TeamSwitcher } from "@/components/team-switcher";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarRail,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
 
 // Dummy getMenuItems function - replace or import your actual function
 function getMenuItems(userId: string | null) {
@@ -97,6 +59,7 @@ const data = {
       icon: Briefcase,
       pages: [
         { name: "Activity Planner", url: "/activity/planner", icon: Target },
+        { name: "Team Activity Planner", url: "/activity/tsm/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/activity/tasklist", icon: ClipboardList },
         { name: "Revised Quotations", url: "/activity/revised-quotation", icon: Compass },
         { name: "Daily Admin Task", url: "/activity/notes", icon: FileText },
@@ -319,7 +282,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
                   "Quotes To SO",
                   "SO's To SI",
                   "Call to SI",
-                  "Activity Planner",
+                  "Team Activity Planner",
                 ].includes(page.name)
             ),
           };
@@ -333,7 +296,8 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
 
               return (
                 !page.url.startsWith("/reports/tsm") &&
-                !page.url.startsWith("/conversion/tsm")
+                !page.url.startsWith("/conversion/tsm") &&
+                !page.url.startsWith("/activity/tsm")
               );
             }),
           };

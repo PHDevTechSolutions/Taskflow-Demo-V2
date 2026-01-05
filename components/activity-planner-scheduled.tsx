@@ -18,6 +18,7 @@ import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator"
 
 interface Company {
   account_reference_number: string;
@@ -58,6 +59,7 @@ interface HistoryItem {
   ticket_reference_number?: string;
   source?: string;
   call_status?: string;
+  tsm_approved_status: string;
 }
 
 interface ScheduledProps {
@@ -497,6 +499,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             .toUpperCase()}
                         </Badge>
                       )}
+
+                    {item.relatedHistoryItems.some(
+                      (h) => h.tsm_approved_status && h.tsm_approved_status !== "-" && h.tsm_approved_status.trim() !== ""
+                    ) && (
+                        <Badge className="text-[8px] bg-green-500">
+                          <strong>Feedback by TSM:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .map((h) => h.tsm_approved_status ?? "")
+                            .filter((v) => v && v !== "-")
+                            .join(", ")
+                            .toUpperCase()}
+                        </Badge>
+                      )}
                   </div>
                 </div>
 
@@ -628,6 +643,20 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <span className="uppercase">
                               {item.relatedHistoryItems
                                 .map((h) => h.call_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
+                      <Separator className="mb-2 mt-2" />
+                      {item.relatedHistoryItems.some(
+                        (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                      ) && (
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
                                 .filter((v) => v !== "-")
                                 .join(", ")}
                             </span>
