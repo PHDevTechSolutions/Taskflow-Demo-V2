@@ -115,6 +115,16 @@ const data = {
         { name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
         { name: "New Client Summary", url: "/reports/ncs", icon: Leaf },
         { name: "FB Marketplace Summary", url: "/reports/fb", icon: ShoppingBag },
+        // TSM
+        { name: "Client Sales Summary", url: "/reports/tsm/am", icon: DollarSign },
+        //{ name: "Quotation Summary", url: "/reports/tsm/quotation", icon: FileText },
+        //{ name: "Sales Order Summary", url: "/reports/tsm/so", icon: ShoppingCart },
+        //{ name: "Pending Sales Order", url: "/reports/tsm/pending", icon: XCircle  },
+        //{ name: "Sales Invoice Summary", url: "/reports/tsm/si", icon: File },
+        //{ name: "CSR Inquiry Summary", url: "/reports/tsm/csr", icon: Phone },
+        //{ name: "SPF Summary", url: "/reports/tsm/spf", icon: ClipboardPenLine },
+        //{ name: "New Client Summary", url: "/reports/tsm/ncs", icon: Leaf },
+        //{ name: "FB Marketplace Summary", url: "/reports/tsm/fb", icon: ShoppingBag },
       ],
     },
     {
@@ -270,14 +280,25 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
             ...workspace,
             pages: workspace.pages.filter(
               (page) =>
-                !["All", "Pending Accounts", "Account Deletion", "Pending Transferred"].includes(page.name)
+                ![
+                  "All", 
+                  "Pending Accounts", 
+                  "Account Deletion", 
+                  "Pending Transferred"
+                ].includes(page.name)
             ),
           };
         } else if (role === "Territory Sales Manager") {
           return {
             ...workspace,
             pages: workspace.pages.filter((page) =>
-              ["All", "Pending Accounts", "Account Deletion", "Pending Transferred"].includes(page.name)
+              [
+                "All", 
+                "Pending Accounts", 
+                "Account Deletion", 
+                "Pending Transferred",
+                "Client Sales Summary",
+              ].includes(page.name)
             ),
           };
         }

@@ -93,7 +93,7 @@ export function ApproveTransferDialog() {
     const fetchAgents = async () => {
       try {
         const response = await fetch(
-          `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
+          `/api/fetch-all-agent?id=${encodeURIComponent(userDetails.referenceid)}`
         );
         if (!response.ok) throw new Error("Failed to fetch agents");
 
