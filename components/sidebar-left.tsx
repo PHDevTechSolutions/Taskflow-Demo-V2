@@ -26,7 +26,7 @@ import {
   Compass,
   DollarSign,
   ShoppingCart,
-  XCircle ,
+  XCircle,
   File,
   Leaf,
   ShoppingBag,
@@ -76,6 +76,7 @@ const data = {
   ],
   favorites: [
     { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
+    { name: "Team Sales Performance", url: "/sales-performance/tsm", icon: BarChart2 },
     { name: "National Call Ranking", url: "/national-call-ranking", icon: Phone },
   ],
   workspaces: [
@@ -106,25 +107,22 @@ const data = {
       name: "Reports",
       icon: BarChart2,
       pages: [
-        { name: "Account Sales Summary", url: "/reports/am", icon: DollarSign },
         { name: "Quotation Summary", url: "/reports/quotation", icon: FileText },
         { name: "Sales Order Summary", url: "/reports/so", icon: ShoppingCart },
-        { name: "Pending Sales Order", url: "/reports/pending", icon: XCircle  },
+        { name: "Pending Sales Order", url: "/reports/pending", icon: XCircle },
         { name: "Sales Invoice Summary", url: "/reports/si", icon: File },
         { name: "CSR Inquiry Summary", url: "/reports/csr", icon: Phone },
         { name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
         { name: "New Client Summary", url: "/reports/ncs", icon: Leaf },
         { name: "FB Marketplace Summary", url: "/reports/fb", icon: ShoppingBag },
         // TSM
-        { name: "Client Sales Summary", url: "/reports/tsm/am", icon: DollarSign },
-        //{ name: "Quotation Summary", url: "/reports/tsm/quotation", icon: FileText },
-        //{ name: "Sales Order Summary", url: "/reports/tsm/so", icon: ShoppingCart },
-        //{ name: "Pending Sales Order", url: "/reports/tsm/pending", icon: XCircle  },
-        //{ name: "Sales Invoice Summary", url: "/reports/tsm/si", icon: File },
-        //{ name: "CSR Inquiry Summary", url: "/reports/tsm/csr", icon: Phone },
-        //{ name: "SPF Summary", url: "/reports/tsm/spf", icon: ClipboardPenLine },
-        //{ name: "New Client Summary", url: "/reports/tsm/ncs", icon: Leaf },
-        //{ name: "FB Marketplace Summary", url: "/reports/tsm/fb", icon: ShoppingBag },
+        { name: "Quotation", url: "/reports/tsm/quotation", icon: FileText },
+        { name: "Sales Order", url: "/reports/tsm/so", icon: ShoppingCart },
+        { name: "Sales Invoice", url: "/reports/tsm/si", icon: File },
+        { name: "CSR Endorsement", url: "/reports/tsm/csr", icon: Phone },
+        { name: "SPF", url: "/reports/tsm/spf", icon: ClipboardPenLine },
+        { name: "New Client", url: "/reports/tsm/ncs", icon: Leaf },
+        { name: "FB Marketplace", url: "/reports/tsm/fb", icon: ShoppingBag },
       ],
     },
     {
@@ -135,6 +133,11 @@ const data = {
         { name: "Quote To SO", url: "/conversion/quote-to-so", icon: FileText },
         { name: "SO To SI", url: "/conversion/so-to-si", icon: CreditCard },
         { name: "Calls to SI", url: "/conversion/calls-to-si", icon: Rocket },
+        // TSM
+        { name: "Call to Quotes", url: "/conversion/tsm/calls-to-quote", icon: PhoneCall },
+        { name: "Quotes To SO", url: "/conversion/tsm/quote-to-so", icon: FileText },
+        { name: "SO's To SI", url: "/conversion/tsm/so-to-si", icon: CreditCard },
+        { name: "Call to SI", url: "/conversion/tsm/calls-to-si", icon: Rocket },
       ],
     },
   ],
@@ -274,6 +277,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     const role = userDetails.Role || "Admin";
 
     return data.workspaces.map((workspace) => {
+      // CUSTOMER DATABASE FILTER (existing logic – ok na)
       if (workspace.name === "Customer Database") {
         if (role === "Territory Sales Associate") {
           return {
@@ -281,40 +285,88 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
             pages: workspace.pages.filter(
               (page) =>
                 ![
-                  "All", 
-                  "Pending Accounts", 
-                  "Account Deletion", 
-                  "Pending Transferred"
+                  "All",
+                  "Pending Accounts",
+                  "Account Deletion",
+                  "Pending Transferred",
                 ].includes(page.name)
-            ),
-          };
-        } else if (role === "Territory Sales Manager") {
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((page) =>
-              [
-                "All", 
-                "Pending Accounts", 
-                "Account Deletion", 
-                "Pending Transferred",
-                "Client Sales Summary",
-              ].includes(page.name)
             ),
           };
         }
       }
+
+      if (workspace.name === "Reports" || workspace.name === "Conversion Rates" || workspace.name === "Customer Database" || workspace.name === "Work Management") {
+        if (role === "Territory Sales Manager") {
+          return {
+            ...workspace,
+            pages: workspace.pages.filter(
+              (page) =>
+                [
+                  "All",
+                  "Pending Accounts",
+                  "Account Deletion",
+                  "Pending Transferred",
+                  "Client Sales",
+                  "Quotation",
+                  "Sales Order",
+                  "Pending SO",
+                  "Sales Invoice",
+                  "CSR Endorsement",
+                  "SPF",
+                  "New Client",
+                  "FB Marketplace",
+                  "Call to Quotes",
+                  "Quotes To SO",
+                  "SO's To SI",
+                  "Call to SI",
+                  "Activity Planner",
+                ].includes(page.name)
+            ),
+          };
+        }
+
+        if (role === "Territory Sales Associate") {
+          return {
+            ...workspace,
+            pages: workspace.pages.filter((page) => {
+              if (!page.url) return false;
+
+              return (
+                !page.url.startsWith("/reports/tsm") &&
+                !page.url.startsWith("/conversion/tsm")
+              );
+            }),
+          };
+        }
+      }
+
       return workspace;
     });
   }, [userDetails.Role]);
 
-  const favoritesWithId = React.useMemo(
-    () =>
-      data.favorites.map((favorite) => ({
-        ...favorite,
-        url: withUserId(favorite.url),
-      })),
-    [data.favorites, withUserId]
-  );
+  const filteredFavorites = React.useMemo(() => {
+    const Role = userDetails.Role || "Admin";
+
+    if (Role === "Territory Sales Manager") {
+      // TSM can see all favorites
+      return data.favorites.filter(fav => fav.name === "Team Sales Performance" || fav.name === "National Call Ranking");
+    }
+
+    if (Role === "Territory Sales Associate") {
+      // TSA cannot see "Team Sales Performance"
+      return data.favorites.filter(fav => fav.name !== "Team Sales Performance");
+    }
+
+    // Other roles can see all favorites
+    return data.favorites;
+  }, [userDetails.Role]);
+
+  const favoritesWithId = React.useMemo(() => {
+    return filteredFavorites.map((favorite) => ({
+      ...favorite,
+      url: withUserId(favorite.url),
+    }));
+  }, [filteredFavorites, withUserId]);
 
   // Append userId to URLs in filtered workspaces
   const workspacesWithId = React.useMemo(

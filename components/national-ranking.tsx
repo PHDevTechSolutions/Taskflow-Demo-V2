@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -274,8 +276,8 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                         );
                         return (
                           <tr key={referenceid}>
-                            <td className="px-4 py-2">{index + 1}</td>
-                            <td className="px-4 py-2 flex items-center gap-2">
+                            <td className="px-4 py-2 text-xs">{index + 1}</td>
+                            <td className="px-4 py-2 flex items-center gap-2 capitalize font-semibold text-xs">
                               {user ? (
                                 <>
                                   <img
@@ -289,23 +291,25 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                                 <span className="italic text-gray-400">Unknown User</span>
                               )}
                             </td>
-                            <td className="px-4 py-2">{successful}</td>
+                            <td className="px-4 py-2 text-xs font-bold">{successful}</td>
                           </tr>
                         );
                       })
                     )}
                   </tbody>
-                  {sortedGroupedByReferenceid.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-gray-100 font-semibold">
-                        <td className="px-4 py-2">Grand Total</td>
-                        <td></td>
-                        <td className="px-4 py-2">{grandTotalReferenceid}</td>
-                      </tr>
-                    </tfoot>
-                  )}
+                 
                 </table>
               </CardContent>
+              <CardFooter>
+                {sortedGroupedByReferenceid.length > 0 && (
+                  <div className="flex justify-end items-center bg-gray-100 px-4 py-2 text-xs font-semibold rounded-md gap-2 w-full">
+                    <span>Grand Total</span>
+                    <Badge className="font-bold">
+                      {grandTotalReferenceid}
+                    </Badge>
+                  </div>
+                )}
+              </CardFooter>
             </Card>
 
             {/* CARD 2: TSM Summary (Managers) */}
@@ -338,8 +342,8 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                     ) : (
                       sortedGroupedByTsm.map(({ tsm, user, total }, index) => (
                         <tr key={tsm}>
-                          <td className="px-4 py-2">{index + 1}</td>
-                          <td className="px-4 py-2 flex items-center gap-2">
+                          <td className="px-4 py-2 text-xs">{index + 1}</td>
+                          <td className="px-4 py-2 flex items-center gap-2 text-xs font-semibold capitalize">
                             {user ? (
                               <>
                                 <img
@@ -353,22 +357,23 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                               <span className="italic text-gray-400">Unknown User</span>
                             )}
                           </td>
-                          <td className="px-4 py-2">{total}</td>
+                          <td className="px-4 py-2 text-xs">{total}</td>
                         </tr>
                       ))
                     )}
                   </tbody>
-                  {sortedGroupedByTsm.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-gray-100 font-semibold">
-                        <td className="px-4 py-2">Grand Total</td>
-                        <td></td>
-                        <td className="px-4 py-2">{groupedByTsm.grandTotal}</td>
-                      </tr>
-                    </tfoot>
-                  )}
                 </table>
               </CardContent>
+              <CardFooter>
+                {sortedGroupedByTsm.length > 0 && (
+                  <div className="flex justify-end items-center bg-gray-100 px-4 py-2 text-xs font-semibold rounded-md gap-2 w-full">
+                    <span>Grand Total</span>
+                    <Badge className="font-bold">
+                      {groupedByTsm.grandTotal}
+                    </Badge>
+                  </div>
+                )}
+              </CardFooter>
             </Card>
           </div>
         </>
