@@ -99,7 +99,6 @@ function DashboardContent() {
 
   useEffect(() => {
     if (!userId) {
-      setErrorUser("User ID is missing.");
       setLoadingUser(false);
       return;
     }

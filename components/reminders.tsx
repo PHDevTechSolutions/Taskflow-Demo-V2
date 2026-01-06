@@ -113,7 +113,6 @@ export function Reminders() {
   // Fetch user details including referenceId
   useEffect(() => {
     if (!userId) {
-      setError("User ID is missing.");
       setLoadingUser(false);
       return;
     }

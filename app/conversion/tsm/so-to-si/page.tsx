@@ -55,7 +55,6 @@ function DashboardContent() {
     // Fetch user details when userId changes
     useEffect(() => {
         if (!userId) {
-            setError("User ID is missing.");
             setLoadingUser(false);
             return;
         }

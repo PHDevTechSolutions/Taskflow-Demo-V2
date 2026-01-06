@@ -55,7 +55,6 @@ export function ApproveTransferDialog() {
   // Fetch user details based on userId
   useEffect(() => {
     if (!userId) {
-      setError("User ID is missing.");
       setLoadingUser(false);
       return;
     }
