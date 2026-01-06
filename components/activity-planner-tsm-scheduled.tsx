@@ -13,6 +13,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationPrevious,
+    PaginationNext,
+} from "@/components/ui/pagination";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { DoneDialog } from "./activity-tsm-done-dialog";
@@ -44,7 +51,8 @@ interface HistoryItem {
 
     date_followup?: string;
     ticket_reference_number?: string;
-    tsm_approved_status?: string;
+    tsm_approved_status: string;
+    tsm_approved_date: string;
     account_reference_number?: string;
     date_created?: string;
     date_updated?: string;
@@ -72,7 +80,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     const [doneOpen, setDoneOpen] = useState(false);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(null);
 
     const fetchAll = useCallback(async () => {
         if (!referenceid) return;
@@ -122,18 +130,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         };
     }, [referenceid, fetchAll]);
 
-    function isScheduledToday(dateStr?: string): boolean {
-        if (!dateStr) return false;
-        const scheduledDate = new Date(dateStr);
-        const today = new Date();
-
-        return (
-            scheduledDate.getFullYear() === today.getFullYear() &&
-            scheduledDate.getMonth() === today.getMonth() &&
-            scheduledDate.getDate() === today.getDate()
-        );
-    }
-
     const allowedType = [
         "Sent Quotation Standard",
         "Sent Quotation with Special Price",
@@ -143,7 +139,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     // Filter and map history items directly (no grouping)
     const filteredHistory = history
         .filter((h) => {
-            if (!isScheduledToday(h.date_followup)) return false;
+            // ✅ allowed call types lang
             if (!allowedType.includes(h.call_type ?? "")) return false;
             return true;
         })
@@ -161,15 +157,18 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         .filter((item) => {
             const term = search.toLowerCase();
 
+            // 🔍 search filter
             if (
                 item.company_name.toLowerCase().includes(term) ||
                 item.ticket_reference_number?.toLowerCase().includes(term) ||
                 item.quotation_number?.toLowerCase().includes(term) ||
                 item.so_number?.toLowerCase().includes(term) ||
-                item.remarks.toLowerCase().includes(term)
-            )
+                item.remarks?.toLowerCase().includes(term)
+            ) {
                 return true;
+            }
 
+            // 📅 date range filter
             if (dateCreatedFilterRange?.from) {
                 if (new Date(item.date_created ?? "") < dateCreatedFilterRange.from)
                     return false;
@@ -183,11 +182,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             return false;
         })
         .sort(
-            (a, b) => new Date(b.date_updated ?? "").getTime() - new Date(a.date_updated ?? "").getTime()
+            (a, b) =>
+                new Date(b.date_updated ?? "").getTime() -
+                new Date(a.date_updated ?? "").getTime()
         );
 
-    const openDone = (id: string) => {
-        setSelectedId(id);
+    const openDone = (activityRef: string) => {
+        setSelectedActivityRef(activityRef);
         setDoneOpen(true);
     };
 
@@ -196,9 +197,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         tsmapprovedremarks: string;
         tsmapproveddate: string;
     }) => {
-        if (!selectedId) return;
+        if (!selectedActivityRef) return;
 
-        setUpdatingId(selectedId);
+        setUpdatingId(selectedActivityRef);
         setDoneOpen(false);
 
         try {
@@ -206,29 +207,44 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    id: selectedId,
+                    activity_reference_number: selectedActivityRef,
                     tsmapprovedstatus: data.tsmapprovedstatus,
                     tsmapprovedremarks: data.tsmapprovedremarks,
                     tsmapproveddate: data.tsmapproveddate,
                 }),
             });
 
+            const result = await response.json();
+
             if (!response.ok) {
-                const error = await response.json();
-                toast.error(`Failed to update: ${error.error || "Unknown error"}`);
+                toast.error(result.error || "Failed to update");
                 setUpdatingId(null);
                 return;
             }
 
-            toast.success("Transaction marked as Approved");
+            toast.success("Transaction successfully approved");
             setUpdatingId(null);
-            setSelectedId(null);
+            setSelectedActivityRef(null);
             fetchAll();
-        } catch (error) {
-            toast.error("Failed to update transaction");
+        } catch (err) {
+            toast.error("Server error");
             setUpdatingId(null);
         }
     };
+
+    const ITEMS_PER_PAGE = 10;
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, dateCreatedFilterRange]);
+
+    const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
+
+    const paginatedHistory = filteredHistory.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
     if (loading) {
         return (
@@ -256,7 +272,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 onChange={(e) => setSearch(e.target.value)}
             />
 
-            <div className="max-h-[70vh] overflow-auto">
+            <div>
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -266,25 +282,25 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <TableHead className="text-xs">Quotation Amount</TableHead>
                             <TableHead className="text-xs">TSA Remarks</TableHead>
                             <TableHead className="text-xs">Feedback</TableHead>
+                            <TableHead className="text-xs">Follow-Up Date</TableHead>
+                            <TableHead className="text-xs">Approved Date</TableHead>
                             <TableHead className="text-xs text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
 
                     <TableBody>
-                        {filteredHistory.length === 0 && (
+                        {paginatedHistory.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center text-xs">
+                                <TableCell colSpan={9} className="text-center text-xs">
                                     No records found
                                 </TableCell>
                             </TableRow>
                         )}
 
-                        {filteredHistory.map((item) => (
+                        {paginatedHistory.map((item) => (
                             <TableRow key={item.id} className="text-xs">
                                 <TableCell className="font-semibold">{item.company_name}</TableCell>
-                                <TableCell>
-                                    <Badge className="text-[10px]">{item.call_type}</Badge>
-                                </TableCell>
+                                <TableCell><Badge className="text-[10px]">{item.call_type}</Badge></TableCell>
                                 <TableCell>{item.quotation_number ?? "-"}</TableCell>
                                 <TableCell>
                                     {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
@@ -293,14 +309,48 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                     })}
                                 </TableCell>
                                 <TableCell>{item.remarks ?? "-"}</TableCell>
-                                <TableCell className="uppercase">{item.tsm_approved_status ?? "-"}</TableCell>
+                                <TableCell>
+                                    {item.tsm_approved_status ? (
+                                        <Badge
+                                            className={
+                                                item.tsm_approved_status.toLowerCase() === "approved"
+                                                    ? "bg-green-600 text-white hover:bg-green-600"
+                                                    : item.tsm_approved_status.toLowerCase() === "declined"
+                                                        ? "bg-red-600 text-white hover:bg-red-600"
+                                                        : "bg-gray-400 text-white hover:bg-gray-400"
+                                            }
+                                        >
+                                            {item.tsm_approved_status.toUpperCase()}
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary">PENDING</Badge>
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {item.date_followup
+                                        ? new Date(item.date_followup).toLocaleDateString("en-PH", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                        })
+                                        : "-"}
+                                </TableCell>
+                                <TableCell>
+                                    {item.tsm_approved_date
+                                        ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                        })
+                                        : "-"}
+                                </TableCell>
                                 <TableCell className="text-right">
                                     <Button
                                         size="sm"
-                                        disabled={updatingId === item.id}
-                                        onClick={() => openDone(item.id)}
+                                        disabled={updatingId === item.activity_reference_number}
+                                        onClick={() => openDone(item.activity_reference_number)}
                                     >
-                                        {updatingId === item.id ? "Validating..." : "Validate"}
+                                        {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -308,6 +358,40 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Pagination controls */}
+            <Pagination>
+                <PaginationContent className="flex items-center space-x-4">
+                    <PaginationItem>
+                        <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (currentPage > 1) setCurrentPage(currentPage - 1);
+                            }}
+                            aria-disabled={currentPage <= 1}
+                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                        />
+                    </PaginationItem>
+
+                    {/* Current page / total pages */}
+                    <div className="px-4 font-medium">
+                        {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
+                    </div>
+
+                    <PaginationItem>
+                        <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                            }}
+                            aria-disabled={currentPage >= totalPages}
+                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                        />
+                    </PaginationItem>
+                </PaginationContent>
+            </Pagination>
 
             <DoneDialog
                 open={doneOpen}

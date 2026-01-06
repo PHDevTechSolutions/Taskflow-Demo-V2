@@ -114,7 +114,7 @@ export const DoneDialog: React.FC<DoneDialogProps> = ({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Approved">Approved</SelectItem>
-                                <SelectItem value="Disapproved">Disapproved</SelectItem>
+                                <SelectItem value="Decline">Decline</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

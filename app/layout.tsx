@@ -14,6 +14,7 @@ import { ApproveTransferDialog } from "@/components/popup-approval-transferred";
 import { RemoveDeletionDialog } from "@/components/popup-approval-deletion";
 import { TicketEndorsed } from "@/components/popup-ticket-endorsed";
 import { ActivityToday } from "@/components/popup-activity-today";
+import { FollowUpToday } from "@/components/popup-follow-up-today";
 import { OfflineDialog } from "@/components/offline-dialog";
 
 const geistSans = Geist({
@@ -64,6 +65,7 @@ export default function RootLayout({
               <RemoveDeletionDialog />
               <TicketEndorsed />
               <ActivityToday />
+              <FollowUpToday />
             </Suspense>
             <Analytics />
             {children}
