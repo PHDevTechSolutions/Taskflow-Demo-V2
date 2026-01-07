@@ -137,7 +137,7 @@ export function OutboundCard({ history }: OutboundCardProps) {
         ) : (
           <>
             {outboundTouchbaseCount > 0 && (
-              <Item variant="outline">
+              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                 <ItemContent>
                   <div className="flex w-full items-center justify-between">
                     <ItemTitle className="text-sm font-mono tabular-nums">
@@ -155,7 +155,7 @@ export function OutboundCard({ history }: OutboundCardProps) {
             )}
 
             {successfulCallsCount > 0 && (
-              <Item variant="outline">
+              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                 <ItemContent>
                   <div className="flex w-full items-center justify-between">
                     <ItemTitle className="text-sm font-mono tabular-nums">Total Successful Calls</ItemTitle>
@@ -171,7 +171,7 @@ export function OutboundCard({ history }: OutboundCardProps) {
             )}
 
             {unsuccessfulCallsCount > 0 && (
-              <Item variant="outline">
+              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                 <ItemContent>
                   <div className="flex w-full items-center justify-between">
                     <ItemTitle className="text-sm font-mono tabular-nums">Total Unsuccessful Calls</ItemTitle>
@@ -187,7 +187,7 @@ export function OutboundCard({ history }: OutboundCardProps) {
             )}
 
             {outboundFollowupCount > 0 && (
-              <Item variant="outline">
+              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                 <ItemContent>
                   <div className="flex w-full items-center justify-between">
                     <ItemTitle className="text-sm font-mono tabular-nums">Outbound - Follow-up</ItemTitle>

@@ -113,7 +113,7 @@ export function InboundRepliesCard({ history }: OutboundCardProps) {
 
             <CardContent className="space-y-4 flex-1 overflow-auto">
                 {inboundCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">
@@ -132,7 +132,7 @@ export function InboundRepliesCard({ history }: OutboundCardProps) {
                 )}
 
                 {viberCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">
@@ -151,7 +151,7 @@ export function InboundRepliesCard({ history }: OutboundCardProps) {
                 )}
 
                 {fbMarketplaceCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums whitespace-normal">

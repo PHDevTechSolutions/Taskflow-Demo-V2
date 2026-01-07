@@ -208,7 +208,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
             <CardContent className="space-y-4 flex-1 overflow-auto">
 
                 {QuotationCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Quotation Preparation</ItemTitle>
@@ -222,7 +222,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {SalesOrderCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Sales Order Preparation</ItemTitle>
@@ -236,7 +236,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {DeliveredCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Delivered / Closed Transaction</ItemTitle>
@@ -250,7 +250,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {SupplierAccreditationCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Admin - Supplier Accreditation</ItemTitle>
@@ -264,7 +264,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {AdminCreditTermsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Admin - Credit Terms Application</ItemTitle>
@@ -278,7 +278,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {AccountingConcernsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Accounting Concerns</ItemTitle>
@@ -292,7 +292,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {AfterSalesRefundsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">After Sales Refunds</ItemTitle>
@@ -306,7 +306,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {AfterSalesRepairCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">After Sales Repair / Replacement</ItemTitle>
@@ -320,7 +320,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {BiddingPreparationsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Bidding Preparations</ItemTitle>
@@ -334,7 +334,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {CustomerOrdersCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Customer Orders</ItemTitle>
@@ -348,7 +348,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {CustomerInquiryCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Customer Inquiry Sales</ItemTitle>
@@ -362,7 +362,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {DeliveryConcernCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Delivery Concern</ItemTitle>
@@ -376,7 +376,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {FollowUpCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Follow Up</ItemTitle>
@@ -390,7 +390,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {SampleRequestsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Sample Requests</ItemTitle>
@@ -404,7 +404,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {SiteVisitsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Site Visits / Demos</ItemTitle>
@@ -418,7 +418,7 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 )}
 
                 {TechnicalConcernsCount > 0 && (
-                    <Item variant="outline">
+                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                         <ItemContent>
                             <div className="flex w-full items-center justify-between">
                                 <ItemTitle className="text-sm font-mono tabular-nums">Technical Concerns</ItemTitle>

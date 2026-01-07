@@ -27,6 +27,7 @@ interface UserDetails {
     contact: string;
     tsmname: string;
     managername: string;
+    profilePicture: string;
 }
 
 function DashboardContent() {
@@ -44,6 +45,7 @@ function DashboardContent() {
         contact: "",
         tsmname: "",
         managername: "",
+        profilePicture: "",
     });
 
     const [loadingUser, setLoadingUser] = useState(true);
@@ -85,6 +87,7 @@ function DashboardContent() {
                     contact: data.ContactNumber || "",
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
+                    profilePicture: data.profilePicture || "",
                 });
 
                 toast.success("User data loaded successfully!");
@@ -126,7 +129,9 @@ function DashboardContent() {
                             <Scheduled
                                 referenceid={userDetails.referenceid}
                                 dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                userDetails={userDetails}
+                         />
                         </CardContent>
                     </Card>
                 </main>

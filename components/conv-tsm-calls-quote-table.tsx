@@ -37,6 +37,7 @@ interface UserDetails {
     manager: string;
     firstname: string;
     lastname: string;
+    profilePicture: string;
 }
 
 interface CallQuoteProps {
@@ -226,6 +227,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
 
         return {
             agentName: `${agent.Firstname} ${agent.Lastname}`,
+            profilePicture: agent.profilePicture || "/Taskflow.png",
             target_quota,
             totalCalls,
             totalQuotes,
@@ -324,7 +326,19 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                         <TableBody>
                             {rows.map((row, idx) => (
                                 <TableRow key={idx}>
-                                    <TableCell className="capitalize">{row.agentName}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <img
+                                                src={row.profilePicture}
+                                                alt={row.agentName}
+                                                className="h-8 w-8 rounded-full object-cover border"
+                                                onError={(e) => {
+                                                    (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
+                                                }}
+                                            />
+                                            <span className="capitalize text-sm">{row.agentName}</span>
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="text-right">{row.target_quota}</TableCell>
                                     <TableCell className="text-right">{row.totalCalls}</TableCell>
                                     <TableCell className="text-right">{row.totalQuotes}</TableCell>

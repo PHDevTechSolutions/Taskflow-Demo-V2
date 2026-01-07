@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,16 @@ interface HistoryItem {
     account_reference_number?: string;
     date_created?: string;
     date_updated?: string;
+    referenceid: string;
+}
+
+interface UserDetails {
+    referenceid: string;
+    tsm: string;
+    manager: string;
+    firstname: string;
+    lastname: string;
+    profilePicture: string;
 }
 
 interface ScheduledProps {
@@ -64,11 +74,13 @@ interface ScheduledProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
+    userDetails: UserDetails;
 }
 
 export const Scheduled: React.FC<ScheduledProps> = ({
     referenceid,
     dateCreatedFilterRange,
+    userDetails
 }) => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -81,6 +93,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     const [doneOpen, setDoneOpen] = useState(false);
     const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(null);
+
+    const [agents, setAgents] = useState<any[]>([]);
+    const [agentFilter, setAgentFilter] = useState("all");
 
     const fetchAll = useCallback(async () => {
         if (!referenceid) return;
@@ -246,6 +261,40 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         currentPage * ITEMS_PER_PAGE
     );
 
+    useEffect(() => {
+        if (!userDetails.referenceid) return;
+
+        const fetchAgents = async () => {
+            try {
+                const response = await fetch(
+                    `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
+                );
+                if (!response.ok) throw new Error("Failed to fetch agents");
+
+                const data = await response.json();
+                setAgents(data);
+            } catch (err) {
+                console.error("Error fetching agents:", err);
+                setError("Failed to load agents.");
+            }
+        };
+
+        fetchAgents();
+    }, [userDetails.referenceid]);
+
+    const agentMap = useMemo(() => {
+        const map: Record<string, { name: string; profilePicture: string }> = {};
+        agents.forEach((agent) => {
+            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
+                map[agent.ReferenceID.toLowerCase()] = {
+                    name: `${agent.Firstname} ${agent.Lastname}`,
+                    profilePicture: agent.profilePicture || "", // use actual key for profile picture
+                };
+            }
+        });
+        return map;
+    }, [agents]);
+
     if (loading) {
         return (
             <div className="flex justify-center py-10">
@@ -276,6 +325,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="text-xs">Agent</TableHead>
                             <TableHead className="text-xs">Company</TableHead>
                             <TableHead className="text-xs">Type</TableHead>
                             <TableHead className="text-xs">Quotation #</TableHead>
@@ -297,64 +347,83 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             </TableRow>
                         )}
 
-                        {paginatedHistory.map((item) => (
-                            <TableRow key={item.id} className="text-xs">
-                                <TableCell className="font-semibold">{item.company_name}</TableCell>
-                                <TableCell><Badge className="text-[10px]">{item.call_type}</Badge></TableCell>
-                                <TableCell>{item.quotation_number ?? "-"}</TableCell>
-                                <TableCell>
-                                    {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
-                                        style: "currency",
-                                        currency: "PHP",
-                                    })}
-                                </TableCell>
-                                <TableCell>{item.remarks ?? "-"}</TableCell>
-                                <TableCell>
-                                    {item.tsm_approved_status ? (
-                                        <Badge
-                                            className={
-                                                item.tsm_approved_status.toLowerCase() === "approved"
-                                                    ? "bg-green-600 text-white hover:bg-green-600"
-                                                    : item.tsm_approved_status.toLowerCase() === "declined"
-                                                        ? "bg-red-600 text-white hover:bg-red-600"
-                                                        : "bg-gray-400 text-white hover:bg-gray-400"
-                                            }
+                        {paginatedHistory.map((item) => {
+                            const agentName =
+                                agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
+                            return (
+                                <TableRow key={item.id} className="text-xs">
+                                    <TableCell className="flex items-center gap-2 capitalize">
+                                        {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
+                                            <img
+                                                src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
+                                                alt={agentMap[item.referenceid?.toLowerCase()]!.name}
+                                                className="w-6 h-6 rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                                                N/A
+                                            </div>
+                                        )}
+                                        <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
+                                    </TableCell>
+                                    <TableCell className="font-semibold">{item.company_name}</TableCell>
+                                    <TableCell><Badge className="text-[10px]">{item.call_type}</Badge></TableCell>
+                                    <TableCell>{item.quotation_number ?? "-"}</TableCell>
+                                    <TableCell>
+                                        {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
+                                            style: "currency",
+                                            currency: "PHP",
+                                        })}
+                                    </TableCell>
+                                    <TableCell>{item.remarks ?? "-"}</TableCell>
+                                    <TableCell>
+                                        {item.tsm_approved_status ? (
+                                            <Badge
+                                                className={
+                                                    item.tsm_approved_status.toLowerCase() === "approved"
+                                                        ? "bg-green-600 text-white hover:bg-green-600"
+                                                        : item.tsm_approved_status.toLowerCase() === "declined"
+                                                            ? "bg-red-600 text-white hover:bg-red-600"
+                                                            : "bg-gray-400 text-white hover:bg-gray-400"
+                                                }
+                                            >
+                                                {item.tsm_approved_status.toUpperCase()}
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="secondary">PENDING</Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {item.date_followup
+                                            ? new Date(item.date_followup).toLocaleDateString("en-PH", {
+                                                year: "numeric",
+                                                month: "short",
+                                                day: "numeric",
+                                            })
+                                            : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                        {item.tsm_approved_date
+                                            ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                                year: "numeric",
+                                                month: "short",
+                                                day: "numeric",
+                                            })
+                                            : "-"}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            size="sm"
+                                            disabled={updatingId === item.activity_reference_number}
+                                            onClick={() => openDone(item.activity_reference_number)}
                                         >
-                                            {item.tsm_approved_status.toUpperCase()}
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="secondary">PENDING</Badge>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {item.date_followup
-                                        ? new Date(item.date_followup).toLocaleDateString("en-PH", {
-                                            year: "numeric",
-                                            month: "short",
-                                            day: "numeric",
-                                        })
-                                        : "-"}
-                                </TableCell>
-                                <TableCell>
-                                    {item.tsm_approved_date
-                                        ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
-                                            year: "numeric",
-                                            month: "short",
-                                            day: "numeric",
-                                        })
-                                        : "-"}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <Button
-                                        size="sm"
-                                        disabled={updatingId === item.activity_reference_number}
-                                        onClick={() => openDone(item.activity_reference_number)}
-                                    >
-                                        {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                                            {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })
+                        }
                     </TableBody>
                 </Table>
             </div>

@@ -45,6 +45,7 @@ interface UserDetails {
     manager: string;
     firstname: string;
     lastname: string;
+    profilePicture: string;
 }
 
 interface CSRProps {
@@ -279,10 +280,13 @@ export const CSRTable: React.FC<CSRProps> = ({
     const error = errorCompanies || errorActivities;
 
     const agentMap = useMemo(() => {
-        const map: Record<string, string> = {};
+        const map: Record<string, { name: string; profilePicture: string }> = {};
         agents.forEach((agent) => {
             if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
-                map[agent.ReferenceID.toLowerCase()] = `${agent.Firstname} ${agent.Lastname}`;
+                map[agent.ReferenceID.toLowerCase()] = {
+                    name: `${agent.Firstname} ${agent.Lastname}`,
+                    profilePicture: agent.profilePicture || "", // use actual key for profile picture
+                };
             }
         });
         return map;
@@ -404,7 +408,7 @@ export const CSRTable: React.FC<CSRProps> = ({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[120px] text-xs">Agent</TableHead>
+                                <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="w-[120px] text-xs">Date Created</TableHead>
                                 <TableHead className="text-xs">Ticket Reference Number</TableHead>
                                 <TableHead className="text-xs">Quotation Amount</TableHead>
@@ -421,7 +425,20 @@ export const CSRTable: React.FC<CSRProps> = ({
                                 return (
 
                                     <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                        <TableCell className="capitalize">{agentName}</TableCell>
+                                        <TableCell className="flex items-center gap-2 capitalize">
+                                            {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
+                                                <img
+                                                    src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
+                                                    alt={agentMap[item.referenceid?.toLowerCase()]!.name}
+                                                    className="w-6 h-6 rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                                                    N/A
+                                                </div>
+                                            )}
+                                            <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
+                                        </TableCell>
                                         <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
                                         <TableCell className="uppercase">{item.ticket_reference_number || "-"}</TableCell>
                                         <TableCell className="text-right">
