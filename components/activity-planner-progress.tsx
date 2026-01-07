@@ -426,7 +426,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                         </div>
                                     </div>
 
-                                    <div className="ml-1">
+                                    <div className="ml-1 space-x-1">
                                         <Badge variant={badgeColor} className="text-[8px]">
                                             {item.status.replace("-", " ")}
                                         </Badge>
