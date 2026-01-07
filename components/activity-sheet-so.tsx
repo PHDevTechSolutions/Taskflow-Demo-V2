@@ -345,7 +345,7 @@ export function SOSheet(props: Props) {
                                     {
                                         value: "Cancelled",
                                         title: "Cancelled",
-                                        desc: "Unable to assist the client due to incomplete info, missed call, etc.",
+                                        desc: "Sales Order process is cancelled.",
                                     },
                                 ].map((item) => (
                                     <FieldLabel key={item.value}>
