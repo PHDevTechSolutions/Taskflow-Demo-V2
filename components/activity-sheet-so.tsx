@@ -335,44 +335,41 @@ export function SOSheet(props: Props) {
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
 
-                            <RadioGroup
-                                value={status}
-                                onValueChange={setStatus}
-                            >
-                                <FieldLabel>
-                                    <Field orientation="horizontal" className="w-full items-start">
-                                        {/* LEFT */}
-                                        <FieldContent className="flex-1">
-                                            <FieldTitle>SO-Done</FieldTitle>
-                                            <FieldDescription>
-                                                Sales Order process is complete.
-                                            </FieldDescription>
+                            <RadioGroup value={status} onValueChange={props.setStatus} className="space-y-4">
+                                {[
+                                    {
+                                        value: "SO-Done",
+                                        title: "SO-Done",
+                                        desc: "Client was success and provided with the needed information or support.",
+                                    },
+                                    {
+                                        value: "Cancelled",
+                                        title: "Cancelled",
+                                        desc: "Unable to assist the client due to incomplete info, missed call, etc.",
+                                    },
+                                ].map((item) => (
+                                    <FieldLabel key={item.value}>
+                                        <Field orientation="horizontal" className="w-full items-start">
+                                            <FieldContent className="flex-1">
+                                                <FieldTitle>{item.title}</FieldTitle>
+                                                <FieldDescription>{item.desc}</FieldDescription>
 
-                                            {/* Buttons only visible if selected */}
-                                            {status === "SO-Done" && (
-                                                <div className="mt-4 flex gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={handleBack}
-                                                    >
-                                                        Back
-                                                    </Button>
+                                                {status === item.value && (
+                                                    <div className="mt-4 flex gap-2">
+                                                        <Button type="button" variant="outline" onClick={props.handleBack}>
+                                                            Back
+                                                        </Button>
+                                                        <Button type="button" onClick={handleSave}>
+                                                            Save
+                                                        </Button>
 
-                                                    <Button
-                                                        type="button"
-                                                        onClick={handleSave}
-                                                    >
-                                                        Save
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </FieldContent>
-
-                                        {/* RIGHT */}
-                                        <RadioGroupItem value="SO-Done" />
-                                    </Field>
-                                </FieldLabel>
+                                                    </div>
+                                                )}
+                                            </FieldContent>
+                                            <RadioGroupItem value={item.value} />
+                                        </Field>
+                                    </FieldLabel>
+                                ))}
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>

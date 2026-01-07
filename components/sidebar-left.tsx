@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { 
+import {
   Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home, BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
   XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, CreditCard, Rocket, ClipboardList, ClipboardPenLine
 } from "lucide-react";
@@ -17,8 +17,6 @@ import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/component
 function getMenuItems(userId: string | null) {
   return [
     { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-    { title: "Ask AI", url: "#", icon: Bot },
-    { title: "Inbox", url: "#", icon: Mail, badge: "5" },
   ];
 }
 
@@ -39,6 +37,7 @@ const data = {
   favorites: [
     { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
     { name: "Team Sales Performance", url: "/sales-performance/tsm", icon: BarChart2 },
+    { name: "Agent List", url: "/agent/tsm", icon: Users },
     { name: "National Call Ranking", url: "/national-call-ranking", icon: Phone },
   ],
   workspaces: [
@@ -283,6 +282,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
                   "SO's To SI",
                   "Call to SI",
                   "Team Activity Planner",
+                  "Agent List"
                 ].includes(page.name)
             ),
           };
@@ -297,7 +297,8 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
               return (
                 !page.url.startsWith("/reports/tsm") &&
                 !page.url.startsWith("/conversion/tsm") &&
-                !page.url.startsWith("/activity/tsm")
+                !page.url.startsWith("/activity/tsm") &&
+                !page.url.startsWith("/agent/tsm")
               );
             }),
           };
@@ -313,12 +314,16 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
 
     if (Role === "Territory Sales Manager") {
       // TSM can see all favorites
-      return data.favorites.filter(fav => fav.name === "Team Sales Performance" || fav.name === "National Call Ranking");
+      return data.favorites.filter(fav => fav.name === "Team Sales Performance" || fav.name === "National Call Ranking" || fav.name === "Agent List");
     }
 
     if (Role === "Territory Sales Associate") {
-      // TSA cannot see "Team Sales Performance"
-      return data.favorites.filter(fav => fav.name !== "Team Sales Performance");
+      // TSA cannot see "Team Sales Performance" and "Agent List"
+      return data.favorites.filter(
+        (fav) =>
+          fav.name !== "Team Sales Performance" &&
+          fav.name !== "Agent List"
+      );
     }
 
     // Other roles can see all favorites
