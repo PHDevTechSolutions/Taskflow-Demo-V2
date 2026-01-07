@@ -42,6 +42,7 @@ interface UserDetails {
     target_quota: string;
     firstname: string;
     lastname: string;
+    profilePicture: string;
 }
 
 function DashboardContent() {
@@ -55,6 +56,7 @@ function DashboardContent() {
         target_quota: "",
         firstname: "",
         lastname: "",
+        profilePicture: "",
     });
 
     const [posts, setPosts] = useState<Account[]>([]);
@@ -94,6 +96,7 @@ function DashboardContent() {
                     target_quota: data.TargetQuota || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
+                    profilePicture: data.profilePicture || "",
                 });
 
                 toast.success("User data loaded successfully!");

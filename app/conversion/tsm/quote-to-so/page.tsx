@@ -41,6 +41,7 @@ interface UserDetails {
     manager: string;
     firstname: string;
     lastname: string;
+    profilePicture: string;
 }
 
 function DashboardContent() {
@@ -53,6 +54,7 @@ function DashboardContent() {
         manager: "",
         firstname: "",
         lastname: "",
+        profilePicture: "",
     });
 
     const [posts, setPosts] = useState<Account[]>([]);
@@ -93,6 +95,7 @@ function DashboardContent() {
                     manager: data.Manager || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
+                    profilePicture: data.profilePicture || "",
                 });
 
                 toast.success("User data loaded successfully!");
