@@ -146,7 +146,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   }, [open, referenceid]);
 
   return (
-    <Card className="flex flex-col justify-center items-center">
+    <Card className="flex flex-col justify-center items-center bg-white text-black z-10">
       <CardTitle className="text-center">Total Accounts</CardTitle>
       <div className="text-3xl font-bold mb-1">
         {loading

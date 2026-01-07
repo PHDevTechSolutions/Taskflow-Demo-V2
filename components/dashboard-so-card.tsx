@@ -58,7 +58,7 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
   }, [totalSalesInvoice, totalSOAmount]);
 
   return (
-    <Card>
+    <Card className="bg-white text-black z-10">
       <CardHeader className="flex justify-between items-center">
         <div>
           <CardTitle>Sales Order Summary</CardTitle>
@@ -112,12 +112,12 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
         {!loading && !error && (
           <div className="space-y-2">
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total SO-Done</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-blue-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-blue-500">
                       {totalSODone}
                     </Badge>
                   </ItemDescription>
@@ -125,12 +125,12 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total SO Amount</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-green-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-green-500">
                       ₱ {totalSOAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Badge>
                   </ItemDescription>
@@ -138,12 +138,12 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Delivered</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-purple-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-purple-500">
                       {totalDelivered}
                     </Badge>
                   </ItemDescription>
@@ -151,12 +151,12 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Sales Invoice</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-yellow-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-yellow-500">
                       ₱ {totalSalesInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Badge>
                   </ItemDescription>
@@ -164,12 +164,12 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">SO to SI Conversion (%)</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-teal-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-teal-500">
                       {soToSIConversion.toFixed(2)}%
                     </Badge>
                   </ItemDescription>

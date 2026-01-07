@@ -74,7 +74,7 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
   }, [totalSalesInvoice, totalQuotationAmount]);
 
   return (
-    <Card>
+    <Card className="bg-white text-black z-10">
       <CardHeader className="flex justify-between items-center">
         <div>
           <CardTitle>Quotations</CardTitle>
@@ -129,12 +129,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
 
         {!loading && !error && (
           <div className="space-y-2">
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Quotations (Quote-Done)</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-blue-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-blue-500">
                       {totalQuotationsDone}
                     </Badge>
                   </ItemDescription>
@@ -142,12 +142,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Quotation Amount</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-green-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-green-500">
                       ₱ {totalQuotationAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Badge>
                   </ItemDescription>
@@ -155,12 +155,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Sales Order Preparation</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-purple-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-purple-500">
                       {totalSOPreparation}
                     </Badge>
                   </ItemDescription>
@@ -168,12 +168,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total SO Amount</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-pink-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-pink-500">
                       ₱ {totalSOAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Badge>
                   </ItemDescription>
@@ -181,12 +181,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
               </ItemContent>
             </Item>
 
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Quote to SO Conversion (%)</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-teal-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-teal-500">
                       {quoteToSOConversion.toFixed(2)}%
                     </Badge>
                   </ItemDescription>
@@ -195,12 +195,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
             </Item>
 
             {/* Total Sales Invoice */}
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Total Sales Invoice</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-yellow-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-yellow-500">
                       ₱ {totalSalesInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Badge>
                   </ItemDescription>
@@ -209,12 +209,12 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
             </Item>
 
             {/* Quotation to SI Conversion */}
-            <Item variant="outline" size="sm">
+            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">Quotation to SI Conversion (%)</ItemTitle>
                   <ItemDescription>
-                    <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-indigo-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-indigo-500">
                       {quotationToSIConversion.toFixed(2)}%
                     </Badge>
                   </ItemDescription>

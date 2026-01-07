@@ -107,6 +107,9 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
     const SiteVisitsCount = useMemo(() =>
         history.filter((item) => item.type_activity === "Site Visits / Demos").length, [history]);
 
+    const TechnicalConcernsCount = useMemo(() =>
+        history.filter((item) => item.type_activity === "Technical Concerns").length, [history]);
+
     // Durations
     const avgDurationSalesOrderMs = useMemo(() =>
         averageDurationMs(history.filter((item) => item.type_activity === "Sales Order Preparation")), [history]);
@@ -153,6 +156,9 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
     const avgDurationSiteVisitsMs = useMemo(() =>
         averageDurationMs(history.filter((item) => item.type_activity === "Site Visits / Demos")), [history]);
 
+    const avgDurationTechnicalConcernsMs = useMemo(() =>
+        averageDurationMs(history.filter((item) => item.type_activity === "Technical Concerns")), [history]);
+
     // Total average duration summed
     const totalAverageDurationMs = useMemo(() => (
         avgDurationSalesOrderMs +
@@ -169,7 +175,8 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
         avgDurationDeliveryConcernMs +
         avgDurationFollowUpMs +
         avgDurationSampleRequestsMs +
-        avgDurationSiteVisitsMs
+        avgDurationSiteVisitsMs +
+        avgDurationTechnicalConcernsMs
     ), [
         avgDurationSalesOrderMs,
         avgDurationQuotationMs,
@@ -185,11 +192,12 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
         avgDurationDeliveryConcernMs,
         avgDurationFollowUpMs,
         avgDurationSampleRequestsMs,
-        avgDurationSiteVisitsMs
+        avgDurationSiteVisitsMs,
+        avgDurationTechnicalConcernsMs
     ]);
 
     return (
-        <Card className="min-h-[400px] max-h-[600px] overflow-y-auto">
+        <Card className="flex flex-col min-h-[700px] max-h-[700px] overflow-y-auto bg-white z-20 text-black">
             <CardHeader>
                 <CardTitle>Other Activities</CardTitle>
                 <CardDescription>
@@ -197,186 +205,231 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-4 flex-1 overflow-auto custom-scrollbar">
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Quotation Preparation</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{QuotationCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationQuotationMs)}</p>
-                    </ItemContent>
-                </Item>
+            <CardContent className="space-y-4 flex-1 overflow-auto">
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Sales Order Preparation</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SalesOrderCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSalesOrderMs)}</p>
-                    </ItemContent>
-                </Item>
+                {QuotationCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Quotation Preparation</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{QuotationCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationQuotationMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Delivered / Closed Transaction</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveredCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveredMs)}</p>
-                    </ItemContent>
-                </Item>
+                {SalesOrderCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Sales Order Preparation</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SalesOrderCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSalesOrderMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Admin - Supplier Accreditation</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SupplierAccreditationCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSupplierAccreditationMs)}</p>
-                    </ItemContent>
-                </Item>
+                {DeliveredCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Delivered / Closed Transaction</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveredCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveredMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Admin - Credit Terms Application</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AdminCreditTermsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAdminCreditTermsMs)}</p>
-                    </ItemContent>
-                </Item>
+                {SupplierAccreditationCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Admin - Supplier Accreditation</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SupplierAccreditationCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSupplierAccreditationMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Accounting Concerns</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AccountingConcernsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAccountingConcernsMs)}</p>
-                    </ItemContent>
-                </Item>
+                {AdminCreditTermsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Admin - Credit Terms Application</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AdminCreditTermsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAdminCreditTermsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">After Sales Refunds</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRefundsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRefundsMs)}</p>
-                    </ItemContent>
-                </Item>
+                {AccountingConcernsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Accounting Concerns</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AccountingConcernsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAccountingConcernsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">After Sales Repair / Replacement</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRepairCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRepairMs)}</p>
-                    </ItemContent>
-                </Item>
+                {AfterSalesRefundsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">After Sales Refunds</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRefundsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRefundsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Bidding Preparations</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{BiddingPreparationsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationBiddingPreparationMs)}</p>
-                    </ItemContent>
-                </Item>
+                {AfterSalesRepairCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">After Sales Repair / Replacement</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRepairCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRepairMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Customer Orders</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerOrdersCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerOrdersMs)}</p>
-                    </ItemContent>
-                </Item>
+                {BiddingPreparationsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Bidding Preparations</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{BiddingPreparationsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationBiddingPreparationMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Customer Inquiry Sales</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerInquiryCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerInquirySalesMs)}</p>
-                    </ItemContent>
-                </Item>
+                {CustomerOrdersCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Customer Orders</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerOrdersCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerOrdersMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Delivery Concern</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveryConcernCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveryConcernMs)}</p>
-                    </ItemContent>
-                </Item>
+                {CustomerInquiryCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Customer Inquiry Sales</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerInquiryCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerInquirySalesMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Follow Up</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{FollowUpCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
-                    </ItemContent>
-                </Item>
+                {DeliveryConcernCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Delivery Concern</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveryConcernCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveryConcernMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Sample Requests</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SampleRequestsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSampleRequestsMs)}</p>
-                    </ItemContent>
-                </Item>
+                {FollowUpCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Follow Up</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{FollowUpCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
-                <Item variant="outline">
-                    <ItemContent>
-                        <div className="flex w-full items-center justify-between">
-                            <ItemTitle className="text-sm font-mono tabular-nums">Site Visits / Demos</ItemTitle>
-                            <ItemDescription className="text-lg font-bold">
-                                <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SiteVisitsCount}</Badge>
-                            </ItemDescription>
-                        </div>
-                        <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSiteVisitsMs)}</p>
-                    </ItemContent>
-                </Item>
+                {SampleRequestsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Sample Requests</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SampleRequestsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSampleRequestsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
+
+                {SiteVisitsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Site Visits / Demos</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SiteVisitsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSiteVisitsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
+
+                {TechnicalConcernsCount > 0 && (
+                    <Item variant="outline">
+                        <ItemContent>
+                            <div className="flex w-full items-center justify-between">
+                                <ItemTitle className="text-sm font-mono tabular-nums">Technical Concerns</ItemTitle>
+                                <ItemDescription className="text-lg font-bold">
+                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{TechnicalConcernsCount}</Badge>
+                                </ItemDescription>
+                            </div>
+                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationTechnicalConcernsMs)}</p>
+                        </ItemContent>
+                    </Item>
+                )}
 
             </CardContent>
 
@@ -402,7 +455,8 @@ export function OtherActivitiesCard({ history }: OutboundCardProps) {
                                 DeliveryConcernCount +
                                 FollowUpCount +
                                 SampleRequestsCount +
-                                SiteVisitsCount
+                                SiteVisitsCount +
+                                TechnicalConcernsCount
                             }
                         </Badge>
                     </>

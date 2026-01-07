@@ -216,7 +216,7 @@ function DashboardContent() {
                             {showCompleted ? "Hide Completed" : "View Completed"}</Button>
                     </div>
 
-                    <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-${showCompleted ? "4" : "3"}  `}>
+                    <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
                         <Card>
                             <CardHeader>
                                 <CardTitle>New Task</CardTitle>

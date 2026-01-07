@@ -41,7 +41,7 @@ function Top3Ranking({
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6 bg-white text-black">
       <CardHeader>
         <CardTitle className="text-2xl">🏆 Ranking Achievements</CardTitle>
       </CardHeader>
@@ -243,7 +243,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* CARD 1: National Ranking (Associates) */}
-            <Card>
+            <Card className="bg-white text-black">
               <CardHeader>
                 <CardTitle>National Ranking</CardTitle>
               </CardHeader>
@@ -313,7 +313,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
             </Card>
 
             {/* CARD 2: TSM Summary (Managers) */}
-            <Card>
+            <Card className="bg-white text-black">
               <CardHeader>
                 <CardTitle>TSM Summary</CardTitle>
               </CardHeader>

@@ -567,7 +567,7 @@ export const Notes: React.FC<NotesProps> = ({
         </div>
 
         {/* Right side: Form for Create/Update */}
-        <div className="bg-white p-6">
+        <div className="p-6">
           <h2 className="text-lg font-semibold mb-4">
             {selectedNote ? "Edit Note" : "Create New Note"}
           </h2>

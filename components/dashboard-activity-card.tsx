@@ -63,16 +63,16 @@ export function ActivityCard({ activities, loading, error }: Props) {
   }
 
   return (
-    <Card className="p-2 gap-3">
+    <Card className="p-2 gap-3 bg-white text-black z-10">
       {/* Total Deliveries */}
-      <Item variant="outline" size="sm">
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
         <ItemContent>
           <div className="flex justify-between w-full">
             <ItemTitle className="text-xs font-medium">
               Total Delivered Transactions
             </ItemTitle>
             <ItemDescription>
-              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-emerald-500">
+              <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-green-500">
                 {totalDeliveries}
               </Badge>
             </ItemDescription>
@@ -81,14 +81,16 @@ export function ActivityCard({ activities, loading, error }: Props) {
       </Item>
 
       {/* Total Sales */}
-      <Item variant="outline" size="sm">
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
         <ItemContent>
           <div className="flex justify-between w-full">
             <ItemTitle className="text-xs font-medium">
               Total Sales Invoice
             </ItemTitle>
             <ItemDescription className="text-xs font-semibold">
-              ₱ {totalSales.toLocaleString()}
+              <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono tabular-nums text-white bg-green-500">
+                ₱ {totalSales.toLocaleString()}
+              </Badge>
             </ItemDescription>
           </div>
         </ItemContent>
@@ -97,14 +99,14 @@ export function ActivityCard({ activities, loading, error }: Props) {
       {/* Quotation & SO — same row */}
       <div className="grid grid-cols-2 gap-2">
         {/* Quotation */}
-        <Item variant="outline" size="sm">
+        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
           <ItemContent>
             <div className="flex justify-between w-full">
               <ItemTitle className="text-xs font-medium">
                 Quotations
               </ItemTitle>
               <ItemDescription>
-                <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-blue-500">
+                <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-blue-500">
                   {quotationCount}
                 </Badge>
               </ItemDescription>
@@ -113,14 +115,14 @@ export function ActivityCard({ activities, loading, error }: Props) {
         </Item>
 
         {/* Sales Order */}
-        <Item variant="outline" size="sm">
+        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
           <ItemContent>
             <div className="flex justify-between w-full">
               <ItemTitle className="text-xs font-medium">
                 Sales Orders
               </ItemTitle>
               <ItemDescription>
-                <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-purple-500">
+                <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-purple-500">
                   {soCount}
                 </Badge>
               </ItemDescription>

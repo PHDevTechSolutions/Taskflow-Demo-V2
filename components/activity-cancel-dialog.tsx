@@ -11,12 +11,12 @@ interface CancelDialogProps {
 export function CancelDialog({ onConfirm, onCancel }: CancelDialogProps) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-md p-6 max-w-sm w-full shadow-lg">
+      <div className="bg-white rounded-md p-6 max-w-sm w-full shadow-lg text-black">
         <h3 className="text-lg font-semibold mb-4">
           Are you sure you want to cancel this activity?
         </h3>
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" className="hover:text-black" onClick={onCancel}>
             No, keep editing
           </Button>
           <Button variant="destructive" onClick={onConfirm}>

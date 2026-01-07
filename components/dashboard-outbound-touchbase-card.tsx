@@ -44,13 +44,13 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
   }
 
   return (
-    <Card className="p-2 gap-2">
-      <Item variant="outline" className="w-full">
+    <Card className="p-2 gap-2 bg-white text-black z-10">
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
         <ItemContent className="w-full">
           <div className="flex justify-between w-full">
             <ItemTitle className="text-xs font-medium">Total Outbound - Touchbase</ItemTitle>
             <ItemDescription className="text-xs font-semibold">
-              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums bg-blue-500">
+              <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-blue-500">
                 {totalOutboundTouchbase}
               </Badge>
             </ItemDescription>
@@ -58,12 +58,12 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
         </ItemContent>
       </Item>
 
-      <Item variant="outline" size="sm" className="w-full">
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
         <ItemContent className="w-full">
           <div className="flex justify-between w-full">
             <ItemTitle className="text-xs font-medium">Total Successful Calls</ItemTitle>
             <ItemDescription className="text-xs font-semibold">
-              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums bg-green-500">
+              <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-green-500">
                 {totalSuccessful}
               </Badge>
             </ItemDescription>
@@ -71,12 +71,12 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
         </ItemContent>
       </Item>
 
-      <Item variant="outline" size="sm" className="w-full">
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
         <ItemContent className="w-full">
           <div className="flex justify-between w-full">
             <ItemTitle className="text-xs font-medium">Total Unsuccessful Calls</ItemTitle>
             <ItemDescription className="text-xs font-semibold">
-              <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono tabular-nums" variant="destructive">
+              <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums" variant="destructive">
                 {totalUnsuccessful}
               </Badge>
             </ItemDescription>

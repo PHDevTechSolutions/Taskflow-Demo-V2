@@ -11,14 +11,14 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-
+import MarkerClusterGroup from "react-leaflet-cluster";
 import {
     Map,
     MapMarker,
     MapPopup,
     MapTileLayer,
     MapZoomControl,
-    MapLocateControl,  // <-- import locate control dito
+    MapLocateControl,
 } from "@/components/ui/map";
 
 interface SiteVisit {
@@ -35,6 +35,14 @@ interface SiteVisitCardProps {
     referenceid: string;
     dateRange?: DateRange;
 }
+
+import dynamic from "next/dynamic";
+
+const SiteVisitMap = dynamic(
+    () => import("./dashboard-site-visit-map"),
+    { ssr: false }
+);
+
 
 export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
     const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
@@ -77,16 +85,18 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
     // Calculate center based on first available site's coords, or fallback
     const mapCenter: [number, number] =
         filteredVisits.length > 0 &&
-        filteredVisits[0].Latitude != null &&
-        filteredVisits[0].Longitude != null
+            filteredVisits[0].Latitude != null &&
+            filteredVisits[0].Longitude != null
             ? [
                 Number(filteredVisits[0].Latitude),
                 Number(filteredVisits[0].Longitude),
             ]
             : defaultCenter;
 
+
+
     return (
-        <Card>
+        <Card className="bg-white text-black z-10">
             <CardHeader>
                 <CardTitle>Site Visits</CardTitle>
                 <CardDescription>Showing site visits on the map from TaskLog collection</CardDescription>
@@ -101,33 +111,12 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
                 )}
 
                 {!loading && !error && filteredVisits.length > 0 && (
-                    <Map center={mapCenter} zoom={12} className="w-full h-full rounded">
-                        <MapTileLayer />
-                        <MapZoomControl />
-                        <MapLocateControl />  {/* <-- dito natin inilagay */}
-                        {filteredVisits.map((visit, idx) => {
-                            if (visit.Latitude == null || visit.Longitude == null) return null;
-                            const position: [number, number] = [
-                                Number(visit.Latitude),
-                                Number(visit.Longitude),
-                            ];
-                            return (
-                                <MapMarker key={idx} position={position}>
-                                    <MapPopup>
-                                        <div className="max-w-xs text-left">
-                                            <p><strong>Type:</strong> {visit.Type || "-"}</p><br />
-                                            <p><strong>Status:</strong> {visit.Status || "-"}</p><br />
-                                            <p><strong>Date:</strong> {visit.date_created ? new Date(visit.date_created).toLocaleString() : "-"}</p><br />
-                                            <p><strong>Location:</strong> {visit.Location || "-"}</p>
-                                        </div>
-                                    </MapPopup>
-                                </MapMarker>
-                            );
-                        })}
-                    </Map>
+                    <SiteVisitMap
+                        visits={filteredVisits}
+                        center={mapCenter}
+                    />
                 )}
             </CardContent>
-
             <CardFooter className="text-muted-foreground text-xs">
                 Displays site visits on a map including location, status, and photos.
             </CardFooter>

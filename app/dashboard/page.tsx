@@ -180,7 +180,7 @@ function DashboardContent() {
     <>
       <SidebarLeft />
       <SidebarInset>
-        <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2">
+        <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 z-[50]">
           <div className="flex flex-1 items-center gap-2 px-3">
             <SidebarTrigger />
             <Separator
@@ -200,6 +200,10 @@ function DashboardContent() {
         <div className="flex flex-col gap-4 p-4">
           {/* Cards container: 4 cards in a row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div
+                className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
+            />
+
             <AccountCard referenceid={userDetails.referenceid} />
 
             <OutboundTouchbaseCard

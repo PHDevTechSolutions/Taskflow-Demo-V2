@@ -213,7 +213,7 @@ export const SalesTable: React.FC<SalesProps> = ({
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 text-black">
             <div className="rounded-md border p-4 bg-white shadow-sm">
                 <h2 className="font-semibold text-sm mb-4">Sales Metrics</h2>
                 <Table>

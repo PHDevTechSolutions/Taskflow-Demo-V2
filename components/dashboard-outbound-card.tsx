@@ -101,7 +101,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
     }, [totalDelivered, totalOutboundTouchbase]);
 
     return (
-        <Card>
+        <Card className="bg-white text-black z-10">
             <CardHeader className="flex justify-between items-center">
                 <div>
                     <CardTitle>Outbound Calls (Touch-Based Only)</CardTitle>
@@ -156,12 +156,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
 
                 {!loading && !error && (
                     <div className="space-y-2">
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">OB Target</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-blue-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-2 font-mono tabular-nums text-white bg-blue-500">
                                             {obTarget.toLocaleString()} (35 × {workingDays} WD)
                                         </Badge>
                                     </ItemDescription>
@@ -169,12 +169,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Total OB</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-indigo-500">
+                                        <Badge className="h-8 min-w-[2rem]rounded-full px-3 font-mono text-white bg-indigo-500">
                                             {totalOutboundTouchbase}
                                         </Badge>
                                     </ItemDescription>
@@ -182,12 +182,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Total Quote</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-yellow-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-yellow-500">
                                             {totalQuotationPreparation}
                                         </Badge>
                                     </ItemDescription>
@@ -195,12 +195,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Total SI</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-emerald-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-emerald-500">
                                             {totalDelivered}
                                         </Badge>
                                     </ItemDescription>
@@ -208,12 +208,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Achievement</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-purple-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-purple-500">
                                             {achievement.toFixed(2)}%
                                         </Badge>
                                     </ItemDescription>
@@ -221,12 +221,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Calls to Quote Conversion</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-pink-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-pink-500">
                                             {callsToQuoteConversion.toFixed(2)}%
                                         </Badge>
                                     </ItemDescription>
@@ -234,12 +234,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Outbound to Sales Conversion</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-red-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-red-500">
                                             {outboundToSalesConversion.toFixed(2)}%
                                         </Badge>
                                     </ItemDescription>
@@ -247,12 +247,12 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                             </ItemContent>
                         </Item>
 
-                        <Item variant="outline" size="sm">
+                        <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
                             <ItemContent>
                                 <div className="flex justify-between w-full">
                                     <ItemTitle className="text-xs font-medium">Total Sales Invoice</ItemTitle>
                                     <ItemDescription>
-                                        <Badge className="h-5 min-w-[1.25rem] rounded-full px-1 font-mono bg-teal-500">
+                                        <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-teal-500">
                                             ₱ {totalSalesInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </Badge>
                                     </ItemDescription>

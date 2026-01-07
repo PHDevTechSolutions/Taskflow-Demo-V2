@@ -113,8 +113,14 @@ export function OutboundCard({ history }: OutboundCardProps) {
     );
   }, [avgDurationTouchbaseMs, avgDurationFollowUpMs, avgDurationSuccessfulMs, avgDurationUnsuccessfulMs]);
 
+  const hasAnyActivity =
+    outboundTouchbaseCount +
+    outboundFollowupCount +
+    successfulCallsCount +
+    unsuccessfulCallsCount > 0;
+
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="flex flex-col h-full bg-white z-20 text-black">
       <CardHeader>
         <CardTitle>Outbound History</CardTitle>
         <CardDescription>
@@ -124,70 +130,78 @@ export function OutboundCard({ history }: OutboundCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-4 flex-1 overflow-auto">
-        {outboundTouchbaseCount > 0 && (
-          <Item variant="outline">
-            <ItemContent>
-              <div className="flex w-full items-center justify-between">
-                <ItemTitle className="text-sm font-mono tabular-nums">
-                  Outbound - Touchbase
-                </ItemTitle>
-                <ItemDescription className="text-lg font-bold">
-                  <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                    {outboundTouchbaseCount}
-                  </Badge>
-                </ItemDescription>
-              </div>
-              <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationTouchbaseMs)}</p>
-            </ItemContent>
-          </Item>
-        )}
+        {!hasAnyActivity ? (
+          <p className="text-center text-sm italic text-gray-500 mt-4">
+            No records found. Coordinate with your TSA to create activities.
+          </p>
+        ) : (
+          <>
+            {outboundTouchbaseCount > 0 && (
+              <Item variant="outline">
+                <ItemContent>
+                  <div className="flex w-full items-center justify-between">
+                    <ItemTitle className="text-sm font-mono tabular-nums">
+                      Outbound - Touchbase
+                    </ItemTitle>
+                    <ItemDescription className="text-lg font-bold">
+                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
+                        {outboundTouchbaseCount}
+                      </Badge>
+                    </ItemDescription>
+                  </div>
+                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationTouchbaseMs)}</p>
+                </ItemContent>
+              </Item>
+            )}
 
-        {successfulCallsCount > 0 && (
-          <Item variant="outline">
-            <ItemContent>
-              <div className="flex w-full items-center justify-between">
-                <ItemTitle className="text-sm font-mono tabular-nums">Total Successful Calls</ItemTitle>
-                <ItemDescription className="text-lg font-bold">
-                  <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                    {successfulCallsCount}
-                  </Badge>
-                </ItemDescription>
-              </div>
-              <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSuccessfulMs)}</p>
-            </ItemContent>
-          </Item>
-        )}
+            {successfulCallsCount > 0 && (
+              <Item variant="outline">
+                <ItemContent>
+                  <div className="flex w-full items-center justify-between">
+                    <ItemTitle className="text-sm font-mono tabular-nums">Total Successful Calls</ItemTitle>
+                    <ItemDescription className="text-lg font-bold">
+                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
+                        {successfulCallsCount}
+                      </Badge>
+                    </ItemDescription>
+                  </div>
+                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSuccessfulMs)}</p>
+                </ItemContent>
+              </Item>
+            )}
 
-        {unsuccessfulCallsCount > 0 && (
-          <Item variant="outline">
-            <ItemContent>
-              <div className="flex w-full items-center justify-between">
-                <ItemTitle className="text-sm font-mono tabular-nums">Total Unsuccessful Calls</ItemTitle>
-                <ItemDescription className="text-lg font-bold">
-                  <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                    {unsuccessfulCallsCount}
-                  </Badge>
-                </ItemDescription>
-              </div>
-              <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationUnsuccessfulMs)}</p>
-            </ItemContent>
-          </Item>
-        )}
+            {unsuccessfulCallsCount > 0 && (
+              <Item variant="outline">
+                <ItemContent>
+                  <div className="flex w-full items-center justify-between">
+                    <ItemTitle className="text-sm font-mono tabular-nums">Total Unsuccessful Calls</ItemTitle>
+                    <ItemDescription className="text-lg font-bold">
+                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
+                        {unsuccessfulCallsCount}
+                      </Badge>
+                    </ItemDescription>
+                  </div>
+                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationUnsuccessfulMs)}</p>
+                </ItemContent>
+              </Item>
+            )}
 
-        {outboundFollowupCount > 0 && (
-          <Item variant="outline">
-            <ItemContent>
-              <div className="flex w-full items-center justify-between">
-                <ItemTitle className="text-sm font-mono tabular-nums">Outbound - Follow-up</ItemTitle>
-                <ItemDescription className="text-lg font-bold">
-                  <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                    {outboundFollowupCount}
-                  </Badge>
-                </ItemDescription>
-              </div>
-              <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
-            </ItemContent>
-          </Item>
+            {outboundFollowupCount > 0 && (
+              <Item variant="outline">
+                <ItemContent>
+                  <div className="flex w-full items-center justify-between">
+                    <ItemTitle className="text-sm font-mono tabular-nums">Outbound - Follow-up</ItemTitle>
+                    <ItemDescription className="text-lg font-bold">
+                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
+                        {outboundFollowupCount}
+                      </Badge>
+                    </ItemDescription>
+                  </div>
+                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
+                </ItemContent>
+              </Item>
+            )}
+          </>
         )}
       </CardContent>
 

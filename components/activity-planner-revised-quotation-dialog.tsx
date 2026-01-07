@@ -554,11 +554,7 @@ export default function TaskListEditDialog({
 
                                         <TableCell className="align-top">
                                             <div className="flex flex-col">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <Button variant="outline" size="sm" onClick={() => togglePreview(index)}>
-                                                        {previewStates[index] ? "Edit" : "Preview"}
-                                                    </Button>
-                                                </div>
+                                               
                                                 {previewStates[index] ? (
                                                     <div
                                                         className="border p-2 rounded max-h-40 overflow-auto bg-white text-black text-xs"

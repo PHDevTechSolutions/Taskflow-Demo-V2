@@ -444,7 +444,7 @@ export function TimemotionCard({
   }
 
   return (
-    <Card className="p-4 flex flex-col items-center space-y-2 w-full max-w-lg mx-auto">
+    <Card className="p-4 flex flex-col items-center space-y-2 w-full max-w-lg mx-auto bg-white text-black z-10">
       <CardHeader className="w-full">
         <h3 className="text-sm font-medium">Total Work Time</h3>
       </CardHeader>
@@ -465,7 +465,7 @@ export function TimemotionCard({
 
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" aria-label="Show Breakdown" className="w-full cursor-pointer">
+                <Button aria-label="Show Breakdown" className="w-full cursor-pointer">
                   Show Breakdown
                 </Button>
               </SheetTrigger>

@@ -101,7 +101,7 @@ export function InboundRepliesCard({ history }: OutboundCardProps) {
     }, [avgDurationInboundMs, avgDurationViberUpMs, avgDurationFBfulMs]);
 
     return (
-        <Card>
+        <Card className="flex flex-col h-full bg-white z-20 text-black">
             <CardHeader>
                 <CardTitle>Inbound and Other Replies History</CardTitle>
                 <CardDescription>

@@ -165,7 +165,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
   }, [chartData]);
 
   return (
-    <Card>
+    <Card className="bg-white text-black z-10">
       <CardHeader>
         <CardTitle>CSR Metrics Overview</CardTitle>
         <CardDescription>Toggle metrics and view total handling durations</CardDescription>
@@ -192,7 +192,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
             <div
               key={key}
               className={`relative rounded-lg border p-3 ${
-                activeMetric === key ? "bg-muted" : "opacity-70"
+                activeMetric === key ? "bg-blue-200" : "opacity-70"
               }`}
             >
               <div className="flex justify-between items-start relative">

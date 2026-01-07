@@ -592,17 +592,26 @@ export const NewTask: React.FC<NewTaskProps> = ({
             </DialogContent>
           </Dialog>
 
-          {/* Search input */}
-          <Input
-            type="search"
-            placeholder="Search Company Name"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className="w-full rounded-md p-2 border border-gray-300 text-xs"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div className="flex items-center gap-2 w-full">
+            {/* Search input */}
+            <Input
+              type="search"
+              placeholder="Search Company Name"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="flex-1 rounded-md p-2 border border-gray-300 text-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+
+            <Button
+              className="shrink-0 cursor-pointer text-xs"
+              onClick={() => setIsCreateDialogOpen(true)}
+            >
+              Add Account
+            </Button>
+          </div>
 
           {/* Show results based on search or grouped */}
 
@@ -781,7 +790,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           </div>
                         </div>
 
-                        <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                        <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
                           <p>
                             <strong>Contact:</strong> {account.contact_number}
                           </p>
@@ -805,6 +814,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
           )}
         </>
       )}
+      
+      <AccountDialog
+        mode="create"
+        userDetails={userDetails}
+        onSaveAction={async (data) => {
+          await onSaveAccountAction(data);
+          setIsCreateDialogOpen(false);
+        }}
+        open={isCreateDialogOpen}
+        onOpenChangeAction={setIsCreateDialogOpen}
+      />
     </div>
   );
 };

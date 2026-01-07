@@ -79,7 +79,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
   } satisfies Record<string, { label: string; color: string }>;
 
   return (
-    <Card>
+    <Card className="bg-white z-20 text-black">
       <CardHeader className="flex justify-between items-center">
         <div>
           <CardTitle>Source Breakdown</CardTitle>
@@ -120,6 +120,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
           <ChartContainer config={chartConfig}>
             <BarChart
               data={data}
+              accessibilityLayer
               layout="vertical"
               margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
               height={360}
@@ -141,19 +142,20 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
                 width={160}
                 stroke="var(--muted-foreground)"
               />
+
               <ChartTooltip
-                cursor={{ fill: "transparent" }}
+                cursor={false}
                 content={<ChartTooltipContent hideLabel />}
               />
               <Bar
                 dataKey="count"
-                fill="var(--color-desktop)"
+                fill="var(--chart-1)"
                 radius={[8, 8, 8, 8]}
               >
                 <LabelList
                   dataKey="count"
                   position="right"
-                  className="fill-foreground"
+                  className="fill-muted-foreground"
                   fontSize={12}
                 />
               </Bar>
