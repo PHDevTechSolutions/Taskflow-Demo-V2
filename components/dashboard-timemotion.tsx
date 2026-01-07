@@ -470,7 +470,7 @@ export function TimemotionCard({
                 </Button>
               </SheetTrigger>
 
-              <SheetContent side="right" className="p-4 max-w-md">
+              <SheetContent side="right" className="p-4 max-w-md overflow-y-auto">
                 <SheetHeader>
                   <SheetTitle>Work Hours per Activity</SheetTitle>
                   <SheetDescription>
