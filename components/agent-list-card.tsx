@@ -156,9 +156,13 @@ export function AgentCard({ agent, agentActivities }: Props) {
             )}
           </div>
         </div>
-        <Badge className="p-4 font-mono">
-          Total Working Hours: {formatDurationMs(totalDurationMs)}
-        </Badge>
+
+        {totalDurationMs > 0 && (
+          <Badge className="p-4 font-mono">
+            Total Working Hours: {formatDurationMs(totalDurationMs)}
+          </Badge>
+        )}
+
       </CardHeader>
 
       <CardContent className="flex flex-col gap-1 text-center sm:text-left px-6 font-mono">

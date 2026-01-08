@@ -143,8 +143,8 @@ export function QuotationTableCard({ history, agents, dateCreatedFilterRange }: 
         <Card className="flex flex-col h-full bg-white text-black">
             <CardHeader className="flex justify-between items-center">
                 <div>
-                    <CardTitle>Quotation Performance</CardTitle>
-                    <CardDescription>Summary and metrics per agent</CardDescription>
+                    <CardTitle>Quotations</CardTitle>
+                    <CardDescription>Counts and totals for quotations (status "Quote-Done") and Sales Order Preparation</CardDescription>
                 </div>
                 <div
                     className="relative cursor-pointer p-1 rounded hover:bg-gray-100"

@@ -236,6 +236,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
         )}
       </CardContent>
 
+      {totalOutboundCalls > 0 && (
       <CardFooter className="flex justify-between border-t bg-white">
         <p className="text-xs italic">
           Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
@@ -244,6 +245,8 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
           Total Outbound Calls: {totalOutboundCalls}
         </Badge>
       </CardFooter>
+      )}
     </Card>
+    
   );
 }

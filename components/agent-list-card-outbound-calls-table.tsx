@@ -152,8 +152,8 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
         <Card className="flex flex-col h-full bg-white text-black">
             <CardHeader className="flex justify-between items-center">
                 <div>
-                    <CardTitle>Outbound Call Performance</CardTitle>
-                    <CardDescription>Summary and metrics per agent</CardDescription>
+                    <CardTitle>Outbound Calls (Touch-Based Only)</CardTitle>
+                    <CardDescription>Counts based on Source, Type of Activity, Status filters and OB Target computed from working days</CardDescription>
                 </div>
                 <div
                     className="relative cursor-pointer p-1 rounded hover:bg-gray-100"

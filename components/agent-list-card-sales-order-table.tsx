@@ -133,8 +133,8 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
         <Card className="flex flex-col h-full bg-white text-black">
             <CardHeader className="flex justify-between items-center">
                 <div>
-                    <CardTitle>Sales Order Performance</CardTitle>
-                    <CardDescription>Summary and metrics per agent</CardDescription>
+                    <CardTitle>Sales Order Summary</CardTitle>
+                    <CardDescription>Counts and totals based on status filters</CardDescription>
                 </div>
                 <div
                     className="relative cursor-pointer p-1 rounded hover:bg-gray-100"

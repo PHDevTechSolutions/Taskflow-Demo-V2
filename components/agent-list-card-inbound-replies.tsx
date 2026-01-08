@@ -154,7 +154,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
 
       <CardContent className="flex-1 overflow-auto">
         {statsByAgentAndActivity.length === 0 ? (
-          <p className="text-center text-sm italic text-gray-500">No records found.</p>
+          <p className="text-center text-sm italic text-gray-500">No records found. Coordinate with your TSA to create activities.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -195,12 +195,15 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
           </Table>
         )}
       </CardContent>
-
+      
+      {totalCount > 0 && (
       <CardFooter className="flex justify-between border-t bg-white">
         <Badge className="rounded-full px-4 py-2 font-mono">
           Total Activities: {totalCount}
         </Badge>
       </CardFooter>
+      )}
+
     </Card>
   );
 }
