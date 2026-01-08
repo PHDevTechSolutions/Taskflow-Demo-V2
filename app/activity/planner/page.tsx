@@ -210,13 +210,7 @@ function DashboardContent() {
                 </header>
 
                 <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                    {/* BUTTON TOGGLE VIEW COMPLETED */}
-                    <div className="flex justify-start">
-                        <Button className="cursor-pointer" type="button" onClick={() => setShowCompleted((v) => !v)} variant="outline"><Eye size={16} />
-                            {showCompleted ? "Hide Completed" : "View Completed"}</Button>
-                    </div>
-
-                    <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
+                    <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
                         <Card>
                             <CardHeader>
                                 <CardTitle>New Task</CardTitle>
@@ -268,20 +262,18 @@ function DashboardContent() {
                             </CardContent>
                         </Card>
 
-                        {showCompleted && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Completed</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <Completed
-                                        referenceid={userDetails.referenceid}
-                                        target_quota={userDetails.target_quota}
-                                        dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
-                                </CardContent>
-                            </Card>
-                        )}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Completed</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <Completed
+                                    referenceid={userDetails.referenceid}
+                                    target_quota={userDetails.target_quota}
+                                    dateCreatedFilterRange={dateCreatedFilterRange}
+                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                            </CardContent>
+                        </Card>
                     </div>
                 </main>
             </SidebarInset>

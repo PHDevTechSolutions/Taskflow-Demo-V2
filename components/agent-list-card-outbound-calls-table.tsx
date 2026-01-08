@@ -266,7 +266,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                             <TableRow className="text-xs font-semibold border-t">
                                 <TableCell className="font-mono">Total</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    {statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}
+                                    <Badge className="rounded-full px-3 font-mono">{statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}</Badge>
                                 </TableCell>
                                 <TableCell className="text-center font-mono">{obTarget * statsByAgent.length}</TableCell>
                                 <TableCell className="text-center font-mono">
