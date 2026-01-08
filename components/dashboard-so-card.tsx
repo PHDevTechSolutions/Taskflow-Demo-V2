@@ -36,9 +36,11 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
     return activities.filter((a) => a.status === "SO-Done").length;
   }, [activities]);
 
-  // Sum so_amount for all activities
+  // Sum so_amount only for activities with status "SO-Done"
   const totalSOAmount = useMemo(() => {
-    return activities.reduce((sum, a) => sum + (Number(a.so_amount) || 0), 0);
+    return activities
+      .filter((a) => a.status === "SO-Done") // <-- filter here
+      .reduce((sum, a) => sum + (Number(a.so_amount) || 0), 0);
   }, [activities]);
 
   // Count activities with status "Delivered"
@@ -95,7 +97,7 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
             <div className="absolute right-0 top-full mt-1 z-50 w-110 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
               <ul className="list-disc list-inside space-y-1">
                 <li>Count of activities with status "SO-Done".</li>
-                <li>Total SO Amount summed from so_amount.</li>
+                <li>Total SO Amount summed only from activities with status "SO-Done".</li>
                 <li>Count of activities with status "Delivered".</li>
                 <li>Total Sales Invoice summed from actual_sales.</li>
                 <li>SO to SI Conversion (%) = (Total Sales Invoice ÷ Total SO Amount) × 100</li>
@@ -111,7 +113,6 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
 
         {!loading && !error && (
           <div className="space-y-2">
-
             <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
@@ -176,7 +177,6 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
                 </div>
               </ItemContent>
             </Item>
-
           </div>
         )}
       </CardContent>

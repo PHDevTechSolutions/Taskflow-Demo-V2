@@ -54,7 +54,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   const playSound = (file: string) => {
     const audio = new Audio(file);
-    audio.play().catch(() => {});
+    audio.play().catch(() => { });
   };
 
   const getDeviceId = () => {
@@ -159,7 +159,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         playSound("/login.mp3");
 
         setUserId(result.userId);
-        router.push(`/dashboard?id=${encodeURIComponent(result.userId)}`);
+
+        if (result.Role === "Territory Sales Manager") {
+          // Mapunta sa agent page
+          router.push(`/agent/tsm?id=${encodeURIComponent(result.userId)}`);
+        } else {
+          // Default dashboard
+          router.push(`/dashboard?id=${encodeURIComponent(result.userId)}`);
+        }
 
         setLoading(false);
       } catch (error) {

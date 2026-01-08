@@ -46,13 +46,13 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
 
   // Count Sales Order Preparation by type_activity
   const totalSOPreparation = useMemo(() => {
-    return activities.filter((a) => a.type_activity === "Sales Order Preparation").length;
+    return activities.filter((a) => a.status === "SO-Done").length;
   }, [activities]);
 
   // Sum so_amount for Sales Order Preparation
   const totalSOAmount = useMemo(() => {
     return activities
-      .filter((a) => a.type_activity === "Sales Order Preparation")
+      .filter((a) => a.status === "SO-Done")
       .reduce((sum, a) => sum + (Number(a.so_amount) || 0), 0);
   }, [activities]);
 

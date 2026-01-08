@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -38,15 +39,12 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Breakdown data state
   const [breakdownData, setBreakdownData] = useState<Record<string, number> | null>(null);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
 
-  // Sheet open state (controlled)
   const [open, setOpen] = useState(false);
 
-  // Fetch total accounts excluding excluded statuses and invalid type_client
   useEffect(() => {
     if (!referenceid) {
       setTotalAccounts(null);
@@ -94,10 +92,8 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
       });
   }, [referenceid]);
 
-  // Fetch breakdown when sheet opens, excluding excluded statuses and invalid type_client
   useEffect(() => {
-    if (!open) return;
-    if (!referenceid) return;
+    if (!open || !referenceid) return;
 
     setLoadingBreakdown(true);
     setBreakdownError(null);
@@ -146,37 +142,47 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   }, [open, referenceid]);
 
   return (
-    <Card className="flex flex-col justify-center items-center bg-white text-black z-10">
-      <CardTitle className="text-center">Total Accounts</CardTitle>
-      <div className="text-3xl font-bold mb-1">
-        {loading
-          ? "Loading..."
-          : error
-          ? error
-          : totalAccounts !== null
-          ? `${totalAccounts}`
-          : "-"}
-      </div>
+    <Card className="bg-white z-10 text-black flex flex-col justify-between">
+      <CardHeader>
+        <CardTitle>Total Accounts</CardTitle>
+        <CardDescription>
+          Number of accounts excluding removed or invalid statuses
+        </CardDescription>
+      </CardHeader>
 
-      <CardContent className="flex justify-center">
+      <CardContent className="flex justify-center items-center text-5xl font-semibold">
+        {loading ? (
+          "Loading..."
+        ) : error ? (
+          <span className="text-red-600">{error}</span>
+        ) : totalAccounts !== null ? (
+          totalAccounts
+        ) : (
+          "-"
+        )}
+      </CardContent>
+
+      
+      <CardFooter className="flex justify-end border-t">
         <Button
           onClick={() => setOpen(true)}
           disabled={loading || !!error || !totalAccounts}
-          className="cursor-pointer"
         >
           Show Breakdown
         </Button>
-      </CardContent>
+      </CardFooter>
 
       {/* Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right">
+        <SheetContent side="right" className="max-w-sm">
           <SheetHeader>
             <SheetTitle>Accounts Breakdown</SheetTitle>
-            <SheetDescription>Number of accounts grouped by client type</SheetDescription>
+            <SheetDescription>
+              Number of accounts grouped by client type
+            </SheetDescription>
           </SheetHeader>
 
-          <div className="mt-4 p-6">
+          <div className="mt-4 p-4">
             {loadingBreakdown && <p>Loading breakdown...</p>}
             {breakdownError && (
               <p className="text-red-500 text-xs">{breakdownError}</p>

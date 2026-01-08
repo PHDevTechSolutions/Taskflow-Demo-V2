@@ -8,26 +8,37 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@/components/ui/item";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 interface HistoryItem {
+  referenceid: string;
   source: string;
   call_status: string;
   type_activity: string;
-  start_date: string; // ISO string timestamp
-  end_date: string;   // ISO string timestamp
+  start_date: string;
+  end_date: string;
+  date_created: string;
+}
+
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  profilePicture: string;
 }
 
 interface OutboundCardProps {
   history: HistoryItem[];
+  agents: Agent[];
 }
 
-// Helper: format milliseconds into readable string
 function formatDurationMs(ms: number) {
   if (ms <= 0) return "-";
 
@@ -44,178 +55,194 @@ function formatDurationMs(ms: number) {
   return parts.join(" ") || "0 sec";
 }
 
-// Helper: calculate average duration in ms for given filtered items
-function averageDurationMs(items: HistoryItem[]) {
-  if (items.length === 0) return 0;
+export function OutboundCard({ history, agents }: OutboundCardProps) {
+  // Map agent ReferenceID to fullname
+  const agentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    agents.forEach((a) => {
+      map.set(a.ReferenceID.toLowerCase(), `${a.Firstname} ${a.Lastname}`);
+    });
+    return map;
+  }, [agents]);
 
-  const totalMs = items.reduce((acc, curr) => {
-    const start = new Date(curr.start_date).getTime();
-    const end = new Date(curr.end_date).getTime();
-    if (!isNaN(start) && !isNaN(end) && end > start) {
-      return acc + (end - start);
-    }
-    return acc;
-  }, 0);
+  const agentPictureMap = useMemo(() => {
+    const map = new Map<string, string>();
+    agents.forEach((a) => {
+      map.set(a.ReferenceID.toLowerCase(), a.profilePicture);
+    });
+    return map;
+  }, [agents]);
 
-  return totalMs / items.length;
-}
 
-export function OutboundCard({ history }: OutboundCardProps) {
-  // Counts
-  const outboundTouchbaseCount = useMemo(() => {
-    return history.filter((item) => item.source === "Outbound - Touchbase").length;
+  // Aggregate stats per agent (counts only)
+  const statsByAgent = useMemo(() => {
+    type AgentStats = {
+      agentID: string;
+      touchbaseCount: number;
+      followupCount: number;
+      successfulCount: number;
+      unsuccessfulCount: number;
+    };
+
+    const map = new Map<string, AgentStats>();
+
+    history.forEach((item) => {
+      const agentID = item.referenceid.toLowerCase();
+      if (!map.has(agentID)) {
+        map.set(agentID, {
+          agentID,
+          touchbaseCount: 0,
+          followupCount: 0,
+          successfulCount: 0,
+          unsuccessfulCount: 0,
+        });
+      }
+      const stat = map.get(agentID)!;
+
+      if (item.source === "Outbound - Touchbase") {
+        stat.touchbaseCount++;
+      } else if (item.source === "Outbound - Follow-up") {
+        stat.followupCount++;
+      }
+
+      if (item.call_status === "Successful") {
+        stat.successfulCount++;
+      } else if (item.call_status === "Unsuccessful") {
+        stat.unsuccessfulCount++;
+      }
+    });
+
+    return Array.from(map.values());
   }, [history]);
 
-  const outboundFollowupCount = useMemo(() => {
-    return history.filter((item) => item.source === "Outbound - Follow-up").length;
+  // Count all Outbound Calls based on type_activity
+  const outboundCalls = useMemo(() => {
+    return history.filter((item) => item.type_activity === "Outbound Calls");
   }, [history]);
 
-  const successfulCallsCount = useMemo(() => {
-    return history.filter((item) => item.call_status === "Successful").length;
-  }, [history]);
+  // Count all Outbound Calls
+  const totalOutboundCalls = outboundCalls.length;
 
-  const unsuccessfulCallsCount = useMemo(() => {
-    return history.filter((item) => item.call_status === "Unsuccessful").length;
-  }, [history]);
+  // Compute total duration (ms) of all outbound calls (end_date - start_date)
+  const totalOutboundDurationMs = useMemo(() => {
+    return outboundCalls.reduce((total, item) => {
+      // parse date safely, replacing space with T for ISO format
+      const start = new Date(item.start_date.replace(" ", "T")).getTime();
+      const end = new Date(item.end_date.replace(" ", "T")).getTime();
 
-  const outboundCallsCount = useMemo(() => {
-    return history.filter((item) => item.type_activity === "Outbound Calls").length;
-  }, [history]);
-
-  // Average durations in ms
-  const avgDurationTouchbaseMs = useMemo(() => {
-    const filtered = history.filter((item) => item.source === "Outbound - Touchbase");
-    return averageDurationMs(filtered);
-  }, [history]);
-
-  const avgDurationFollowUpMs = useMemo(() => {
-    const filtered = history.filter((item) => item.source === "Outbound - Follow-up");
-    return averageDurationMs(filtered);
-  }, [history]);
-
-  const avgDurationSuccessfulMs = useMemo(() => {
-    const filtered = history.filter((item) => item.call_status === "Successful");
-    return averageDurationMs(filtered);
-  }, [history]);
-
-  const avgDurationUnsuccessfulMs = useMemo(() => {
-    const filtered = history.filter((item) => item.call_status === "Unsuccessful");
-    return averageDurationMs(filtered);
-  }, [history]);
-
-  // Total average duration summed
-  const totalAverageDurationMs = useMemo(() => {
-    return (
-      avgDurationTouchbaseMs +
-      avgDurationFollowUpMs +
-      avgDurationSuccessfulMs +
-      avgDurationUnsuccessfulMs
-    );
-  }, [avgDurationTouchbaseMs, avgDurationFollowUpMs, avgDurationSuccessfulMs, avgDurationUnsuccessfulMs]);
-
-  const hasAnyActivity =
-    outboundTouchbaseCount +
-    outboundFollowupCount +
-    successfulCallsCount +
-    unsuccessfulCallsCount > 0;
+      if (!isNaN(start) && !isNaN(end) && end > start) {
+        return total + (end - start);
+      }
+      return total;
+    }, 0);
+  }, [outboundCalls]);
 
   return (
-    <Card className="flex flex-col h-full bg-white z-20 text-black">
+    <Card className="flex flex-col h-full bg-white text-black">
       <CardHeader>
         <CardTitle>Outbound History</CardTitle>
-        <CardDescription>
-          Summary of all outbound call activities including touchbase, follow-ups,
-          and call outcomes for the selected agent.
-        </CardDescription>
+        <CardDescription>Summary of outbound call activities per agent.</CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4 flex-1 overflow-auto">
-        {!hasAnyActivity ? (
-          <p className="text-center text-sm italic text-gray-500 mt-4">
+      <CardContent className="flex-1 overflow-auto">
+        {statsByAgent.length === 0 ? (
+          <p className="text-center text-sm italic text-gray-500">
             No records found. Coordinate with your TSA to create activities.
           </p>
         ) : (
-          <>
-            {outboundTouchbaseCount > 0 && (
-              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                <ItemContent>
-                  <div className="flex w-full items-center justify-between">
-                    <ItemTitle className="text-sm font-mono tabular-nums">
-                      Outbound - Touchbase
-                    </ItemTitle>
-                    <ItemDescription className="text-lg font-bold">
-                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                        {outboundTouchbaseCount}
-                      </Badge>
-                    </ItemDescription>
-                  </div>
-                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationTouchbaseMs)}</p>
-                </ItemContent>
-              </Item>
-            )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Agent</TableHead>
+                <TableHead className="text-xs text-center">Touchbase Count</TableHead>
+                <TableHead className="text-xs text-center">Follow-up Count</TableHead>
+                <TableHead className="text-xs text-center">Successful Count</TableHead>
+                <TableHead className="text-xs text-center">Unsuccessful Count</TableHead>
+              </TableRow>
+            </TableHeader>
 
-            {successfulCallsCount > 0 && (
-              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                <ItemContent>
-                  <div className="flex w-full items-center justify-between">
-                    <ItemTitle className="text-sm font-mono tabular-nums">Total Successful Calls</ItemTitle>
-                    <ItemDescription className="text-lg font-bold">
-                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                        {successfulCallsCount}
-                      </Badge>
-                    </ItemDescription>
-                  </div>
-                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSuccessfulMs)}</p>
-                </ItemContent>
-              </Item>
-            )}
+            <TableBody>
+              {statsByAgent.map((stat) => {
+                const agentName = agentMap.get(stat.agentID) || stat.agentID;
+                const profilePicture = agentPictureMap.get(stat.agentID);
 
-            {unsuccessfulCallsCount > 0 && (
-              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                <ItemContent>
-                  <div className="flex w-full items-center justify-between">
-                    <ItemTitle className="text-sm font-mono tabular-nums">Total Unsuccessful Calls</ItemTitle>
-                    <ItemDescription className="text-lg font-bold">
-                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                        {unsuccessfulCallsCount}
-                      </Badge>
-                    </ItemDescription>
-                  </div>
-                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationUnsuccessfulMs)}</p>
-                </ItemContent>
-              </Item>
-            )}
+                return (
+                  <TableRow key={stat.agentID} className="text-xs">
+                    <TableCell className="flex items-center gap-2 font-mono">
+                      {profilePicture ? (
+                        <img
+                          src={profilePicture}
+                          alt={agentName}
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                          ?
+                        </div>
+                      )}
+                      {agentName}
+                    </TableCell>
 
-            {outboundFollowupCount > 0 && (
-              <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                <ItemContent>
-                  <div className="flex w-full items-center justify-between">
-                    <ItemTitle className="text-sm font-mono tabular-nums">Outbound - Follow-up</ItemTitle>
-                    <ItemDescription className="text-lg font-bold">
-                      <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">
-                        {outboundFollowupCount}
-                      </Badge>
-                    </ItemDescription>
-                  </div>
-                  <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
-                </ItemContent>
-              </Item>
-            )}
-          </>
+                    <TableCell className="text-center">
+                      <Badge className="rounded-full px-3 font-mono">{stat.touchbaseCount}</Badge>
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Badge className="rounded-full px-3 font-mono">{stat.followupCount}</Badge>
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Badge className="rounded-full px-3 font-mono">{stat.successfulCount}</Badge>
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Badge className="rounded-full px-3 font-mono">{stat.unsuccessfulCount}</Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+
+            <tfoot>
+              <TableRow className="text-xs font-semibold border-t">
+                <TableCell className="font-mono">Total</TableCell>
+
+                <TableCell className="text-center">
+                  <Badge className="rounded-full px-3 font-mono">
+                    {statsByAgent.reduce((acc, stat) => acc + stat.touchbaseCount, 0)}
+                  </Badge>
+                </TableCell>
+
+                <TableCell className="text-center">
+                  <Badge className="rounded-full px-3 font-mono">
+                    {statsByAgent.reduce((acc, stat) => acc + stat.followupCount, 0)}
+                  </Badge>
+                </TableCell>
+
+                <TableCell className="text-center">
+                  <Badge className="rounded-full px-3 font-mono">
+                    {statsByAgent.reduce((acc, stat) => acc + stat.successfulCount, 0)}
+                  </Badge>
+                </TableCell>
+
+                <TableCell className="text-center">
+                  <Badge className="rounded-full px-3 font-mono">
+                    {statsByAgent.reduce((acc, stat) => acc + stat.unsuccessfulCount, 0)}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            </tfoot>
+          </Table>
         )}
       </CardContent>
 
-      <CardFooter className="flex justify-between sticky bottom-0 bg-white space-x-4">
-        {outboundCallsCount > 0 && (
-          <>
-            <p className="self-center text-xs italic">
-              Avg duration total: {formatDurationMs(totalAverageDurationMs)}
-            </p>
-            <Badge className="h-8 min-w-8 rounded-full px-4 font-mono tabular-nums">
-              Total: {outboundCallsCount}
-            </Badge>
-          </>
-        )}
+      <CardFooter className="flex justify-between border-t bg-white">
+        <p className="text-xs italic">
+          Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
+        </p>
+        <Badge className="rounded-full px-4 py-2 font-mono">
+          Total Outbound Calls: {totalOutboundCalls}
+        </Badge>
       </CardFooter>
     </Card>
   );

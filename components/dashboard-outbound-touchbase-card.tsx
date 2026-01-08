@@ -26,6 +26,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
   const totalSuccessful = activities.filter((a) => a.call_status === "Successful").length;
   const totalUnsuccessful = activities.filter((a) => a.call_status && a.call_status !== "Successful").length;
   const totalOutboundTouchbase = activities.filter((a) => a.source === "Outbound - Touchbase").length;
+  const totalFollowUp = activities.filter((a) => a.source === "Outbound - Follow-up").length;
 
   if (loading) {
     return (
@@ -78,6 +79,19 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
             <ItemDescription className="text-xs font-semibold">
               <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums" variant="destructive">
                 {totalUnsuccessful}
+              </Badge>
+            </ItemDescription>
+          </div>
+        </ItemContent>
+      </Item>
+
+      <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
+        <ItemContent className="w-full">
+          <div className="flex justify-between w-full">
+            <ItemTitle className="text-xs font-medium">Total Follow Up</ItemTitle>
+            <ItemDescription className="text-xs font-semibold">
+              <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums" variant="destructive">
+                {totalFollowUp}
               </Badge>
             </ItemDescription>
           </div>

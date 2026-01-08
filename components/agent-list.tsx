@@ -2,31 +2,19 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import {
-    Item,
-    ItemContent,
-    ItemDescription,
-    ItemTitle,
-} from "@/components/ui/item";
-import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 
+import { AgentCard } from "@/components/agent-list-card";
 import { OutboundCard } from "@/components/agent-list-card-outbound";
+import { OutboundCallsTableCard } from "@/components/agent-list-card-outbound-calls-table";
+import { QuotationTableCard } from "@/components/agent-list-card-quotation-table";
+import { SalesOrderTableCard } from "@/components/agent-list-card-sales-order-table";
 import { InboundRepliesCard } from "@/components/agent-list-card-inbound-replies";
-import { OtherActivitiesCard } from "@/components/agent-list-card-others-activities";
 
 interface HistoryItem {
     referenceid: string;
@@ -34,8 +22,15 @@ interface HistoryItem {
     source: string;
     call_status: string;
     type_activity: string;
+    actual_sales: string;
+    dr_number: string;
+    quotation_amount: string;
+    quotation_number: string;
+    so_amount: string;
+    so_number: string;
     start_date: string;
     end_date: string;
+    status: string;
     date_created: string;
 }
 
@@ -43,10 +38,13 @@ interface Agent {
     ReferenceID: string;
     Firstname: string;
     Lastname: string;
+    profilePicture: string;
+    Position: string;
+    Status: string;
 }
 
 interface Props {
-    referenceid: string; // from props (parent)
+    referenceid: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
@@ -54,6 +52,7 @@ interface Props {
 export function AgentList({
     referenceid,
     dateCreatedFilterRange,
+    setDateCreatedFilterRangeAction,
 }: Props) {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -62,122 +61,102 @@ export function AgentList({
     const [agents, setAgents] = useState<Agent[]>([]);
     const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-    // Fetch agents
+    /* =========================
+       DEFAULT DATE = TODAY
+    ========================= */
     useEffect(() => {
-        if (!referenceid) return;
+        if (!dateCreatedFilterRange?.from) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch(
-                    `/api/fetch-all-user?id=${encodeURIComponent(referenceid)}`
-                );
-                if (!response.ok) throw new Error("Failed to fetch agents");
-
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
-                setErrorHistory("Failed to load agents.");
-            }
-        };
-
-        fetchAgents();
-    }, [referenceid]);
-
-    // Fetch history for referenceid
-    useEffect(() => {
-        if (!referenceid) return;
-
-        const fetchHistoryByReference = async () => {
-            setLoadingHistory(true);
-            setErrorHistory(null);
-
-            try {
-                const res = await fetch(
-                    `/api/all-agent-history?referenceid=${encodeURIComponent(referenceid)}`
-                );
-
-                if (!res.ok) {
-                    throw new Error("Failed to fetch history data");
-                }
-
-                const data = await res.json();
-                setHistory(data.activities ?? []);
-            } catch (err: any) {
-                setErrorHistory(err.message);
-            } finally {
-                setLoadingHistory(false);
-            }
-        };
-
-        fetchHistoryByReference();
-    }, [referenceid]);
-
-    // Filter history by selected agent, or show all if "all"
-    const filteredHistory = useMemo(() => {
-        if (selectedAgent === "all") {
-            return history;
+            setDateCreatedFilterRangeAction({
+                from: today,
+                to: today,
+            });
         }
-        // Filter where tsm matches selected agent ReferenceID
-        return history.filter((item) => item.referenceid.toLowerCase() === selectedAgent.toLowerCase());
-    }, [history, selectedAgent]);
+    }, [dateCreatedFilterRange, setDateCreatedFilterRangeAction]);
 
-    function formatDurationMs(ms: number) {
-        if (ms <= 0) return "-";
+    /* =========================
+       FETCH AGENTS
+    ========================= */
+    useEffect(() => {
+        if (!referenceid) return;
 
-        const totalSeconds = Math.floor(ms / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
+        fetch(`/api/fetch-all-user?id=${encodeURIComponent(referenceid)}`)
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch agents");
+                return res.json();
+            })
+            .then(setAgents)
+            .catch(() => setErrorHistory("Failed to load agents."));
+    }, [referenceid]);
 
-        const parts = [];
-        if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
-        if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
-        if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
+    /* =========================
+       FETCH HISTORY
+    ========================= */
+    useEffect(() => {
+        if (!referenceid) return;
 
-        return parts.join(" ") || "0 sec";
-    }
+        setLoadingHistory(true);
+        fetch(`/api/all-agent-history?referenceid=${encodeURIComponent(referenceid)}`)
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch history");
+                return res.json();
+            })
+            .then((data) => setHistory(data.activities ?? []))
+            .catch((err) => setErrorHistory(err.message))
+            .finally(() => setLoadingHistory(false));
+    }, [referenceid]);
 
-    // Helper: calculate average duration in ms for given filtered items
-    function averageDurationMs(items: HistoryItem[]) {
-        if (items.length === 0) return 0;
+    /* =========================
+       FILTER LOGIC (TODAY DEFAULT)
+    ========================= */
+    const filteredHistory = useMemo(() => {
+        if (!history.length) return [];
 
-        const totalMs = items.reduce((acc, curr) => {
-            const start = new Date(curr.start_date).getTime();
-            const end = new Date(curr.end_date).getTime();
-            if (!isNaN(start) && !isNaN(end) && end > start) {
-                return acc + (end - start);
-            }
-            return acc;
-        }, 0);
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from)
+            : new Date();
 
-        return totalMs / items.length;
-    }
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to)
+            : from;
+
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
+
+        return history.filter((item) => {
+            const createdAt = new Date(item.date_created);
+            if (isNaN(createdAt.getTime())) return false;
+
+            if (createdAt < from || createdAt > to) return false;
+
+            if (selectedAgent === "all") return true;
+
+            return (
+                item.referenceid.toLowerCase() ===
+                selectedAgent.toLowerCase()
+            );
+        });
+    }, [history, selectedAgent, dateCreatedFilterRange]);
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none" />
-
             {loadingHistory ? (
                 <div className="text-center py-10">Loading history data...</div>
             ) : errorHistory ? (
                 <div className="text-center text-red-500 py-10">{errorHistory}</div>
             ) : (
                 <>
-                    {/* Filter Select */}
-                    <Select
-                        value={selectedAgent}
-                        onValueChange={(value) => setSelectedAgent(value)}
-                    >
+                    {/* AGENT FILTER */}
+                    <Select value={selectedAgent} onValueChange={setSelectedAgent}>
                         <SelectTrigger className="w-[220px] text-xs">
                             <SelectValue placeholder="Filter by Agent" />
                         </SelectTrigger>
-
                         <SelectContent>
                             <SelectItem value="all">All Agents</SelectItem>
                             {agents.map((agent) => (
                                 <SelectItem
-                                    className="capitalize"
                                     key={agent.ReferenceID}
                                     value={agent.ReferenceID}
                                 >
@@ -187,20 +166,58 @@ export function AgentList({
                         </SelectContent>
                     </Select>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mt-2">
-                        {/* CARD 1 */}
-                        <OutboundCard history={filteredHistory} />
+                    <div className="grid grid-cols-1 gap-4 mt-2">
+                        {/* CARD 1 – AGENT SUMMARY */}
+                        {selectedAgent !== "all" && (() => {
+                            const agent = agents.find(
+                                (a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase()
+                            );
 
-                        {/* CARD 2 */}
-                        <InboundRepliesCard history={filteredHistory} />
+                            if (!agent) {
+                                return (
+                                    <p className="text-center text-sm italic text-muted-foreground">
+                                        Agent not found.
+                                    </p>
+                                );
+                            }
 
-                        {/* CARD 3 */}
-                        <OtherActivitiesCard history={filteredHistory} />
+                            const agentActivities = filteredHistory.filter(
+                                (item) => item.referenceid.toLowerCase() === selectedAgent.toLowerCase()
+                            );
 
-                        {/* CARD 4 */}
-                        <Card className="min-h-[160px] flex items-center justify-center text-muted-foreground">
-                            Empty Card
-                        </Card>
+                            return <AgentCard agent={agent} agentActivities={agentActivities} />;
+                        })()}
+
+                        <OutboundCallsTableCard
+                            history={filteredHistory}
+                            agents={agents}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                        />
+
+                        <QuotationTableCard
+                            history={filteredHistory}
+                            agents={agents}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                        />
+
+                        <SalesOrderTableCard
+                            history={filteredHistory}
+                            agents={agents}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                        />
+
+                        {/* OTHER CARDS */}
+                        <OutboundCard
+                            history={filteredHistory}
+                            agents={agents}
+                        />
+                        <InboundRepliesCard
+                            history={filteredHistory}
+                            agents={agents}
+                        />
                     </div>
                 </>
             )}

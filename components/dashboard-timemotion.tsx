@@ -121,6 +121,7 @@ export function TimemotionCard({
   const [siteVisits, setSiteVisits] = useState<SiteVisitItem[]>([]);
   const [loadingSiteVisits, setLoadingSiteVisits] = useState(false);
   const [errorSiteVisits, setErrorSiteVisits] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   // Store site visit durations per Type
   const [siteVisitDurations, setSiteVisitDurations] = useState<Record<string, number>>({});
@@ -261,7 +262,6 @@ export function TimemotionCard({
     fetchSiteVisits();
   }, [referenceid, dateRange]);
 
-  // Calculate site visit durations per Type (Login-Logout pairs)
   // Calculate site visit durations per Type (Login-Logout pairs) with defaults
   useEffect(() => {
     if (!siteVisits.length) {
@@ -444,75 +444,85 @@ export function TimemotionCard({
   }
 
   return (
-    <Card className="p-4 flex flex-col items-center space-y-2 w-full max-w-lg mx-auto bg-white text-black z-10">
-      <CardHeader className="w-full">
-        <h3 className="text-sm font-medium">Total Work Time</h3>
+    <Card className="bg-white z-10 text-black flex flex-col justify-between">
+      <CardHeader>
+        <CardTitle>Total Work Time</CardTitle>
+        <CardDescription>
+          Working Hours
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="w-full flex flex-col items-center">
+      <CardContent className="flex justify-center items-center text-5xl font-semibold">
         {(loading || loadingMeetings || loadingNotes || loadingSiteVisits) ? (
           < div className="flex justify-center items-center w-full min-h-[100px]">
             <Spinner />
           </div>
         ) : error || errorMeetings || errorNotes || errorSiteVisits ? (
-          <div className="text-red-500 text-xs text-center w-full">{error || errorMeetings || errorNotes || errorSiteVisits}</div>
+          <div className="text-red-500 text-center w-full">{error || errorMeetings || errorNotes || errorSiteVisits}</div>
         ) : (
           <>
             {/* Display GRAND TOTAL (activities + site visits) here */}
-            <div className="text-3xl font-bold mb-4">
+            <div>
               {grandHours}h {grandMinutes}m {grandSeconds}s (of 8h)
             </div>
 
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button aria-label="Show Breakdown" className="w-full cursor-pointer">
-                  Show Breakdown
-                </Button>
-              </SheetTrigger>
-
-              <SheetContent side="right" className="p-4 max-w-md overflow-y-auto">
-                <SheetHeader>
-                  <SheetTitle>Work Hours per Activity</SheetTitle>
-                  <SheetDescription>
-                    Breakdown of total work hours by activity type.
-                  </SheetDescription>
-                </SheetHeader>
-
-                <ChartPieDonutActive />
-
-                <div className="mt-4">
-                  {Object.keys(durationPerType).length === 0 ? (
-                    <p className="text-sm text-gray-500">No activities with time recorded.</p>
-                  ) : (
-                    Object.entries(durationPerType).map(([type, ms], i) => (
-                      <React.Fragment key={type}>
-                        {i > 0 && <Separator className="my-2" />}
-                        <div className="flex justify-between text-xs font-medium py-1 w-full">
-                          <span>{type}</span>
-                          <span>{formatDuration(ms)}</span>
-                        </div>
-                      </React.Fragment>
-                    ))
-                  )}
-                </div>
-                <Separator />
-                <div>
-                  {Object.keys(siteVisitDurations).length === 0 ? (
-                    <p className="text-sm text-gray-500">No site visits found.</p>
-                  ) : (
-                    Object.entries(siteVisitDurations).map(([type, ms]) => (
-                      <div key={type} className="flex justify-between text-xs font-medium py-1 border-b border-gray-200">
-                        <span>{type}</span>
-                        <span>{formatDuration(ms)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
           </>
         )}
+
       </CardContent>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="p-4 max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Work Hours per Activity</SheetTitle>
+            <SheetDescription>
+              Breakdown of total work hours by activity type.
+            </SheetDescription>
+          </SheetHeader>
+
+          <ChartPieDonutActive />
+
+          <div className="mt-4">
+            {Object.keys(durationPerType).length === 0 ? (
+              <p className="text-sm text-gray-500">No activities with time recorded.</p>
+            ) : (
+              Object.entries(durationPerType).map(([type, ms], i) => (
+                <React.Fragment key={type}>
+                  {i > 0 && <Separator className="my-2" />}
+                  <div className="flex justify-between text-xs font-medium py-1 w-full">
+                    <span>{type}</span>
+                    <span>{formatDuration(ms)}</span>
+                  </div>
+                </React.Fragment>
+              ))
+            )}
+          </div>
+          <Separator />
+          <div>
+            {Object.keys(siteVisitDurations).length === 0 ? (
+              <p className="text-sm text-gray-500">No site visits found.</p>
+            ) : (
+              Object.entries(siteVisitDurations).map(([type, ms]) => (
+                <div key={type} className="flex justify-between text-xs font-medium py-1 border-b border-gray-200">
+                  <span>{type}</span>
+                  <span>{formatDuration(ms)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <CardFooter className="flex justify-end border-t">
+        <Button
+          aria-label="Show Breakdown"
+          className="cursor-pointer"
+          onClick={() => setOpen(true)} // <-- open Sheet when clicked
+        >
+          Show Breakdown
+        </Button>
+      </CardFooter>
+
     </Card>
   );
 }

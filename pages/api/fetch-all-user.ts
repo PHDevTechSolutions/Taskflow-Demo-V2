@@ -24,6 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Lastname: 1,
         ReferenceID: 1,
         profilePicture: 1,
+        Position: 1,
+        Status: 1,
         _id: 0,
       })
       .toArray();

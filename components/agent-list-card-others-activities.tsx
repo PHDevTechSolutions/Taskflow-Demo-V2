@@ -1,467 +1,348 @@
-import React, { useMemo } from "react";
+"use client";
+
+import React, { useEffect, useState, useMemo } from "react";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import {
-    Item,
-    ItemContent,
-    ItemDescription,
-    ItemTitle,
-} from "@/components/ui/item";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+
+// Firebase imports
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface HistoryItem {
-    source: string;
-    call_status: string;
-    type_activity: string;
-    start_date: string; // ISO string timestamp
-    end_date: string;   // ISO string timestamp
+  source?: string;
+  call_status?: string;
+  type_activity?: string;
+  start_date?: string;
+  end_date?: string;
+  date_created?: any;
+  [key: string]: any;
 }
 
-interface OutboundCardProps {
-    history: HistoryItem[];
+interface SiteVisitItem {
+  Type?: string;
+  Status?: string;
+  date_created: string;
+  [key: string]: any;
 }
 
-// Helper: format milliseconds into readable string
+interface OtherActivitiesCardProps {
+  activities: HistoryItem[]; // original activities prop
+  referenceid: string;
+  dateRange?: { from?: Date; to?: Date };
+}
+
+// Helpers
+
 function formatDurationMs(ms: number) {
-    if (ms <= 0) return "-";
+  if (ms <= 0) return "-";
 
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-    const parts = [];
-    if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
-    if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
-    if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
+  const parts = [];
+  if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
+  if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
+  if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
 
-    return parts.join(" ") || "0 sec";
+  return parts.join(" ") || "0 sec";
 }
 
-// Helper: calculate average duration in ms for given filtered items
 function averageDurationMs(items: HistoryItem[]) {
-    if (items.length === 0) return 0;
+  if (items.length === 0) return 0;
 
-    const totalMs = items.reduce((acc, curr) => {
-        const start = new Date(curr.start_date).getTime();
-        const end = new Date(curr.end_date).getTime();
-        if (!isNaN(start) && !isNaN(end) && end > start) {
-            return acc + (end - start);
-        }
-        return acc;
-    }, 0);
+  const totalMs = items.reduce((acc, curr) => {
+    if (curr.start_date && curr.end_date) {
+      const start = new Date(curr.start_date).getTime();
+      const end = new Date(curr.end_date).getTime();
+      if (!isNaN(start) && !isNaN(end) && end > start) {
+        return acc + (end - start);
+      }
+    }
+    return acc;
+  }, 0);
 
-    return totalMs / items.length;
+  return totalMs / items.length;
 }
 
-export function OtherActivitiesCard({ history }: OutboundCardProps) {
-    // Counts
-    const SalesOrderCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Sales Order Preparation").length, [history]);
+const ACTIVITY_TYPES = [
+  "Quotation Preparation",
+  "Sales Order Preparation",
+  "Delivered / Closed Transaction",
+  "Admin - Supplier Accreditation",
+  "Admin - Credit Terms Application",
+  "Accounting Concerns",
+  "After Sales Refunds",
+  "After Sales Repair / Replacement",
+  "Bidding Preparations",
+  "Customer Orders",
+  "Customer Inquiry Sales",
+  "Delivery Concern",
+  "Follow Up",
+  "Sample Requests",
+  "Site Visits / Demos",
+  "Technical Concerns",
+];
 
-    const QuotationCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Quotation Preparation").length, [history]);
+function isInRange(date: any, from?: Date, to?: Date) {
+  if (!date) return false;
+  if (!from && !to) return true;
 
-    const DeliveredCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Delivered / Closed Transaction").length, [history]);
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return false;
 
-    const SupplierAccreditationCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Admin - Supplier Accreditation").length, [history]);
+  if (from && d < from) return false;
+  if (to && d > to) return false;
 
-    const AdminCreditTermsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Admin - Credit Terms Application").length, [history]);
+  return true;
+}
 
-    const AccountingConcernsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Accounting Concerns").length, [history]);
+export function OtherActivitiesCard({ activities, referenceid, dateRange }: OtherActivitiesCardProps) {
+  const [meetings, setMeetings] = useState<HistoryItem[]>([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(false);
+  const [errorMeetings, setErrorMeetings] = useState<string | null>(null);
 
-    const AfterSalesRefundsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "After Sales Refunds").length, [history]);
+  const [notes, setNotes] = useState<HistoryItem[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [errorNotes, setErrorNotes] = useState<string | null>(null);
 
-    const AfterSalesRepairCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "After Sales Repair / Replacement").length, [history]);
+  const [siteVisits, setSiteVisits] = useState<SiteVisitItem[]>([]);
+  const [loadingSiteVisits, setLoadingSiteVisits] = useState(false);
+  const [errorSiteVisits, setErrorSiteVisits] = useState<string | null>(null);
 
-    const BiddingPreparationsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Bidding Preparations").length, [history]);
+  // Fetch meetings
+  useEffect(() => {
+    if (!referenceid) return;
 
-    const CustomerOrdersCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Customer Orders").length, [history]);
+    async function fetchMeetings() {
+      setLoadingMeetings(true);
+      setErrorMeetings(null);
 
-    const CustomerInquiryCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Customer Inquiry Sales").length, [history]);
+      try {
+        const q = query(
+          collection(db, "meetings"),
+          where("referenceid", "==", referenceid),
+          orderBy("date_created", "desc")
+        );
 
-    const DeliveryConcernCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Delivery Concern").length, [history]);
+        const querySnapshot = await getDocs(q);
 
-    const FollowUpCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Follow Up").length, [history]);
+        const fetched = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as HistoryItem[];
 
-    const SampleRequestsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Sample Requests").length, [history]);
+        const filtered = fetched.filter((m) =>
+          isInRange(m.date_created, dateRange?.from, dateRange?.to)
+        );
 
-    const SiteVisitsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Site Visits / Demos").length, [history]);
+        setMeetings(filtered);
+      } catch (err) {
+        console.error(err);
+        setErrorMeetings("Failed to load meetings.");
+        toast.error("Failed to load meetings.");
+      } finally {
+        setLoadingMeetings(false);
+      }
+    }
 
-    const TechnicalConcernsCount = useMemo(() =>
-        history.filter((item) => item.type_activity === "Technical Concerns").length, [history]);
+    fetchMeetings();
+  }, [referenceid, dateRange]);
 
-    // Durations
-    const avgDurationSalesOrderMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Sales Order Preparation")), [history]);
+  // Fetch notes
+  useEffect(() => {
+    if (!referenceid) return;
 
-    const avgDurationQuotationMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Quotation Preparation")), [history]);
+    async function fetchNotes() {
+      setLoadingNotes(true);
+      setErrorNotes(null);
 
-    const avgDurationDeliveredMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Delivered / Closed Transaction")), [history]);
+      try {
+        const q = query(
+          collection(db, "notes"),
+          where("tsm", "==", referenceid),
+          orderBy("date_created", "desc")
+        );
 
-    const avgDurationSupplierAccreditationMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Admin - Supplier Accreditation")), [history]);
+        const querySnapshot = await getDocs(q);
 
-    const avgDurationAdminCreditTermsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Admin - Credit Terms Application")), [history]);
+        const fetched = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as HistoryItem[];
 
-    const avgDurationAccountingConcernsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Accounting Concerns")), [history]);
+        const filtered = fetched.filter((n) =>
+          isInRange(n.date_created, dateRange?.from, dateRange?.to)
+        );
 
-    const avgDurationAfterSalesRefundsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "After Sales Refunds")), [history]);
+        setNotes(filtered);
+      } catch (err) {
+        console.error(err);
+        setErrorNotes("Failed to load notes.");
+        toast.error("Failed to load notes.");
+      } finally {
+        setLoadingNotes(false);
+      }
+    }
 
-    const avgDurationAfterSalesRepairMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "After Sales Repair / Replacement")), [history]);
+    fetchNotes();
+  }, [referenceid, dateRange]);
 
-    const avgDurationBiddingPreparationMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Bidding Preparations")), [history]);
+  // Fetch site visits from API
+  useEffect(() => {
+    if (!referenceid) return;
 
-    const avgDurationCustomerOrdersMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Customer Orders")), [history]);
+    async function fetchSiteVisits() {
+      setLoadingSiteVisits(true);
+      setErrorSiteVisits(null);
 
-    const avgDurationCustomerInquirySalesMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Customer Inquiry Sales")), [history]);
+      try {
+        const res = await fetch(`/api/fetch-tasklog?referenceid=${encodeURIComponent(referenceid)}`);
+        if (!res.ok) throw new Error("Failed to fetch site visits");
+        const data = await res.json();
 
-    const avgDurationDeliveryConcernMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Delivery Concern")), [history]);
+        const filtered = (data.siteVisits || []).filter((visit: SiteVisitItem) =>
+          isInRange(visit.date_created, dateRange?.from, dateRange?.to)
+        );
 
-    const avgDurationFollowUpMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Follow Up")), [history]);
+        setSiteVisits(filtered);
+      } catch (err: any) {
+        setErrorSiteVisits(err.message);
+        toast.error(err.message);
+      } finally {
+        setLoadingSiteVisits(false);
+      }
+    }
 
-    const avgDurationSampleRequestsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Sample Requests")), [history]);
+    fetchSiteVisits();
+  }, [referenceid, dateRange]);
 
-    const avgDurationSiteVisitsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Site Visits / Demos")), [history]);
+  // Combine all data into one array with consistent keys for activities, meetings, notes
+  const combinedHistory = useMemo(() => {
+    // Map site visits to have type_activity and start/end date (for averaging duration)
+    const siteVisitsMapped = siteVisits.map((visit) => {
+      // Treat "Site Visits / Demos" as type_activity for site visits
+      // Use date_created for both start and end (or you can customize if you have more data)
+      return {
+        ...visit,
+        type_activity: "Site Visits / Demos",
+        start_date: visit.date_created,
+        end_date: visit.date_created,
+      } as HistoryItem;
+    });
 
-    const avgDurationTechnicalConcernsMs = useMemo(() =>
-        averageDurationMs(history.filter((item) => item.type_activity === "Technical Concerns")), [history]);
+    return [...activities, ...meetings, ...notes, ...siteVisitsMapped].filter(item => item.type_activity);
+  }, [activities, meetings, notes, siteVisits]);
 
-    // Total average duration summed
-    const totalAverageDurationMs = useMemo(() => (
-        avgDurationSalesOrderMs +
-        avgDurationQuotationMs +
-        avgDurationDeliveredMs +
-        avgDurationSupplierAccreditationMs +
-        avgDurationAdminCreditTermsMs +
-        avgDurationAccountingConcernsMs +
-        avgDurationAfterSalesRepairMs +
-        avgDurationAfterSalesRefundsMs +
-        avgDurationBiddingPreparationMs +
-        avgDurationCustomerOrdersMs +
-        avgDurationCustomerInquirySalesMs +
-        avgDurationDeliveryConcernMs +
-        avgDurationFollowUpMs +
-        avgDurationSampleRequestsMs +
-        avgDurationSiteVisitsMs +
-        avgDurationTechnicalConcernsMs
-    ), [
-        avgDurationSalesOrderMs,
-        avgDurationQuotationMs,
-        avgDurationDeliveredMs,
-        avgDurationSupplierAccreditationMs,
-        avgDurationAdminCreditTermsMs,
-        avgDurationAccountingConcernsMs,
-        avgDurationAfterSalesRepairMs,
-        avgDurationAfterSalesRefundsMs,
-        avgDurationBiddingPreparationMs,
-        avgDurationCustomerOrdersMs,
-        avgDurationCustomerInquirySalesMs,
-        avgDurationDeliveryConcernMs,
-        avgDurationFollowUpMs,
-        avgDurationSampleRequestsMs,
-        avgDurationSiteVisitsMs,
-        avgDurationTechnicalConcernsMs
-    ]);
+  // Calculate stats as before using combinedHistory
+  const stats = useMemo(() => {
+    return ACTIVITY_TYPES.map((type) => {
+      const filtered = combinedHistory.filter(
+        (item) => item.type_activity === type
+      );
 
-    return (
-        <Card className="flex flex-col min-h-[700px] max-h-[700px] overflow-y-auto bg-white z-20 text-black">
-            <CardHeader>
-                <CardTitle>Other Activities</CardTitle>
-                <CardDescription>
-                    Summary of other activity types with counts and average durations for the selected agent.
-                </CardDescription>
-            </CardHeader>
+      return {
+        label: type,
+        count: filtered.length,
+        avg: averageDurationMs(filtered),
+      };
+    }).filter((row) => row.count > 0);
+  }, [combinedHistory]);
 
-            <CardContent className="space-y-4 flex-1 overflow-auto">
+  const totalAverageDurationMs = useMemo(
+    () => stats.reduce((acc, s) => acc + s.avg, 0),
+    [stats]
+  );
 
-                {QuotationCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Quotation Preparation</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{QuotationCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationQuotationMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
+  const totalCount = useMemo(
+    () => stats.reduce((acc, s) => acc + s.count, 0),
+    [stats]
+  );
 
-                {SalesOrderCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Sales Order Preparation</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SalesOrderCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSalesOrderMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
+  const isLoading = loadingMeetings || loadingNotes || loadingSiteVisits;
+  const isError = errorMeetings || errorNotes || errorSiteVisits;
 
-                {DeliveredCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Delivered / Closed Transaction</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveredCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveredMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
+  return (
+    <Card className="flex flex-col min-h-[700px] max-h-[700px] bg-white text-black">
+      <CardHeader>
+        <CardTitle>Other Activities</CardTitle>
+        <CardDescription>
+          Summary of other activity types with counts and average durations for
+          the selected agent.
+        </CardDescription>
+      </CardHeader>
 
-                {SupplierAccreditationCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Admin - Supplier Accreditation</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SupplierAccreditationCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSupplierAccreditationMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
+      <CardContent className="flex-1 overflow-auto">
+        {isLoading ? (
+          <p className="text-center text-sm italic text-gray-500">Loading data...</p>
+        ) : isError ? (
+          <p className="text-center text-sm italic text-red-500">{errorMeetings || errorNotes || errorSiteVisits}</p>
+        ) : stats.length === 0 ? (
+          <p className="text-center text-sm italic text-gray-500">
+            No records found.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Activity</TableHead>
+                <TableHead className="text-xs text-center">Count</TableHead>
+                <TableHead className="text-xs text-right">
+                  Avg Duration
+                </TableHead>
+              </TableRow>
+            </TableHeader>
 
-                {AdminCreditTermsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Admin - Credit Terms Application</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AdminCreditTermsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAdminCreditTermsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
+            <TableBody>
+              {stats.map((row) => (
+                <TableRow key={row.label} className="text-xs">
+                  <TableCell className="font-medium">
+                    {row.label}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge className="rounded-full px-3 font-mono">
+                      {row.count}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right italic">
+                    {formatDurationMs(row.avg)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
 
-                {AccountingConcernsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Accounting Concerns</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AccountingConcernsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAccountingConcernsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {AfterSalesRefundsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">After Sales Refunds</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRefundsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRefundsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {AfterSalesRepairCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">After Sales Repair / Replacement</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{AfterSalesRepairCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationAfterSalesRepairMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {BiddingPreparationsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Bidding Preparations</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{BiddingPreparationsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationBiddingPreparationMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {CustomerOrdersCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Customer Orders</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerOrdersCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerOrdersMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {CustomerInquiryCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Customer Inquiry Sales</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{CustomerInquiryCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationCustomerInquirySalesMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {DeliveryConcernCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Delivery Concern</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{DeliveryConcernCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationDeliveryConcernMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {FollowUpCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Follow Up</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{FollowUpCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationFollowUpMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {SampleRequestsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Sample Requests</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SampleRequestsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSampleRequestsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {SiteVisitsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Site Visits / Demos</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{SiteVisitsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationSiteVisitsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-                {TechnicalConcernsCount > 0 && (
-                    <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-                        <ItemContent>
-                            <div className="flex w-full items-center justify-between">
-                                <ItemTitle className="text-sm font-mono tabular-nums">Technical Concerns</ItemTitle>
-                                <ItemDescription className="text-lg font-bold">
-                                    <Badge className="h-8 min-w-8 rounded-full px-1 font-mono tabular-nums">{TechnicalConcernsCount}</Badge>
-                                </ItemDescription>
-                            </div>
-                            <p className="text-xs italic">Avg duration: {formatDurationMs(avgDurationTechnicalConcernsMs)}</p>
-                        </ItemContent>
-                    </Item>
-                )}
-
-            </CardContent>
-
-            <CardFooter className="flex justify-between sticky bottom-0 bg-white">
-                {totalAverageDurationMs > 0 && (
-                    <>
-                        <p className="self-center text-xs italic">
-                            Avg duration total: {formatDurationMs(totalAverageDurationMs)}
-                        </p>
-                        <Badge className="h-8 min-w-8 rounded-full px-4 font-mono tabular-nums">
-                            Total: {
-                                QuotationCount +
-                                SalesOrderCount +
-                                DeliveredCount +
-                                SupplierAccreditationCount +
-                                AdminCreditTermsCount +
-                                AccountingConcernsCount +
-                                AfterSalesRefundsCount +
-                                AfterSalesRepairCount +
-                                BiddingPreparationsCount +
-                                CustomerOrdersCount +
-                                CustomerInquiryCount +
-                                DeliveryConcernCount +
-                                FollowUpCount +
-                                SampleRequestsCount +
-                                SiteVisitsCount +
-                                TechnicalConcernsCount
-                            }
-                        </Badge>
-                    </>
-                )}
-            </CardFooter>
-        </Card>
-    );
+      <CardFooter className="flex justify-between border-t bg-white">
+        {totalCount > 0 && (
+          <>
+            <p className="text-xs italic">
+              Avg duration total: {formatDurationMs(totalAverageDurationMs)}
+            </p>
+            <Badge className="rounded-full px-4 font-mono">
+              Total: {totalCount}
+            </Badge>
+          </>
+        )}
+      </CardFooter>
+    </Card>
+  );
 }
