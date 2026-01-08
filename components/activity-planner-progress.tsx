@@ -12,6 +12,8 @@ import { DoneDialog } from "./activity-done-dialog";
 import { CreateActivityDialog } from "./activity-create-dialog";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator"
 
 interface Company {
     account_reference_number: string;
@@ -53,6 +55,7 @@ interface HistoryItem {
     source?: string;
     call_status?: string;
     type_activity: string;
+    tsm_approved_status: string;
 }
 
 interface NewTaskProps {
@@ -95,6 +98,8 @@ export const Progress: React.FC<NewTaskProps> = ({
     const [errorHistory, setErrorHistory] = useState<string | null>(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [history, setHistory] = useState<HistoryItem[]>([]);
+
+    const [searchTerm, setSearchTerm] = useState("");
 
     // Fetch companies with no cache
     useEffect(() => {
@@ -260,14 +265,9 @@ export const Progress: React.FC<NewTaskProps> = ({
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
         .filter((a) => !a.scheduled_date || a.scheduled_date === "")
         .map((activity) => {
-            const company = companies.find(
-                (c) => c.account_reference_number === activity.account_reference_number
-            );
+            const company = companies.find((c) => c.account_reference_number === activity.account_reference_number);
 
-            // All history related to this activity
-            const relatedHistoryItems = history.filter(
-                (h) => h.activity_reference_number === activity.activity_reference_number
-            );
+            const relatedHistoryItems = history.filter((h) => h.activity_reference_number === activity.activity_reference_number);
 
             return {
                 ...activity,
@@ -280,9 +280,19 @@ export const Progress: React.FC<NewTaskProps> = ({
                 relatedHistoryItems,
             };
         })
-        .sort(
-            (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+        .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
+
+    const filteredData = mergedData.filter((item) => {
+        const lowerSearch = searchTerm.toLowerCase();
+        return (
+            item.company_name.toLowerCase().includes(lowerSearch) ||
+            (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ?? false) ||
+            item.relatedHistoryItems.some((h) =>
+                (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
+                (h.so_number?.toLowerCase().includes(lowerSearch) ?? false)
+            )
         );
+    });
 
     const isLoading = loadingCompanies || loadingActivities;
     const error = errorCompanies || errorActivities;
@@ -361,13 +371,22 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     return (
         <>
+            <Input
+                type="search"
+                placeholder="Search company, ticket ref, quotation no, so no..."
+                className="text-xs flex-grow mb-3"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search accounts"
+            />
+
             <div className="mb-2 text-xs font-bold">
                 Total On-Progress Activities: {mergedData.length}
             </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
-                    {mergedData.map((item) => {
+                    {filteredData.map((item) => {
                         let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
 
                         if (item.status === "Assisted" || item.status === "SO-Done") {
@@ -447,12 +466,159 @@ export const Progress: React.FC<NewTaskProps> = ({
                                 </div>
 
                                 <AccordionContent className="text-xs px-4 py-2">
-                                    <p><strong>Type of Client:</strong> {item.type_client}</p>
-                                    <p><strong>Contact Person:</strong> {item.contact_person}</p>
-                                    <p><strong>Contact Number:</strong> {item.contact_number}</p>
-                                    <p><strong>Email Address:</strong> {item.email_address}</p>
-                                    <p><strong>Address:</strong> {item.address}</p>
-                                    <p><strong>Date Created:</strong>{" "}{new Date(item.date_created).toLocaleDateString()}</p>
+                                    <p>
+                                        <strong>Contact Number:</strong> {item.contact_number || "-"}
+                                    </p>
+
+                                    {item.relatedHistoryItems.length === 0 ? (
+                                        <p>No quotation or SO history available.</p>
+                                    ) : (
+                                        <>
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Ticket Reference Number:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {Array.from(
+                                                                new Set(
+                                                                    item.relatedHistoryItems
+                                                                        .map((h) => h.ticket_reference_number ?? "-")
+                                                                        .filter((v) => v !== "-")
+                                                                )
+                                                            ).join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.call_type && h.call_type !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Type:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {item.relatedHistoryItems
+                                                                .map((h) => h.call_type ?? "-")
+                                                                .filter((v) => v !== "-")
+                                                                .join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.source && h.source !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Source:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {Array.from(
+                                                                new Set(
+                                                                    item.relatedHistoryItems
+                                                                        .map((h) => h.source ?? "-")
+                                                                        .filter((v) => v !== "-")
+                                                                )
+                                                            ).join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+
+                                            {/* Quotation Number */}
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.quotation_number && h.quotation_number !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Quotation Number:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {item.relatedHistoryItems
+                                                                .map((h) => h.quotation_number ?? "-")
+                                                                .filter((v) => v !== "-")
+                                                                .join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+
+                                            {/* TOTAL Quotation Amount */}
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
+                                            ) && (
+                                                    <p>
+                                                        <strong>Total Quotation Amount:</strong>{" "}
+                                                        {item.relatedHistoryItems
+                                                            .reduce((total, h) => {
+                                                                return total + (h.quotation_amount ?? 0);
+                                                            }, 0)
+                                                            .toLocaleString("en-PH", {
+                                                                style: "currency",
+                                                                currency: "PHP",
+                                                            })}
+                                                    </p>
+                                                )}
+
+                                            {/* SO Number */}
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.so_number && h.so_number !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>SO Number:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {item.relatedHistoryItems
+                                                                .map((h) => h.so_number ?? "-")
+                                                                .filter((v) => v !== "-")
+                                                                .join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+
+                                            {/* TOTAL SO Amount */}
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.so_amount !== null && h.so_amount !== undefined
+                                            ) && (
+                                                    <p>
+                                                        <strong>Total SO Amount:</strong>{" "}
+                                                        {item.relatedHistoryItems
+                                                            .reduce((total, h) => {
+                                                                return total + (h.so_amount ?? 0);
+                                                            }, 0)
+                                                            .toLocaleString("en-PH", {
+                                                                style: "currency",
+                                                                currency: "PHP",
+                                                            })}
+                                                    </p>
+                                                )}
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.call_status && h.call_status !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Call Status:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {item.relatedHistoryItems
+                                                                .map((h) => h.call_status ?? "-")
+                                                                .filter((v) => v !== "-")
+                                                                .join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+                                            <Separator className="mb-2 mt-2" />
+                                            {item.relatedHistoryItems.some(
+                                                (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>TSM Feedback:</strong>{" "}
+                                                        <span className="uppercase">
+                                                            {item.relatedHistoryItems
+                                                                .map((h) => h.tsm_approved_status ?? "-")
+                                                                .filter((v) => v !== "-")
+                                                                .join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}
+                                        </>
+                                    )}
+
+                                    <p>
+                                        <strong>Date Created:</strong>{" "}
+                                        {new Date(item.date_created).toLocaleDateString()}
+                                    </p>
                                 </AccordionContent>
                             </AccordionItem>
                         );
