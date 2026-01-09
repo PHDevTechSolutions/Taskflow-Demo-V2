@@ -23,6 +23,18 @@ import {
 } from "@/components/ui/map";
 import type { LatLngExpression } from "leaflet";
 import { useMap } from "react-leaflet";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  where,
+  Timestamp,
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
+  limit
+} from "firebase/firestore";
 
 interface HistoryItem {
   referenceid: string;
@@ -90,11 +102,15 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
   const [errorVisits, setErrorVisits] = useState<string | null>(null);
   const [selectedVisit, setSelectedVisit] = useState<[number, number] | null>(null);
 
+  const [latestLogin, setLatestLogin] = useState<string | null>(null);
+  const [latestLogout, setLatestLogout] = useState<string | null>(null);
+
   useEffect(() => {
     if (!agent?.ReferenceID) return;
 
     const refId = agent.ReferenceID.trim();
 
+    // Fetch Site Visits (existing)
     const fetchSiteVisits = async () => {
       setLoadingVisits(true);
       setErrorVisits(null);
@@ -114,7 +130,77 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
     };
 
     fetchSiteVisits();
-  }, [agent.ReferenceID]);
+  }, [agent?.ReferenceID]);
+
+  useEffect(() => {
+    if (!agent?.ReferenceID) return;
+
+    const refId = agent.ReferenceID.trim();
+
+    const activityLogsQuery = query(
+      collection(db, "activity_logs"),
+      where("ReferenceID", "==", refId),
+      orderBy("date_created", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      activityLogsQuery,
+      (snapshot) => {
+        // Find latest login doc
+        const loginDoc = snapshot.docs.find(doc => doc.data().status?.toLowerCase() === "login");
+        // Find latest logout doc
+        const logoutDoc = snapshot.docs.find(doc => doc.data().status?.toLowerCase() === "logout");
+
+        // Helper to format Firestore Timestamp or string to desired date format
+        const formatDate = (dateCreated: any) => {
+          if (!dateCreated) return null;
+          if (dateCreated.toDate) {
+            return dateCreated.toDate().toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              second: 'numeric',
+              hour12: true,
+              timeZoneName: 'short',
+            });
+          } else if (typeof dateCreated === "string") {
+            return new Date(dateCreated).toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              second: 'numeric',
+              hour12: true,
+              timeZoneName: 'short',
+            });
+          }
+          return null;
+        };
+
+        if (loginDoc) {
+          setLatestLogin(formatDate(loginDoc.data().date_created));
+        } else {
+          setLatestLogin(null);
+        }
+
+        if (logoutDoc) {
+          setLatestLogout(formatDate(logoutDoc.data().date_created));
+        } else {
+          setLatestLogout(null);
+        }
+      },
+      (error) => {
+        console.error("Firestore snapshot error:", error);
+        setLatestLogin(null);
+        setLatestLogout(null);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [agent?.ReferenceID]);
 
   // Filter activities by status
   const soDoneActivities = agentActivities.filter(
@@ -204,35 +290,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
 
   const mapZoom = selectedVisit ? 16 : 13;
 
-  const loginLogoutSiteVisits = siteVisits
-    .filter(visit => visit.Status === "Login" || visit.Status === "Logout")
-    .sort((a, b) => {
-      const timeA = a.date_created ? new Date(a.date_created).getTime() : 0;
-      const timeB = b.date_created ? new Date(b.date_created).getTime() : 0;
-      return timeA - timeB;
-    });
-
-
-  // Calculate total login duration (sum of Login to Logout pairs)
-  let totalLoginDurationMs = 0;
-  for (let i = 0; i < loginLogoutSiteVisits.length; i++) {
-    const current = loginLogoutSiteVisits[i];
-    if (current.Status === "Login") {
-      // Find next Logout event after this Login
-      const logoutEvent = loginLogoutSiteVisits.slice(i + 1).find(e => e.Status === "Logout");
-      if (logoutEvent && current.date_created && logoutEvent.date_created) {
-        const loginTime = new Date(current.date_created).getTime();
-        const logoutTime = new Date(logoutEvent.date_created).getTime();
-        if (logoutTime > loginTime) {
-          totalLoginDurationMs += logoutTime - loginTime;
-        }
-      }
-    }
-  }
-
-  // Count of logins
-  const loginCount = loginLogoutSiteVisits.filter(e => e.Status === "Login").length;
-
   return (
     <Card className="min-h-[160px]">
       <CardHeader className="flex justify-between items-center gap-4">
@@ -258,10 +315,20 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                 {agent.Position}
               </p>
             )}
+
             {agent.Status && (
-              <p className="text-xs text-muted-foreground font-mono">
+              <div className="flex items-start gap-2 text-xs text-muted-foreground font-mono">
                 <Badge className="text-[8px] p-2 font-mono">{agent.Status}</Badge>
-              </p>
+
+                <div className="flex flex-col leading-tight">
+                  {latestLogin && (
+                    <span>Latest login: {latestLogin}</span>
+                  )}
+                  {latestLogout && (
+                    <span>Latest logout: {latestLogout}</span>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -455,7 +522,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                     })}
                   </ul>
                 </div>
-
               </>
             )}
           </div>

@@ -45,6 +45,9 @@ export function NavUser({
     name: string;
     position?: string;
     email: string;
+    ReferenceID: string;
+    TSM: string;
+    Manager: string;
     avatar: string;
   };
   userId: string;
@@ -66,6 +69,9 @@ export function NavUser({
         timestamp: new Date().toISOString(),
         deviceId,
         location,
+        ReferenceID: user.ReferenceID,
+        TSM: user.TSM,
+        Manager: user.Manager,
         browser: navigator.userAgent,
         os: navigator.platform,
         date_created: serverTimestamp(),

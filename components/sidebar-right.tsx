@@ -148,6 +148,9 @@ export function SidebarRight({
               name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
               position: userDetails.Position,
               email: userDetails.Email,
+              ReferenceID: userDetails.ReferenceID,
+              TSM: userDetails.TSM,
+              Manager: userDetails.Manager,
               avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
             }}
             userId={userId}
@@ -158,6 +161,9 @@ export function SidebarRight({
               name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
               position: userDetails.Position,
               email: userDetails.Email,
+              ReferenceID: userDetails.ReferenceID,
+              TSM: userDetails.TSM,
+              Manager: userDetails.Manager,
               avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
             }}
             userId={userId ?? ""}

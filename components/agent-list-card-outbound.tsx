@@ -138,115 +138,118 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
   }, [outboundCalls]);
 
   return (
-    <Card className="flex flex-col h-full bg-white text-black">
-      <CardHeader>
-        <CardTitle>Outbound History</CardTitle>
-        <CardDescription>Summary of outbound call activities per agent.</CardDescription>
-      </CardHeader>
+    <>
+      {totalOutboundCalls > 0 && (
+        <Card className="flex flex-col h-full bg-white text-black">
+          <CardHeader>
+            <CardTitle>Outbound History</CardTitle>
+            <CardDescription>Summary of outbound call activities per agent.</CardDescription>
+          </CardHeader>
 
-      <CardContent className="flex-1 overflow-auto">
-        {statsByAgent.length === 0 ? (
-          <p className="text-center text-sm italic text-gray-500">
-            No records found. Coordinate with your TSA to create activities.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="text-xs text-center">Touchbase Count</TableHead>
-                <TableHead className="text-xs text-center">Follow-up Count</TableHead>
-                <TableHead className="text-xs text-center">Successful Count</TableHead>
-                <TableHead className="text-xs text-center">Unsuccessful Count</TableHead>
-              </TableRow>
-            </TableHeader>
+          <CardContent className="flex-1 overflow-auto">
+            {statsByAgent.length === 0 ? (
+              <p className="text-center text-sm italic text-gray-500">
+                No records found. Coordinate with your TSA to create activities.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Agent</TableHead>
+                    <TableHead className="text-xs text-center">Touchbase Count</TableHead>
+                    <TableHead className="text-xs text-center">Follow-up Count</TableHead>
+                    <TableHead className="text-xs text-center">Successful Count</TableHead>
+                    <TableHead className="text-xs text-center">Unsuccessful Count</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-            <TableBody>
-              {statsByAgent.map((stat) => {
-                const agentName = agentMap.get(stat.agentID) || stat.agentID;
-                const profilePicture = agentPictureMap.get(stat.agentID);
+                <TableBody>
+                  {statsByAgent.map((stat) => {
+                    const agentName = agentMap.get(stat.agentID) || stat.agentID;
+                    const profilePicture = agentPictureMap.get(stat.agentID);
 
-                return (
-                  <TableRow key={stat.agentID} className="text-xs">
-                    <TableCell className="flex items-center gap-2 font-mono">
-                      {profilePicture ? (
-                        <img
-                          src={profilePicture}
-                          alt={agentName}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                          ?
-                        </div>
-                      )}
-                      {agentName}
+                    return (
+                      <TableRow key={stat.agentID} className="text-xs">
+                        <TableCell className="flex items-center gap-2 font-mono">
+                          {profilePicture ? (
+                            <img
+                              src={profilePicture}
+                              alt={agentName}
+                              className="w-6 h-6 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                              ?
+                            </div>
+                          )}
+                          {agentName}
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <Badge className="rounded-full px-3 font-mono">{stat.touchbaseCount}</Badge>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <Badge className="rounded-full px-3 font-mono">{stat.followupCount}</Badge>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <Badge className="rounded-full px-3 font-mono">{stat.successfulCount}</Badge>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <Badge className="rounded-full px-3 font-mono">{stat.unsuccessfulCount}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+
+                <tfoot>
+                  <TableRow className="text-xs font-semibold border-t">
+                    <TableCell className="font-mono">Total</TableCell>
+
+                    <TableCell className="text-center">
+                      <Badge className="rounded-full px-3 font-mono">
+                        {statsByAgent.reduce((acc, stat) => acc + stat.touchbaseCount, 0)}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="text-center">
-                      <Badge className="rounded-full px-3 font-mono">{stat.touchbaseCount}</Badge>
+                      <Badge className="rounded-full px-3 font-mono">
+                        {statsByAgent.reduce((acc, stat) => acc + stat.followupCount, 0)}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="text-center">
-                      <Badge className="rounded-full px-3 font-mono">{stat.followupCount}</Badge>
+                      <Badge className="rounded-full px-3 font-mono">
+                        {statsByAgent.reduce((acc, stat) => acc + stat.successfulCount, 0)}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="text-center">
-                      <Badge className="rounded-full px-3 font-mono">{stat.successfulCount}</Badge>
-                    </TableCell>
-
-                    <TableCell className="text-center">
-                      <Badge className="rounded-full px-3 font-mono">{stat.unsuccessfulCount}</Badge>
+                      <Badge className="rounded-full px-3 font-mono">
+                        {statsByAgent.reduce((acc, stat) => acc + stat.unsuccessfulCount, 0)}
+                      </Badge>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
+                </tfoot>
+              </Table>
+            )}
+          </CardContent>
 
-            <tfoot>
-              <TableRow className="text-xs font-semibold border-t">
-                <TableCell className="font-mono">Total</TableCell>
-
-                <TableCell className="text-center">
-                  <Badge className="rounded-full px-3 font-mono">
-                    {statsByAgent.reduce((acc, stat) => acc + stat.touchbaseCount, 0)}
-                  </Badge>
-                </TableCell>
-
-                <TableCell className="text-center">
-                  <Badge className="rounded-full px-3 font-mono">
-                    {statsByAgent.reduce((acc, stat) => acc + stat.followupCount, 0)}
-                  </Badge>
-                </TableCell>
-
-                <TableCell className="text-center">
-                  <Badge className="rounded-full px-3 font-mono">
-                    {statsByAgent.reduce((acc, stat) => acc + stat.successfulCount, 0)}
-                  </Badge>
-                </TableCell>
-
-                <TableCell className="text-center">
-                  <Badge className="rounded-full px-3 font-mono">
-                    {statsByAgent.reduce((acc, stat) => acc + stat.unsuccessfulCount, 0)}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            </tfoot>
-          </Table>
-        )}
-      </CardContent>
-
-      {totalOutboundCalls > 0 && (
-      <CardFooter className="flex justify-between border-t bg-white">
-        <p className="text-xs italic">
-          Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
-        </p>
-        <Badge className="rounded-full px-4 py-2 font-mono">
-          Total Outbound Calls: {totalOutboundCalls}
-        </Badge>
-      </CardFooter>
+          {totalOutboundCalls > 0 && (
+            <CardFooter className="flex justify-between border-t bg-white">
+              <p className="text-xs italic">
+                Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
+              </p>
+              <Badge className="rounded-full px-4 py-2 font-mono">
+                Total Outbound Calls: {totalOutboundCalls}
+              </Badge>
+            </CardFooter>
+          )}
+        </Card>
       )}
-    </Card>
-    
+    </>
   );
 }

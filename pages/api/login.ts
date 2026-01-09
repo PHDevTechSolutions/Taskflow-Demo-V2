@@ -115,5 +115,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     Status: result.user.Status,
     Department: user.Department,
     Role: user.Role,
+    ReferenceID: user.ReferenceID,
+    TSM: user.TSM,
+    Manager: user.Manager,
   });
 }
