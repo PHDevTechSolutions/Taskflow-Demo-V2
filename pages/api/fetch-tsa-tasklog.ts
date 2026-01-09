@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 
-  const referenceid = req.query.referenceid as string;
+  const referenceid = (req.query.referenceid as string)?.trim();
 
   if (!referenceid) {
     return res.status(400).json({ error: "referenceid query parameter is required" });
@@ -18,10 +18,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Query TaskLog collection filtering by exact ReferenceID
     const siteVisits = await db
-      .collection("TaskLog")
-      .find({ ReferenceID: referenceid })
-      .sort({ date_created: -1 })
-      .toArray();
+  .collection("TaskLog")
+  .find({
+    ReferenceID: { $regex: `^${referenceid}$`, $options: "i" }
+  })
+  .sort({ date_created: -1 })
+  .toArray();
 
     res.status(200).json({ siteVisits });
   } catch (error) {

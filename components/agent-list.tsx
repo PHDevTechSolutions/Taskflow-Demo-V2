@@ -185,7 +185,12 @@ export function AgentList({
                                 (item) => item.referenceid.toLowerCase() === selectedAgent.toLowerCase()
                             );
 
-                            return <AgentCard agent={agent} agentActivities={agentActivities} />;
+                            return <AgentCard 
+                            agent={agent} 
+                            agentActivities={agentActivities} 
+                            referenceid={referenceid}
+                            
+                              />;
                         })()}
 
                         <OutboundCallsTableCard
