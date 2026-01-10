@@ -153,8 +153,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           browser: navigator.userAgent,
           os: navigator.platform,
           ReferenceID: result.ReferenceID,
-          TSM: result.TSM,
-          Manager: result.Manager,
+          TSM: result.TSM ?? null,
+          Manager: result.Manager ?? null,
           date_created: serverTimestamp(),
         });
 

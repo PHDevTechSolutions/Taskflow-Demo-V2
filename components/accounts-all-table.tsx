@@ -337,10 +337,10 @@ export function AccountsTable({
             {/* Table */}
             <div className="rounded-md border p-4 space-y-2 overflow-x-auto">
                 <Badge
-                    className="h-5 min-w-5 rounded-full px-2 font-mono tabular-nums"
+                    className="h-10 min-w-10 rounded-full px-4 font-mono text-lg font-bold tabular-nums"
                     variant="outline"
                 >
-                    Total: {filteredData.length}
+                    Total Database: {filteredData.length}
                 </Badge>
 
                 <Table>
@@ -410,8 +410,6 @@ export function AccountsTable({
                         )}
                     </TableBody>
                 </Table>
-
-
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
