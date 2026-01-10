@@ -194,7 +194,7 @@ export function QuotationTableCard({ history, agents, dateCreatedFilterRange }: 
                 ) : (
                     <Table>
                         <TableHeader>
-                            <TableRow>
+                            <TableRow className="font-mono">
                                 <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="text-xs text-center">Total Quotations<br />(Quote-Done)</TableHead>
                                 <TableHead className="text-xs text-center">Total Quotation Amount</TableHead>

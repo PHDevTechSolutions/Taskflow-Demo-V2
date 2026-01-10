@@ -301,7 +301,7 @@ export function OtherActivitiesCard({ activities, referenceid, dateRange }: Othe
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="font-mono">
                 <TableHead className="text-xs">Activity</TableHead>
                 <TableHead className="text-xs text-center">Count</TableHead>
                 <TableHead className="text-xs text-right">

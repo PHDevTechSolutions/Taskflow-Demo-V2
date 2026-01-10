@@ -40,7 +40,7 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
   return (
     <Card>
       <CardHeader className="font-semibold">Meetings</CardHeader>
-      <CardContent>
+      <CardContent className="font-mono">
         <Table>
           <TableHeader>
             <TableRow>
@@ -76,9 +76,9 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
                       <img
                         src={agent.profilePicture || "/Taskflow.png"}
                         alt={`${agent.Firstname} ${agent.Lastname}`}
-                        className="h-10 w-10 rounded-sm object-cover border"
+                        className="h-10 w-10 rounded-xs object-cover border"
                       />
-                      <span className="text-sm font-medium capitalize">
+                      <span className="text-xs font-medium capitalize">
                         {agent.Firstname} {agent.Lastname}
                       </span>
                     </div>

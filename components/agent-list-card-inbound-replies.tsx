@@ -158,7 +158,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="font-mono">
                 <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="text-xs">Activity</TableHead>
                 <TableHead className="text-xs text-center">Count</TableHead>

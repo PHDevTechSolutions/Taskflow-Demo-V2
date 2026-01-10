@@ -203,7 +203,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                 ) : (
                     <Table>
                         <TableHeader>
-                            <TableRow>
+                            <TableRow className="font-mono">
                                 <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="text-xs text-center">Total OB (Touchbase)</TableHead>
                                 <TableHead className="text-xs text-center">OB Target</TableHead>

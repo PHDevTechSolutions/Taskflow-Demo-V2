@@ -154,7 +154,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="font-mono">
                     <TableHead className="text-xs">Agent</TableHead>
                     <TableHead className="text-xs text-center">Touchbase Count</TableHead>
                     <TableHead className="text-xs text-center">Follow-up Count</TableHead>

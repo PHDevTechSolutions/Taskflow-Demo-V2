@@ -48,6 +48,7 @@ export function SidebarRight({
     Position: "",
     Email: "",
     profilePicture: "",
+    Role: "",
   });
 
   React.useEffect(() => {
@@ -98,6 +99,7 @@ export function SidebarRight({
           Position: data.Position || "",
           Email: data.Email || "",
           profilePicture: data.profilePicture || "",
+          Role: data.Role || "",
         });
       })
       .catch((err) => console.error(err));
@@ -179,20 +181,22 @@ export function SidebarRight({
 
         <SidebarSeparator className="mx-0" />
 
-        <Card className="rounded-xs shadow-none border-0">
-          <CardContent>
-            <Meeting
-              referenceid={userDetails.ReferenceID}
-              tsm={userDetails.TSM}
-              manager={userDetails.Manager}
-            />
-            <TimeLogComponent
-              timeLogs={timeLogs}
-              loadingLogs={loadingLogs}
-              errorLogs={errorLogs}
-            />
-          </CardContent>
-        </Card>
+        {userDetails.Role !== "Territory Sales Manager" && (
+          <Card className="rounded-xs shadow-none border-0">
+            <CardContent>
+              <Meeting
+                referenceid={userDetails.ReferenceID}
+                tsm={userDetails.TSM}
+                manager={userDetails.Manager}
+              />
+              <TimeLogComponent
+                timeLogs={timeLogs}
+                loadingLogs={loadingLogs}
+                errorLogs={errorLogs}
+              />
+            </CardContent>
+          </Card>
+        )}
       </SidebarContent>
 
       <SidebarFooter>

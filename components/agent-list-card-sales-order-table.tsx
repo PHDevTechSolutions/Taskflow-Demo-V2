@@ -182,7 +182,7 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
                 ) : (
                     <Table>
                         <TableHeader>
-                            <TableRow>
+                            <TableRow className="font-mono">
                                 <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="text-xs text-center">Total SO Done</TableHead>
                                 <TableHead className="text-xs text-center">Total SO Amount</TableHead>

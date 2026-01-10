@@ -42,15 +42,15 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
 
                     return (
                         <Item key={agent.ReferenceID} variant="outline">
-                            <ItemContent className="flex gap-3">
+                            <ItemContent className="flex gap-3 font-mono">
                                 <div className="flex items-center gap-4">
                                     <img
                                         src={agent.profilePicture || "/Taskflow.png"}
                                         alt={`${agent.Firstname} ${agent.Lastname}`}
-                                        className="h-20 w-20 rounded-sm object-cover border flex-shrink-0"
+                                        className="h-20 w-20 rounded-xs object-cover border flex-shrink-0"
                                     />
                                     <div className="flex flex-col">
-                                        <ItemTitle className="text-sm capitalize leading-tight">
+                                        <ItemTitle className="text-xs capitalize leading-tight">
                                             {agent.Firstname} {agent.Lastname}
                                         </ItemTitle>
 

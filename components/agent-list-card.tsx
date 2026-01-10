@@ -58,6 +58,7 @@ interface SiteVisit {
   Latitude?: number | string;
   Longitude?: number | string;
   PhotoURL?: string;
+  SiteVisitAccount?: string;
 }
 
 interface Agent {
@@ -500,6 +501,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                   ${isSelected ? "bg-red-100 border-red-400" : "border-gray-200"}
                 `}
                         >
+                          <p><strong>Visited On:</strong> {visit.SiteVisitAccount || "N/A"}</p>
                           <p><strong>Type:</strong> {visit.Type || "N/A"}</p>
                           <p><strong>Status:</strong> {visit.Status || "N/A"}</p>
                           <p><strong>Location:</strong> {visit.Location || "N/A"}</p>
