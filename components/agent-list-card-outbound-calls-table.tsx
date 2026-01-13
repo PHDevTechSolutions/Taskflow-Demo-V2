@@ -43,21 +43,8 @@ interface OutboundCardProps {
     setDateCreatedFilterRangeAction?: React.Dispatch<React.SetStateAction<any>>;
 }
 
-function formatDurationMs(ms: number) {
-    if (ms <= 0) return "-";
-
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    const parts = [];
-    if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
-    if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
-    if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
-
-    return parts.join(" ") || "0 sec";
-}
+const WORKING_DAYS = 16;
+const OB_PER_DAY = 20;
 
 export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange }: OutboundCardProps) {
     // Map agent ReferenceID to fullname and picture
@@ -74,20 +61,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
     }, [agents]);
 
     // Calculate working days between from and to (inclusive)
-    const workingDays = useMemo(() => {
-        if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return 1;
-
-        let count = 0;
-        const current = new Date(dateCreatedFilterRange.from);
-        const to = new Date(dateCreatedFilterRange.to);
-
-        while (current <= to) {
-            const day = current.getDay();
-            if (day !== 0) count++; // Exclude only Sundays (0)
-            current.setDate(current.getDate() + 1);
-        }
-        return count || 1;
-    }, [dateCreatedFilterRange]);
+    const obTarget = WORKING_DAYS * OB_PER_DAY;
 
     // Aggregate stats per agent
     const statsByAgent = useMemo(() => {
@@ -142,9 +116,6 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
         return Array.from(map.values());
     }, [history]);
 
-    // OB Target = 35 * WorkingDays
-    const obTarget = 35 * workingDays;
-
     // Format percentage helper
     const formatPercent = (val: number) => `${val.toFixed(2)}%`;
 
@@ -183,7 +154,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                         <div className="absolute right-0 top-full mt-1 z-50 w-180 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
                             <ul className="list-disc list-inside space-y-1">
                                 <li>Counts activities with Source "Outbound - Touchbase", Type of Activity "Quotation Preparation", and Status "Delivered".</li>
-                                <li>OB Target = 35 × WorkingDays, where Working Days is calculated from date range.</li>
+                                <li>OB Target = 16 × WorkingDays, where Working Days is calculated from date range.</li>
                                 <li>Achievement = (Total OB ÷ OB Target) × 100</li>
                                 <li>Calls to Quote Conversion = (Total Quotations ÷ Total OB) × 100</li>
                                 <li>Outbound to Sales Conversion = (Total Delivered ÷ Total OB) × 100</li>
@@ -302,8 +273,8 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
             </CardContent>
 
             <CardFooter className="flex justify-between border-t bg-white">
-                <p className="text-xs italic">Working Days in Range: {workingDays}</p>
-                <p className="text-xs italic">OB Target (35 × working days): {obTarget}</p>
+                <p className="text-xs italic">Working Days in Range: {obTarget}</p>
+                <p className="text-xs italic">OB Target (16 × working days): {obTarget}</p>
             </CardFooter>
         </Card>
     );

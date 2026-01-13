@@ -28,28 +28,11 @@ interface SourceCardProps {
     dateRange?: DateRange;
 }
 
-function calculateWorkingDays(from?: Date, to?: Date): number {
-    if (!from || !to) return 0;
-
-    let count = 0;
-    const current = new Date(from);
-    while (current <= to) {
-        const day = current.getDay();
-        // Count Mon-Fri as working days (1 to 5)
-        if (day !== 0 && day !== 6) {
-            count++;
-        }
-        current.setDate(current.getDate() + 1);
-    }
-    return count;
-}
+const WORKING_DAYS = 16;
+const OB_PER_DAY = 20;
 
 export function OutboundCard({ activities, loading, error, dateRange }: SourceCardProps) {
     const [showTooltip, setShowTooltip] = useState(false);
-
-    const workingDays = useMemo(() => {
-        return calculateWorkingDays(dateRange?.from, dateRange?.to);
-    }, [dateRange]);
 
     // Total Outbound - Touchbase activities
     const totalOutboundTouchbase = useMemo(() => {
@@ -83,7 +66,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
     }, [activities]);
 
     // OB Target calculation
-    const obTarget = 35 * workingDays;
+    const obTarget = WORKING_DAYS * OB_PER_DAY;
 
     // Achievement calculation
     const achievement = obTarget > 0 ? (totalOutboundTouchbase / obTarget) * 100 : 0;
@@ -106,7 +89,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                 <div>
                     <CardTitle>Outbound Calls (Touch-Based Only)</CardTitle>
                     <CardDescription>
-                        Counts based on Source, Type of Activity, Status filters and OB Target computed from working days
+                        OB Target is based on a fixed 16 working days
                     </CardDescription>
                 </div>
 
@@ -138,7 +121,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                         <div className="absolute right-0 top-full mt-1 z-50 w-180 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
                             <ul className="list-disc list-inside space-y-1">
                                 <li>Counts activities with Source "Outbound - Touchbase", Type of Activity "Quotation Preparation", and Status "Delivered".</li>
-                                <li>OB Target = 35 × WorkingDays, where Working Days is calculated from date range.</li>
+                                <li>OB Target = 20 × WorkingDays, where Working Days is calculated from date range.</li>
                                 <li>Achievement = (Total OB ÷ OB Target) × 100</li>
                                 <li>Calls to Quote Conversion = (Total Quotations ÷ Total OB) × 100</li>
                                 <li>Outbound to Sales Conversion = (Total Delivered ÷ Total OB) × 100</li>
@@ -162,7 +145,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
                                     <ItemTitle className="text-xs font-medium">OB Target</ItemTitle>
                                     <ItemDescription>
                                         <Badge className="h-8 min-w-[2rem] rounded-full px-2 font-mono tabular-nums text-white bg-blue-500">
-                                            {obTarget.toLocaleString()} (35 × {workingDays} WD)
+                                            {obTarget} (20 × 16 WD)
                                         </Badge>
                                     </ItemDescription>
                                 </div>
