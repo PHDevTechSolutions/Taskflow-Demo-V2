@@ -2,23 +2,39 @@
 
 import * as React from "react";
 import {
-  Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home, BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
-  XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, CreditCard, Rocket, ClipboardList, ClipboardPenLine
+  Bot,
+  LayoutDashboard,
+  Mail,
+  CalendarDays,
+  Settings,
+  BarChart2,
+  Phone,
+  Home,
+  BookOpen,
+  Trash2,
+  Users,
+  Briefcase,
+  Target,
+  FileText,
+  Compass,
+  ShoppingCart,
+  XCircle,
+  File,
+  Leaf,
+  ShoppingBag,
+  TrendingUp,
+  PhoneCall,
+  CreditCard,
+  Rocket,
+  ClipboardList,
+  ClipboardPenLine,
 } from "lucide-react";
 
 import { NavFavorites } from "@/components/nav-favorites";
-import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavWorkspaces } from "@/components/nav-workspaces";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
-
-// Dummy getMenuItems function - replace or import your actual function
-function getMenuItems(userId: string | null) {
-  return [
-    { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  ];
-}
 
 const data = {
   teams: [
@@ -27,17 +43,17 @@ const data = {
       plan: "Enterprise",
     },
   ],
-  navMain: [
-    { title: "Dashboard", url: "#", icon: LayoutDashboard, isActive: true },
-  ],
   navSecondary: [
     { title: "Calendar", url: "/calendar", icon: CalendarDays },
     { title: "Settings", url: "/settings", icon: Settings },
   ],
   favorites: [
+    { name: "Dashboard", url: "#", icon: LayoutDashboard, isActive: true },
     { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
-    { name: "Team Sales Performance", url: "/sales-performance/tsm", icon: BarChart2 },
-    { name: "Agent List", url: "/agent/tsm", icon: Users },
+    { name: "Team Sales Performance", url: "/sales-performance/tsm", icon: BarChart2 }, // TSM
+    { name: "My Team Sales Performance", url: "/sales-performance/manager", icon: BarChart2 }, // Manager
+    { name: "Agent List", url: "/agent/tsm", icon: Users }, // TSM
+    { name: "Team List", url: "/agent/manager", icon: Users }, // Manager
     { name: "National Call Ranking", url: "/national-call-ranking", icon: Phone },
   ],
   workspaces: [
@@ -48,9 +64,10 @@ const data = {
         { name: "Active", url: "/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/companies/remove", icon: Trash2 },
         { name: "Group Affiliate", url: "/companies/group", icon: Users },
-        { name: "All", url: "/companies/all", icon: BookOpen }, // For TSM 
-        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen }, // For TSM 
-        { name: "Account Deletion", url: "/companies/approval", icon: Trash2 }, // For TSM 
+        { name: "All", url: "/companies/all", icon: BookOpen }, // TSM
+        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen }, // TSM
+        { name: "Account Deletion", url: "/companies/approval", icon: Trash2 }, // TSM
+        { name: "All Clients", url: "/companies/all-clients", icon: BookOpen }, // Manager
       ],
     },
     {
@@ -77,6 +94,7 @@ const data = {
         { name: "SPF Summary", url: "/reports/spf", icon: ClipboardPenLine },
         { name: "New Client Summary", url: "/reports/ncs", icon: Leaf },
         { name: "FB Marketplace Summary", url: "/reports/fb", icon: ShoppingBag },
+
         // TSM
         { name: "Quotation", url: "/reports/tsm/quotation", icon: FileText },
         { name: "Sales Order", url: "/reports/tsm/so", icon: ShoppingCart },
@@ -85,6 +103,15 @@ const data = {
         { name: "SPF", url: "/reports/tsm/spf", icon: ClipboardPenLine },
         { name: "New Client", url: "/reports/tsm/ncs", icon: Leaf },
         { name: "FB Marketplace", url: "/reports/tsm/fb", icon: ShoppingBag },
+
+        // Manager
+        { name: "Proposals", url: "/reports/manager/quotation", icon: FileText },
+        { name: "Customer Orders", url: "/reports/manager/so", icon: ShoppingCart },
+        { name: "Customer Invoice", url: "/reports/manager/si", icon: File },
+        { name: "Customer Service Report", url: "/reports/manager/csr", icon: Phone },
+        { name: "Customer SPF", url: "/reports/manager/spf", icon: ClipboardPenLine },
+        { name: "New Leads", url: "/reports/manager/ncs", icon: Leaf },
+        { name: "Facebook Marketplace", url: "/reports/manager/fb", icon: ShoppingBag },
       ],
     },
     {
@@ -95,17 +122,24 @@ const data = {
         { name: "Quote To SO", url: "/conversion/quote-to-so", icon: FileText },
         { name: "SO To SI", url: "/conversion/so-to-si", icon: CreditCard },
         { name: "Calls to SI", url: "/conversion/calls-to-si", icon: Rocket },
+
         // TSM
         { name: "Call to Quotes", url: "/conversion/tsm/calls-to-quote", icon: PhoneCall },
         { name: "Quotes To SO", url: "/conversion/tsm/quote-to-so", icon: FileText },
         { name: "SO's To SI", url: "/conversion/tsm/so-to-si", icon: CreditCard },
         { name: "Call to SI", url: "/conversion/tsm/calls-to-si", icon: Rocket },
+
+        // Manager
+        { name: "Calls to Quotes", url: "/conversion/manager/calls-to-quote", icon: PhoneCall },
+        { name: "Quotes To SO's", url: "/conversion/manager/quote-to-so", icon: FileText },
+        { name: "SO's To SI's", url: "/conversion/manager/so-to-si", icon: CreditCard },
+        { name: "Calls to SI's", url: "/conversion/manager/calls-to-si", icon: Rocket },
       ],
     },
   ],
 };
 
-export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [userDetails, setUserDetails] = React.useState({
     Firstname: "Task",
@@ -165,64 +199,6 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const menuItems = React.useMemo(() => getMenuItems(userId), [userId]);
-
-  const filteredMenuItems = React.useMemo(() => {
-    const role = userDetails.Role || "Admin";
-    const allowed: Record<string, string[]> = {
-      Admin: menuItems.map((m) => m.title),
-      "Super Admin": menuItems.map((m) => m.title),
-      Manager: [
-        "Session Logs",
-        "Sales Performance",
-        "Conversion Rates",
-        "Customer Database",
-        "National",
-        "My Team",
-        "Work Management",
-        "Reports",
-        "Help Center",
-        "What is Taskflow?",
-      ],
-      "Special Access": [
-        "Session Logs",
-        "Sales Performance",
-        "Conversion Rates",
-        "Customer Database",
-        "National",
-        "My Team",
-        "Reports",
-        "Help Center",
-        "What is Taskflow?",
-      ],
-      "Territory Sales Manager": [
-        "Session Logs",
-        "Sales Performance",
-        "Conversion Rates",
-        "Customer Database",
-        "National",
-        "Work Management",
-        "My Team",
-        "Reports",
-        "Help Center",
-        "What is Taskflow?",
-      ],
-      "Territory Sales Associate": [
-        "Dashboard",
-        "Session Logs",
-        "Sales Performance",
-        "Conversion Rates",
-        "Customer Database",
-        "National",
-        "Work Management",
-        "Reports",
-        "Help Center",
-        "What is Taskflow?",
-      ],
-    };
-    return menuItems.filter((item) => allowed[role]?.includes(item.title));
-  }, [menuItems, userDetails]);
-
   const withUserId = React.useCallback(
     (url: string) => {
       if (!userId) return url;
@@ -234,12 +210,10 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     [userId]
   );
 
-  // Filter pages in Customer Database workspace for TSM and Manager roles
   const filteredWorkspaces = React.useMemo(() => {
     const role = userDetails.Role || "Admin";
 
     return data.workspaces.map((workspace) => {
-      // CUSTOMER DATABASE FILTER (existing logic – ok na)
       if (workspace.name === "Customer Database") {
         if (role === "Territory Sales Associate") {
           return {
@@ -248,6 +222,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
               (page) =>
                 ![
                   "All",
+                  "All Clients",
                   "Pending Accounts",
                   "Account Deletion",
                   "Pending Transferred",
@@ -257,33 +232,34 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
         }
       }
 
-      if (workspace.name === "Reports" || workspace.name === "Conversion Rates" || workspace.name === "Customer Database" || workspace.name === "Work Management") {
+      if (
+        ["Reports", "Conversion Rates", "Customer Database", "Work Management"].includes(workspace.name)
+      ) {
         if (role === "Territory Sales Manager") {
           return {
             ...workspace,
-            pages: workspace.pages.filter(
-              (page) =>
-                [
-                  "All",
-                  "Pending Accounts",
-                  "Account Deletion",
-                  "Pending Transferred",
-                  "Client Sales",
-                  "Quotation",
-                  "Sales Order",
-                  "Pending SO",
-                  "Sales Invoice",
-                  "CSR Endorsement",
-                  "SPF",
-                  "New Client",
-                  "FB Marketplace",
-                  "Call to Quotes",
-                  "Quotes To SO",
-                  "SO's To SI",
-                  "Call to SI",
-                  "Team Activity Planner",
-                  "Agent List"
-                ].includes(page.name)
+            pages: workspace.pages.filter((page) =>
+              [
+                "All",
+                "Pending Accounts",
+                "Account Deletion",
+                "Pending Transferred",
+                "Client Sales",
+                "Quotation",
+                "Sales Order",
+                "Pending SO",
+                "Sales Invoice",
+                "CSR Endorsement",
+                "SPF",
+                "New Client",
+                "FB Marketplace",
+                "Call to Quotes",
+                "Quotes To SO",
+                "SO's To SI",
+                "Call to SI",
+                "Team Activity Planner",
+                "Agent List",
+              ].includes(page.name)
             ),
           };
         }
@@ -291,16 +267,45 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
         if (role === "Territory Sales Associate") {
           return {
             ...workspace,
-            pages: workspace.pages.filter((page) => {
-              if (!page.url) return false;
-
-              return (
+            pages: workspace.pages.filter(
+              (page) =>
+                page.url &&
                 !page.url.startsWith("/reports/tsm") &&
+                !page.url.startsWith("/reports/manager") &&
                 !page.url.startsWith("/conversion/tsm") &&
+                !page.url.startsWith("/conversion/manager") &&
                 !page.url.startsWith("/activity/tsm") &&
                 !page.url.startsWith("/agent/tsm")
-              );
-            }),
+            ),
+          };
+        }
+      }
+
+      if (
+        ["Reports", "Conversion Rates", "Customer Database", "Work Management"].includes(workspace.name)
+      ) {
+        if (role === "Manager") {
+          return {
+            ...workspace,
+            pages: workspace.pages.filter((page) =>
+              [
+                "All Clients",
+                "Client Sales",
+                "Proposals",
+                "Customer Orders",
+                "Customer Invoice",
+                "Customer Service Report",
+                "Customer SPF",
+                "New Leads",
+                "Facebook Marketplace",
+                "Calls to Quotes",
+                "Quotes To SO's",
+                "SO's To SI's",
+                "Calls to SI's",
+                "Team Activity Planner",
+                "Team List",
+              ].includes(page.name)
+            ),
           };
         }
       }
@@ -310,23 +315,36 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
   }, [userDetails.Role]);
 
   const filteredFavorites = React.useMemo(() => {
-    const Role = userDetails.Role || "Admin";
+    const role = userDetails.Role || "Admin";
 
-    if (Role === "Territory Sales Manager") {
-      // TSM can see all favorites
-      return data.favorites.filter(fav => fav.name === "Team Sales Performance" || fav.name === "National Call Ranking" || fav.name === "Agent List");
-    }
-
-    if (Role === "Territory Sales Associate") {
-      // TSA cannot see "Team Sales Performance" and "Agent List"
+    if (role === "Territory Sales Manager") {
       return data.favorites.filter(
         (fav) =>
-          fav.name !== "Team Sales Performance" &&
-          fav.name !== "Agent List"
+          fav.name === "Team Sales Performance" ||
+          fav.name === "National Call Ranking" ||
+          fav.name === "Agent List"
       );
     }
 
-    // Other roles can see all favorites
+    if (role === "Manager") {
+      return data.favorites.filter(
+        (fav) =>
+          fav.name === "My Team Sales Performance" ||
+          fav.name === "National Call Ranking" ||
+          fav.name === "Team List"
+      );
+    }
+
+    if (role === "Territory Sales Associate") {
+      return data.favorites.filter(
+        (fav) =>
+          fav.name !== "My Team Sales Performance" &&
+          fav.name !== "Team Sales Performance" &&
+          fav.name !== "Agent List" &&
+          fav.name !== "Team List"
+      );
+    }
+
     return data.favorites;
   }, [userDetails.Role]);
 
@@ -337,7 +355,6 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     }));
   }, [filteredFavorites, withUserId]);
 
-  // Append userId to URLs in filtered workspaces
   const workspacesWithId = React.useMemo(
     () =>
       filteredWorkspaces.map((workspace) => ({
@@ -350,11 +367,6 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     [filteredWorkspaces, withUserId]
   );
 
-  const navMainWithId = React.useMemo(
-    () => filteredMenuItems.map((item) => ({ ...item, url: withUserId(item.url || "#") })),
-    [filteredMenuItems, withUserId]
-  );
-
   const navSecondaryWithId = React.useMemo(
     () => data.navSecondary.map((item) => ({ ...item, url: withUserId(item.url) })),
     [withUserId]
@@ -364,7 +376,6 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     <Sidebar className="border-r-0" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
-        <NavMain items={navMainWithId} />
       </SidebarHeader>
 
       <SidebarContent>

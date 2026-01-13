@@ -60,22 +60,6 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
         return map;
     }, [agents]);
 
-    // Calculate working days between from and to (inclusive)
-    const workingDays = useMemo(() => {
-        if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return 1;
-
-        let count = 0;
-        const current = new Date(dateCreatedFilterRange.from);
-        const to = new Date(dateCreatedFilterRange.to);
-
-        while (current <= to) {
-            const day = current.getDay();
-            if (day !== 0) count++; // Exclude Sundays (0)
-            current.setDate(current.getDate() + 1);
-        }
-        return count || 1;
-    }, [dateCreatedFilterRange]);
-
     // Aggregate stats per agent
     const statsByAgent = useMemo(() => {
         type AgentStats = {
