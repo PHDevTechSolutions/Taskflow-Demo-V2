@@ -456,7 +456,7 @@ export function AccountDialog({
                 </FieldDescription>
               </FieldContent>
 
-              {mode === "edit" ? (
+              
                 <Input
                   required
                   value={formData.company_name}
@@ -469,12 +469,7 @@ export function AccountDialog({
                   placeholder="Company Name"
                   className="uppercase"
                 />
-              ) : (
-                <p className="uppercase font-semibold">
-                  {formData.company_name || "-"}
-                </p>
-              )}
-
+           
               {isCheckingDuplicate && (
                 <Alert>
                   <CheckCircle2Icon />
