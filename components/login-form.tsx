@@ -165,13 +165,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
         if (result.Role === "Territory Sales Manager") {
           // Mapunta sa agent page
-          router.push(`/agent/tsm?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/tsm/agent?id=${encodeURIComponent(result.userId)}`);
         } else if (result.Role === "Manager") {
           // Mapunta sa agent page
-          router.push(`/agent/manager?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/manager/agent?id=${encodeURIComponent(result.userId)}`);
         } else {
           // Default dashboard
-          router.push(`/dashboard?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/tsa/dashboard?id=${encodeURIComponent(result.userId)}`);
         }
 
         setLoading(false);

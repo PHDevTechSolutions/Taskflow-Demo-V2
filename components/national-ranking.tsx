@@ -58,7 +58,7 @@ function Top3Ranking({
               >
                 <div className="text-5xl mb-2">{medals[index] || `#${index + 1}`}</div>
                 <img
-                  src={user?.profilePicture ?? "/default-profile.png"}
+                  src={user?.profilePicture ?? "/Taskflow.png"}
                   alt={user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
                   className="w-30 h-30 rounded-full object-cover mb-2 border-4 border-yellow-400"
                 />
