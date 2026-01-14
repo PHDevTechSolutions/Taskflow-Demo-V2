@@ -410,7 +410,7 @@ export const FBTable: React.FC<FBProps> = ({
 
             {/* Table */}
             {filteredActivities.length > 0 && (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
+                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
                     <Table>
                         <TableHeader>
                             <TableRow>

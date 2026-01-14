@@ -26,6 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profilePicture: 1,
         Position: 1,
         Status: 1,
+        Role: 1,
+        TargetQuota: 1,
         _id: 0,
       })
       .toArray();

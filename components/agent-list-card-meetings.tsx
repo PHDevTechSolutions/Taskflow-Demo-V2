@@ -82,7 +82,12 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
                         {agent.Firstname} {agent.Lastname}
                       </span>
                     </div>
-                  </TableCell><TableCell className="text-xs">{meeting?.start_date ?? "no set date"}</TableCell><TableCell className="text-xs">{meeting?.end_date ?? "no set date"}</TableCell><TableCell className="text-xs">{duration}</TableCell><TableCell className="text-xs">{meeting?.type_activity ?? "no type"}</TableCell><TableCell className="text-xs text-muted-foreground">{meeting?.remarks ?? "no remarks"}</TableCell>
+                  </TableCell>
+                  <TableCell className="text-xs">{meeting?.start_date ?? "no set date"}</TableCell>
+                  <TableCell className="text-xs">{meeting?.end_date ?? "no set date"}</TableCell>
+                  <TableCell className="text-xs">{duration}</TableCell>
+                  <TableCell className="text-xs">{meeting?.type_activity ?? "no type"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{meeting?.remarks ?? "no remarks"}</TableCell>
                 </TableRow>
               );
             })}

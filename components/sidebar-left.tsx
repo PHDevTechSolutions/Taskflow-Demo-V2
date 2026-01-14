@@ -64,10 +64,10 @@ const data = {
         { name: "Active", url: "/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/companies/remove", icon: Trash2 },
         { name: "Group Affiliate", url: "/companies/group", icon: Users },
-        { name: "All", url: "/companies/all", icon: BookOpen }, // TSM
-        { name: "Pending Transferred", url: "/companies/transfer", icon: BookOpen }, // TSM
-        { name: "Account Deletion", url: "/companies/approval", icon: Trash2 }, // TSM
-        { name: "All Clients", url: "/companies/all-clients", icon: BookOpen }, // Manager
+        { name: "All", url: "/companies/tsm/all", icon: BookOpen }, // TSM
+        { name: "Pending Transferred", url: "/companies/tsm/transfer", icon: BookOpen }, // TSM
+        { name: "Account Deletion", url: "/companies/tsm/approval", icon: Trash2 }, // TSM
+        { name: "All Clients", url: "/companies/manager/all", icon: BookOpen }, // Manager
       ],
     },
     {
@@ -213,101 +213,45 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const filteredWorkspaces = React.useMemo(() => {
     const role = userDetails.Role || "Admin";
 
-    return data.workspaces.map((workspace) => {
-      if (workspace.name === "Customer Database") {
-        if (role === "Territory Sales Associate") {
-          return {
-            ...workspace,
-            pages: workspace.pages.filter(
-              (page) =>
-                ![
-                  "All",
-                  "All Clients",
-                  "Pending Accounts",
-                  "Account Deletion",
-                  "Pending Transferred",
-                ].includes(page.name)
-            ),
-          };
-        }
+    const baseWorkspaces =
+      role === "Manager"
+        ? data.workspaces.filter(
+          (w) => w.name !== "Work Management"
+        )
+        : data.workspaces;
+
+    return baseWorkspaces.map((workspace) => {
+      if (role === "Territory Sales Associate") {
+        return {
+          ...workspace,
+          pages: workspace.pages.filter(
+            (p) =>
+              !p.url?.includes("/tsm") &&
+              !p.url?.includes("/manager")
+          ),
+        };
       }
 
-      if (
-        ["Reports", "Conversion Rates", "Customer Database", "Work Management"].includes(workspace.name)
-      ) {
-        if (role === "Territory Sales Manager") {
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((page) =>
-              [
-                "All",
-                "Pending Accounts",
-                "Account Deletion",
-                "Pending Transferred",
-                "Client Sales",
-                "Quotation",
-                "Sales Order",
-                "Pending SO",
-                "Sales Invoice",
-                "CSR Endorsement",
-                "SPF",
-                "New Client",
-                "FB Marketplace",
-                "Call to Quotes",
-                "Quotes To SO",
-                "SO's To SI",
-                "Call to SI",
-                "Team Activity Planner",
-                "Agent List",
-              ].includes(page.name)
-            ),
-          };
-        }
-
-        if (role === "Territory Sales Associate") {
-          return {
-            ...workspace,
-            pages: workspace.pages.filter(
-              (page) =>
-                page.url &&
-                !page.url.startsWith("/reports/tsm") &&
-                !page.url.startsWith("/reports/manager") &&
-                !page.url.startsWith("/conversion/tsm") &&
-                !page.url.startsWith("/conversion/manager") &&
-                !page.url.startsWith("/activity/tsm") &&
-                !page.url.startsWith("/agent/tsm")
-            ),
-          };
-        }
+      if (role === "Territory Sales Manager") {
+        return {
+          ...workspace,
+          pages: workspace.pages.filter(
+            (p) => 
+              p.url?.includes("/tsm") &&
+              !p.url?.includes("/manager")
+          ),
+        };
       }
 
-      if (
-        ["Reports", "Conversion Rates", "Customer Database", "Work Management"].includes(workspace.name)
-      ) {
-        if (role === "Manager") {
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((page) =>
-              [
-                "All Clients",
-                "Client Sales",
-                "Proposals",
-                "Customer Orders",
-                "Customer Invoice",
-                "Customer Service Report",
-                "Customer SPF",
-                "New Leads",
-                "Facebook Marketplace",
-                "Calls to Quotes",
-                "Quotes To SO's",
-                "SO's To SI's",
-                "Calls to SI's",
-                "Team Activity Planner",
-                "Team List",
-              ].includes(page.name)
-            ),
-          };
-        }
+      if (role === "Manager") {
+        return {
+          ...workspace,
+          pages: workspace.pages.filter(
+            (p) => 
+              p.url?.includes("/manager") || 
+              p.name === "All Clients"
+          ),
+        };
       }
 
       return workspace;

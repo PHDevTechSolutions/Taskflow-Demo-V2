@@ -47,7 +47,7 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
                                     <img
                                         src={agent.profilePicture || "/Taskflow.png"}
                                         alt={`${agent.Firstname} ${agent.Lastname}`}
-                                        className="h-20 w-20 rounded-xs object-cover border flex-shrink-0"
+                                        className="h-20 w-20 rounded-sm shadow-sm object-cover border flex-shrink-0"
                                     />
                                     <div className="flex flex-col">
                                         <ItemTitle className="text-xs capitalize leading-tight">

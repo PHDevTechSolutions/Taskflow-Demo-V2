@@ -42,6 +42,8 @@ interface Agent {
   ReferenceID: string;
   Firstname: string;
   Lastname: string;
+  Role: string;
+  TargetQuota: string; // <-- added here
 }
 
 interface SalesProps {
@@ -187,19 +189,30 @@ export const SalesTable: React.FC<SalesProps> = ({
     return map;
   }, [filteredActivitiesByDate]);
 
-  // Compute aggregated sales data for each agent
+  // Compute aggregated sales data for each agent, with TargetQuota from Agent interface
   const salesDataPerAgent = useMemo(() => {
     return Object.entries(activitiesByAgent).map(([agentId, sales]) => {
+      // Sum actual sales numbers, fallback to 0
       const totalActualSales = sales.reduce(
         (sum, s) => sum + (s.actual_sales ?? 0),
         0
       );
-      const totalTargetQuota = sales.reduce((sum, s) => {
-        const quota = Number(s.target_quota);
-        return sum + (isNaN(quota) ? 0 : quota);
-      }, 0);
+
+      // Find agent info from agents list
+      const agent = agents.find(
+        (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
+      );
+
+      // Safely parse TargetQuota string to number
+      const totalTargetQuota =
+        agent && agent.TargetQuota
+          ? parseFloat(agent.TargetQuota.replace(/[^0-9.-]+/g, "")) || 0
+          : 0;
+
       const variance = totalTargetQuota - totalActualSales;
-      const achievement = totalTargetQuota === 0 ? 0 : (totalActualSales / totalTargetQuota) * 100;
+
+      const achievement =
+        totalTargetQuota === 0 ? 0 : (totalActualSales / totalTargetQuota) * 100;
 
       return {
         agentId,
@@ -209,12 +222,14 @@ export const SalesTable: React.FC<SalesProps> = ({
         achievement,
       };
     });
-  }, [activitiesByAgent]);
+  }, [activitiesByAgent, agents]);
 
   // For "all" selected, show all agents, otherwise filter to just selected
   const filteredSalesData = useMemo(() => {
     if (selectedAgent === "all") return salesDataPerAgent;
-    return salesDataPerAgent.filter((d) => d.agentId.toLowerCase() === selectedAgent.toLowerCase());
+    return salesDataPerAgent.filter(
+      (d) => d.agentId.toLowerCase() === selectedAgent.toLowerCase()
+    );
   }, [salesDataPerAgent, selectedAgent]);
 
   // Working days excluding Sundays
@@ -290,43 +305,45 @@ export const SalesTable: React.FC<SalesProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSalesData.map(({ agentId, totalActualSales, totalTargetQuota, variance, achievement }) => {
-              const agentInfo = agents.find(
-                (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
-              );
-              const percentToPlan = Math.round(achievement);
+            {filteredSalesData.map(
+              ({ agentId, totalActualSales, totalTargetQuota, variance, achievement }) => {
+                const agentInfo = agents.find(
+                  (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
+                );
+                const percentToPlan = Math.round(achievement);
 
-              return (
-                <TableRow key={agentId} className="hover:bg-muted/30 text-xs">
-                  <TableCell className="capitalize">
-                    {agentInfo
-                      ? `${agentInfo.Firstname} ${agentInfo.Lastname}`
-                      : agentId}
-                  </TableCell>
-                  <TableCell>
-                    {totalTargetQuota.toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "PHP",
-                    })}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {totalActualSales.toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "PHP",
-                    })}
-                  </TableCell>
-                  <TableCell className="uppercase text-red-500">
-                    {variance.toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "PHP",
-                    })}
-                  </TableCell>
-                  <TableCell>{achievement.toFixed(2)}%</TableCell>
-                  <TableCell>{parPercentage.toFixed(2)}%</TableCell>
-                  <TableCell>{percentToPlan}%</TableCell>
-                </TableRow>
-              );
-            })}
+                return (
+                  <TableRow key={agentId} className="hover:bg-muted/30 text-xs">
+                    <TableCell className="capitalize">
+                      {agentInfo
+                        ? `${agentInfo.Firstname} ${agentInfo.Lastname}`
+                        : agentId}
+                    </TableCell>
+                    <TableCell>
+                      {totalTargetQuota.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {totalActualSales.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell className="uppercase text-red-500">
+                      {variance.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell>{achievement.toFixed(2)}%</TableCell>
+                    <TableCell>{parPercentage.toFixed(2)}%</TableCell>
+                    <TableCell>{percentToPlan}%</TableCell>
+                  </TableRow>
+                );
+              }
+            )}
           </TableBody>
         </Table>
       </div>

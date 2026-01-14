@@ -312,7 +312,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
             {filteredAgents.length === 0 ? (
                 <div className="text-center text-xs text-gray-500">No agents found.</div>
             ) : (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
+                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -360,7 +360,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
             )}
 
             {/* Computation Explanation */}
-            <div className="mt-4 text-xs text-gray-700">
+            <div className="mt-4 text-xs text-gray-700 font-mono">
                 <p>
                     <strong>Percentage of Calls to Quote:</strong> This represents the ratio
                     of successful quotes to total outbound calls. Calculated as:

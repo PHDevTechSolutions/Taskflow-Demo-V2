@@ -255,7 +255,7 @@ export const QuoteSO: React.FC<QuoteSOProps> = ({
             {filteredAgents.length === 0 ? (
                 <div className="text-center text-xs text-gray-500">No agents found.</div>
             ) : (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
+                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -303,7 +303,7 @@ export const QuoteSO: React.FC<QuoteSOProps> = ({
             )}
 
             {/* Computation Explanation */}
-            <div className="mt-4 text-xs text-gray-700">
+            <div className="mt-4 text-xs text-gray-700 font-mono">
                 <p>The numbers represent counts of quotes and sales orders completed, based on their status.</p>
                 <p>
                     <strong>Number of Quotes:</strong> Counts all activities with status <code>Quote-Done</code>.
@@ -311,7 +311,7 @@ export const QuoteSO: React.FC<QuoteSOProps> = ({
                 <p>
                     <strong>Number of SO:</strong> Counts all activities with status <code>SO-Done</code>.
                 </p>
-                <p className="bg-gray-100 p-2 rounded">
+                <p>
                     Percentage of Quote to SO: Calculated as (Number of SO ÷ Number of Quotes) × 100.
                 </p>
                 <p>Data filtered by selected month from dropdown.</p>

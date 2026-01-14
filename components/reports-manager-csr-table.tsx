@@ -24,17 +24,17 @@ interface Company {
     type_client?: string;
 }
 
-interface SO {
+interface CSR {
     id: number;
-    so_number?: string;
-    so_amount?: number;
+    quotation_amount?: number;
+    ticket_reference_number?: string;
     remarks?: string;
     date_created: string;
     date_updated?: string;
     account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
-    type_activity: string;
+    type_client: string;
     status: string;
     referenceid: string;
 }
@@ -48,7 +48,7 @@ interface UserDetails {
     profilePicture: string;
 }
 
-interface SOProps {
+interface CSRProps {
     referenceid: string;
     target_quota?: string;
     dateCreatedFilterRange: any;
@@ -58,7 +58,7 @@ interface SOProps {
 
 const PAGE_SIZE = 10;
 
-export const SOTable: React.FC<SOProps> = ({
+export const CSRTable: React.FC<CSRProps> = ({
     referenceid,
     target_quota,
     dateCreatedFilterRange,
@@ -66,7 +66,7 @@ export const SOTable: React.FC<SOProps> = ({
     setDateCreatedFilterRangeAction,
 }) => {
     const [companies, setCompanies] = useState<Company[]>([]);
-    const [activities, setActivities] = useState<SO[]>([]);
+    const [activities, setActivities] = useState<CSR[]>([]);
     const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
     const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
@@ -136,8 +136,8 @@ export const SOTable: React.FC<SOProps> = ({
                     filter: `manager=eq.${referenceid}`,
                 },
                 (payload) => {
-                    const newRecord = payload.new as SO;
-                    const oldRecord = payload.old as SO;
+                    const newRecord = payload.new as CSR;
+                    const oldRecord = payload.old as CSR;
 
                     setActivities((curr) => {
                         switch (payload.eventType) {
@@ -189,12 +189,12 @@ export const SOTable: React.FC<SOProps> = ({
         const search = searchTerm.toLowerCase();
 
         return mergedActivities
-            .filter((item) => item.type_activity?.toLowerCase() === "sales order preparation")
+            .filter((item) => item.type_client?.toLowerCase() === "csr client")
             .filter((item) => {
                 if (!search) return true;
                 return (
                     (item.company_name?.toLowerCase().includes(search) ?? false) ||
-                    (item.so_number?.toLowerCase().includes(search) ?? false) ||
+                    (item.ticket_reference_number?.toLowerCase().includes(search) ?? false) ||
                     (item.remarks?.toLowerCase().includes(search) ?? false)
                 );
             })
@@ -214,8 +214,8 @@ export const SOTable: React.FC<SOProps> = ({
                     return true;
                 }
 
-                const updatedDate = item.date_updated
-                    ? new Date(item.date_updated)
+                const updatedDate = item.date_created
+                    ? new Date(item.date_created)
                     : new Date(item.date_created);
 
                 if (isNaN(updatedDate.getTime())) return false;
@@ -252,14 +252,14 @@ export const SOTable: React.FC<SOProps> = ({
 
     // Calculate totals for footer (for filteredActivities, not paginated subset)
     const totalQuotationAmount = useMemo(() => {
-        return filteredActivities.reduce((acc, item) => acc + (item.so_amount ?? 0), 0);
+        return filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0);
     }, [filteredActivities]);
 
     // Count unique quotation_number (non-null)
     const uniqueQuotationCount = useMemo(() => {
         const uniqueSet = new Set<string>();
         filteredActivities.forEach((item) => {
-            if (item.so_number) uniqueSet.add(item.so_number);
+            if (item.ticket_reference_number) uniqueSet.add(item.ticket_reference_number);
         });
         return uniqueSet.size;
     }, [filteredActivities]);
@@ -398,7 +398,7 @@ export const SOTable: React.FC<SOProps> = ({
             {/* Total info */}
             {filteredActivities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length} | Unique SO: {uniqueQuotationCount}
+                    Total Activities: {filteredActivities.length} | Unique Ticket Reference Number: {uniqueQuotationCount}
                 </div>
             )}
 
@@ -410,8 +410,8 @@ export const SOTable: React.FC<SOProps> = ({
                             <TableRow>
                                 <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                                <TableHead className="text-xs">SO Number</TableHead>
-                                <TableHead className="text-right text-xs">SO Amount</TableHead>
+                                <TableHead className="text-xs">Ticket Reference Number</TableHead>
+                                <TableHead className="text-xs">Quotation Amount</TableHead>
                                 <TableHead className="text-xs">Company Name</TableHead>
                                 <TableHead className="text-xs">Contact Person</TableHead>
                                 <TableHead className="text-xs">Contact Number</TableHead>
@@ -440,10 +440,10 @@ export const SOTable: React.FC<SOProps> = ({
                                             <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                                         </TableCell>
                                         <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                                        <TableCell className="uppercase">{item.so_number || "-"}</TableCell>
+                                        <TableCell className="uppercase">{item.ticket_reference_number || "-"}</TableCell>
                                         <TableCell className="text-right">
-                                            {item.so_amount !== undefined && item.so_amount !== null
-                                                ? item.so_amount.toLocaleString(undefined, {
+                                            {item.quotation_amount !== undefined && item.quotation_amount !== null
+                                                ? item.quotation_amount.toLocaleString(undefined, {
                                                     style: "currency",
                                                     currency: "PHP",
                                                 })
@@ -452,14 +452,14 @@ export const SOTable: React.FC<SOProps> = ({
                                         <TableCell>{item.company_name}</TableCell>
                                         <TableCell>{item.contact_person}</TableCell>
                                         <TableCell>{item.contact_number}</TableCell>
-                                        <TableCell className="capitalize italic font-semibold">{item.remarks || "-"}</TableCell>
+                                        <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
                                     </TableRow>
                                 );
                             })}
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
+                                <TableCell colSpan={1} className="text-right pr-4">
                                     Totals:
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -468,7 +468,7 @@ export const SOTable: React.FC<SOProps> = ({
                                         currency: "PHP",
                                     })}
                                 </TableCell>
-                                <TableCell colSpan={4}></TableCell>
+                                <TableCell colSpan={6}></TableCell>
                             </TableRow>
                         </tfoot>
                     </Table>

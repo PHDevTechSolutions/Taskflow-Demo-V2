@@ -9,11 +9,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-import { AgentCard } from "@/components/agent-list-card";
-import { AgentActivityLogs } from "@/components/agent-list-card-activity-logs";
-import { AgentMeetings } from "@/components/agent-list-card-meetings";
+import { AgentCard } from "@/components/manager-list-card";
+import { AgentActivityLogs } from "@/components/manager-list-card-activity-logs";
+import { AgentMeetings } from "@/components/manager-list-card-meetings";
 import { OutboundCard } from "@/components/agent-list-card-outbound";
-import { OutboundCallsTableCard } from "@/components/agent-list-card-outbound-calls-table";
+import { OutboundCallsTableCard } from "@/components/manager-list-card-outbound-calls-table";
 import { QuotationTableCard } from "@/components/agent-list-card-quotation-table";
 import { SalesOrderTableCard } from "@/components/agent-list-card-sales-order-table";
 import { InboundRepliesCard } from "@/components/agent-list-card-inbound-replies";
@@ -46,6 +46,7 @@ interface Agent {
     profilePicture: string;
     Position: string;
     Status: string;
+    Role: string;
 }
 
 interface AgentMeeting {
@@ -308,7 +309,6 @@ export function AgentList({
 
         return () => unsubscribes.forEach(u => u());
     }, [selectedAgent, agents]);
-
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">

@@ -8,20 +8,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-
-import {
-    Card,
-    CardContent,
-    CardHeader,
-} from "@/components/ui/card";
 
 import { AgentCard } from "@/components/agent-list-card";
 import { AgentActivityLogs } from "@/components/agent-list-card-activity-logs";
