@@ -58,25 +58,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     // Pagination state
     const [page, setPage] = useState(1);
 
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
-
     // Fetch activities
     const fetchActivities = useCallback(() => {
         if (!referenceid) {
@@ -140,31 +121,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
-
     // Filter logic
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
-        return mergedActivities
+        return activities
             .filter((item) => item.type_activity?.toLowerCase() === "quotation preparation")
             .filter((item) => {
                 if (!search) return true;
@@ -199,14 +160,12 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                     ? new Date(dateCreatedFilterRange.to)
                     : null;
 
-                // Helper function to check if two dates are on the same day (ignoring time)
                 const isSameDay = (d1: Date, d2: Date) =>
                     d1.getFullYear() === d2.getFullYear() &&
                     d1.getMonth() === d2.getMonth() &&
                     d1.getDate() === d2.getDate();
 
                 if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                    // Exact one-day filter: match any record in that day
                     return isSameDay(updatedDate, fromDate);
                 }
 
@@ -214,9 +173,14 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 if (toDate && updatedDate > toDate) return false;
 
                 return true;
+            })
+            // Add sort at the end:
+            .sort((a, b) => {
+                const dateA = new Date(a.date_updated ?? a.date_created).getTime();
+                const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+                return dateB - dateA; // descending: newest first
             });
-
-    }, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+    }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
     // Calculate totals for footer (for filteredActivities, not paginated subset)
     const totalQuotationAmount = useMemo(() => {
@@ -339,8 +303,8 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                                             })
                                             : "-"}
                                     </TableCell>
-                                    <TableCell>{item.company_name}</TableCell>
-                                    <TableCell>{item.contact_number}</TableCell>
+                                    <TableCell>{item.company_name || "-"}</TableCell>
+                                    <TableCell>{item.contact_number || "-"}</TableCell>
                                     <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
                                 </TableRow>
                             ))}

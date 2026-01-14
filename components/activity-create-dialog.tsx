@@ -23,6 +23,10 @@ import { DRSheet } from "./activity-sheet-dr";
 interface Activity {
     id: string;
     type_client: string; // now required
+    company_name: string;
+    contact_person: string;
+    contact_number: string;
+    email_address: string;
     activity_reference_number: string;
     account_reference_number: string;
     ticket_reference_number: string;
@@ -156,6 +160,10 @@ export function CreateActivityDialog({
     const [activityRef, setActivityRef] = useState(activityReferenceNumber || "");
     const [accountRef, setAccountRef] = useState(accountReferenceNumber || "");
     const [typeClient, setTypeClient] = useState(type_client || "");
+    const [CompanyName, setCompanyName] = useState(company_name || "");
+    const [ContactPerson, setContactPerson] = useState(contact_person || "");
+    const [ContactNumber, setContactNumber] = useState(contact_number || "");
+    const [EmailAddress, setEmailAddress] = useState(email_address || "");
     const [typeActivity, setTypeActivity] = useState("");
     const [source, setSource] = useState("");
     const [callback, setCallback] = useState(""); // optional
@@ -419,6 +427,10 @@ export function CreateActivityDialog({
             activity_reference_number: activityRef,
             account_reference_number: accountRef,
             type_client,
+            company_name,
+            contact_person,
+            contact_number,
+            email_address,
             date_created: dateCreated,
             date_updated: new Date().toISOString(),
             status,

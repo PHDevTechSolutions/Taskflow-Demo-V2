@@ -86,7 +86,7 @@ export function NavUser({
     try {
       await logLogoutActivity();
       localStorage.removeItem("userId");
-      router.replace("/login");
+      router.replace("/auth/login");
     } finally {
       setIsLoggingOut(false);
       setIsDialogOpen(false);

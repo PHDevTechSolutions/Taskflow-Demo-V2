@@ -68,7 +68,8 @@ interface Completed {
     date_site_visit: string;
     date_created: string;
     date_updated?: string;
-    account_reference_number?: string;
+    company_name: string;
+    contact_number: string;
     payment_terms?: string;
     scheduled_status?: string;
 }
@@ -111,25 +112,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     const [editSoNumber, setEditSoNumber] = useState("");
     const [editSoAmount, setEditSoAmount] = useState<number | "">("");
     const [isEditingSo, setIsEditingSo] = useState(false);
-
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
 
     // Fetch activities
     const fetchActivities = useCallback(() => {
@@ -180,26 +162,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    type_client: company?.type_client ?? "",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
 
     // Check if item has any meaningful data in these columns
     const hasMeaningfulData = (item: Completed) => {
@@ -234,7 +196,8 @@ export const TaskList: React.FC<CompletedProps> = ({
             "date_site_vist",
             "date_created",
             "date_updated",
-            "account_reference_number",
+            "company_name",
+            "contact_number",
             "payment_terms",
             "scheduled_status",
         ];
@@ -259,7 +222,7 @@ export const TaskList: React.FC<CompletedProps> = ({
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
-        return mergedActivities
+        return activities
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some((val) => {
@@ -269,13 +232,15 @@ export const TaskList: React.FC<CompletedProps> = ({
             })
             .filter((item) => {
                 if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
+                if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity)
+                    return false;
                 return true;
             })
-
-            /* ⭐⭐⭐ DATE RANGE FILTER HERE ⭐⭐⭐ */
             .filter((item) => {
-                if (!dateCreatedFilterRange || (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)) {
+                if (
+                    !dateCreatedFilterRange ||
+                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
+                ) {
                     return true;
                 }
 
@@ -285,18 +250,27 @@ export const TaskList: React.FC<CompletedProps> = ({
 
                 if (isNaN(updated.getTime())) return false;
 
-                const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-                const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+                const from = dateCreatedFilterRange.from
+                    ? new Date(dateCreatedFilterRange.from)
+                    : null;
+                const to = dateCreatedFilterRange.to
+                    ? new Date(dateCreatedFilterRange.to)
+                    : null;
 
                 if (from && updated < from) return false;
                 if (to && updated > to) return false;
 
                 return true;
             })
-
-            .filter(hasMeaningfulData);
+            .filter(hasMeaningfulData)
+            .sort((a, b) => {
+                // Descending sort: most recent first
+                const dateA = new Date(a.date_updated ?? a.date_created).getTime();
+                const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+                return dateB - dateA;
+            });
     }, [
-        mergedActivities,
+        activities,
         searchTerm,
         filterStatus,
         filterTypeActivity,
@@ -309,19 +283,19 @@ export const TaskList: React.FC<CompletedProps> = ({
     // Extract unique status and type_activity values for filter dropdowns
     const statusOptions = useMemo(() => {
         const setStatus = new Set<string>();
-        mergedActivities.forEach((a) => {
+        activities.forEach((a) => {
             if (a.status) setStatus.add(a.status);
         });
         return Array.from(setStatus).sort();
-    }, [mergedActivities]);
+    }, [activities]);
 
     const typeActivityOptions = useMemo(() => {
         const setType = new Set<string>();
-        mergedActivities.forEach((a) => {
+        activities.forEach((a) => {
             if (a.type_activity) setType.add(a.type_activity);
         });
         return Array.from(setType).sort();
-    }, [mergedActivities]);
+    }, [activities]);
 
     const openEditDialog = (item: Completed) => {
         setEditItem(item);
@@ -553,7 +527,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                 minute: "2-digit",
                                             })}
                                         </TableCell>
-                                        <TableCell className="font-semibold">{item.company_name}</TableCell>
+                                        <TableCell className="font-semibold">{displayValue(item.company_name)}</TableCell>
                                         <TableCell>
                                             <Badge variant={badgeColor} className="text-[8px] whitespace-nowrap">
                                                 {item.status?.replace("-", " ")}

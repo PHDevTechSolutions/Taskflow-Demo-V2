@@ -383,9 +383,15 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
+                </div>
+            )}
 
+            {/* STEP 5 */}
+            {step === 5 && (
+                <div>
+                    <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     {followUpDate ? (
-                        <Alert variant="default" className="mt-4 flex flex-col gap-2">
+                        <Alert variant="default" className="mb-4 flex flex-col gap-2">
                             <div>
                                 <AlertTitle>Follow Up Date:</AlertTitle>
                                 <AlertDescription>
@@ -415,14 +421,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             />
                         </Alert>
                     )}
-
-                </div>
-            )}
-
-            {/* STEP 5 */}
-            {step === 5 && (
-                <div>
-                    <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel>Remarks</FieldLabel>
