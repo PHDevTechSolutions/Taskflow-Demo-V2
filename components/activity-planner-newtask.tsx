@@ -321,6 +321,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // Use Endorsed Ticket handler
   const handleConfirmUseEndorsed = async () => {
     if (!selectedTicket) return;
+    if (!userDetails) {
+      toast.error("User details not available.");
+      return;
+    }
 
     try {
       setConfirmLoading(true);
@@ -331,8 +335,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
       const payload = {
         ticket_reference_number: ticket.ticket_reference_number,
         account_reference_number: ticket.account_reference_number,
-        tsm: ticket.tsm,
-        referenceid: ticket.referenceid,
+        tsm: userDetails.tsm,
+        referenceid: userDetails.referenceid, // use userDetails.referenceid
+        manager: userDetails.manager,         // use userDetails.manager here
         status: "On-Progress",
         agent: ticket.agent,
         activity_reference_number: generateActivityRef(ticket.company_name, region),
@@ -373,7 +378,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           account_reference_number: ticket.account_reference_number,
-          referenceid: ticket.referenceid,
+          referenceid: userDetails.referenceid, // use userDetails.referenceid here as well
         }),
       });
 
@@ -814,7 +819,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
           )}
         </>
       )}
-      
+
       <AccountDialog
         mode="create"
         userDetails={userDetails}

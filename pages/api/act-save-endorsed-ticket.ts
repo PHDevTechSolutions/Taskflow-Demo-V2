@@ -12,6 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       account_reference_number,  
       referenceid,            // agent
       tsm,                    // manager
+      manager,
       ticket_reference_number,
       status,
       agent,
@@ -23,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       !account_reference_number ||
       !referenceid ||
       !tsm ||
+      !manager ||
       !ticket_reference_number ||
       !status ||
       !activity_reference_number
@@ -35,6 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       account_reference_number,
       referenceid,             // agent
       tsm,                     // manager
+      manager,
       ticket_reference_number,
       status,
       agent,
