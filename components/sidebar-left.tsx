@@ -48,7 +48,7 @@ const data = {
     { title: "Settings", url: "/settings", icon: Settings },
   ],
   favorites: [
-    { name: "Dashboard", url: "#", icon: LayoutDashboard, isActive: true },
+    { name: "Dashboard", url: "/dashboard", icon: LayoutDashboard, isActive: true },
     { name: "Sales Performance", url: "/sales-performance", icon: BarChart2 },
     { name: "Team Sales Performance", url: "/sales-performance/tsm", icon: BarChart2 }, // TSM
     { name: "My Team Sales Performance", url: "/sales-performance/manager", icon: BarChart2 }, // Manager
