@@ -386,20 +386,26 @@ export const Progress: React.FC<NewTaskProps> = ({
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
-                    {filteredData.map((item) => {
-                        let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
 
-                        if (item.status === "Assisted" || item.status === "SO-Done") {
-                            badgeColor = "secondary";
+                    {filteredData.map((item) => {
+                        // Define bg colors base sa status
+                        let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
+
+                        if (item.status === "Assisted" || item.status === "On-Progress") {
+                            badgeClass = "bg-orange-400 text-white";
+                        } else if (item.status === "SO-Done") {
+                            badgeClass = "bg-yellow-400 text-black";
                         } else if (item.status === "Quote-Done") {
-                            badgeColor = "outline";
+                            badgeClass = "bg-blue-500 text-white";
+                        } else if (item.status === "Cancelled") {
+                            badgeClass = "bg-red-600 text-white";
                         }
 
                         return (
-                            <AccordionItem key={item.id} value={item.id}>
+                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2 border-gray-200">
                                 <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
-                                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                                             {item.company_name}
                                         </AccordionTrigger>
 
@@ -446,22 +452,26 @@ export const Progress: React.FC<NewTaskProps> = ({
                                     </div>
 
                                     <div className="ml-1 space-x-1">
-                                        <Badge variant={badgeColor} className="text-[8px]">
+                                        <Badge className={`${badgeClass} font-mono`}>
                                             {item.status.replace("-", " ")}
                                         </Badge>
-                                        {
-                                            item.relatedHistoryItems.some(
-                                                (h: HistoryItem) =>
-                                                    !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
-                                            ) && (
-                                                <Badge variant="default" className="text-[8px]">
-                                                    {item.relatedHistoryItems
-                                                        .map((h: HistoryItem) => h.type_activity ?? "")
+                                        {item.relatedHistoryItems.some(
+                                            (h: HistoryItem) =>
+                                                !!h.type_activity &&
+                                                h.type_activity !== "-" &&
+                                                h.type_activity.trim() !== ""
+                                        ) &&
+                                            Array.from(
+                                                new Set(
+                                                    item.relatedHistoryItems
+                                                        .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
                                                         .filter((v) => v && v !== "-")
-                                                        .join(", ")
-                                                        .toUpperCase()}
+                                                )
+                                            ).map((activity) => (
+                                                <Badge key={activity} variant="default" className="font-mono">
+                                                    {activity.toUpperCase()}
                                                 </Badge>
-                                            )}
+                                            ))}
                                     </div>
                                 </div>
 

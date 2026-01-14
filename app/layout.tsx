@@ -49,7 +49,7 @@ export default function RootLayout({
       className="light"
       style={{ colorScheme: "light" }}
     >
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-mono`}>
         <UserProvider>
           <ThemeProvider
             attribute="class"

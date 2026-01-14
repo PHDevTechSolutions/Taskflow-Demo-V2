@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
+const nextConfig = {
+  experimental: {
+    turbopack: false,
+  },
   images: {
     remotePatterns: [
       {
@@ -10,6 +13,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-};
+} as NextConfig; // <-- type assertion to avoid error
 
 export default nextConfig;

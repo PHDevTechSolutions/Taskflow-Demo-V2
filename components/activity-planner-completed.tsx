@@ -340,27 +340,18 @@ export const Completed: React.FC<NewTaskProps> = ({
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
           {filteredData.map((item) => {
-            // Badge color logic based on status
-            let badgeColor: "default" | "secondary" | "destructive" | "outline" =
-              "default";
-
-            if (item.status === "Assisted" || item.status === "SO-Done") {
-              badgeColor = "secondary";
-            } else if (item.status === "Quote-Done") {
-              badgeColor = "outline";
-            }
 
             return (
-              <AccordionItem key={item.id} value={item.id}>
+              <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2 border-gray-200">
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
-                    <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                       {item.company_name}
                     </AccordionTrigger>
                   </div>
 
                   <div className="ml-1 space-x-1">
-                    <Badge variant={badgeColor} className="text-[8px]">
+                    <Badge className="bg-green-500 font-mono">
                       {item.status.replace("-", " ")}
                     </Badge>
                     {item.relatedHistoryItems.some(
@@ -368,15 +359,18 @@ export const Completed: React.FC<NewTaskProps> = ({
                         !!h.type_activity &&
                         h.type_activity !== "-" &&
                         h.type_activity.trim() !== ""
-                    ) && (
-                      <Badge variant="default" className="text-[8px]">
-                        {item.relatedHistoryItems
-                          .map((h: HistoryItem) => h.type_activity ?? "")
-                          .filter((v) => v && v !== "-")
-                          .join(", ")
-                          .toUpperCase()}
-                      </Badge>
-                    )}
+                    ) &&
+                      Array.from(
+                        new Set(
+                          item.relatedHistoryItems
+                            .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
+                            .filter((v) => v && v !== "-")
+                        )
+                      ).map((activity) => (
+                        <Badge key={activity} variant="default" className="font-mono">
+                          {activity.toUpperCase()}
+                        </Badge>
+                      ))}
                   </div>
                 </div>
 
@@ -392,150 +386,150 @@ export const Completed: React.FC<NewTaskProps> = ({
                       {item.relatedHistoryItems.some(
                         (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
                       ) && (
-                        <p>
-                          <strong>Ticket Reference Number:</strong>{" "}
-                          <span className="uppercase">
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.ticket_reference_number ?? "-")
-                                  .filter((v) => v !== "-")
-                              )
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.ticket_reference_number ?? "-")
+                                    .filter((v) => v !== "-")
+                                )
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.call_type && h.call_type !== "-"
                       ) && (
-                        <p>
-                          <strong>Type:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.call_type ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.source && h.source !== "-"
                       ) && (
-                        <p>
-                          <strong>Source:</strong>{" "}
-                          <span className="uppercase">
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.source ?? "-")
-                                  .filter((v) => v !== "-")
-                              )
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-")
+                                )
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.quotation_number && h.quotation_number !== "-"
                       ) && (
-                        <p>
-                          <strong>Quotation Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.quotation_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.quotation_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
                       ) && (
-                        <p>
-                          <strong>Total Quotation Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => total + (h.quotation_amount ?? 0), 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => total + (h.quotation_amount ?? 0), 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.so_number && h.so_number !== "-"
                       ) && (
-                        <p>
-                          <strong>SO Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.so_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>SO Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.so_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.so_amount !== null && h.so_amount !== undefined
                       ) && (
-                        <p>
-                          <strong>Total SO Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => total + (h.so_amount ?? 0), 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => total + (h.so_amount ?? 0), 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.actual_sales !== null && h.actual_sales !== undefined
                       ) && (
-                        <p>
-                          <strong>Total Sales Invoice:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => total + (h.actual_sales ?? 0), 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total Sales Invoice:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => total + (h.actual_sales ?? 0), 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.call_status && h.call_status !== "-"
                       ) && (
-                        <p>
-                          <strong>Call Status:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.call_status ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Call Status:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       <Separator className="mb-2 mt-2" />
 
                       {item.relatedHistoryItems.some(
                         (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
                       ) && (
-                        <p>
-                          <strong>TSM Feedback:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.tsm_approved_status ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                     </>
                   )}
 

@@ -386,6 +386,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       </Alert>
     );
   }
+  type BadgeVariant = "secondary" | "outline" | "destructive" | "default" | null | undefined;
+  function getBadgeProps(status: string): { variant: BadgeVariant; className?: string } {
+    switch (status) {
+      case "Assisted":
+      case "On-Progress":
+        return { variant: "secondary", className: "bg-orange-500 text-white" };
+      case "SO-Done":
+        return { variant: "default", className: "bg-yellow-400 text-white" };
+      case "Quote-Done":
+        return { variant: "outline", className: "bg-blue-500 text-white" };
+      case "Cancelled":
+        return { variant: "destructive", className: "bg-red-600 text-white" };
+      default:
+        return { variant: "default" };
+    }
+  }
 
   return (
     <>
@@ -411,270 +427,273 @@ export const Scheduled: React.FC<ScheduledProps> = ({
               No scheduled activities found.
             </p>
           ) : (
-            filteredActivities.map((item) => (
-              <AccordionItem key={item.id} value={item.id}>
-                <div className="p-2 select-none">
-                  <div className="flex justify-between items-center">
-                    <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
-                      {item.company_name}
-                    </AccordionTrigger>
+            filteredActivities.map((item) => {
+              const badgeProps = getBadgeProps(item.status);
 
-                    <div className="flex gap-2 ml-4">
-                      <CreateActivityDialog
-                        firstname={firstname}
-                        lastname={lastname}
-                        target_quota={target_quota}
-                        email={email}
-                        contact={contact}
-                        tsmname={tsmname}
-                        managername={managername}
-                        referenceid={item.referenceid}
-                        tsm={item.tsm}
-                        manager={item.manager}
-                        type_client={item.type_client}
-                        contact_number={item.contact_number}
-                        email_address={item.email_address}
-                        activityReferenceNumber={item.activity_reference_number}
-                        ticket_reference_number={item.ticket_reference_number}
-                        agent={item.agent}
-                        company_name={item.company_name}
-                        contact_person={item.contact_person}
-                        address={item.address}
-                        accountReferenceNumber={item.account_reference_number}
-                        onCreated={() => {
-                          fetchActivities();
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        className="cursor-pointer"
-                        variant="secondary"
-                        disabled={updatingId === item.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDoneDialog(item.id);
-                        }}
-                      >
-                        {updatingId === item.id ? "Updating..." : "Done"}
-                      </Button>
+              return (
+                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2 border-gray-200">
+                  <div className="p-2 select-none">
+                    <div className="flex justify-between items-center">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                        {item.company_name}
+                      </AccordionTrigger>
+
+                      <div className="flex gap-2 ml-4">
+                        <CreateActivityDialog
+                          firstname={firstname}
+                          lastname={lastname}
+                          target_quota={target_quota}
+                          email={email}
+                          contact={contact}
+                          tsmname={tsmname}
+                          managername={managername}
+                          referenceid={item.referenceid}
+                          tsm={item.tsm}
+                          manager={item.manager}
+                          type_client={item.type_client}
+                          contact_number={item.contact_number}
+                          email_address={item.email_address}
+                          activityReferenceNumber={item.activity_reference_number}
+                          ticket_reference_number={item.ticket_reference_number}
+                          agent={item.agent}
+                          company_name={item.company_name}
+                          contact_person={item.contact_person}
+                          address={item.address}
+                          accountReferenceNumber={item.account_reference_number}
+                          onCreated={() => {
+                            fetchActivities();
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          className="cursor-pointer"
+                          variant="secondary"
+                          disabled={updatingId === item.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDoneDialog(item.id);
+                          }}
+                        >
+                          {updatingId === item.id ? "Updating..." : "Done"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="ml-1 flex flex-wrap gap-1">
+                      {/* Status Badge */}
+                      <Badge variant={badgeProps.variant} className={`font-mono ${badgeProps.className || ""}`}>
+                        {item.status.replace("-", " ")} | {(() => {
+                          if (item.status === "SO-Done") return "Sales Order Preparation";
+                          if (item.status === "Quote-Done") return "Quotation Preparation";
+                          if (item.status === "Assisted") return "Outbound Calls";
+                          if (item.status === "Not Assisted") return "Outbound Calls";
+                          return item.status.replace("-", " ");
+                        })()}
+                      </Badge>
+                      {/* SO Number Badge — only if there's at least one valid SO number */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.so_number && h.so_number !== "-" && h.so_number.trim() !== ""
+                      ) && (
+                          <Badge variant="default" className="font-mono">
+                            <strong>SO:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .map((h) => h.so_number ?? "")
+                              .filter((v) => v && v !== "-")
+                              .join(", ")
+                              .toUpperCase()}
+                          </Badge>
+                        )}
+
+                      {/* Quotation Number Badge — only if there's at least one valid Quotation number */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.quotation_number && h.quotation_number !== "-" && h.quotation_number.trim() !== ""
+                      ) && (
+                          <Badge variant="default" className="font-mono">
+                            <strong>Quotation Number:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .map((h) => h.quotation_number ?? "")
+                              .filter((v) => v && v !== "-")
+                              .join(", ")
+                              .toUpperCase()}
+                          </Badge>
+                        )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.tsm_approved_status && h.tsm_approved_status !== "-" && h.tsm_approved_status.trim() !== ""
+                      ) && (
+                          <Badge className="font-mono bg-green-500">
+                            <strong>Feedback by TSM:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .map((h) => h.tsm_approved_status ?? "")
+                              .filter((v) => v && v !== "-")
+                              .join(", ")
+                              .toUpperCase()}
+                          </Badge>
+                        )}
                     </div>
                   </div>
 
-                  <div className="ml-1 flex flex-wrap gap-1">
-                    {/* Status Badge */}
-                    <Badge variant="default" className="text-[8px]">
-                      {item.status.replace("-", " ")} | {(() => {
-                        if (item.status === "SO-Done") return "Sales Order Preparation";
-                        if (item.status === "Quote-Done") return "Quotation Preparation";
-                        if (item.status === "Assisted") return "Outbound Calls";
-                        if (item.status === "Not Assisted") return "Outbound Calls";
-                        return item.status.replace("-", " ");
-                      })()}
-                    </Badge>
+                  <AccordionContent className="text-xs px-4 py-2">
+                    <p>
+                      <strong>Contact Number:</strong> {item.contact_number || "-"}
+                    </p>
 
-                    {/* SO Number Badge — only if there's at least one valid SO number */}
-                    {item.relatedHistoryItems.some(
-                      (h) => h.so_number && h.so_number !== "-" && h.so_number.trim() !== ""
-                    ) && (
-                        <Badge variant="default" className="text-[8px]">
-                          <strong>SO:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .map((h) => h.so_number ?? "")
-                            .filter((v) => v && v !== "-")
-                            .join(", ")
-                            .toUpperCase()}
-                        </Badge>
-                      )}
+                    {item.relatedHistoryItems.length === 0 ? (
+                      <p>No quotation or SO history available.</p>
+                    ) : (
+                      <>
+                        {item.relatedHistoryItems.some(
+                          (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
+                        ) && (
+                            <p>
+                              <strong>Ticket Reference Number:</strong>{" "}
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.ticket_reference_number ?? "-")
+                                      .filter((v) => v !== "-")
+                                  )
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
 
-                    {/* Quotation Number Badge — only if there's at least one valid Quotation number */}
-                    {item.relatedHistoryItems.some(
-                      (h) => h.quotation_number && h.quotation_number !== "-" && h.quotation_number.trim() !== ""
-                    ) && (
-                        <Badge variant="default" className="text-[8px]">
-                          <strong>Quotation Number:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .map((h) => h.quotation_number ?? "")
-                            .filter((v) => v && v !== "-")
-                            .join(", ")
-                            .toUpperCase()}
-                        </Badge>
-                      )}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.call_type && h.call_type !== "-"
+                        ) && (
+                            <p>
+                              <strong>Type:</strong>{" "}
+                              <span className="uppercase">
+                                {item.relatedHistoryItems
+                                  .map((h) => h.call_type ?? "-")
+                                  .filter((v) => v !== "-")
+                                  .join(", ")}
+                              </span>
+                            </p>
+                          )}
 
-                    {item.relatedHistoryItems.some(
-                      (h) => h.tsm_approved_status && h.tsm_approved_status !== "-" && h.tsm_approved_status.trim() !== ""
-                    ) && (
-                        <Badge className="text-[8px] bg-green-500">
-                          <strong>Feedback by TSM:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .map((h) => h.tsm_approved_status ?? "")
-                            .filter((v) => v && v !== "-")
-                            .join(", ")
-                            .toUpperCase()}
-                        </Badge>
-                      )}
-                  </div>
-                </div>
+                        {item.relatedHistoryItems.some(
+                          (h) => h.source && h.source !== "-"
+                        ) && (
+                            <p>
+                              <strong>Source:</strong>{" "}
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.source ?? "-")
+                                      .filter((v) => v !== "-")
+                                  )
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
 
-                <AccordionContent className="text-xs px-4 py-2">
-                  <p>
-                    <strong>Contact Number:</strong> {item.contact_number || "-"}
-                  </p>
+                        {/* Quotation Number */}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.quotation_number && h.quotation_number !== "-"
+                        ) && (
+                            <p>
+                              <strong>Quotation Number:</strong>{" "}
+                              <span className="uppercase">
+                                {item.relatedHistoryItems
+                                  .map((h) => h.quotation_number ?? "-")
+                                  .filter((v) => v !== "-")
+                                  .join(", ")}
+                              </span>
+                            </p>
+                          )}
 
-                  {item.relatedHistoryItems.length === 0 ? (
-                    <p>No quotation or SO history available.</p>
-                  ) : (
-                    <>
-                      {item.relatedHistoryItems.some(
-                        (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
-                      ) && (
-                          <p>
-                            <strong>Ticket Reference Number:</strong>{" "}
-                            <span className="uppercase">
-                              {Array.from(
-                                new Set(
-                                  item.relatedHistoryItems
-                                    .map((h) => h.ticket_reference_number ?? "-")
-                                    .filter((v) => v !== "-")
-                                )
-                              ).join(", ")}
-                            </span>
-                          </p>
-                        )}
-
-                      {item.relatedHistoryItems.some(
-                        (h) => h.call_type && h.call_type !== "-"
-                      ) && (
-                          <p>
-                            <strong>Type:</strong>{" "}
-                            <span className="uppercase">
+                        {/* TOTAL Quotation Amount */}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
+                        ) && (
+                            <p>
+                              <strong>Total Quotation Amount:</strong>{" "}
                               {item.relatedHistoryItems
-                                .map((h) => h.call_type ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
+                                .reduce((total, h) => {
+                                  return total + (h.quotation_amount ?? 0);
+                                }, 0)
+                                .toLocaleString("en-PH", {
+                                  style: "currency",
+                                  currency: "PHP",
+                                })}
+                            </p>
+                          )}
 
-                      {item.relatedHistoryItems.some(
-                        (h) => h.source && h.source !== "-"
-                      ) && (
-                          <p>
-                            <strong>Source:</strong>{" "}
-                            <span className="uppercase">
-                              {Array.from(
-                                new Set(
-                                  item.relatedHistoryItems
-                                    .map((h) => h.source ?? "-")
-                                    .filter((v) => v !== "-")
-                                )
-                              ).join(", ")}
-                            </span>
-                          </p>
-                        )}
+                        {/* SO Number */}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.so_number && h.so_number !== "-"
+                        ) && (
+                            <p>
+                              <strong>SO Number:</strong>{" "}
+                              <span className="uppercase">
+                                {item.relatedHistoryItems
+                                  .map((h) => h.so_number ?? "-")
+                                  .filter((v) => v !== "-")
+                                  .join(", ")}
+                              </span>
+                            </p>
+                          )}
 
-                      {/* Quotation Number */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.quotation_number && h.quotation_number !== "-"
-                      ) && (
-                          <p>
-                            <strong>Quotation Number:</strong>{" "}
-                            <span className="uppercase">
+                        {/* TOTAL SO Amount */}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.so_amount !== null && h.so_amount !== undefined
+                        ) && (
+                            <p>
+                              <strong>Total SO Amount:</strong>{" "}
                               {item.relatedHistoryItems
-                                .map((h) => h.quotation_number ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
+                                .reduce((total, h) => {
+                                  return total + (h.so_amount ?? 0);
+                                }, 0)
+                                .toLocaleString("en-PH", {
+                                  style: "currency",
+                                  currency: "PHP",
+                                })}
+                            </p>
+                          )}
+                        {item.relatedHistoryItems.some(
+                          (h) => h.call_status && h.call_status !== "-"
+                        ) && (
+                            <p>
+                              <strong>Call Status:</strong>{" "}
+                              <span className="uppercase">
+                                {item.relatedHistoryItems
+                                  .map((h) => h.call_status ?? "-")
+                                  .filter((v) => v !== "-")
+                                  .join(", ")}
+                              </span>
+                            </p>
+                          )}
+                        <Separator className="mb-2 mt-2" />
+                        {item.relatedHistoryItems.some(
+                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                        ) && (
+                            <p>
+                              <strong>TSM Feedback:</strong>{" "}
+                              <span className="uppercase">
+                                {item.relatedHistoryItems
+                                  .map((h) => h.tsm_approved_status ?? "-")
+                                  .filter((v) => v !== "-")
+                                  .join(", ")}
+                              </span>
+                            </p>
+                          )}
+                      </>
+                    )}
 
-                      {/* TOTAL Quotation Amount */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
-                      ) && (
-                          <p>
-                            <strong>Total Quotation Amount:</strong>{" "}
-                            {item.relatedHistoryItems
-                              .reduce((total, h) => {
-                                return total + (h.quotation_amount ?? 0);
-                              }, 0)
-                              .toLocaleString("en-PH", {
-                                style: "currency",
-                                currency: "PHP",
-                              })}
-                          </p>
-                        )}
-
-                      {/* SO Number */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.so_number && h.so_number !== "-"
-                      ) && (
-                          <p>
-                            <strong>SO Number:</strong>{" "}
-                            <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.so_number ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
-
-                      {/* TOTAL SO Amount */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.so_amount !== null && h.so_amount !== undefined
-                      ) && (
-                          <p>
-                            <strong>Total SO Amount:</strong>{" "}
-                            {item.relatedHistoryItems
-                              .reduce((total, h) => {
-                                return total + (h.so_amount ?? 0);
-                              }, 0)
-                              .toLocaleString("en-PH", {
-                                style: "currency",
-                                currency: "PHP",
-                              })}
-                          </p>
-                        )}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.call_status && h.call_status !== "-"
-                      ) && (
-                          <p>
-                            <strong>Call Status:</strong>{" "}
-                            <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.call_status ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
-                      <Separator className="mb-2 mt-2" />
-                      {item.relatedHistoryItems.some(
-                        (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
-                      ) && (
-                          <p>
-                            <strong>TSM Feedback:</strong>{" "}
-                            <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.tsm_approved_status ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
-                    </>
-                  )}
-
-                  <p>
-                    <strong>Date Created:</strong>{" "}
-                    {new Date(item.date_created).toLocaleDateString()}
-                  </p>
-                </AccordionContent>
+                    <p>
+                      <strong>Date Created:</strong>{" "}
+                      {new Date(item.date_created).toLocaleDateString()}
+                    </p>
+                  </AccordionContent>
 
 
 
-              </AccordionItem>
-            ))
+                </AccordionItem>
+              );
+            })
           )}
         </Accordion>
       </div>

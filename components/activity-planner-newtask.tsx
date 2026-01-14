@@ -516,11 +516,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 Endorsed Tickets ({endorsedTickets.length})
               </h2>
 
-              <Accordion type="single" collapsible className="w-full">
+              <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-red-100 border-red-500">
                 {endorsedTickets.map((ticket) => (
                   <AccordionItem key={ticket.id} value={ticket.id}>
                     <div className="flex justify-between items-center p-2 select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                         {ticket.company_name}
                       </AccordionTrigger>
                       <Button
@@ -606,10 +606,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
             />
 
             <Button
-              className="shrink-0 cursor-pointer text-xs"
+              className="shrink-0 cursor-pointer"
               onClick={() => setIsCreateDialogOpen(true)}
             >
-              Add Account
+              Create Account
             </Button>
           </div>
 
@@ -618,16 +618,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
           {searchTerm.trim() ? (
             <section>
               <h2 className="text-xs font-bold mb-4">
-                Search Results ({filteredBySearch.length})
+                Search Results <span className="text-green-600">({filteredBySearch.length})</span>
               </h2>
               {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
-                <Accordion type="single" collapsible className="w-full">
+                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200">
                   {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
-                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                           {account.company_name}
                         </AccordionTrigger>
 
@@ -695,7 +695,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                               className="bg-green-100 border border-green-300 rounded mb-2"
                             >
                               <div className="flex justify-between items-center p-2 select-none">
-                                <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                                <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                                   {account.company_name}
                                 </AccordionTrigger>
 
@@ -751,7 +751,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                     Available OB Calls ({groupedNull[firstAvailableCluster].length})
                   </h2>
 
-                  <Alert>
+                  <Alert className="font-mono">
                     <CheckCircle2Icon />
                     <AlertTitle className="text-xs">
                       Cluster Series: {firstAvailableCluster.toUpperCase()}
@@ -761,11 +761,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
                     </AlertDescription>
                   </Alert>
 
-                  <Accordion type="single" collapsible className="w-full">
+                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200">
                     {groupedNull[firstAvailableCluster].map((account) => (
                       <AccordionItem key={account.id} value={account.id}>
                         <div className="flex justify-between items-center p-2 select-none">
-                          <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                          <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                             {account.company_name}
                           </AccordionTrigger>
 
