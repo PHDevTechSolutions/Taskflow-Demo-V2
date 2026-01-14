@@ -290,7 +290,7 @@ export const SalesTable: React.FC<SalesProps> = ({
         </SelectContent>
       </Select>
 
-      <div className="rounded-md border p-4 bg-white shadow-sm">
+      <div className="rounded-md border p-4 bg-white shadow-sm font-mono">
         <h2 className="font-semibold text-sm mb-4">Sales Metrics</h2>
         <Table>
           <TableHeader>
@@ -349,7 +349,7 @@ export const SalesTable: React.FC<SalesProps> = ({
       </div>
 
       {/* Computation Explanation Card */}
-      <div className="rounded-md border p-4 bg-white shadow-sm">
+      <div className="rounded-md border p-4 bg-white shadow-sm font-mono">
         <h2 className="font-semibold text-sm mb-4">Computation Explanation</h2>
         <div className="text-xs space-y-3 text-gray-700">
           <p>

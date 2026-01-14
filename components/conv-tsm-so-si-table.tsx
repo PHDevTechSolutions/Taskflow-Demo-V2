@@ -289,7 +289,7 @@ export const SOSI: React.FC<SOSIProps> = ({
       {filteredAgents.length === 0 ? (
         <div className="text-center text-xs text-gray-500">No agents found.</div>
       ) : (
-        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
+        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
           <Table>
             <TableHeader>
               <TableRow>
@@ -337,7 +337,7 @@ export const SOSI: React.FC<SOSIProps> = ({
       )}
 
       {/* Computation Explanation */}
-      <div className="mt-4 text-xs text-gray-700">
+      <div className="mt-4 text-xs text-gray-700 font-mono">
         <p>
           The numbers represent counts of sales orders and SI completed, based on their status and presence of SI date with actual sales.
         </p>

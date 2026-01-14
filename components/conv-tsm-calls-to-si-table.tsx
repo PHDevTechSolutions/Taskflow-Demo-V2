@@ -288,7 +288,7 @@ export const CallSI: React.FC<CallSIProps> = ({
       {filteredAgents.length === 0 ? (
         <div className="text-center text-xs text-gray-500">No agents found.</div>
       ) : (
-        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
+        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
           <Table>
             <TableHeader>
               <TableRow>
@@ -327,7 +327,7 @@ export const CallSI: React.FC<CallSIProps> = ({
       )}
 
       {/* Computation Explanation */}
-      <div className="mt-4 text-xs text-gray-700">
+      <div className="mt-4 text-xs text-gray-700 font-mono">
         <p>
           <strong>Number of Calls:</strong> Counted where <code>source === "Outbound - Touchbase"</code>.
         </p>
