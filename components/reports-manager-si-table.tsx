@@ -37,7 +37,6 @@ interface SI {
     type_activity: string;
     status: string;
     delivery_date: string;
-    si_date: string;
     payment_terms: string;
     referenceid: string;
 }
@@ -217,9 +216,9 @@ export const SITable: React.FC<SIProps> = ({
                     return true;
                 }
 
-                const updatedDate = item.si_date
-                    ? new Date(item.si_date)
-                    : new Date(item.si_date);
+                const updatedDate = item.delivery_date
+                    ? new Date(item.delivery_date)
+                    : new Date(item.delivery_date);
 
                 if (isNaN(updatedDate.getTime())) return false;
 
@@ -412,7 +411,6 @@ export const SITable: React.FC<SIProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="text-xs">Agent</TableHead>
-                                <TableHead className="w-[120px] text-xs">SI Date</TableHead>
                                 <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
                                 <TableHead className="text-xs text-right">SI Amount</TableHead>
                                 <TableHead className="text-xs">DR Number</TableHead>
@@ -444,7 +442,6 @@ export const SITable: React.FC<SIProps> = ({
                                             )}
                                             <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                                         </TableCell>
-                                        <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
                                         <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
                                         <TableCell className="text-right">
                                             {item.actual_sales !== undefined && item.actual_sales !== null
