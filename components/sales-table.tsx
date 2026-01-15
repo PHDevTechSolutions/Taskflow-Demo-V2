@@ -17,7 +17,7 @@ import {
 interface Sales {
     id: number;
     actual_sales?: number;
-    si_date?: string;
+    delivery_date?: string;
 }
 
 interface SalesProps {
@@ -104,9 +104,9 @@ export const SalesTable: React.FC<SalesProps> = ({
     const groupSalesByDate = (data: Sales[]) => {
         const grouped: { [date: string]: number } = {};
         data.forEach((item) => {
-            if (!item.si_date) return;
-            if (!(item.si_date in grouped)) grouped[item.si_date] = 0;
-            grouped[item.si_date] += item.actual_sales ?? 0;
+            if (!item.delivery_date) return;
+            if (!(item.delivery_date in grouped)) grouped[item.delivery_date] = 0;
+            grouped[item.delivery_date] += item.actual_sales ?? 0;
         });
         return grouped;
     };
@@ -142,8 +142,8 @@ export const SalesTable: React.FC<SalesProps> = ({
         const toTime = toDate.getTime();
 
         return activities.filter((activity) => {
-            if (!activity.si_date) return false;
-            const activityDate = new Date(activity.si_date);
+            if (!activity.delivery_date) return false;
+            const activityDate = new Date(activity.delivery_date);
             const activityTime = activityDate.getTime();
             return activityTime >= fromTime && activityTime <= toTime;
         });
