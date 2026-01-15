@@ -23,6 +23,7 @@ interface SI {
     type_activity: string;
     status: string;
     delivery_date: string;
+    si_date: string;
     payment_terms: string;
 }
 
@@ -280,6 +281,7 @@ export const SITable: React.FC<SIProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
+                                <TableHead className="text-xs">SI Date</TableHead>
                                 <TableHead className="text-xs text-right">SI Amount</TableHead>
                                 <TableHead className="text-xs">DR Number</TableHead>
                                 <TableHead className="text-xs">Company Name</TableHead>
@@ -293,6 +295,7 @@ export const SITable: React.FC<SIProps> = ({
                             {paginatedActivities.map((item) => (
                                 <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
                                     <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
+                                    <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
                                     <TableCell className="text-right">
                                         {item.actual_sales !== undefined && item.actual_sales !== null
                                             ? item.actual_sales.toLocaleString(undefined, {
