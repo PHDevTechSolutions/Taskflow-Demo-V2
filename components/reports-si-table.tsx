@@ -23,7 +23,6 @@ interface SI {
     type_activity: string;
     status: string;
     delivery_date: string;
-    si_date: string;
     payment_terms: string;
 }
 
@@ -143,9 +142,9 @@ export const SITable: React.FC<SIProps> = ({
                     return true;
                 }
 
-                const updatedDate = item.si_date
-                    ? new Date(item.si_date)
-                    : new Date(item.si_date);
+                const updatedDate = item.delivery_date
+                    ? new Date(item.delivery_date)
+                    : new Date(item.delivery_date);
 
                 if (isNaN(updatedDate.getTime())) return false;
 
@@ -173,8 +172,8 @@ export const SITable: React.FC<SIProps> = ({
                 return true;
             })
             .sort((a, b) => {
-                const dateA = new Date(a.si_date ?? 0).getTime();
-                const dateB = new Date(b.si_date ?? 0).getTime();
+                const dateA = new Date(a.delivery_date ?? 0).getTime();
+                const dateB = new Date(b.delivery_date ?? 0).getTime();
                 return dateB - dateA; // descending order (newest first)
             });
 
@@ -280,7 +279,6 @@ export const SITable: React.FC<SIProps> = ({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[120px] text-xs">SI Date</TableHead>
                                 <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
                                 <TableHead className="text-xs text-right">SI Amount</TableHead>
                                 <TableHead className="text-xs">DR Number</TableHead>
@@ -294,7 +292,6 @@ export const SITable: React.FC<SIProps> = ({
                         <TableBody>
                             {paginatedActivities.map((item) => (
                                 <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                    <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
                                     <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
                                     <TableCell className="text-right">
                                         {item.actual_sales !== undefined && item.actual_sales !== null
