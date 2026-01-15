@@ -7,13 +7,15 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CreateActivityDialog } from "./activity-create-dialog";
 import { DoneDialog } from "./activity-done-dialog";
+import { CancelledDialog } from "./activity-cancelled-dialog";
+
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
@@ -101,6 +103,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogCancelledOpen, setDialogCancelledOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -254,19 +257,37 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     );
   }
 
+  function isDelivered(status: string) {
+    return ["Delivered", "Done", "Completed", "Cancelled"].includes(status);
+  }
+
+  function getOverdueDays(scheduledDate: string): number {
+    const sched = new Date(scheduledDate);
+    const today = new Date();
+
+    // reset time para date lang ang comparison
+    sched.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const diffMs = today.getTime() - sched.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    return diffDays > 0 ? diffDays : 0;
+  }
+
   const mergedActivities = activities
     .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
-    .filter((a) => isScheduledToday(a.scheduled_date))
-    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => !isDelivered(a.status))
     .map((activity) => {
       const company = companies.find(
         (c) => c.account_reference_number === activity.account_reference_number
       );
 
-      // All history related to this activity
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
       );
+
+      const overdueDays = getOverdueDays(activity.scheduled_date);
 
       return {
         ...activity,
@@ -276,24 +297,21 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         email_address: company?.email_address ?? "",
         contact_person: company?.contact_person ?? "",
         address: company?.address ?? "",
-        relatedHistoryItems, // pass all related histories here
+        relatedHistoryItems,
+        overdueDays,
       };
     })
     .sort(
       (a, b) =>
-        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+        new Date(b.scheduled_date).getTime() -
+        new Date(a.scheduled_date).getTime()
     );
 
   const term = searchTerm.toLowerCase();
 
   const filteredActivities = mergedActivities.filter((item) => {
-    // Check company_name safely
     if (item.company_name?.toLowerCase().includes(term)) return true;
-
-    // Check ticket_reference_number safely
     if (item.ticket_reference_number?.toLowerCase().includes(term)) return true;
-
-    // Check quotation_number(s) inside relatedHistoryItems safely
     if (
       item.relatedHistoryItems.some((h) =>
         h.quotation_number?.toLowerCase().includes(term)
@@ -301,7 +319,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     )
       return true;
 
-    // Check so_number(s) inside relatedHistoryItems safely
     if (
       item.relatedHistoryItems.some((h) =>
         h.so_number?.toLowerCase().includes(term)
@@ -328,6 +345,44 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       setDialogOpen(false);
 
       const res = await fetch("/api/act-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchActivities();
+
+      toast.success("Transaction marked as Done.");
+    } catch {
+      toast.error("An error occurred while updating status.");
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const openCancelledDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogOpen(true);
+  };
+
+  const handleConfirmCancelled = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogOpen(false);
+
+      const res = await fetch("/api/act-cancelled-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selectedActivityId }),
@@ -476,12 +531,26 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         >
                           {updatingId === item.id ? "Updating..." : "Done"}
                         </Button>
+
+                        <Button
+                          type="button"
+                          className="cursor-pointer"
+                          variant="destructive"
+                          disabled={updatingId === item.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCancelledDialog(item.id);
+                          }}
+                        >
+                          {updatingId === item.id ? "Cancelling..." : "Cancelled"}
+                        </Button>
                       </div>
                     </div>
 
                     <div className="ml-1 flex flex-wrap gap-1">
                       {/* Status Badge */}
                       <Badge variant={badgeProps.variant} className={`font-mono ${badgeProps.className || ""}`}>
+                        <CheckCircle2 />
                         {item.status.replace("-", " ")} | {(() => {
                           if (item.status === "SO-Done") return "Sales Order Preparation";
                           if (item.status === "Quote-Done") return "Quotation Preparation";
@@ -490,6 +559,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           return item.status.replace("-", " ");
                         })()}
                       </Badge>
+                      {item.overdueDays > 0 && (
+                        <Badge variant="destructive" className="font-mono">
+                          <Clock /> OVERDUE: {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""}
+                        </Badge>
+                      )}
                       {/* SO Number Badge — only if there's at least one valid SO number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.so_number && h.so_number !== "-" && h.so_number.trim() !== ""
@@ -519,17 +593,25 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         )}
 
                       {item.relatedHistoryItems.some(
-                        (h) => h.tsm_approved_status && h.tsm_approved_status !== "-" && h.tsm_approved_status.trim() !== ""
+                        (h) =>
+                          h.tsm_approved_status &&
+                          h.tsm_approved_status !== "-" &&
+                          h.tsm_approved_status.trim() !== ""
                       ) && (
                           <Badge className="font-mono bg-green-500">
                             <strong>Feedback by TSM:</strong>{" "}
-                            {item.relatedHistoryItems
-                              .map((h) => h.tsm_approved_status ?? "")
-                              .filter((v) => v && v !== "-")
+                            {Array.from(
+                              new Set(
+                                item.relatedHistoryItems
+                                  .map((h) => h.tsm_approved_status?.trim() ?? "")
+                                  .filter((v) => v && v !== "-")
+                              )
+                            )
                               .join(", ")
                               .toUpperCase()}
                           </Badge>
                         )}
+
                     </div>
                   </div>
 
@@ -702,6 +784,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConfirm={handleConfirmDone}
+        loading={updatingId !== null}
+      />
+
+      <CancelledDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConfirm={handleConfirmCancelled}
         loading={updatingId !== null}
       />
     </>

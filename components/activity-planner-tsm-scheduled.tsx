@@ -26,16 +26,6 @@ import { DoneDialog } from "./activity-tsm-done-dialog";
 import { supabase } from "@/utils/supabase";
 import { type DateRange } from "react-day-picker";
 
-interface Company {
-    account_reference_number: string;
-    company_name: string;
-    contact_number?: string;
-    type_client?: string;
-    email_address?: string;
-    address?: string;
-    contact_person?: string;
-}
-
 interface HistoryItem {
     id: string;
     activity_reference_number: string;
@@ -57,6 +47,10 @@ interface HistoryItem {
     date_created?: string;
     date_updated?: string;
     referenceid: string;
+
+    company_name?: string;      // Assuming these fields are present in the history data
+    contact_number?: string;    // If not present, fallback to "-" in UI
+    contact_person?: string;    // Optional if you want to show contact person
 }
 
 interface UserDetails {
@@ -80,9 +74,8 @@ interface ScheduledProps {
 export const Scheduled: React.FC<ScheduledProps> = ({
     referenceid,
     dateCreatedFilterRange,
-    userDetails
+    userDetails,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [history, setHistory] = useState<HistoryItem[]>([]);
 
     const [loading, setLoading] = useState(false);
@@ -92,26 +85,26 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     const [doneOpen, setDoneOpen] = useState(false);
-    const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(null);
+    const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(
+        null
+    );
 
     const [agents, setAgents] = useState<any[]>([]);
-    const [agentFilter, setAgentFilter] = useState("all");
 
+    // Fetch history data only, no fetching or merging of companies
     const fetchAll = useCallback(async () => {
         if (!referenceid) return;
         setLoading(true);
         setError(null);
 
         try {
-            const [c, h] = await Promise.all([
-                fetch("/api/com-fetch-companies").then((r) => r.json()),
-                fetch(`/api/act-fetch-tsm-history?referenceid=${referenceid}`).then((r) =>
-                    r.json()
-                ),
-            ]);
+            const res = await fetch(
+                `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(referenceid)}`
+            );
+            if (!res.ok) throw new Error("Failed to load history data");
+            const data = await res.json();
 
-            setCompanies(c.data || []);
-            setHistory(h.activities || []);
+            setHistory(data.activities || []);
         } catch {
             setError("Failed to load data");
         } finally {
@@ -151,56 +144,47 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         "Sent Quotation with SPF",
     ];
 
-    // Filter and map history items directly (no grouping)
-    const filteredHistory = history
-        .filter((h) => {
-            // ✅ allowed call types lang
-            if (!allowedType.includes(h.call_type ?? "")) return false;
-            return true;
-        })
-        .map((h) => {
-            const company = companies.find(
-                (c) => c.account_reference_number === h.account_reference_number
-            );
+    // Filtered history directly from fetched history, no merging companies
+    const filteredHistory = useMemo(() => {
+        const term = search.toLowerCase();
 
-            return {
-                ...h,
-                company_name: company?.company_name ?? "Unknown",
-                contact_number: company?.contact_number ?? "-",
-            };
-        })
-        .filter((item) => {
-            const term = search.toLowerCase();
+        return history
+            .filter((h) => allowedType.includes(h.call_type ?? ""))
+            .filter((item) => {
+                // Search filter
+                if (
+                    (item.company_name ?? "").toLowerCase().includes(term) ||
+                    (item.ticket_reference_number ?? "").toLowerCase().includes(term) ||
+                    (item.quotation_number ?? "").toLowerCase().includes(term) ||
+                    (item.so_number ?? "").toLowerCase().includes(term) ||
+                    (item.remarks ?? "").toLowerCase().includes(term)
+                ) {
+                    // pass
+                } else {
+                    return false;
+                }
 
-            // 🔍 search filter
-            if (
-                item.company_name.toLowerCase().includes(term) ||
-                item.ticket_reference_number?.toLowerCase().includes(term) ||
-                item.quotation_number?.toLowerCase().includes(term) ||
-                item.so_number?.toLowerCase().includes(term) ||
-                item.remarks?.toLowerCase().includes(term)
-            ) {
+                // Date range filter
+                if (
+                    dateCreatedFilterRange?.from &&
+                    new Date(item.date_created ?? "") < dateCreatedFilterRange.from
+                )
+                    return false;
+
+                if (
+                    dateCreatedFilterRange?.to &&
+                    new Date(item.date_created ?? "") > dateCreatedFilterRange.to
+                )
+                    return false;
+
                 return true;
-            }
-
-            // 📅 date range filter
-            if (dateCreatedFilterRange?.from) {
-                if (new Date(item.date_created ?? "") < dateCreatedFilterRange.from)
-                    return false;
-            }
-
-            if (dateCreatedFilterRange?.to) {
-                if (new Date(item.date_created ?? "") > dateCreatedFilterRange.to)
-                    return false;
-            }
-
-            return false;
-        })
-        .sort(
-            (a, b) =>
-                new Date(b.date_updated ?? "").getTime() -
-                new Date(a.date_updated ?? "").getTime()
-        );
+            })
+            .sort(
+                (a, b) =>
+                    new Date(b.date_updated ?? "").getTime() -
+                    new Date(a.date_updated ?? "").getTime()
+            );
+    }, [history, search, dateCreatedFilterRange]);
 
     const openDone = (activityRef: string) => {
         setSelectedActivityRef(activityRef);
@@ -261,6 +245,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         currentPage * ITEMS_PER_PAGE
     );
 
+    // Agent fetching and mapping (same as before)
     useEffect(() => {
         if (!userDetails.referenceid) return;
 
@@ -288,7 +273,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
                 map[agent.ReferenceID.toLowerCase()] = {
                     name: `${agent.Firstname} ${agent.Lastname}`,
-                    profilePicture: agent.profilePicture || "", // use actual key for profile picture
+                    profilePicture: agent.profilePicture || "",
                 };
             }
         });
@@ -321,38 +306,36 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 onChange={(e) => setSearch(e.target.value)}
             />
 
-            <div>
-                <Table>
+            <div className="w-full overflow-auto">
+                <Table className="w-full min-w-max">
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-xs">Agent</TableHead>
-                            <TableHead className="text-xs">Company</TableHead>
-                            <TableHead className="text-xs">Type</TableHead>
-                            <TableHead className="text-xs">Quotation #</TableHead>
-                            <TableHead className="text-xs">Quotation Amount</TableHead>
-                            <TableHead className="text-xs">TSA Remarks</TableHead>
-                            <TableHead className="text-xs">Feedback</TableHead>
-                            <TableHead className="text-xs">Follow-Up Date</TableHead>
-                            <TableHead className="text-xs">Approved Date</TableHead>
-                            <TableHead className="text-xs text-right">Actions</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Agent</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Company</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Type</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Quotation #</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Quotation Amount</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">TSA Remarks</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Feedback</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Follow-Up Date</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap">Approved Date</TableHead>
+                            <TableHead className="text-xs whitespace-nowrap text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
 
                     <TableBody>
                         {paginatedHistory.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={9} className="text-center text-xs">
+                                <TableCell colSpan={10} className="text-center text-xs whitespace-nowrap">
                                     No records found
                                 </TableCell>
                             </TableRow>
                         )}
 
-                        {paginatedHistory.map((item) => {
-                            const agentName =
-                                agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
-                            return (
-                                <TableRow key={item.id} className="text-xs">
-                                    <TableCell className="flex items-center gap-2 capitalize">
+                        {paginatedHistory.map((item) => (
+                            <TableRow key={item.id} className="text-xs">
+                                <TableCell className="whitespace-nowrap">
+                                    <div className="flex items-center gap-2 capitalize">
                                         {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
                                             <img
                                                 src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
@@ -365,65 +348,67 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                             </div>
                                         )}
                                         <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
-                                    </TableCell>
-                                    <TableCell className="font-semibold">{item.company_name}</TableCell>
-                                    <TableCell><Badge className="text-[10px]">{item.call_type}</Badge></TableCell>
-                                    <TableCell>{item.quotation_number ?? "-"}</TableCell>
-                                    <TableCell>
-                                        {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
-                                            style: "currency",
-                                            currency: "PHP",
-                                        })}
-                                    </TableCell>
-                                    <TableCell>{item.remarks ?? "-"}</TableCell>
-                                    <TableCell>
-                                        {item.tsm_approved_status ? (
-                                            <Badge
-                                                className={
-                                                    item.tsm_approved_status.toLowerCase() === "approved"
-                                                        ? "bg-green-600 text-white hover:bg-green-600"
-                                                        : item.tsm_approved_status.toLowerCase() === "declined"
-                                                            ? "bg-red-600 text-white hover:bg-red-600"
-                                                            : "bg-gray-400 text-white hover:bg-gray-400"
-                                                }
-                                            >
-                                                {item.tsm_approved_status.toUpperCase()}
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="secondary">PENDING</Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {item.date_followup
-                                            ? new Date(item.date_followup).toLocaleDateString("en-PH", {
-                                                year: "numeric",
-                                                month: "short",
-                                                day: "numeric",
-                                            })
-                                            : "-"}
-                                    </TableCell>
-                                    <TableCell>
-                                        {item.tsm_approved_date
-                                            ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
-                                                year: "numeric",
-                                                month: "short",
-                                                day: "numeric",
-                                            })
-                                            : "-"}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            size="sm"
-                                            disabled={updatingId === item.activity_reference_number}
-                                            onClick={() => openDone(item.activity_reference_number)}
+                                    </div>
+                                </TableCell>
+
+                                <TableCell className="font-semibold whitespace-nowrap">{item.company_name ?? "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                    <Badge className="text-[10px]">{item.call_type}</Badge>
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">{item.quotation_number ?? "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                    {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
+                                        style: "currency",
+                                        currency: "PHP",
+                                    })}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">{item.remarks ?? "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                    {item.tsm_approved_status ? (
+                                        <Badge
+                                            className={
+                                                item.tsm_approved_status.toLowerCase() === "approved"
+                                                    ? "bg-green-600 text-white hover:bg-green-600"
+                                                    : item.tsm_approved_status.toLowerCase() === "declined"
+                                                        ? "bg-red-600 text-white hover:bg-red-600"
+                                                        : "bg-gray-400 text-white hover:bg-gray-400"
+                                            }
                                         >
-                                            {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })
-                        }
+                                            {item.tsm_approved_status.toUpperCase()}
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary">PENDING</Badge>
+                                    )}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                    {item.date_followup
+                                        ? new Date(item.date_followup).toLocaleDateString("en-PH", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                        })
+                                        : "-"}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                    {item.tsm_approved_date
+                                        ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                        })
+                                        : "-"}
+                                </TableCell>
+                                <TableCell className="text-right whitespace-nowrap">
+                                    <Button
+                                        size="sm"
+                                        disabled={updatingId === item.activity_reference_number}
+                                        onClick={() => openDone(item.activity_reference_number)}
+                                    >
+                                        {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
                     </TableBody>
                 </Table>
             </div>

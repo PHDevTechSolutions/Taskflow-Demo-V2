@@ -9,14 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
 
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-    type_client?: string;
-}
-
 interface SPF {
     id: number;
     so_amount?: number;
@@ -27,6 +19,7 @@ interface SPF {
     account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
+    contact_person: string;
     call_type: string;
     status: string;
 }
@@ -46,7 +39,6 @@ export const SPFTable: React.FC<SPFProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<SPF[]>([]);
     const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
@@ -58,25 +50,6 @@ export const SPFTable: React.FC<SPFProps> = ({
 
     // Pagination state
     const [page, setPage] = useState(1);
-
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
 
     // Fetch activities
     const fetchActivities = useCallback(() => {
@@ -141,32 +114,11 @@ export const SPFTable: React.FC<SPFProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    contact_person: company?.contact_person ?? "-",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
-
     // Filter logic
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
-        return mergedActivities
+        return activities
             .filter((item) =>
                 ["spf - special project", "spf - local", "spf - foreign"].includes(
                     item.call_type?.toLowerCase() ?? ""
@@ -221,9 +173,14 @@ export const SPFTable: React.FC<SPFProps> = ({
                 if (toDate && updatedDate > toDate) return false;
 
                 return true;
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.date_updated ?? a.date_created).getTime();
+                const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+                return dateB - dateA; // descending: newest first
             });
 
-    }, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+    }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
     // Calculate totals for footer (for filteredActivities, not paginated subset)
     const totalQuotationAmount = useMemo(() => {

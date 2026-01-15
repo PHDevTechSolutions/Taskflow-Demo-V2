@@ -1,21 +1,31 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+} from "@/components/ui/alert";
 import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
-
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-    type_client?: string;
-}
+import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationPrevious,
+    PaginationNext,
+} from "@/components/ui/pagination";
 
 interface CSR {
     id: number;
@@ -27,6 +37,7 @@ interface CSR {
     account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
+    contact_person: string;
     type_client: string;
     status: string;
 }
@@ -46,7 +57,6 @@ export const CSRTable: React.FC<CSRProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<CSR[]>([]);
     const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
@@ -58,25 +68,6 @@ export const CSRTable: React.FC<CSRProps> = ({
 
     // Pagination state
     const [page, setPage] = useState(1);
-
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
 
     // Fetch activities
     const fetchActivities = useCallback(() => {
@@ -141,32 +132,11 @@ export const CSRTable: React.FC<CSRProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    contact_person: company?.contact_person ?? "-",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
-
     // Filter logic
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
-        return mergedActivities
+        return activities
             .filter((item) => item.type_client?.toLowerCase() === "csr client")
             .filter((item) => {
                 if (!search) return true;
@@ -201,14 +171,12 @@ export const CSRTable: React.FC<CSRProps> = ({
                     ? new Date(dateCreatedFilterRange.to)
                     : null;
 
-                // Helper function to check if two dates are on the same day (ignoring time)
                 const isSameDay = (d1: Date, d2: Date) =>
                     d1.getFullYear() === d2.getFullYear() &&
                     d1.getMonth() === d2.getMonth() &&
                     d1.getDate() === d2.getDate();
 
                 if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                    // Exact one-day filter: match any record in that day
                     return isSameDay(updatedDate, fromDate);
                 }
 
@@ -216,32 +184,51 @@ export const CSRTable: React.FC<CSRProps> = ({
                 if (toDate && updatedDate > toDate) return false;
 
                 return true;
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.date_updated ?? a.date_created).getTime();
+                const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+                return dateB - dateA; // descending: newest first
+            });
+    }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
+
+    // Group by ticket_reference_number
+    const groupedByTicket = useMemo(() => {
+        const map = new Map<string, CSR[]>();
+
+        filteredActivities.forEach((item) => {
+            const key = item.ticket_reference_number ?? "UNKNOWN";
+
+            if (!map.has(key)) {
+                map.set(key, []);
+            }
+            map.get(key)!.push(item);
+        });
+
+        return Array.from(map.entries()).map(([ticketRef, items]) => {
+            // Pick the latest by date_updated or date_created
+            const latest = items.reduce((prev, curr) => {
+                const prevDate = new Date(prev.date_updated ?? prev.date_created).getTime();
+                const currDate = new Date(curr.date_updated ?? curr.date_created).getTime();
+                return currDate > prevDate ? curr : prev;
             });
 
-    }, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+            const totalQuotationAmount = items.reduce((acc, i) => acc + (i.quotation_amount ?? 0), 0);
 
-    // Calculate totals for footer (for filteredActivities, not paginated subset)
-    const totalQuotationAmount = useMemo(() => {
-        return filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0);
-    }, [filteredActivities]);
-
-    // Count unique quotation_number (non-null)
-    const uniqueQuotationCount = useMemo(() => {
-        const uniqueSet = new Set<string>();
-        filteredActivities.forEach((item) => {
-            if (item.ticket_reference_number) uniqueSet.add(item.ticket_reference_number);
+            return {
+                ticket_reference_number: ticketRef,
+                latest,
+                totalQuotationAmount,
+                count: items.length,
+            };
         });
-        return uniqueSet.size;
     }, [filteredActivities]);
 
-    // Pagination logic
-    const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-    const paginatedActivities = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredActivities.slice(start, start + PAGE_SIZE);
-    }, [filteredActivities, page]);
+    // Pagination logic on grouped data
+    const pageCount = Math.ceil(groupedByTicket.length / PAGE_SIZE);
+    const paginatedGroups = groupedByTicket.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    // Reset to page 1 if filter or search changes
+    // Reset page on filter changes
     useEffect(() => {
         setPage(1);
     }, [searchTerm, filterStatus, dateCreatedFilterRange]);
@@ -296,7 +283,7 @@ export const CSRTable: React.FC<CSRProps> = ({
             )}
 
             {/* No Data Alert */}
-            {!isLoading && !error && filteredActivities.length === 0 && (
+            {!isLoading && !error && groupedByTicket.length === 0 && (
                 <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
                     <AlertCircleIcon className="h-6 w-6 text-red-600" />
                     <div>
@@ -306,16 +293,16 @@ export const CSRTable: React.FC<CSRProps> = ({
                 </Alert>
             )}
 
-
             {/* Total info */}
-            {filteredActivities.length > 0 && (
+            {groupedByTicket.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length} | Unique Ticket Reference Number: {uniqueQuotationCount}
+                    Total Activities: {filteredActivities.length} | Unique Ticket Reference Number:{" "}
+                    {groupedByTicket.length}
                 </div>
             )}
 
             {/* Table */}
-            {filteredActivities.length > 0 && (
+            {groupedByTicket.length > 0 && (
                 <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
                     <Table>
                         <TableHeader>
@@ -330,37 +317,37 @@ export const CSRTable: React.FC<CSRProps> = ({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {paginatedActivities.map((item) => (
-                                <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                                    <TableCell className="uppercase">{item.ticket_reference_number || "-"}</TableCell>
+                            {paginatedGroups.map(({ ticket_reference_number, latest, totalQuotationAmount }) => (
+                                <TableRow key={latest.id} className="hover:bg-muted/30 text-xs">
+                                    <TableCell>{new Date(latest.date_created).toLocaleDateString()}</TableCell>
+                                    <TableCell className="uppercase">{ticket_reference_number || "-"}</TableCell>
                                     <TableCell className="text-right">
-                                        {item.quotation_amount !== undefined && item.quotation_amount !== null
-                                            ? item.quotation_amount.toLocaleString(undefined, {
-                                                style: "currency",
-                                                currency: "PHP",
-                                            })
-                                            : "-"}
+                                        {totalQuotationAmount.toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency: "PHP",
+                                        })}
                                     </TableCell>
-                                    <TableCell>{item.company_name}</TableCell>
-                                    <TableCell>{item.contact_person}</TableCell>
-                                    <TableCell>{item.contact_number}</TableCell>
-                                    <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
+                                    <TableCell>{latest.company_name}</TableCell>
+                                    <TableCell>{latest.contact_person}</TableCell>
+                                    <TableCell>{latest.contact_number}</TableCell>
+                                    <TableCell className="capitalize">{latest.remarks || "-"}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={1} className="text-right pr-4">
+                                <TableCell colSpan={2} className="text-right pr-4">
                                     Totals:
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
-                                        style: "currency",
-                                        currency: "PHP",
-                                    })}
+                                    {groupedByTicket
+                                        .reduce((acc, group) => acc + group.totalQuotationAmount, 0)
+                                        .toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency: "PHP",
+                                        })}
                                 </TableCell>
-                                <TableCell colSpan={6}></TableCell>
+                                <TableCell colSpan={4}></TableCell>
                             </TableRow>
                         </tfoot>
                     </Table>

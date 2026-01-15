@@ -9,14 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
 
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-    type_client?: string;
-}
-
 interface FB {
     id: number;
     quotation_amount?: number;
@@ -27,6 +19,7 @@ interface FB {
     account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
+    contact_person: string;
     source: string;
     status: string;
 }
@@ -46,7 +39,6 @@ export const FBTable: React.FC<FBProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<FB[]>([]);
     const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
@@ -58,25 +50,6 @@ export const FBTable: React.FC<FBProps> = ({
 
     // Pagination state
     const [page, setPage] = useState(1);
-
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
 
     // Fetch activities
     const fetchActivities = useCallback(() => {
@@ -141,94 +114,77 @@ export const FBTable: React.FC<FBProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    contact_person: company?.contact_person ?? "-",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
-
     // Filter logic
     const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
+        const search = searchTerm.toLowerCase();
 
-    return mergedActivities
-        // TYPE CLIENT FILTER
-        .filter((item) =>
-            ["facebook marketplace"].includes(
-                item.source?.toLowerCase() ?? ""
+        return activities
+            // TYPE CLIENT FILTER
+            .filter((item) =>
+                ["facebook marketplace"].includes(
+                    item.source?.toLowerCase() ?? ""
+                )
             )
-        )
 
-        // SEARCH FILTER
-        .filter((item) => {
-            if (!search) return true;
-            return (
-                (item.company_name?.toLowerCase().includes(search) ?? false) ||
-                (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
-                (item.remarks?.toLowerCase().includes(search) ?? false)
-            );
-        })
+            // SEARCH FILTER
+            .filter((item) => {
+                if (!search) return true;
+                return (
+                    (item.company_name?.toLowerCase().includes(search) ?? false) ||
+                    (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
+                    (item.remarks?.toLowerCase().includes(search) ?? false)
+                );
+            })
 
-        // STATUS FILTER
-        .filter((item) => {
-            if (filterStatus !== "all" && item.status !== filterStatus) return false;
-            return true;
-        })
-
-        // DATE CREATED FILTER
-        .filter((item) => {
-            if (
-                !dateCreatedFilterRange ||
-                (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-            ) {
+            // STATUS FILTER
+            .filter((item) => {
+                if (filterStatus !== "all" && item.status !== filterStatus) return false;
                 return true;
-            }
+            })
 
-            const updatedDate = item.date_created
-                ? new Date(item.date_created)
-                : new Date(item.date_created);
+            // DATE CREATED FILTER
+            .filter((item) => {
+                if (
+                    !dateCreatedFilterRange ||
+                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
+                ) {
+                    return true;
+                }
 
-            if (isNaN(updatedDate.getTime())) return false;
+                const updatedDate = item.date_created
+                    ? new Date(item.date_created)
+                    : new Date(item.date_created);
 
-            const fromDate = dateCreatedFilterRange.from
-                ? new Date(dateCreatedFilterRange.from)
-                : null;
-            const toDate = dateCreatedFilterRange.to
-                ? new Date(dateCreatedFilterRange.to)
-                : null;
+                if (isNaN(updatedDate.getTime())) return false;
 
-            const isSameDay = (d1: Date, d2: Date) =>
-                d1.getFullYear() === d2.getFullYear() &&
-                d1.getMonth() === d2.getMonth() &&
-                d1.getDate() === d2.getDate();
+                const fromDate = dateCreatedFilterRange.from
+                    ? new Date(dateCreatedFilterRange.from)
+                    : null;
+                const toDate = dateCreatedFilterRange.to
+                    ? new Date(dateCreatedFilterRange.to)
+                    : null;
 
-            if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                return isSameDay(updatedDate, fromDate);
-            }
+                const isSameDay = (d1: Date, d2: Date) =>
+                    d1.getFullYear() === d2.getFullYear() &&
+                    d1.getMonth() === d2.getMonth() &&
+                    d1.getDate() === d2.getDate();
 
-            if (fromDate && updatedDate < fromDate) return false;
-            if (toDate && updatedDate > toDate) return false;
+                if (fromDate && toDate && isSameDay(fromDate, toDate)) {
+                    return isSameDay(updatedDate, fromDate);
+                }
 
-            return true;
-        });
+                if (fromDate && updatedDate < fromDate) return false;
+                if (toDate && updatedDate > toDate) return false;
 
-}, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+                return true;
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.date_updated ?? a.date_created).getTime();
+                const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+                return dateB - dateA; // descending: newest first
+            });
 
+    }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
     // Calculate totals for footer (for filteredActivities, not paginated subset)
     const totalQuotationAmount = useMemo(() => {
