@@ -224,7 +224,7 @@ export function ApproveTransferDialog() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Company for Deletion</DialogTitle>
+            <DialogTitle>New Company for Transfer</DialogTitle>
             <DialogDescription>
               {deletions.length > 0 ? (
                 <>
