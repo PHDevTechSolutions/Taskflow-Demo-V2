@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo } from "react";
 import {
   Card,
@@ -17,13 +19,15 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+/* ===================== TYPES ===================== */
+
 interface HistoryItem {
   source: string;
   call_status: string;
   type_activity: string;
-  start_date: string;
-  end_date: string;
-  referenceid: string; // para i-link sa agent
+  start_date: string | null;
+  end_date: string | null;
+  referenceid: string;
 }
 
 interface Agent {
@@ -38,7 +42,9 @@ interface InboundRepliesCardProps {
   agents: Agent[];
 }
 
-// Format milliseconds duration into "X hr Y min Z sec" string
+/* ===================== HELPERS ===================== */
+
+// Convert milliseconds to readable duration
 function formatDurationMs(ms: number) {
   if (ms <= 0) return "-";
 
@@ -47,58 +53,74 @@ function formatDurationMs(ms: number) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  const parts = [];
-  if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
-  if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
-  if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
+  const parts: string[] = [];
+  if (hours) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
+  if (minutes) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
+  if (seconds) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
 
-  return parts.join(" ") || "0 sec";
+  return parts.join(" ");
 }
 
+// Safe date parsing (NULL-SAFE)
+function parseDateMs(value?: string | null) {
+  if (!value) return null;
+  const ms = new Date(value.replace(" ", "T")).getTime();
+  return isNaN(ms) ? null : ms;
+}
+
+/* ===================== COMPONENT ===================== */
+
 export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps) {
-  // Map agent ReferenceID to agent object for quick lookup
+  /* Map agents for quick lookup */
   const agentMap = useMemo(() => {
     const map = new Map<string, Agent>();
-    agents.forEach((a) => {
-      map.set(a.ReferenceID.toLowerCase(), a);
-    });
+    agents.forEach((a) =>
+      map.set(a.ReferenceID.toLowerCase(), a)
+    );
     return map;
   }, [agents]);
 
-  // Filter out "Outbound Calls"
-  const filteredHistory = useMemo(() => {
-    return history.filter((item) => item.type_activity !== "Outbound Calls");
-  }, [history]);
+  /* Remove Outbound Calls */
+  const filteredHistory = useMemo(
+    () => history.filter((h) => h.type_activity !== "Outbound Calls"),
+    [history]
+  );
 
-  // Group filtered history by agent and activity, calculate count and total duration per group
+  /* Group by agent + activity */
   const statsByAgentAndActivity = useMemo(() => {
     const grouping = new Map<
       string,
-      {
-        [activity: string]: { items: HistoryItem[]; totalDurationMs: number };
-      }
+      Record<
+        string,
+        { count: number; totalDurationMs: number }
+      >
     >();
 
     filteredHistory.forEach((item) => {
-      const agentId = item.referenceid?.toLowerCase() ?? "";
+      const agentId = item.referenceid?.toLowerCase();
       if (!agentId) return;
 
       if (!grouping.has(agentId)) grouping.set(agentId, {});
       const activities = grouping.get(agentId)!;
 
-      if (!activities[item.type_activity])
-        activities[item.type_activity] = { items: [], totalDurationMs: 0 };
+      if (!activities[item.type_activity]) {
+        activities[item.type_activity] = {
+          count: 0,
+          totalDurationMs: 0,
+        };
+      }
 
-      activities[item.type_activity].items.push(item);
+      activities[item.type_activity].count += 1;
 
-      // Parse dates safely and accumulate duration if valid
-      const start = new Date(item.start_date.replace(" ", "T")).getTime();
-      const end = new Date(item.end_date.replace(" ", "T")).getTime();
-      if (!isNaN(start) && !isNaN(end) && end > start) {
+      const start = parseDateMs(item.start_date);
+      const end = parseDateMs(item.end_date);
+
+      if (start && end && end > start) {
         activities[item.type_activity].totalDurationMs += end - start;
       }
     });
 
+    /* Flatten result */
     const result: {
       agentId: string;
       agentName: string;
@@ -110,41 +132,38 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
 
     grouping.forEach((activities, agentId) => {
       const agent = agentMap.get(agentId);
-      const agentName = agent ? `${agent.Firstname} ${agent.Lastname}` : agentId;
-      const profilePicture = agent?.profilePicture || "";
+      const agentName = agent
+        ? `${agent.Firstname} ${agent.Lastname}`
+        : agentId;
 
       Object.entries(activities).forEach(([activity, data]) => {
         result.push({
           agentId,
           agentName,
-          profilePicture,
+          profilePicture: agent?.profilePicture || "",
           activity,
-          count: data.items.length,
+          count: data.count,
           totalDurationMs: data.totalDurationMs,
         });
       });
     });
 
-    // Sort by agentName then activity alphabetically
-    result.sort((a, b) => {
-      if (a.agentName < b.agentName) return -1;
-      if (a.agentName > b.agentName) return 1;
-      if (a.activity < b.activity) return -1;
-      if (a.activity > b.activity) return 1;
-      return 0;
-    });
-
-    return result;
+    return result.sort(
+      (a, b) =>
+        a.agentName.localeCompare(b.agentName) ||
+        a.activity.localeCompare(b.activity)
+    );
   }, [filteredHistory, agentMap]);
 
-  // Total count of all grouped activities (excluding Outbound Calls)
   const totalCount = useMemo(
-    () => statsByAgentAndActivity.reduce((acc, cur) => acc + cur.count, 0),
+    () => statsByAgentAndActivity.reduce((t, r) => t + r.count, 0),
     [statsByAgentAndActivity]
   );
 
+  /* ===================== UI ===================== */
+
   return (
-    <Card className="flex flex-col h-full bg-white text-black">
+    <Card className="flex flex-col h-full bg-white">
       <CardHeader>
         <CardTitle>Other Activities Duration</CardTitle>
         <CardDescription>
@@ -154,39 +173,47 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
 
       <CardContent className="flex-1 overflow-auto">
         {statsByAgentAndActivity.length === 0 ? (
-          <p className="text-center text-sm italic text-gray-500">No records found. Coordinate with your TSA to create activities.</p>
+          <p className="text-center text-sm italic text-gray-500">
+            No records found. Coordinate with your TSA to create activities.
+          </p>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="font-mono">
+              <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="text-xs">Activity</TableHead>
                 <TableHead className="text-xs text-center">Count</TableHead>
                 <TableHead className="text-xs text-center">Duration</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {statsByAgentAndActivity.map((row) => (
                 <TableRow key={`${row.agentId}-${row.activity}`} className="text-xs">
-                  <TableCell className="flex items-center gap-2 font-mono">
+                  <TableCell className="flex items-center gap-2">
                     {row.profilePicture ? (
                       <img
                         src={row.profilePicture}
-                        alt={row.agentName}
                         className="w-6 h-6 rounded-full object-cover"
+                        alt={row.agentName}
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                      <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs">
                         ?
                       </div>
                     )}
                     {row.agentName}
                   </TableCell>
-                  <TableCell className="font-medium font-mono">{row.activity}</TableCell>
+
+                  <TableCell>{row.activity}</TableCell>
+
                   <TableCell className="text-center">
-                    <Badge className="rounded-full px-3 font-mono">{row.count}</Badge>
+                    <Badge className="rounded-full px-3">
+                      {row.count}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-center font-mono">
+
+                  <TableCell className="text-center">
                     {formatDurationMs(row.totalDurationMs)}
                   </TableCell>
                 </TableRow>
@@ -195,15 +222,14 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
           </Table>
         )}
       </CardContent>
-      
-      {totalCount > 0 && (
-      <CardFooter className="flex justify-between border-t bg-white">
-        <Badge className="rounded-full px-4 py-2 font-mono">
-          Total Activities: {totalCount}
-        </Badge>
-      </CardFooter>
-      )}
 
+      {totalCount > 0 && (
+        <CardFooter className="border-t">
+          <Badge className="rounded-full px-4 py-2">
+            Total Activities: {totalCount}
+          </Badge>
+        </CardFooter>
+      )}
     </Card>
   );
 }
