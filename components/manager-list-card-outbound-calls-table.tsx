@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo, useState } from "react";
 import {
     Card,
@@ -47,6 +49,13 @@ interface OutboundCardProps {
 const WORKING_DAYS = 16;
 const OB_PER_DAY = 20;
 
+// Helper para safe mag-parse ng dates sa milliseconds
+function parseDateMs(value?: string | null) {
+    if (!value) return null;
+    const ms = new Date(value.replace(" ", "T")).getTime();
+    return isNaN(ms) ? null : ms;
+}
+
 export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange }: OutboundCardProps) {
     // Map agent ReferenceID to fullname and picture
     const [showTooltip, setShowTooltip] = useState(false);
@@ -62,6 +71,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
     }, [agents]);
 
     // Calculate working days between from and to (inclusive)
+    // You can enhance this later to actually calculate days from dateCreatedFilterRange
     const obTarget = WORKING_DAYS * OB_PER_DAY;
 
     // Aggregate stats per agent
@@ -108,7 +118,6 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                 }
             }
 
-            // Count quotations with delivered or Quote-Done status
             if (item.type_activity === "Quotation Preparation" && (item.status === "Delivered" || item.status === "Quote-Done")) {
                 stat.totalQuotationPreparationDelivered++;
             }
@@ -120,12 +129,20 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
     // Format percentage helper
     const formatPercent = (val: number) => `${val.toFixed(2)}%`;
 
+    const totalOutboundTouchbaseSum = statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0);
+    const totalQuotationPreparationDeliveredSum = statsByAgent.reduce((acc, stat) => acc + stat.totalQuotationPreparationDelivered, 0);
+    const totalDeliveredSum = statsByAgent.reduce((acc, stat) => acc + stat.totalDelivered, 0);
+
+    const totalAgents = statsByAgent.length;
+    const totalObTarget = obTarget * totalAgents;
     return (
         <Card className="flex flex-col h-full bg-white text-black">
             <CardHeader className="flex justify-between items-center">
                 <div>
                     <CardTitle>Outbound Calls (Touch-Based Only)</CardTitle>
-                    <CardDescription>Counts based on Source, Type of Activity, Status filters and OB Target computed from working days</CardDescription>
+                    <CardDescription>
+                        Counts based on Source, Type of Activity, Status filters and OB Target computed from working days
+                    </CardDescription>
                 </div>
                 <div
                     className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
@@ -163,7 +180,6 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                             </ul>
                         </div>
                     )}
-
                 </div>
             </CardHeader>
 
@@ -238,29 +254,23 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                             <TableRow className="text-xs font-semibold border-t">
                                 <TableCell className="font-mono">Total</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    <Badge className="rounded-full px-3 font-mono">{statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}</Badge>
+                                    <Badge className="rounded-full px-3 font-mono">{totalOutboundTouchbaseSum}</Badge>
                                 </TableCell>
-                                <TableCell className="text-center font-mono">{obTarget * statsByAgent.length}</TableCell>
+                                <TableCell className="text-center font-mono">{totalObTarget}</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    {formatPercent(
-                                        (statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0) /
-                                            (obTarget * statsByAgent.length)) *
-                                        100
-                                    )}
+                                    {totalObTarget > 0
+                                        ? formatPercent((totalOutboundTouchbaseSum / totalObTarget) * 100)
+                                        : "0.00%"}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">
-                                    {formatPercent(
-                                        (statsByAgent.reduce((acc, stat) => acc + stat.totalQuotationPreparationDelivered, 0) /
-                                            statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)) *
-                                        100
-                                    )}
+                                    {totalOutboundTouchbaseSum > 0
+                                        ? formatPercent((totalQuotationPreparationDeliveredSum / totalOutboundTouchbaseSum) * 100)
+                                        : "0.00%"}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">
-                                    {formatPercent(
-                                        (statsByAgent.reduce((acc, stat) => acc + stat.totalDelivered, 0) /
-                                            statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)) *
-                                        100
-                                    )}
+                                    {totalOutboundTouchbaseSum > 0
+                                        ? formatPercent((totalDeliveredSum / totalOutboundTouchbaseSum) * 100)
+                                        : "0.00%"}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">
                                     {statsByAgent
