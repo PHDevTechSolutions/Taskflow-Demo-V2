@@ -29,17 +29,13 @@ import {
   query,
   orderBy,
   where,
-  Timestamp,
   onSnapshot,
-  QuerySnapshot,
-  DocumentData,
-  limit
 } from "firebase/firestore";
 
 interface HistoryItem {
   referenceid: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   actual_sales: string;
   dr_number: string;
   quotation_amount: string;
@@ -98,6 +94,13 @@ function FlyToLocation({
   return null;
 }
 
+// Helper to safely parse date strings, returns ms or null
+function parseDateMs(value?: string | null) {
+  if (!value) return null;
+  const ms = new Date(value.replace(" ", "T")).getTime();
+  return isNaN(ms) ? null : ms;
+}
+
 export function AgentCard({ agent, agentActivities, referenceid }: Props) {
   const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
@@ -112,7 +115,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
 
     const refId = agent.ReferenceID.trim();
 
-    // Fetch Site Visits (existing)
     const fetchSiteVisits = async () => {
       setLoadingVisits(true);
       setErrorVisits(null);
@@ -148,12 +150,9 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
     const unsubscribe = onSnapshot(
       activityLogsQuery,
       (snapshot) => {
-        // Find latest login doc
         const loginDoc = snapshot.docs.find(doc => doc.data().status?.toLowerCase() === "login");
-        // Find latest logout doc
         const logoutDoc = snapshot.docs.find(doc => doc.data().status?.toLowerCase() === "logout");
 
-        // Helper to format Firestore Timestamp or string to desired date format
         const formatDate = (dateCreated: any) => {
           if (!dateCreated) return null;
           if (dateCreated.toDate) {
@@ -182,17 +181,8 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
           return null;
         };
 
-        if (loginDoc) {
-          setLatestLogin(formatDate(loginDoc.data().date_created));
-        } else {
-          setLatestLogin(null);
-        }
-
-        if (logoutDoc) {
-          setLatestLogout(formatDate(logoutDoc.data().date_created));
-        } else {
-          setLatestLogout(null);
-        }
+        setLatestLogin(loginDoc ? formatDate(loginDoc.data().date_created) : null);
+        setLatestLogout(logoutDoc ? formatDate(logoutDoc.data().date_created) : null);
       },
       (error) => {
         console.error("Firestore snapshot error:", error);
@@ -212,18 +202,17 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
     (item) => item.status === "Cancelled"
   );
 
-  // Total working duration (ms)
+  // Total working duration (ms) - safely parse dates
   const totalDurationMs = agentActivities.reduce((total, item) => {
-    const start = new Date(item.start_date.replace(" ", "T")).getTime();
-    const end = new Date(item.end_date.replace(" ", "T")).getTime();
+    const start = parseDateMs(item.start_date);
+    const end = parseDateMs(item.end_date);
 
-    if (!isNaN(start) && !isNaN(end) && end > start) {
+    if (start !== null && end !== null && end > start) {
       return total + (end - start);
     }
     return total;
   }, 0);
 
-  // Format duration helper
   const formatDurationMs = (ms: number) => {
     if (ms <= 0) return "-";
 
@@ -268,7 +257,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
   const countSoNumber = uniqueCount("so_number", soDoneActivities);
   const countCancelledSoNumber = uniqueCount("so_number", cancelledActivities);
 
-  // Prepare coordinates for the map markers from siteVisits with valid lat/lng
+  // Prepare map markers for site visits
   const mapMarkers = siteVisits
     .map((visit) => {
       const lat = typeof visit.Latitude === "string" ? parseFloat(visit.Latitude) : visit.Latitude;
@@ -286,10 +275,9 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
     })
     .filter((v): v is NonNullable<typeof v> => v !== null);
 
-  // Default map center: if any marker exists, center on first marker, else fallback to [0, 0]
+  // Default map center
   const mapCenter: LatLngExpression =
     selectedVisit ?? (mapMarkers.length > 0 ? mapMarkers[0].position : [0, 0]);
-
   const mapZoom = selectedVisit ? 16 : 13;
 
   return (
@@ -449,7 +437,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                 <Map center={mapCenter} zoom={13} className="h-full w-full">
                   <MapTileLayer />
 
-                  {/* This makes map flyTo when selectedVisit changes */}
                   <FlyToLocation center={mapCenter} zoom={mapZoom} />
 
                   {mapMarkers.map((marker, idx) => (
@@ -457,7 +444,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                   ))}
                 </Map>
 
-                {/* FLOATING PANEL */}
                 <div
                   className="absolute top-4 right-4 w-72 max-h-[360px] bg-white/40 backdrop-blur-xs custom-scrollbar
                    bg-white shadow-lg

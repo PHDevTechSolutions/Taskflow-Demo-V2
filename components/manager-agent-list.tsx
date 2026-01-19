@@ -370,11 +370,13 @@ export function AgentList({
                             />
                         )}
 
+                        {selectedAgent == "all" && (
                         <AgentMeetings
                             agents={agents}
                             agentMeetingMap={agentMeetingMap}
                             formatDate={formatDate} // if you use formatDate inside the component
                         />
+                        )}
 
                         <OutboundCallsTableCard
                             history={filteredHistory}
