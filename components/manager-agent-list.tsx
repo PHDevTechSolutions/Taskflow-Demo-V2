@@ -247,10 +247,16 @@ export function AgentList({
     }, [selectedAgent, agents]);
 
     // Fetch Meetings
+    const formatToISO = (d: any) => {
+        if (!d) return null;
+        if (d.toDate) return d.toDate().toISOString(); // convert Firestore Timestamp to ISO string
+        if (typeof d === "string") return new Date(d).toISOString();
+        return null;
+    };
+
     useEffect(() => {
         if (!agents.length) return;
 
-        // clear old data
         setAgentMeetingMap({});
 
         const unsubscribes: (() => void)[] = [];
@@ -265,7 +271,7 @@ export function AgentList({
                 collection(db, "meetings"),
                 where("referenceid", "==", agent.ReferenceID),
                 orderBy("date_created", "desc"),
-                limit(1) // 🔑 latest meeting lang
+                limit(1)
             );
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -277,7 +283,7 @@ export function AgentList({
                             end_date: null,
                             remarks: null,
                             type_activity: null,
-                            date_created: null
+                            date_created: null,
                         },
                     }));
                     return;
@@ -285,21 +291,14 @@ export function AgentList({
 
                 const data = snapshot.docs[0].data();
 
-                const formatDate = (d: any) => {
-                    if (!d) return null;
-                    if (d.toDate) return d.toDate().toLocaleString();
-                    if (typeof d === "string") return new Date(d).toLocaleString();
-                    return null;
-                };
-
                 setAgentMeetingMap(prev => ({
                     ...prev,
                     [agent.ReferenceID]: {
-                        start_date: formatDate(data.start_date),
-                        end_date: formatDate(data.end_date),
+                        start_date: formatToISO(data.start_date),
+                        end_date: formatToISO(data.end_date),
                         remarks: data.remarks ?? "—",
                         type_activity: data.type_activity ?? "—",
-                        date_created: data.date_created ?? "—",
+                        date_created: formatToISO(data.date_created),
                     },
                 }));
             });

@@ -32,17 +32,36 @@ interface Props {
   agents: Agent[];
   agentMeetingMap: Record<string, Meeting>;
   formatDate?: (dateStr?: string) => string;
+  filterDateCreated?: boolean;
 }
 
-export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
-  // 👉 group by role
-  const tsaAgents = agents.filter(
-    (a) => a.Role === "Territory Sales Associate"
-  );
+export function AgentMeetings({ agents, agentMeetingMap, formatDate, filterDateCreated = false, }: Props) {
+  // Helper function para i-check kung ang date string ay today
+  const isToday = (dateStr?: string | null) => {
+    if (!dateStr) return false;
+    const today = new Date();
+    const d = new Date(dateStr);
 
-  const tsmAgents = agents.filter(
-    (a) => a.Role === "Territory Sales Manager"
-  );
+    return (
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate()
+    );
+  };
+
+  // Filter agents by role first
+  const tsaAgents = agents.filter((a) => a.Role === "Territory Sales Associate");
+  const tsmAgents = agents.filter((a) => a.Role === "Territory Sales Manager");
+
+  // Filter agents whose meetings' date_created is today
+  const filterByMeetingDate = (list: Agent[]) =>
+    list.filter((agent) => {
+      const meeting = agentMeetingMap[agent.ReferenceID];
+      return meeting && isToday(meeting.date_created);
+    });
+
+  const filteredTsaAgents = filterByMeetingDate(tsaAgents);
+  const filteredTsmAgents = filterByMeetingDate(tsmAgents);
 
   const renderRows = (list: Agent[]) =>
     list.map((agent) => {
@@ -78,12 +97,13 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
           </TableCell>
 
           <TableCell className="text-xs">
-            {meeting?.start_date ?? "no set date"}
+            {meeting?.start_date ? new Date(meeting.start_date).toLocaleString() : "no set date"}
           </TableCell>
 
           <TableCell className="text-xs">
-            {meeting?.end_date ?? "no set date"}
+            {meeting?.end_date ? new Date(meeting.end_date).toLocaleString() : "no set date"}
           </TableCell>
+
 
           <TableCell className="text-xs">{duration}</TableCell>
           <TableCell className="text-xs">
@@ -115,7 +135,7 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
 
           <TableBody>
             {/* TSA SECTION */}
-            {tsaAgents.length > 0 && (
+            {filteredTsaAgents.length > 0 && (
               <>
                 <TableRow>
                   <TableCell
@@ -125,12 +145,12 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
                     Territory Sales Associates
                   </TableCell>
                 </TableRow>
-                {renderRows(tsaAgents)}
+                {renderRows(filteredTsaAgents)}
               </>
             )}
 
             {/* TSM SECTION */}
-            {tsmAgents.length > 0 && (
+            {filteredTsmAgents.length > 0 && (
               <>
                 <TableRow>
                   <TableCell
@@ -140,18 +160,18 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
                     Territory Sales Managers
                   </TableCell>
                 </TableRow>
-                {renderRows(tsmAgents)}
+                {renderRows(filteredTsmAgents)}
               </>
             )}
 
             {/* EMPTY STATE */}
-            {tsaAgents.length === 0 && tsmAgents.length === 0 && (
+            {filteredTsaAgents.length === 0 && filteredTsmAgents.length === 0 && (
               <TableRow>
                 <TableCell
                   colSpan={6}
                   className="text-center text-xs text-muted-foreground"
                 >
-                  No meetings found
+                  No meetings found for today
                 </TableCell>
               </TableRow>
             )}
