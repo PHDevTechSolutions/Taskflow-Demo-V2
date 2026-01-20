@@ -146,7 +146,7 @@ export function NavUser({
 
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <Link href={`/profile?id=${encodeURIComponent(userId)}`}>
+                  <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
                     <div className="flex items-center gap-2">
                       <BadgeCheck />
                       <span>Account</span>
