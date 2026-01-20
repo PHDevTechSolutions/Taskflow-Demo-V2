@@ -94,7 +94,7 @@ export function AccountsAllFilter({
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Agent" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="uppercase">
                                     {agentOptions.map((agent) => (
                                         <SelectItem key={agent.value} value={agent.value}>
                                             {agent.label}
