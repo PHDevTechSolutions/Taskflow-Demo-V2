@@ -16,9 +16,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch all agents whose TSM field matches the provided ReferenceID
+    // and whose Status is NOT "Resigned" or "Terminated"
     const agents = await db
       .collection("users")
-      .find({ TSM: referenceId })
+      .find({
+        TSM: referenceId,
+        Status: { $nin: ["Resigned", "Terminated"] }, // exclude resigned or terminated
+      })
       .project({
         Firstname: 1,
         Lastname: 1,

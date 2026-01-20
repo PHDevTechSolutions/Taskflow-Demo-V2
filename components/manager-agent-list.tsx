@@ -326,7 +326,7 @@ export function AgentList({
                         <SelectContent>
                             <SelectItem value="all">All Agents</SelectItem>
                             {agents.map((agent) => (
-                                <SelectItem
+                                <SelectItem className="capitalize"
                                     key={agent.ReferenceID}
                                     value={agent.ReferenceID}
                                 >

@@ -190,7 +190,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
             <TableBody>
               {statsByAgentAndActivity.map((row) => (
                 <TableRow key={`${row.agentId}-${row.activity}`} className="text-xs">
-                  <TableCell className="flex items-center gap-2">
+                  <TableCell className="flex items-center gap-2 capitalize">
                     {row.profilePicture ? (
                       <img
                         src={row.profilePicture}
@@ -208,9 +208,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
                   <TableCell>{row.activity}</TableCell>
 
                   <TableCell className="text-center">
-                    <Badge className="rounded-full px-3">
-                      {row.count}
-                    </Badge>
+                    {row.count}
                   </TableCell>
 
                   <TableCell className="text-center">

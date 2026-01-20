@@ -198,7 +198,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
 
                                 return (
                                     <TableRow key={stat.agentID} className="text-xs">
-                                        <TableCell className="flex items-center gap-2 font-mono">
+                                        <TableCell className="flex items-center gap-2 font-mono capitalize">
                                             {agentInfo?.picture ? (
                                                 <img
                                                     src={agentInfo.picture}
@@ -213,9 +213,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                                             {agentInfo?.name ?? stat.agentID}
                                         </TableCell>
 
-                                        <TableCell className="text-center">
-                                            <Badge className="rounded-full px-3 font-mono">{stat.totalOutboundTouchbase}</Badge>
-                                        </TableCell>
+                                        <TableCell className="text-center">{stat.totalOutboundTouchbase}</TableCell>
 
                                         <TableCell className="text-center font-mono">{obTarget}</TableCell>
 
@@ -237,7 +235,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                             <TableRow className="text-xs font-semibold border-t">
                                 <TableCell className="font-mono">Total</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    <Badge className="rounded-full px-3 font-mono">{statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}</Badge>
+                                    {statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">{obTarget * statsByAgent.length}</TableCell>
                                 <TableCell className="text-center font-mono">

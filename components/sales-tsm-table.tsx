@@ -13,13 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Sales {
   id: number;
@@ -43,7 +36,7 @@ interface Agent {
   Firstname: string;
   Lastname: string;
   Role: string;
-  TargetQuota: string; // <-- added here
+  TargetQuota: string;
 }
 
 interface SalesProps {
@@ -64,7 +57,6 @@ export const SalesTable: React.FC<SalesProps> = ({
   const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
   // Fetch activities from API
   const fetchActivities = useCallback(() => {
@@ -150,7 +142,7 @@ export const SalesTable: React.FC<SalesProps> = ({
     fetchAgents();
   }, [userDetails.referenceid]);
 
-  // Filter activities by date range only (agent filtering is handled by the table rows)
+  // Filter activities by date range only
   const filteredActivitiesByDate = useMemo(() => {
     let fromDate = dateCreatedFilterRange?.from;
     let toDate = dateCreatedFilterRange?.to;
@@ -189,21 +181,18 @@ export const SalesTable: React.FC<SalesProps> = ({
     return map;
   }, [filteredActivitiesByDate]);
 
-  // Compute aggregated sales data for each agent, with TargetQuota from Agent interface
+  // Compute aggregated sales data for each agent
   const salesDataPerAgent = useMemo(() => {
     return Object.entries(activitiesByAgent).map(([agentId, sales]) => {
-      // Sum actual sales numbers, fallback to 0
       const totalActualSales = sales.reduce(
         (sum, s) => sum + (s.actual_sales ?? 0),
         0
       );
 
-      // Find agent info from agents list
       const agent = agents.find(
         (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
       );
 
-      // Safely parse TargetQuota string to number
       const totalTargetQuota =
         agent && agent.TargetQuota
           ? parseFloat(agent.TargetQuota.replace(/[^0-9.-]+/g, "")) || 0
@@ -224,13 +213,8 @@ export const SalesTable: React.FC<SalesProps> = ({
     });
   }, [activitiesByAgent, agents]);
 
-  // For "all" selected, show all agents, otherwise filter to just selected
-  const filteredSalesData = useMemo(() => {
-    if (selectedAgent === "all") return salesDataPerAgent;
-    return salesDataPerAgent.filter(
-      (d) => d.agentId.toLowerCase() === selectedAgent.toLowerCase()
-    );
-  }, [salesDataPerAgent, selectedAgent]);
+  // Remove agent filtering, show all sales data directly
+  const salesDataToDisplay = salesDataPerAgent;
 
   // Working days excluding Sundays
   const getWorkingDaysCount = (date: Date) => {
@@ -272,23 +256,7 @@ export const SalesTable: React.FC<SalesProps> = ({
 
   return (
     <div className="space-y-6">
-      <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-        <SelectTrigger className="w-[220px] text-xs">
-          <SelectValue placeholder="Filter by Agent" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Agents</SelectItem>
-          {agents.map((agent) => (
-            <SelectItem
-              className="capitalize"
-              key={agent.ReferenceID}
-              value={agent.ReferenceID}
-            >
-              {agent.Firstname} {agent.Lastname}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Removed Select dropdown */}
 
       <div className="rounded-md border p-4 bg-white shadow-sm font-mono">
         <h2 className="font-semibold text-sm mb-4">Sales Metrics</h2>
@@ -305,7 +273,7 @@ export const SalesTable: React.FC<SalesProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSalesData.map(
+            {salesDataToDisplay.map(
               ({ agentId, totalActualSales, totalTargetQuota, variance, achievement }) => {
                 const agentInfo = agents.find(
                   (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()

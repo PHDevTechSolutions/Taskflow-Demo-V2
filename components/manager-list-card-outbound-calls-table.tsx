@@ -215,7 +215,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
 
                                 return (
                                     <TableRow key={stat.agentID} className="text-xs">
-                                        <TableCell className="flex items-center gap-2 font-mono">
+                                        <TableCell className="flex items-center gap-2 font-mono capitalize">
                                             {agentInfo?.picture ? (
                                                 <img
                                                     src={agentInfo.picture}
@@ -231,7 +231,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                                         </TableCell>
 
                                         <TableCell className="text-center">
-                                            <Badge className="rounded-full px-3 font-mono">{stat.totalOutboundTouchbase}</Badge>
+                                            {stat.totalOutboundTouchbase}
                                         </TableCell>
 
                                         <TableCell className="text-center font-mono">{obTarget}</TableCell>
@@ -254,7 +254,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
                             <TableRow className="text-xs font-semibold border-t">
                                 <TableCell className="font-mono">Total</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    <Badge className="rounded-full px-3 font-mono">{totalOutboundTouchbaseSum}</Badge>
+                                    {totalOutboundTouchbaseSum}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">{totalObTarget}</TableCell>
                                 <TableCell className="text-center font-mono">

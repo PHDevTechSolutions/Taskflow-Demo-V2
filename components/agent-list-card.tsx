@@ -213,6 +213,8 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
 
   // Total working duration (ms)
   const totalDurationMs = agentActivities.reduce((total, item) => {
+    if (!item.start_date || !item.end_date) return total;
+
     const start = new Date(item.start_date.replace(" ", "T")).getTime();
     const end = new Date(item.end_date.replace(" ", "T")).getTime();
 

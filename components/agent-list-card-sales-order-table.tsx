@@ -186,7 +186,7 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
 
                                 return (
                                     <TableRow key={stat.agentID} className="text-xs">
-                                        <TableCell className="flex items-center gap-2 font-mono">
+                                        <TableCell className="flex items-center gap-2 font-mono capitalize">
                                             {agentInfo?.picture ? (
                                                 <img
                                                     src={agentInfo.picture}
@@ -202,7 +202,7 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
                                         </TableCell>
 
                                         <TableCell className="text-center font-mono">
-                                            <Badge className="rounded-full px-3 font-mono">{stat.totalSODoneCount}</Badge>
+                                            {stat.totalSODoneCount}
                                         </TableCell>
 
                                         <TableCell className="text-center font-mono">
@@ -225,9 +225,7 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
                             <TableRow className="text-xs font-semibold border-t">
                                 <TableCell className="font-mono">Total</TableCell>
                                 <TableCell className="text-center font-mono">
-                                    <Badge className="rounded-full px-3 font-mono">
-                                        {statsByAgent.reduce((acc, stat) => acc + stat.totalSODoneCount, 0)}
-                                    </Badge>
+                                    {statsByAgent.reduce((acc, stat) => acc + stat.totalSODoneCount, 0)}
                                 </TableCell>
                                 <TableCell className="text-center font-mono">
                                     {statsByAgent
