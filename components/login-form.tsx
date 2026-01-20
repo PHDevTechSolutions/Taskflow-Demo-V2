@@ -23,7 +23,8 @@ import { Globe, Calendar } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
-// Import dialog components from your UI lib or create your own dialog
+import { supabase } from "@/utils/supabase-ticket";
+
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Label } from "@radix-ui/react-label";
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const [Email, setEmail] = useState("");
@@ -42,6 +44,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [pendingLocation, setPendingLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  const [showLockDialog, setShowLockDialog] = useState(false);
+  const [remarks, setRemarks] = useState("");
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [showWaitDialog, setShowWaitDialog] = useState(false);
+
+  const [ticket, setTicket] = useState<any[]>([]); // Holds tickets fetched
+  const [ticket_id, setTicketId] = useState<string>(""); // Current ticket ID
 
   const { setUserId } = useUser();
   const router = useRouter();
@@ -89,10 +99,109 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     return hour >= 7 && hour < 19;
   };
 
-  // This function handles the actual login, including location if allowed
+  // Fetch tickets without referenceid filtering
+  const fetchTicket = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tickets")
+        .select("*")
+        .order("date_created", { ascending: false });
+
+      if (error) throw error;
+
+      setTicket(data ?? []);
+    } catch (error: any) {
+      toast.error(error.message || "Error fetching tickets");
+    }
+  }, []);
+
+  // Placeholder: implement or import fetchActivities accordingly
+  const fetchActivities = useCallback(() => {
+    // Your fetchActivities logic here if needed
+  }, []);
+
+  useEffect(() => {
+    fetchTicket();
+    fetchActivities();
+  }, [fetchTicket, fetchActivities]);
+
+  function generateTicketID(existingTicketIds: string[]): string {
+    const prefix = "DSI";
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const datePart = `${year}-${month}-${day}`;
+
+    const todayIds = existingTicketIds.filter((id) =>
+      id.startsWith(`${prefix}-${datePart}`)
+    );
+
+    let maxSeq = 0;
+    for (const id of todayIds) {
+      const parts = id.split("-");
+      const seqStr = parts[4];
+      const seqNum = parseInt(seqStr, 10);
+      if (!isNaN(seqNum) && seqNum > maxSeq) {
+        maxSeq = seqNum;
+      }
+    }
+
+    const nextSeq = String(maxSeq + 1).padStart(3, "0");
+
+    return `${prefix}-${datePart}-${nextSeq}`;
+  }
+
+  const submitTicket = async () => {
+    if (!remarks.trim()) {
+      toast.error("Remarks is required.");
+      return;
+    }
+
+    setTicketSubmitting(true);
+
+    try {
+      const existingTicketIds = ticket.map((t) => t.ticket_id);
+      let newTicketID = ticket_id;
+
+      if (!newTicketID || !existingTicketIds.includes(newTicketID)) {
+        newTicketID = generateTicketID(existingTicketIds);
+        setTicketId(newTicketID);
+      }
+
+      const { error } = await supabase.from("tickets").insert([
+        {
+          ticket_id: newTicketID,
+          department: "Sales",
+          requestor_name: "Taskflow User",
+          mode: "System Directory",
+          status: "Pending",
+          ticket_subject: `Account Locked of ${Email}`,
+          date_created: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast.success("Ticket submitted successfully.");
+      setShowLockDialog(false);
+      setRemarks("");
+      fetchTicket();
+
+      // Show the wait dialog after successful submission
+      setShowWaitDialog(true);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to submit ticket.");
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
   const proceedLogin = useCallback(
     async (location: { latitude: number; longitude: number } | null) => {
       setLoading(true);
+
       try {
         const response = await fetch("/api/login", {
           method: "POST",
@@ -100,58 +209,31 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           body: JSON.stringify({ Email, Password }),
         });
 
-        const text = await response.text();
-        let result;
-
-        try {
-          result = JSON.parse(text);
-        } catch {
-          toast.error("Invalid server response.");
-          playSound("/login-failed.mp3");
-          setLoading(false);
-          return;
-        }
+        const result = await response.json();
 
         if (!response.ok) {
-          if (result.lockUntil) {
-            setLockUntil(result.lockUntil);
-            toast.error(
-              `Account locked! Try again after ${new Date(result.lockUntil).toLocaleString()}.`
-            );
+          if (result.locked) {
+            toast.error("Account Is Locked. Submit your ticket to IT Department.");
+            setShowLockDialog(true);
           } else {
-            toast.error(result.message || "Login failed!");
+            toast.error(result.message || "Login failed.");
           }
-          playSound("/reset.mp3");
-          setLoading(false);
-          return;
-        }
 
-        if (result.Department !== "Sales") {
-          toast.error("Only Sales department users are allowed to log in.");
           playSound("/login-failed.mp3");
           setLoading(false);
           return;
         }
 
-        if (result.Status === "Resigned" || result.Status === "Terminated") {
-          toast.error(`Your account is ${result.Status}. Login not allowed.`);
-          playSound("/login-failed.mp3");
-          setLoading(false);
-          return;
-        }
-
-        // Log activity with location if available
         const deviceId = getDeviceId();
 
         await addDoc(collection(db, "activity_logs"), {
           email: Email,
           status: "login",
-          timestamp: new Date().toISOString(),
           deviceId,
           location,
-          userId: result.userId,
           browser: navigator.userAgent,
           os: navigator.platform,
+          userId: result.userId,
           ReferenceID: result.ReferenceID,
           TSM: result.TSM ?? null,
           Manager: result.Manager ?? null,
@@ -160,32 +242,25 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
         toast.success("Login successful!");
         playSound("/login.mp3");
-
         setUserId(result.userId);
 
         if (result.Role === "Territory Sales Manager") {
-          // Mapunta sa agent page
-          router.push(`/roles/tsm/agent?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/tsm/agent?id=${result.userId}`);
         } else if (result.Role === "Manager") {
-          // Mapunta sa agent page
-          router.push(`/roles/manager/agent?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/manager/agent?id=${result.userId}`);
         } else {
-          // Default dashboard
-          router.push(`/roles/tsa/dashboard?id=${encodeURIComponent(result.userId)}`);
+          router.push(`/roles/tsa/dashboard?id=${result.userId}`);
         }
-
-        setLoading(false);
-      } catch (error) {
-        console.error("Login error:", error);
-        toast.error("An error occurred during login.");
-        playSound("/login-failed.mp3");
+      } catch {
+        toast.error("Login error occurred.");
+      } finally {
         setLoading(false);
       }
     },
     [Email, Password, router, setUserId]
   );
 
-  const handleSubmit = useCallback(
+  const handleLoginSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
 
@@ -195,18 +270,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       }
 
       if (!isLoginAllowed()) {
-        toast.error("⏰ Login is only allowed between 7:00 AM and 7:00 PM (Philippine time).");
+        toast.error("⏰ Login allowed only from 7:00 AM to 7:00 PM (PH time).");
         return;
       }
 
-      // Request location first, then show dialog to allow or deny
       const location = await getLocation();
-
       if (location) {
         setPendingLocation(location);
         setShowLocationDialog(true);
       } else {
-        // If no location or denied, just proceed without location
         proceedLogin(null);
       }
     },
@@ -230,7 +302,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       <div className={cn("flex flex-col gap-6", className)} {...props}>
         <Card className="overflow-hidden p-0">
           <CardContent className="grid p-0 md:grid-cols-2">
-            <form onSubmit={handleSubmit} className="p-6 md:p-8">
+            <form onSubmit={handleLoginSubmit} className="p-6 md:p-8">
               <FieldGroup>
                 <div className="flex flex-col items-center gap-2 text-center">
                   <h1 className="text-2xl font-bold">Welcome back</h1>
@@ -317,6 +389,53 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           and <a href="#">Privacy Policy</a>.
         </FieldDescription>
       </div>
+
+      <Dialog open={showLockDialog} onOpenChange={setShowLockDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Account Locked</DialogTitle>
+            <DialogDescription>
+              Account Is Locked. Submit your ticket to IT Department.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Label className="text-xs">Subject for Resetting Password</Label>
+          <Input disabled value={Email} className="mb-2" />
+          <Input
+            placeholder="Enter Message"
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+          />
+
+          <DialogFooter>
+            <Button
+              className="w-full"
+              disabled={ticketSubmitting}
+              onClick={submitTicket}
+            >
+              {ticketSubmitting ? "Submitting..." : "Submit Ticket"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Wait for IT associates dialog */}
+      <Dialog open={showWaitDialog} onOpenChange={setShowWaitDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ticket Submitted</DialogTitle>
+            <DialogDescription>
+              Please wait for a message or call from IT Associates from the IT Department.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowWaitDialog(false)} className="w-full">
+              Okay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Location Permission Dialog */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>

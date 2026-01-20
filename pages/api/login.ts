@@ -8,83 +8,76 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { Email, Password } = req.body;
-
   if (!Email || !Password) {
     return res.status(400).json({ message: "All fields are required." });
   }
 
   const db = await connectToDatabase();
-  const usersCollection = db.collection("users");
+  const users = db.collection("users");
 
-  // Find the user
-  const user = await usersCollection.findOne({ Email });
-
+  const user = await users.findOne({ Email });
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials." });
   }
 
-  // ❌ Block resigned / terminated
-  if (user.Status === "Resigned" || user.Status === "Terminated") {
+  // ❌ Resigned / Terminated
+  if (["Resigned", "Terminated"].includes(user.Status)) {
     return res.status(403).json({
       message: `Your account is ${user.Status}. Login not allowed.`,
     });
   }
 
-  // Account lock checks
-  const now = new Date();
-  const lockDuration = 50 * 365 * 24 * 60 * 60 * 1000;
-  const lockUntil = user.LockUntil ? new Date(user.LockUntil) : null;
-
-  if (user.Status === "Locked" && lockUntil && lockUntil > now) {
+  // 🔒 Already locked
+  if (user.Status === "Locked") {
     return res.status(403).json({
-      message: `Account is locked. Try again after ${lockUntil.toLocaleString()}.`,
-      lockUntil: lockUntil.toISOString(),
+      message: "Account Is Locked. Submit your ticket to IT Department.",
+      locked: true,
     });
   }
 
-  // Validate credentials
   const result = await validateUser({ Email, Password });
 
-  if (!result.success || !result.user) {
+  // ❌ INVALID PASSWORD
+  if (!result.success) {
     const attempts = (user.LoginAttempts || 0) + 1;
 
-    if (attempts >= 3) {
-      const newLockUntil = new Date(now.getTime() + lockDuration);
-
-      await usersCollection.updateOne(
+    if (attempts >= 5) {
+      await users.updateOne(
         { Email },
         {
           $set: {
             LoginAttempts: attempts,
             Status: "Locked",
-            LockUntil: newLockUntil.toISOString(),
+            LockUntil: null,
           },
         }
       );
 
       return res.status(403).json({
-        message: `Account locked after 3 failed attempts. Try again after ${newLockUntil.toLocaleString()}.`,
-        lockUntil: newLockUntil.toISOString(),
+        message: "Account Is Locked. Submit your ticket to IT Department.",
+        locked: true,
       });
     }
 
-    await usersCollection.updateOne(
+    await users.updateOne(
       { Email },
       { $set: { LoginAttempts: attempts } }
     );
 
-    return res.status(401).json({ message: "Invalid credentials." });
+    return res.status(401).json({
+      message: `Invalid credentials. Attempt ${attempts}/5`,
+    });
   }
 
-  // ❗ ❗ FINAL FILTER — ONLY SALES CAN LOGIN
+  // ❗ SALES ONLY
   if (user.Department !== "Sales") {
     return res.status(403).json({
       message: "Only Sales department users are allowed to log in.",
     });
   }
 
-  // Reset attempts after success
-  await usersCollection.updateOne(
+  // ✅ RESET AFTER SUCCESS
+  await users.updateOne(
     { Email },
     {
       $set: {
@@ -97,7 +90,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const userId = result.user._id.toString();
 
-  // Create session cookie
   res.setHeader(
     "Set-Cookie",
     serialize("session", userId, {
@@ -112,9 +104,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return res.status(200).json({
     message: "Login successful",
     userId,
-    Status: result.user.Status,
-    Department: user.Department,
     Role: user.Role,
+    Department: user.Department,
+    Status: user.Status,
     ReferenceID: user.ReferenceID,
     TSM: user.TSM,
     Manager: user.Manager,
