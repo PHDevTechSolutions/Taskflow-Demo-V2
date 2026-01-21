@@ -81,10 +81,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
   }, [agents]);
 
   /* Remove Outbound Calls */
-  const filteredHistory = useMemo(
-    () => history.filter((h) => h.type_activity !== "Outbound Calls"),
-    [history]
-  );
+  const filteredHistory = useMemo(() => history, [history]);
 
   /* Group by agent + activity */
   const statsByAgentAndActivity = useMemo(() => {
