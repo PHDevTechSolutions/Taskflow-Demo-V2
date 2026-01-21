@@ -249,7 +249,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         } else if (result.Role === "Manager") {
           router.push(`/roles/manager/agent?id=${result.userId}`);
         } else {
-          router.push(`/roles/tsa/dashboard?id=${result.userId}`);
+          router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
         }
       } catch {
         toast.error("Login error occurred.");
