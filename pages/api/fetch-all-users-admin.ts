@@ -11,11 +11,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const db = await connectToDatabase();
 
     // Fetch all agents whose Role is Territory Sales Associate, Territory Sales Manager, or Manager
-    // and Status is NOT "Resigned" or "Terminated"
+    // and Department is Sales, and Status is NOT "Resigned" or "Terminated"
     const agents = await db
       .collection("users")
       .find({
         Role: { $in: ["Territory Sales Associate", "Territory Sales Manager", "Manager"] },
+        Department: "Sales",
         Status: { $nin: ["Resigned", "Terminated"] },
       })
       .project({
@@ -27,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Status: 1,
         Role: 1,
         TargetQuota: 1,
+        Department: 1,
         _id: 0,
       })
       .toArray();

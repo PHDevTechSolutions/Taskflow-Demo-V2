@@ -40,6 +40,10 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
     (a) => a.Role === "Territory Sales Manager"
   );
 
+  const managerAgents = agents.filter(
+    (a) => a.Role === "Manager"
+  );
+
   const renderAgentsGrid = (list: Agent[]) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {list.map((agent) => {
@@ -101,6 +105,24 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
               Territory Sales Managers
             </h4>
             {renderAgentsGrid(tsmAgents)}
+          </div>
+        )}
+
+        {tsmAgents.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase">
+              Territory Sales Managers
+            </h4>
+            {renderAgentsGrid(tsmAgents)}
+          </div>
+        )}
+
+        {managerAgents.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase">
+              Managers
+            </h4>
+            {renderAgentsGrid(managerAgents)}
           </div>
         )}
       </CardContent>
