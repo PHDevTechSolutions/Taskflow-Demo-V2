@@ -1,34 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  Bot,
-  LayoutDashboard,
-  Mail,
-  CalendarDays,
-  Settings,
-  BarChart2,
-  Phone,
-  Home,
-  BookOpen,
-  Trash2,
-  Users,
-  Briefcase,
-  Target,
-  FileText,
-  Compass,
-  ShoppingCart,
-  XCircle,
-  File,
-  Leaf,
-  ShoppingBag,
-  TrendingUp,
-  PhoneCall,
-  CreditCard,
-  Rocket,
-  ClipboardList,
-  ClipboardPenLine,
-} from "lucide-react";
+import { Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home, BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
+  XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, CreditCard, Rocket, ClipboardList, ClipboardPenLine, } from "lucide-react";
 
 import { NavFavorites } from "@/components/nav-favorites";
 import { NavSecondary } from "@/components/nav-secondary";
@@ -61,6 +35,7 @@ const data = {
     { name: "My Team Sales Performance", url: "/roles/manager/sales-performance", icon: BarChart2 },
     { name: "Team List", url: "/roles/manager/agent", icon: Users },
   ],
+
   workspaces: [
     {
       name: "Customer Database",
@@ -76,7 +51,7 @@ const data = {
         { name: "Account Deletion", url: "/roles/tsm/companies/approval", icon: Trash2 },
 
         // Manager
-        { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
+        { name: "- All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
       ],
     },
     {
@@ -116,13 +91,13 @@ const data = {
         { name: "FB Marketplace", url: "/roles/tsm/reports/fb", icon: ShoppingBag },
 
         // Manager
-        { name: "Proposals", url: "/roles/manager/reports/quotation", icon: FileText },
-        { name: "Customer Orders", url: "/roles/manager/reports/so", icon: ShoppingCart },
-        { name: "Customer Invoice", url: "/roles/manager/reports/si", icon: File },
-        { name: "Customer Service Report", url: "/roles/manager/reports/csr", icon: Phone },
-        { name: "Customer SPF", url: "/roles/manager/reports/spf", icon: ClipboardPenLine },
-        { name: "New Leads", url: "/roles/manager/reports/ncs", icon: Leaf },
-        { name: "Facebook Marketplace", url: "/roles/manager/reports/fb", icon: ShoppingBag },
+        { name: "Quotation Summary", url: "/roles/manager/reports/quotation", icon: FileText },
+        { name: "SO Summary", url: "/roles/manager/reports/so", icon: ShoppingCart },
+        { name: "Sales Invoice Summary", url: "/roles/manager/reports/si", icon: File },
+        { name: "CSR Inquiry Summary", url: "/roles/manager/reports/csr", icon: Phone },
+        { name: "SPF Summary", url: "/roles/manager/reports/spf", icon: ClipboardPenLine },
+        { name: "New Client Summary", url: "/roles/manager/reports/ncs", icon: Leaf },
+        { name: "FB Marketplace", url: "/roles/manager/reports/fb", icon: ShoppingBag },
       ],
     },
     {
@@ -141,10 +116,10 @@ const data = {
         { name: "Call to SI", url: "/roles/tsm/conversion/calls-to-si", icon: Rocket },
 
         // Manager
-        { name: "Calls to Quotes", url: "/roles/manager/conversion/calls-to-quote", icon: PhoneCall },
-        { name: "Quotes To SO's", url: "/roles/manager/conversion/quote-to-so", icon: FileText },
-        { name: "SO's To SI's", url: "/roles/manager/conversion/so-to-si", icon: CreditCard },
-        { name: "Calls to SI's", url: "/roles/manager/conversion/calls-to-si", icon: Rocket },
+        { name: "Calls to Quote", url: "/roles/manager/conversion/calls-to-quote", icon: PhoneCall },
+        { name: "Quote To SO", url: "/roles/manager/conversion/quote-to-so", icon: FileText },
+        { name: "SO To SI", url: "/roles/manager/conversion/so-to-si", icon: CreditCard },
+        { name: "Calls to SI", url: "/roles/manager/conversion/calls-to-si", icon: Rocket },
       ],
     },
   ],
