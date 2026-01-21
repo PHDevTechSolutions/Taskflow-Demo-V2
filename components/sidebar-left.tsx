@@ -1,8 +1,34 @@
 "use client";
 
 import * as React from "react";
-import { Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home, BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
-  XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, CreditCard, Rocket, ClipboardList, ClipboardPenLine, } from "lucide-react";
+import {
+  Bot,
+  LayoutDashboard,
+  Mail,
+  CalendarDays,
+  Settings,
+  BarChart2,
+  Phone,
+  Home,
+  BookOpen,
+  Trash2,
+  Users,
+  Briefcase,
+  Target,
+  FileText,
+  Compass,
+  ShoppingCart,
+  XCircle,
+  File,
+  Leaf,
+  ShoppingBag,
+  TrendingUp,
+  PhoneCall,
+  CreditCard,
+  Rocket,
+  ClipboardList,
+  ClipboardPenLine,
+} from "lucide-react";
 
 import { NavFavorites } from "@/components/nav-favorites";
 import { NavSecondary } from "@/components/nav-secondary";
@@ -34,6 +60,10 @@ const data = {
     // Manager
     { name: "My Team Sales Performance", url: "/roles/manager/sales-performance", icon: BarChart2 },
     { name: "Team List", url: "/roles/manager/agent", icon: Users },
+
+    // Admin
+    { name: "Admin Dashboard", url: "/roles/admin/dashboard", icon: LayoutDashboard, isActive: true },
+    { name: "Agent Sales Performance", url: "/roles/admin/sales-performance", icon: BarChart2 },
   ],
 
   workspaces: [
@@ -52,6 +82,13 @@ const data = {
 
         // Manager
         { name: "- All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
+
+        // Admin
+        { name: "Active", url: "/roles/admin/companies/active", icon: BookOpen },
+        { name: "Deletion", url: "/roles/admin/companies/remove", icon: Trash2 },
+        { name: "Group Affiliate", url: "/roles/admin/companies/group", icon: Users },
+        { name: "Pending Transferred", url: "/roles/admin/companies/transfer", icon: BookOpen },
+        { name: "Account Approval", url: "/roles/admin/companies/approval", icon: Trash2 },
       ],
     },
     {
@@ -66,6 +103,12 @@ const data = {
 
         // TSM
         { name: "Team Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
+
+        // Admin
+        { name: "Activity Planner", url: "/roles/admin/activity/planner", icon: Target },
+        { name: "Historical Data (TaskList)", url: "/roles/admin/activity/tasklist", icon: ClipboardList },
+        { name: "Revised Quotations", url: "/roles/admin/activity/revised-quotation", icon: Compass },
+        { name: "Client Coverage Guide", url: "/roles/admin/activity/ccg", icon: Compass },
       ],
     },
     {
@@ -98,6 +141,15 @@ const data = {
         { name: "SPF Summary", url: "/roles/manager/reports/spf", icon: ClipboardPenLine },
         { name: "New Client Summary", url: "/roles/manager/reports/ncs", icon: Leaf },
         { name: "FB Marketplace", url: "/roles/manager/reports/fb", icon: ShoppingBag },
+
+        // Admin
+        { name: "Quotation Summary", url: "/roles/admin/reports/quotation", icon: FileText },
+        { name: "Sales Order Summary", url: "/roles/admin/reports/so", icon: ShoppingCart },
+        { name: "Sales Invoice Summary", url: "/roles/admin/reports/si", icon: File },
+        { name: "CSR Inquiry Summary", url: "/roles/admin/reports/csr", icon: Phone },
+        { name: "SPF Summary", url: "/roles/admin/reports/spf", icon: ClipboardPenLine },
+        { name: "New Client Summary", url: "/roles/admin/reports/ncs", icon: Leaf },
+        { name: "FB Marketplace Summary", url: "/roles/admin/reports/fb", icon: ShoppingBag },
       ],
     },
     {
@@ -120,6 +172,12 @@ const data = {
         { name: "Quote To SO", url: "/roles/manager/conversion/quote-to-so", icon: FileText },
         { name: "SO To SI", url: "/roles/manager/conversion/so-to-si", icon: CreditCard },
         { name: "Calls to SI", url: "/roles/manager/conversion/calls-to-si", icon: Rocket },
+
+        // Admin
+        { name: "Calls to Quote", url: "/roles/admin/conversion/calls-to-quote", icon: PhoneCall },
+        { name: "Quote To SO", url: "/roles/admin/conversion/quote-to-so", icon: FileText },
+        { name: "SO To SI", url: "/roles/admin/conversion/so-to-si", icon: CreditCard },
+        { name: "Calls to SI", url: "/roles/admin/conversion/calls-to-si", icon: Rocket },
       ],
     },
   ],
@@ -143,6 +201,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
   const [isLoadingUser, setIsLoadingUser] = React.useState(true);
 
+  // Load openSections from localStorage on mount
   React.useEffect(() => {
     const saved = localStorage.getItem("sidebarOpenSections");
     if (saved) {
@@ -150,17 +209,23 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     }
   }, []);
 
+  // Save openSections to localStorage on change
   React.useEffect(() => {
     localStorage.setItem("sidebarOpenSections", JSON.stringify(openSections));
   }, [openSections]);
 
+  // Get userId from URL query param on mount
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setUserId(params.get("id"));
   }, []);
 
+  // Fetch user details when userId changes
   React.useEffect(() => {
     if (!userId) return;
+
+    setIsLoadingUser(true);
+
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
       .then((res) => res.json())
       .then((data) => {
@@ -179,15 +244,20 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
           profilePicture: data.profilePicture || prev.profilePicture,
         }));
       })
+      .catch((err) => {
+        console.error("Failed to fetch user details:", err);
+      })
       .finally(() => {
         setIsLoadingUser(false);
       });
   }, [userId]);
 
+  // Toggle section open/close state
   const handleToggle = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
+  // Append userId query param to URLs
   const withUserId = React.useCallback(
     (url: string) => {
       if (!userId) return url;
@@ -199,14 +269,14 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     [userId]
   );
 
+  // Filter workspaces based on role
   const filteredWorkspaces = React.useMemo(() => {
-    const role = userDetails.Role || "Admin";
+    const role = userDetails.Role;
 
+    // Remove "Work Management" workspace for Managers
     const baseWorkspaces =
       role === "Manager"
-        ? data.workspaces.filter(
-          (w) => w.name !== "Work Management"
-        )
+        ? data.workspaces.filter((w) => w.name !== "Work Management")
         : data.workspaces;
 
     return baseWorkspaces.map((workspace) => {
@@ -214,9 +284,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         return {
           ...workspace,
           pages: workspace.pages.filter(
-            (p) =>
-              !p.url?.includes("/tsm") &&
-              !p.url?.includes("/manager")
+            (p) => !p.url?.includes("/tsm") && !p.url?.includes("/manager")
           ),
         };
       }
@@ -225,9 +293,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         return {
           ...workspace,
           pages: workspace.pages.filter(
-            (p) =>
-              p.url?.includes("/tsm") &&
-              !p.url?.includes("/manager")
+            (p) => p.url?.includes("/tsm") && !p.url?.includes("/manager")
           ),
         };
       }
@@ -236,9 +302,20 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         return {
           ...workspace,
           pages: workspace.pages.filter(
+            (p) => p.url?.includes("/manager") || p.name === "All Clients"
+          ),
+        };
+      }
+
+      if (role === "Super Admin") {
+        return {
+          ...workspace,
+          pages: workspace.pages.filter(
             (p) =>
-              p.url?.includes("/manager") ||
-              p.name === "All Clients"
+              p.url?.includes("/admin") &&
+              !p.url?.includes("/manager") &&
+              !p.url?.includes("/tsm") &&
+              !p.url?.includes("/tsa")
           ),
         };
       }
@@ -247,8 +324,9 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     });
   }, [userDetails.Role]);
 
+  // Filter favorites based on role
   const filteredFavorites = React.useMemo(() => {
-    const role = userDetails.Role || "Admin";
+    const role = userDetails.Role;
 
     if (role === "Territory Sales Manager") {
       return data.favorites.filter(
@@ -278,9 +356,22 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
       );
     }
 
+    if (role === "Super Admin") {
+      return data.favorites.filter(
+        (fav) =>
+          fav.name !== "My Team Sales Performance" &&
+          fav.name !== "Team Sales Performance" &&
+          fav.name !== "Agent List" &&
+          fav.name !== "Team List" &&
+          fav.name !== "Dashboard" &&
+          fav.name !== "Sales Performance"
+      );
+    }
+
     return data.favorites;
   }, [userDetails.Role]);
 
+  // Add userId query param to favorites URLs
   const favoritesWithId = React.useMemo(() => {
     return filteredFavorites.map((favorite) => ({
       ...favorite,
@@ -288,6 +379,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     }));
   }, [filteredFavorites, withUserId]);
 
+  // Add userId query param to workspaces URLs
   const workspacesWithId = React.useMemo(
     () =>
       filteredWorkspaces.map((workspace) => ({
@@ -300,6 +392,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     [filteredWorkspaces, withUserId]
   );
 
+  // Add userId query param to secondary nav URLs
   const navSecondaryWithId = React.useMemo(
     () => data.navSecondary.map((item) => ({ ...item, url: withUserId(item.url) })),
     [withUserId]

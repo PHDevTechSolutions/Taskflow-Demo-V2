@@ -248,6 +248,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           router.push(`/roles/tsm/agent?id=${result.userId}`);
         } else if (result.Role === "Manager") {
           router.push(`/roles/manager/agent?id=${result.userId}`);
+        } else if (result.Role === "Super Admin") {
+          router.push(`/roles/admin/dashboard?id=${result.userId}`);
         } else {
           router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
         }

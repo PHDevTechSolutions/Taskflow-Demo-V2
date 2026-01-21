@@ -88,7 +88,7 @@ export function NavWorkspaces({
                     {workspace.pages.map((page) => {
                       const PageIcon = page.icon;
                       return (
-                        <SidebarMenuSubItem key={page.name}>
+                        <SidebarMenuSubItem key={`${workspace.name}-${page.name}-${page.url}`}>
                           <SidebarMenuSubButton asChild>
                             <a href={page.url} className="flex items-center space-x-2">
                               <PageIcon className="w-4 h-4" />
