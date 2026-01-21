@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 
 import { AgentCard } from "@/components/agent-list-card";
-import { AgentActivityLogs } from "@/components/agent-list-card-activity-logs";
+import { AgentActivityLogs } from "@/components/admin-list-card-activity-logs";
 import { AgentMeetings } from "@/components/agent-list-card-meetings";
 import { OutboundCard } from "@/components/agent-list-card-outbound";
 import { OutboundCallsTableCard } from "@/components/agent-list-card-outbound-calls-table";
@@ -56,6 +56,7 @@ interface Agent {
     profilePicture: string;
     Position: string;
     Status: string;
+    Role: string;
 }
 
 interface AgentMeeting {
@@ -148,7 +149,7 @@ export function AgentList({
    FETCH AGENTS
 ========================= */
     useEffect(() => {
-        fetch(`/api/fetch-all-user-admin`)
+        fetch(`/api/fetch-all-users-admin`)
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch agents");
                 return res.json();
