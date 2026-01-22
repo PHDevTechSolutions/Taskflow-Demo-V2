@@ -500,6 +500,7 @@ export function AccountsTable({
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
                     />
 
+                    {/*
                     <Button variant="outline" className="cursor-pointer" onClick={handleDownloadCSV}>
                         Download CSV
                     </Button>
@@ -523,6 +524,7 @@ export function AccountsTable({
                             </Button>
                         </>
                     )}
+                        */}
                 </div>
             </div>
 

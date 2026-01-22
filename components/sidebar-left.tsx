@@ -319,7 +319,6 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     });
   }, [userDetails.Role]);
 
-
   // Filter favorites based on role
   const filteredFavorites = React.useMemo(() => {
     const role = userDetails.Role;
