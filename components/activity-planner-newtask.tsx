@@ -29,6 +29,7 @@ interface Account {
   tsm: string;
   manager: string;
   company_name: string;
+  contact_person: string;
   contact_number: string;
   email_address: string;
   type_client: string;
@@ -133,6 +134,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
       manager,
       account_reference_number: account.account_reference_number,
       status: "On-Progress",
+      company_name: account.company_name,
+      contact_person: account.contact_person,
+      contact_number: account.contact_number,
+      email_address: account.email_address,
+      address: account.address,
+      type_client: account.type_client,
       activity_reference_number: generateActivityRef(account.company_name, region),
     };
 

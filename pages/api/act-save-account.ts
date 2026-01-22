@@ -13,6 +13,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tsm,
       manager,
       account_reference_number,
+      company_name,
+      contact_person,
+      contact_number,
+      email_address,
+      address,
       status,
       activity_reference_number,
     } = req.body;
@@ -31,6 +36,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         account_reference_number,
         status,
         activity_reference_number,
+        company_name,
+        contact_person,
+        contact_number,
+        email_address,
+        address,
       });
 
     if (error) {

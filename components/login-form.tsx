@@ -94,9 +94,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   const isLoginAllowed = () => {
     const now = new Date();
-    const phTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+    const phTime = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+    );
     const hour = phTime.getHours();
-    return hour >= 7 && hour < 19;
+
+    // Allowed: 10:00 AM to 6:59 PM
+    return hour >= 10 && hour < 19;
   };
 
   // Fetch tickets without referenceid filtering
@@ -272,7 +276,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       }
 
       if (!isLoginAllowed()) {
-        toast.error("⏰ Login allowed only from 7:00 AM to 7:00 PM (PH time).");
+        toast.error("⏰ Login allowed only from 7:00 AM to 10:00 PM (PH time).");
         return;
       }
 
