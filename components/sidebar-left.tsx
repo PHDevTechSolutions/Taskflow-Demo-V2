@@ -284,7 +284,9 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         return {
           ...workspace,
           pages: workspace.pages.filter(
-            (p) => !p.url?.includes("/tsm") && !p.url?.includes("/manager")
+            (p) => !p.url?.includes("/tsm") && 
+            !p.url?.includes("/manager") &&
+            !p.url?.includes("/admin")
           ),
         };
       }
@@ -352,7 +354,9 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
           fav.name !== "My Team Sales Performance" &&
           fav.name !== "Team Sales Performance" &&
           fav.name !== "Agent List" &&
-          fav.name !== "Team List"
+          fav.name !== "Team List" &&
+          fav.name !== "Admin Dashboard" &&
+          fav.name !== "Agent Sales Performance"
       );
     }
 
