@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import { AccountsTable } from "@/components/accounts-nonbuying-table";
 import { type DateRange } from "react-day-picker";
 
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
 interface Account {
   id: string;
   referenceid: string;
@@ -285,14 +287,16 @@ function DashboardContent() {
 
 export default function Page() {
   return (
-    <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
-    </UserProvider>
+    <ProtectedPageWrapper>
+      <UserProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </UserProvider>
+    </ProtectedPageWrapper>
   );
 }

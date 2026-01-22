@@ -17,6 +17,8 @@ import { QuotationTable } from "@/components/reports-tsm-quotation-table";
 
 import { type DateRange } from "react-day-picker";
 
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
 interface Account {
     id: string;
     referenceid: string;
@@ -175,7 +177,8 @@ function DashboardContent() {
 
 export default function Page() {
     return (
-        <UserProvider>
+        <ProtectedPageWrapper>
+            <UserProvider>
             <FormatProvider>
                 <SidebarProvider>
                     <Suspense fallback={<div>Loading...</div>}>
@@ -184,5 +187,6 @@ export default function Page() {
                 </SidebarProvider>
             </FormatProvider>
         </UserProvider>
+        </ProtectedPageWrapper>
     );
 }

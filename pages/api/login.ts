@@ -7,9 +7,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { Email, Password } = req.body;
-  if (!Email || !Password) {
-    return res.status(400).json({ message: "All fields are required." });
+  const { Email, Password, deviceId } = req.body;
+  if (!Email || !Password || !deviceId) {
+    return res.status(400).json({ message: "Email, Password and deviceId are required." });
   }
 
   const db = await connectToDatabase();
@@ -76,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // ✅ RESET AFTER SUCCESS
+  // ✅ RESET AFTER SUCCESS and save deviceId
   await users.updateOne(
     { Email },
     {
@@ -84,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LoginAttempts: 0,
         Status: "Active",
         LockUntil: null,
+        DeviceId: deviceId,  // save deviceId here
       },
     }
   );
@@ -96,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       httpOnly: true,
       secure: process.env.NODE_ENV !== "development",
       sameSite: "strict",
-      maxAge: 60 * 60 * 24,
+      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     })
   );

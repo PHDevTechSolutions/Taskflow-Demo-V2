@@ -21,6 +21,8 @@ import { type DateRange } from "react-day-picker";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
@@ -163,14 +165,16 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <SettingsContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
-    </UserProvider>
+    <ProtectedPageWrapper>
+      <UserProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <SettingsContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </UserProvider>
+    </ProtectedPageWrapper>
   );
 }

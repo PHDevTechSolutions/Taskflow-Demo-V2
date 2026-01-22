@@ -67,14 +67,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     audio.play().catch(() => { });
   };
 
-  const getDeviceId = () => {
+  function getDeviceId() {
     let deviceId = localStorage.getItem("deviceId");
     if (!deviceId) {
       deviceId = uuidv4();
       localStorage.setItem("deviceId", deviceId);
     }
     return deviceId;
-  };
+  }
 
   const getLocation = async () => {
     if (!navigator.geolocation) return null;
@@ -207,10 +207,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       setLoading(true);
 
       try {
+        const deviceId = getDeviceId(); // kunin deviceId from localStorage
+
         const response = await fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ Email, Password }),
+          body: JSON.stringify({ Email, Password, deviceId }),  // dito isama
         });
 
         const result = await response.json();
@@ -228,12 +230,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           return;
         }
 
-        const deviceId = getDeviceId();
-
+        // log activity after successful login
         await addDoc(collection(db, "activity_logs"), {
           email: Email,
           status: "login",
-          deviceId,
+          deviceId,  // save deviceId here too
           location,
           browser: navigator.userAgent,
           os: navigator.platform,
@@ -248,6 +249,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         playSound("/login.mp3");
         setUserId(result.userId);
 
+        // redirect based on role
         if (result.Role === "Territory Sales Manager") {
           router.push(`/roles/tsm/agent?id=${result.userId}`);
         } else if (result.Role === "Manager") {
@@ -264,6 +266,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       }
     },
     [Email, Password, router, setUserId]
+
   );
 
   const handleLoginSubmit = useCallback(

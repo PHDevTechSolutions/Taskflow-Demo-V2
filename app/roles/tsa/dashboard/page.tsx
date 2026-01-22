@@ -35,6 +35,7 @@ import { OutboundCard } from "@/components/dashboard-outbound-card";
 import { QuotationCard } from "@/components/dashboard-quotation-card";
 import { SOCard } from "@/components/dashboard-so-card";
 import { SiteVisitCard } from "@/components/dashboard-site-visit-card";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface UserDetails {
   referenceid: string;
@@ -201,7 +202,7 @@ function DashboardContent() {
           {/* Cards container: 4 cards in a row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div
-                className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
+              className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
             />
 
             <AccountCard referenceid={userDetails.referenceid} />
@@ -282,14 +283,16 @@ function DashboardContent() {
 
 export default function Page() {
   return (
-    <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
-    </UserProvider>
+    <ProtectedPageWrapper>
+      <UserProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </UserProvider>
+    </ProtectedPageWrapper>
   );
 }
