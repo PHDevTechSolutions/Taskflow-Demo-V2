@@ -155,6 +155,7 @@ export function QuotationSheet(props: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(false);
+  const [noProductsAvailable, setNoProductsAvailable] = useState(false);
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -356,14 +357,16 @@ export function QuotationSheet(props: Props) {
 
   // Save handler with validation
   const saveWithSelectedProducts = () => {
-    if (!isManualEntry && selectedProducts.length === 0) {
+    if (!isManualEntry && !noProductsAvailable && selectedProducts.length === 0) {
       toast.error("Please select at least one product.");
       return;
     }
-    if (!isManualEntry && selectedProducts.some((p) => p.quantity <= 0 || p.price < 0)) {
+
+    if (!isManualEntry && !noProductsAvailable && selectedProducts.some((p) => p.quantity <= 0 || p.price < 0)) {
       toast.error("Quantity and Price must be valid numbers.");
       return;
     }
+
     if (!isStep6Valid) {
       toast.error("Please select status.");
       return;
@@ -373,6 +376,7 @@ export function QuotationSheet(props: Props) {
 
     handleSave();
   };
+
 
   function setDescriptionAtIndex(idx: number, newDesc: string) {
     setManualProducts((prev) => {
@@ -632,7 +636,7 @@ export function QuotationSheet(props: Props) {
                 </div>
               </Alert>
 
-              {!isManualEntry && (
+              {!noProductsAvailable && !isManualEntry && (
                 <>
                   <FieldLabel>Product Name</FieldLabel>
                   <Input
@@ -674,20 +678,6 @@ export function QuotationSheet(props: Props) {
                   />
                 </>
               )}
-
-              {/* Manual Entry Checkbox */}
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isManualEntry}
-                  onChange={(e) => {
-                    const manual = e.target.checked;
-                    setIsManualEntry(manual);
-                    if (!manual) setManualProducts([]);
-                  }}
-                />
-                <span className="text-xs font-medium">No products available / Manual entry</span>
-              </label>
 
               {isSearching && <p className="text-sm mt-1">Searching...</p>}
 
@@ -756,6 +746,31 @@ export function QuotationSheet(props: Props) {
                   })}
                 </div>
               )}
+
+              <label className="flex items-center gap-2 mt-4">
+                <input
+                  type="checkbox"
+                  checked={isManualEntry}
+                  onChange={(e) => {
+                    const manual = e.target.checked;
+                    setIsManualEntry(manual);
+                    if (!manual) setManualProducts([]);
+                  }}
+                />
+                <span className="text-xs font-medium">Manual entry</span>
+              </label>
+
+              {/* No Products Available Checkbox */}
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={noProductsAvailable}
+                  onChange={(e) => {
+                    setNoProductsAvailable(e.target.checked);
+                  }}
+                />
+                <span className="text-xs font-medium">No products available</span>
+              </label>
 
               {/* Selected Products with quantity and price inputs */}
               {!isManualEntry && selectedProducts.length > 0 && (
