@@ -273,7 +273,9 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const filteredWorkspaces = React.useMemo(() => {
     const role = userDetails.Role;
 
-    // Remove "Work Management" workspace for Managers
+    // ⛔ habang wala pang role → WALANG MENU
+    if (!role) return [];
+
     const baseWorkspaces =
       role === "Manager"
         ? data.workspaces.filter((w) => w.name !== "Work Management")
@@ -284,9 +286,10 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         return {
           ...workspace,
           pages: workspace.pages.filter(
-            (p) => !p.url?.includes("/tsm") && 
-            !p.url?.includes("/manager") &&
-            !p.url?.includes("/admin")
+            (p) =>
+              !p.url?.includes("/tsm") &&
+              !p.url?.includes("/manager") &&
+              !p.url?.includes("/admin")
           ),
         };
       }
@@ -294,37 +297,28 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
       if (role === "Territory Sales Manager") {
         return {
           ...workspace,
-          pages: workspace.pages.filter(
-            (p) => p.url?.includes("/tsm") && !p.url?.includes("/manager")
-          ),
+          pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
         };
       }
 
       if (role === "Manager") {
         return {
           ...workspace,
-          pages: workspace.pages.filter(
-            (p) => p.url?.includes("/manager") || p.name === "All Clients"
-          ),
+          pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
         };
       }
 
       if (role === "Super Admin") {
         return {
           ...workspace,
-          pages: workspace.pages.filter(
-            (p) =>
-              p.url?.includes("/admin") &&
-              !p.url?.includes("/manager") &&
-              !p.url?.includes("/tsm") &&
-              !p.url?.includes("/tsa")
-          ),
+          pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
         };
       }
 
-      return workspace;
+      return { ...workspace, pages: [] };
     });
   }, [userDetails.Role]);
+
 
   // Filter favorites based on role
   const filteredFavorites = React.useMemo(() => {
@@ -401,6 +395,16 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     () => data.navSecondary.map((item) => ({ ...item, url: withUserId(item.url) })),
     [withUserId]
   );
+
+  if (isLoadingUser || !userDetails.Role) {
+    return (
+      <Sidebar className="border-r-0">
+        <SidebarContent className="flex items-center justify-center text-sm text-muted-foreground">
+          Loading menu...
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar className="border-r-0" {...props}>
