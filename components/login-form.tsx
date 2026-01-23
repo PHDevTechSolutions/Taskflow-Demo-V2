@@ -278,11 +278,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         return;
       }
 
-      if (!isLoginAllowed()) {
-        toast.error("⏰ Login allowed only from 7:00 AM to 10:00 PM (PH time).");
-        return;
-      }
-
       const location = await getLocation();
       if (location) {
         setPendingLocation(location);
@@ -334,7 +329,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   <div className="flex items-center">
                     <FieldLabel htmlFor="password">Password</FieldLabel>
                     <a
-                      href="/reset-password"
+                      href="/auth/forgot-password"
                       className="ml-auto text-sm underline-offset-2 hover:underline"
                     >
                       Forgot your password?

@@ -1,29 +1,33 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/mongodb";
-import { hashPassword } from "@/lib/auth"; // your password hashing function
+import { hashPassword } from "@/lib/auth";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { email, newPassword } = req.body;
+  const { token, newPassword } = req.body;
 
-  if (!email || !newPassword) {
-    return res.status(400).json({ message: "Email and new password are required" });
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: "Invalid request" });
   }
 
   const db = await connectToDatabase();
-  const user = await db.collection("users").findOne({ Email: email });
 
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
+  const reset = await db.collection("password_resets").findOne({
+    token,
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!reset) {
+    return res.status(400).json({ message: "Token expired or invalid" });
   }
 
   const hashedPassword = await hashPassword(newPassword);
-  
+
   await db.collection("users").updateOne(
-    { Email: email },
+    { Email: reset.email },
     {
       $set: {
         Password: hashedPassword,
@@ -33,6 +37,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     }
   );
+
+  // 🔥 delete token after use
+  await db.collection("password_resets").deleteOne({ token });
 
   return res.status(200).json({ message: "Password reset successful" });
 }
