@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { validateUser, connectToDatabase } from "@/lib/mongodb";
 import { serialize } from "cookie";
+import nodemailer from "nodemailer";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -41,16 +42,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!result.success) {
     const attempts = (user.LoginAttempts || 0) + 1;
 
+    // ✅ Send security alert email after 2 failed attempts
+    if (attempts === 2) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+
+        const ip =
+          req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
+          req.socket.remoteAddress ||
+          "Unknown IP";
+
+        const timestamp = new Date().toLocaleString("en-US", {
+          timeZone: "Asia/Manila",
+        });
+
+        await transporter.sendMail({
+          from: `"Taskflow Security" <${process.env.EMAIL_USER}>`,
+          to: Email, // <-- send to the email that is being accessed
+          subject: `⚠️ Security Alert: Failed login attempts on your account`,
+          html: `
+            <p>There have been <strong>2 failed login attempts</strong> on your account <strong>${Email}</strong>.</p>
+            <ul>
+              <li><strong>IP Address:</strong> ${ip}</li>
+              <li><strong>Device ID:</strong> ${deviceId}</li>
+              <li><strong>Time:</strong> ${timestamp}</li>
+            </ul>
+            <p>If this was you, you can disregard this email.</p>
+            <p>If not, please consider changing your password immediately.</p>
+          `,
+        });
+      } catch (err) {
+        console.error("Failed to send security alert email", err);
+      }
+    }
+
+    // Lock account after 5 failed attempts
     if (attempts >= 5) {
       await users.updateOne(
         { Email },
-        {
-          $set: {
-            LoginAttempts: attempts,
-            Status: "Locked",
-            LockUntil: null,
-          },
-        }
+        { $set: { LoginAttempts: attempts, Status: "Locked", LockUntil: null } }
       );
 
       return res.status(403).json({
@@ -59,10 +95,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    await users.updateOne(
-      { Email },
-      { $set: { LoginAttempts: attempts } }
-    );
+    // Update attempts in DB
+    await users.updateOne({ Email }, { $set: { LoginAttempts: attempts } });
 
     return res.status(401).json({
       message: `Invalid credentials. Attempt ${attempts}/5`,
@@ -84,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LoginAttempts: 0,
         Status: "Active",
         LockUntil: null,
-        DeviceId: deviceId,  // save deviceId here
+        DeviceId: deviceId,
       },
     }
   );
