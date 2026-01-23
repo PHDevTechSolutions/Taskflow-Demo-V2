@@ -1,16 +1,14 @@
-"use client"; // ⚠️ must be at top
+"use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [token, setToken] = useState<string | null>(null);
   const [validToken, setValidToken] = useState<boolean | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -18,17 +16,17 @@ export default function ResetPasswordPage() {
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Extract token only on client
+  // ✅ Only run on client
   useEffect(() => {
-    if (searchParams) setToken(searchParams.get("token"));
-  }, [searchParams]);
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("token");
+    setToken(t);
+  }, []);
 
-  // Password match check
   useEffect(() => {
     setPasswordsMatch(!newPassword || !confirmPassword || newPassword === confirmPassword);
   }, [newPassword, confirmPassword]);
 
-  // Verify token after token is set
   useEffect(() => {
     if (!token) return;
     const verifyToken = async () => {
@@ -47,19 +45,19 @@ export default function ResetPasswordPage() {
     verifyToken();
   }, [token]);
 
-  if (validToken === null) {
+  if (!token || validToken === null) {
     return <p className="flex items-center justify-center min-h-screen">Verifying reset link...</p>;
   }
 
   if (validToken === false) {
-    return <p className="text-red-600 text-lg flex items-center justify-center min-h-screen">This reset link is invalid or has expired.</p>;
+    return <p className="text-red-600 flex items-center justify-center min-h-screen">This reset link is invalid or expired.</p>;
   }
 
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) return toast.error("Both fields required");
     if (!passwordsMatch) return toast.error("Passwords do not match");
-    setLoading(true);
 
+    setLoading(true);
     try {
       const res = await fetch("/api/reset-password", {
         method: "POST",
@@ -85,11 +83,11 @@ export default function ResetPasswordPage() {
         <FieldGroup>
           <Field>
             <FieldLabel>New Password</FieldLabel>
-            <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password"/>
+            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </Field>
           <Field>
             <FieldLabel>Confirm Password</FieldLabel>
-            <Input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password"/>
+            <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
           </Field>
           {!passwordsMatch && <p className="text-red-600">Passwords do not match</p>}
           <Button onClick={handleResetPassword} disabled={loading || !passwordsMatch} className="w-full mt-4">
