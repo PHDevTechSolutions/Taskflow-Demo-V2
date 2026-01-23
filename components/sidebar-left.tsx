@@ -28,6 +28,7 @@ import {
   Rocket,
   ClipboardList,
   ClipboardPenLine,
+  ShieldIcon
 } from "lucide-react";
 
 import { NavFavorites } from "@/components/nav-favorites";
@@ -44,6 +45,7 @@ const data = {
     },
   ],
   navSecondary: [
+    { title: "Security Alerts", url: "/general/security", icon: ShieldIcon },
     { title: "Calendar", url: "/general/calendar", icon: CalendarDays },
     { title: "Settings", url: "/general/settings", icon: Settings },
   ],

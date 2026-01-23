@@ -1,7 +1,9 @@
+// pages/api/login.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import { validateUser, connectToDatabase } from "@/lib/mongodb";
 import { serialize } from "cookie";
 import nodemailer from "nodemailer";
+import { UAParser } from "ua-parser-js";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -15,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const db = await connectToDatabase();
   const users = db.collection("users");
+  const securityAlerts = db.collection("security_alerts"); // Collection for alerts
 
   const user = await users.findOne({ Email });
   if (!user) {
@@ -38,12 +41,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const result = await validateUser({ Email, Password });
 
+  // Get User-Agent
+  const userAgent = req.headers["user-agent"] || "Unknown";
+  const parser = new UAParser(userAgent);
+  const deviceType = parser.getDevice().type || "desktop";
+
   // ❌ INVALID PASSWORD
   if (!result.success) {
     const attempts = (user.LoginAttempts || 0) + 1;
 
-    // ✅ Send security alert email after 2 failed attempts
+    // ✅ Send security alert email and log to DB after 2 failed attempts
     if (attempts === 2) {
+      const ip =
+        req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
+        req.socket.remoteAddress ||
+        "Unknown IP";
+
+      const timestamp = new Date();
+
+      // Log to DB
+      try {
+        await securityAlerts.insertOne({
+          Email,
+          ipAddress: ip,
+          deviceId,
+          userAgent,
+          deviceType,
+          timestamp,
+          message: `2 failed login attempts detected for account ${Email}`,
+        });
+      } catch (err) {
+        console.error("Failed to log security alert in DB", err);
+      }
+
+      // Send email
       try {
         const transporter = nodemailer.createTransport({
           service: "gmail",
@@ -53,25 +84,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
         });
 
-        const ip =
-          req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
-          req.socket.remoteAddress ||
-          "Unknown IP";
-
-        const timestamp = new Date().toLocaleString("en-US", {
-          timeZone: "Asia/Manila",
-        });
-
         await transporter.sendMail({
           from: `"Taskflow Security" <${process.env.EMAIL_USER}>`,
-          to: Email, // <-- send to the email that is being accessed
-          subject: `⚠️ Security Alert: Failed login attempts on your account`,
+          to: Email,
+          subject: `Security Alert: Failed login attempts on your account`,
           html: `
             <p>There have been <strong>2 failed login attempts</strong> on your account <strong>${Email}</strong>.</p>
             <ul>
               <li><strong>IP Address:</strong> ${ip}</li>
               <li><strong>Device ID:</strong> ${deviceId}</li>
-              <li><strong>Time:</strong> ${timestamp}</li>
+              <li><strong>Device Type:</strong> ${deviceType}</li>
+              <li><strong>Time:</strong> ${timestamp.toLocaleString("en-US", { timeZone: "Asia/Manila" })}</li>
             </ul>
             <p>If this was you, you can disregard this email.</p>
             <p>If not, please consider changing your password immediately.</p>
