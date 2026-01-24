@@ -1,3 +1,5 @@
+"use client";
+
 import React, { Suspense } from "react";
 import ProfileClient from "@/components/general/edit";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
