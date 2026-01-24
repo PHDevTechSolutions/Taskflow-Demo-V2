@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 export function NavUser({
   user,
@@ -95,41 +96,18 @@ export function NavUser({
 
   return (
     <>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
-              >
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">TF</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  {user.position && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user.position}
-                    </span>
-                  )}
-                </div>
-                <ChevronsUpDown className="ml-auto size-4" />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              className="min-w-[224px] rounded-lg"
-              side={isMobile ? "bottom" : "right"}
-              align="start"
-              sideOffset={4}
-            >
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+      <ProtectedPageWrapper>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
+                >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarFallback className="rounded-lg">TF</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{user.name}</span>
@@ -139,64 +117,89 @@ export function NavUser({
                       </span>
                     )}
                   </div>
-                </div>
-              </DropdownMenuLabel>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
 
-              <DropdownMenuSeparator />
-
-              <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
-                    <div className="flex items-center gap-2">
-                      <BadgeCheck />
-                      <span>Account</span>
+              <DropdownMenuContent
+                className="min-w-[224px] rounded-lg"
+                side={isMobile ? "bottom" : "right"}
+                align="start"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarImage src={user.avatar} alt={user.name} />
+                      <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">{user.name}</span>
+                      {user.position && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {user.position}
+                        </span>
+                      )}
                     </div>
-                  </Link>
+                  </div>
+                </DropdownMenuLabel>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
+                      <div className="flex items-center gap-2">
+                        <BadgeCheck />
+                        <span>Account</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => setIsDialogOpen(true)}
+                  className="cursor-pointer"
+                  disabled={isLoggingOut}
+                >
+                  <LogOut />
+                  Log out
                 </DropdownMenuItem>
-              </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={() => setIsDialogOpen(true)}
-                className="cursor-pointer"
+        {/* Dialog confirmation */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Logout</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to log out?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
                 disabled={isLoggingOut}
               >
-                <LogOut />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
-      </SidebarMenu>
-
-      {/* Dialog confirmation */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Logout</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to log out?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDialogOpen(false)}
-              disabled={isLoggingOut}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={doLogout}
-              disabled={isLoggingOut}
-              className="ml-2"
-            >
-              {isLoggingOut ? "Logging out..." : "Logout"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                Cancel
+              </Button>
+              <Button
+                onClick={doLogout}
+                disabled={isLoggingOut}
+                className="ml-2"
+              >
+                {isLoggingOut ? "Logging out..." : "Logout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </ProtectedPageWrapper>
     </>
   );
 }

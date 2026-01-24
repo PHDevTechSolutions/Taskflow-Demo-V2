@@ -17,7 +17,6 @@ import { TicketEndorsed } from "@/components/popup/ticket-endorsed";
 import { ActivityToday } from "@/components/popup/activity-today";
 import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,21 +49,19 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-mono`}>
         <UserProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <ProtectedPageWrapper>
-              <Suspense fallback={null}>
-                <Reminders />
-                <TransferAlertDialog />
-                <ApproveDeletionDialog />
-                <ApproveTransferDialog />
-                <RemoveDeletionDialog />
-                <TicketEndorsed />
-                <ActivityToday />
-                <FollowUpToday />
-              </Suspense>
-              <Analytics />
-              {children}
-              <OfflineDialog />
-            </ProtectedPageWrapper>
+            <Suspense fallback={null}>
+              <Reminders />
+              <TransferAlertDialog />
+              <ApproveDeletionDialog />
+              <ApproveTransferDialog />
+              <RemoveDeletionDialog />
+              <TicketEndorsed />
+              <ActivityToday />
+              <FollowUpToday />
+            </Suspense>
+            <Analytics />
+            {children}
+            <OfflineDialog />
           </ThemeProvider>
           <Toaster />
         </UserProvider>

@@ -8,6 +8,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 export function NavFavorites({
   favorites,
@@ -21,23 +22,25 @@ export function NavFavorites({
   const { isMobile } = useSidebar();
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Favorites</SidebarGroupLabel>
-      <SidebarMenu>
-        {favorites.map((item) => {
-          const Icon = item.icon;
-          return (
-            <SidebarMenuItem key={item.name}>
-              <SidebarMenuButton asChild>
-                <a href={item.url} title={item.name} className="flex items-center space-x-2">
-                  <Icon className="w-5 h-5" />
-                  <span>{item.name}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          );
-        })}
-      </SidebarMenu>
-    </SidebarGroup>
+    <ProtectedPageWrapper>
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+        <SidebarGroupLabel>Favorites</SidebarGroupLabel>
+        <SidebarMenu>
+          {favorites.map((item) => {
+            const Icon = item.icon;
+            return (
+              <SidebarMenuItem key={item.name}>
+                <SidebarMenuButton asChild>
+                  <a href={item.url} title={item.name} className="flex items-center space-x-2">
+                    <Icon className="w-5 h-5" />
+                    <span>{item.name}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroup>
+    </ProtectedPageWrapper>
   );
 }

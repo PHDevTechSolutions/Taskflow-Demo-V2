@@ -14,7 +14,7 @@ export default function ProtectedPageWrapper({ children }: { children: React.Rea
 
         const res = await fetch("/api/check-session", {
           headers: { "x-device-id": deviceId },
-          cache: "no-store", // make sure it doesn't cache
+          cache: "no-store", // prevent caching
         });
 
         if (res.status !== 200) {
