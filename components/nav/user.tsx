@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation"; // Next.js 13 app router
 import {
   BadgeCheck,
-  Bell,
   ChevronsUpDown,
   LogOut,
 } from "lucide-react";
@@ -31,12 +30,18 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 export function NavUser({
   user,
@@ -86,8 +91,15 @@ export function NavUser({
     setIsLoggingOut(true);
     try {
       await logLogoutActivity();
+
+      // Clear session and related data
       localStorage.removeItem("userId");
+      localStorage.removeItem("deviceId");
+      sessionStorage.clear();
+
+      // Redirect to login and force reload to prevent back button cache
       router.replace("/auth/login");
+      window.location.reload();
     } finally {
       setIsLoggingOut(false);
       setIsDialogOpen(false);
@@ -96,18 +108,41 @@ export function NavUser({
 
   return (
     <>
-      <ProtectedPageWrapper>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
-                >
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
+              >
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="rounded-lg">TF</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{user.name}</span>
+                  {user.position && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {user.position}
+                    </span>
+                  )}
+                </div>
+                <ChevronsUpDown className="ml-auto size-4" />
+              </SidebarMenuButton>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              className="min-w-[224px] rounded-lg"
+              side={isMobile ? "bottom" : "right"}
+              align="start"
+              sideOffset={4}
+            >
+              <DropdownMenuLabel className="p-0 font-normal">
+                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">TF</AvatarFallback>
+                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{user.name}</span>
@@ -117,89 +152,64 @@ export function NavUser({
                       </span>
                     )}
                   </div>
-                  <ChevronsUpDown className="ml-auto size-4" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
+                </div>
+              </DropdownMenuLabel>
 
-              <DropdownMenuContent
-                className="min-w-[224px] rounded-lg"
-                side={isMobile ? "bottom" : "right"}
-                align="start"
-                sideOffset={4}
-              >
-                <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src={user.avatar} alt={user.name} />
-                      <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-medium">{user.name}</span>
-                      {user.position && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {user.position}
-                        </span>
-                      )}
+              <DropdownMenuSeparator />
+
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
+                    <div className="flex items-center gap-2">
+                      <BadgeCheck />
+                      <span>Account</span>
                     </div>
-                  </div>
-                </DropdownMenuLabel>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuGroup>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
-                      <div className="flex items-center gap-2">
-                        <BadgeCheck />
-                        <span>Account</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => setIsDialogOpen(true)}
-                  className="cursor-pointer"
-                  disabled={isLoggingOut}
-                >
-                  <LogOut />
-                  Log out
+                  </Link>
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+              </DropdownMenuGroup>
 
-        {/* Dialog confirmation */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirm Logout</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to log out?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                onClick={() => setIsDialogOpen(true)}
+                className="cursor-pointer"
                 disabled={isLoggingOut}
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={doLogout}
-                disabled={isLoggingOut}
-                className="ml-2"
-              >
-                {isLoggingOut ? "Logging out..." : "Logout"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </ProtectedPageWrapper>
+                <LogOut />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarMenuItem>
+      </SidebarMenu>
+
+      {/* Dialog confirmation */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to log out?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              disabled={isLoggingOut}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={doLogout}
+              disabled={isLoggingOut}
+              className="ml-2"
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
