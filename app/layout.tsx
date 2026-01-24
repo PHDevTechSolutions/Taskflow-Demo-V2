@@ -17,6 +17,7 @@ import { TicketEndorsed } from "@/components/popup/ticket-endorsed";
 import { ActivityToday } from "@/components/popup/activity-today";
 import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,32 +46,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className="light"
-      style={{ colorScheme: "light" }}
-    >
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-mono`}>
         <UserProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <Suspense fallback={null}>
-              <Reminders />
-              <TransferAlertDialog />
-              <ApproveDeletionDialog />
-              <ApproveTransferDialog />
-              <RemoveDeletionDialog />
-              <TicketEndorsed />
-              <ActivityToday />
-              <FollowUpToday />
-            </Suspense>
-            <Analytics />
-            {children}
-            <OfflineDialog />
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <ProtectedPageWrapper>
+              <Suspense fallback={null}>
+                <Reminders />
+                <TransferAlertDialog />
+                <ApproveDeletionDialog />
+                <ApproveTransferDialog />
+                <RemoveDeletionDialog />
+                <TicketEndorsed />
+                <ActivityToday />
+                <FollowUpToday />
+              </Suspense>
+              <Analytics />
+              {children}
+              <OfflineDialog />
+            </ProtectedPageWrapper>
           </ThemeProvider>
           <Toaster />
         </UserProvider>

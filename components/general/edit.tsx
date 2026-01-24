@@ -27,6 +27,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
 
+import { Eye, WandSparkles, ImagePlus } from "lucide-react";
+
 interface UserDetails {
   id: string;
   Firstname: string;
@@ -252,7 +254,7 @@ export default function ProfileClient() {
                     <BreadcrumbList>
                       <BreadcrumbItem>
                         <BreadcrumbPage className="line-clamp-1">
-                          Project Management & Task Tracking
+                          Profile Information
                         </BreadcrumbPage>
                       </BreadcrumbItem>
                     </BreadcrumbList>
@@ -283,8 +285,6 @@ export default function ProfileClient() {
                       )}
                     </AspectRatio>
 
-                    <Label htmlFor="profilePicture">Profile Picture</Label>
-
                     <input
                       type="file"
                       id="profilePicture"
@@ -303,7 +303,7 @@ export default function ProfileClient() {
                       }
                       disabled={uploading}
                     >
-                      {uploading ? "Uploading..." : "Change Avatar Photo"}
+                      <ImagePlus /> {uploading ? "Uploading..." : "Change Photo"}
                     </Button>
                   </div>
 
@@ -409,14 +409,14 @@ export default function ProfileClient() {
                                 variant="outline"
                                 onClick={() => setShowPassword(!showPassword)}
                               >
-                                {showPassword ? "Hide" : "Show"}
+                                <Eye /> {showPassword ? "Hide" : "Show"}
                               </Button>
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={handleGeneratePassword}
                               >
-                                Generate
+                                <WandSparkles /> Generate
                               </Button>
                             </div>
                           </div>
@@ -465,7 +465,7 @@ export default function ProfileClient() {
                                 variant="outline"
                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                               >
-                                {showConfirmPassword ? "Hide" : "Show"}
+                                <Eye /> {showConfirmPassword ? "Hide" : "Show"}
                               </Button>
                             </div>
                           </div>

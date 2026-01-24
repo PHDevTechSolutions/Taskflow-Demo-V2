@@ -10,6 +10,8 @@ import { useMap } from "react-leaflet";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot, DocumentData, limit } from "firebase/firestore";
 
+import { Clock, TruckElectric, Coins, ReceiptText, PackageCheck, PackageX, CircleOff } from "lucide-react";
+
 interface HistoryItem {
   referenceid: string;
   start_date: string;
@@ -312,7 +314,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
 
         {totalDurationMs > 0 && (
           <Badge className="p-4 font-mono">
-            Total Working Hours: {formatDurationMs(totalDurationMs)}
+            <Clock /> Total Working Hours: {formatDurationMs(totalDurationMs)}
           </Badge>
         )}
       </CardHeader>
@@ -324,7 +326,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             {totalActualSales > 0 && (
               <Item variant="outline">
                 <ItemContent>
-                  <ItemTitle>Total Sales Invoice:</ItemTitle>
+                  <ItemTitle> <Coins /> Total Sales Invoice:</ItemTitle>
                   <ItemDescription>
                     {totalActualSales.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -334,8 +336,20 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                 </ItemContent>
                 <ItemActions />
                 <ItemFooter>
-                  Total Delivered Transactions:{" "}
-                  <Badge className="px-4 py-2 font-mono">{countDrNumber}</Badge>
+                  <div className="flex items-center justify-between w-full">
+                    {/* Left Side: Icon and Text */}
+                    <div className="flex items-center gap-2">
+                      <TruckElectric />
+                      <span className="font-medium text-sm">
+                        Total Delivered Transactions
+                      </span>
+                    </div>
+
+                    {/* Right Side: Badge */}
+                    <Badge className="px-4 py-2 font-mono ml-4">
+                      {countDrNumber}
+                    </Badge>
+                  </div>
                 </ItemFooter>
               </Item>
             )}
@@ -343,7 +357,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             {totalSoAmount > 0 && (
               <Item variant="outline">
                 <ItemContent>
-                  <ItemTitle>Total Sales Order:</ItemTitle>
+                  <ItemTitle><PackageCheck />Total Sales Order:</ItemTitle>
                   <ItemDescription>
                     {totalSoAmount.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -362,7 +376,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             {totalCancelledSoAmount > 0 && (
               <Item variant="outline" className="border-red-500">
                 <ItemContent>
-                  <ItemTitle>Total Cancelled Sales Order:</ItemTitle>
+                  <ItemTitle><CircleOff /> Total Cancelled Sales Order:</ItemTitle>
                   <ItemDescription className="text-red-600 font-semibold">
                     {totalCancelledSoAmount.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -381,7 +395,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             {totalQuotationAmount > 0 && (
               <Item variant="outline">
                 <ItemContent>
-                  <ItemTitle>Total Quotation Amount:</ItemTitle>
+                  <ItemTitle><ReceiptText /> Total Quotation Amount:</ItemTitle>
                   <ItemDescription>
                     {totalQuotationAmount.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -423,10 +437,8 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
               <>
                 <Map center={mapCenter} zoom={13} className="h-full w-full">
                   <MapTileLayer />
-
                   {/* This makes map flyTo when selectedVisit changes */}
                   <FlyToLocation center={mapCenter} zoom={mapZoom} />
-
                   {mapMarkers.map((marker, idx) => (
                     <MapMarker key={idx} position={marker.position} />
                   ))}

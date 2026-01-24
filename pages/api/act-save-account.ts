@@ -19,6 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_address,
       address,
       status,
+      type_client,
       activity_reference_number,
     } = req.body;
 
@@ -41,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         contact_number,
         email_address,
         address,
+        type_client
       });
 
     if (error) {

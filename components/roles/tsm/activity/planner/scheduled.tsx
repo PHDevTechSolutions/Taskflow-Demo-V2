@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { DoneDialog } from "./dialog/done";
 import { supabase } from "@/utils/supabase";
 import { type DateRange } from "react-day-picker";
+import { Stamp } from "lucide-react";
 
 interface HistoryItem {
     id: string;
@@ -391,7 +392,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                         disabled={updatingId === item.activity_reference_number}
                                         onClick={() => openDone(item.activity_reference_number)}
                                     >
-                                        {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
+                                      <Stamp /> {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
                                     </Button>
                                 </TableCell>
                             </TableRow>

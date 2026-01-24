@@ -447,16 +447,14 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
-                                    Totals:
-                                </TableCell>
+                                <TableCell colSpan={3} className="text-right pr-4"></TableCell>
                                 <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
+                                   Totals: {totalQuotationAmount.toLocaleString(undefined, {
                                         style: "currency",
                                         currency: "PHP",
                                     })}
                                 </TableCell>
-                                <TableCell colSpan={3}></TableCell>
+                                <TableCell colSpan={4}></TableCell>
                             </TableRow>
                         </tfoot>
                     </Table>

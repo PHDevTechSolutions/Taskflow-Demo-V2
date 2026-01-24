@@ -206,6 +206,18 @@ export const SITable: React.FC<SIProps> = ({
         setPage(1);
     }, [searchTerm, filterStatus, dateCreatedFilterRange]);
 
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        // Check if date is invalid or Unix epoch (1/1/1970)
+        if (
+            isNaN(date.getTime()) ||
+            date.getTime() === new Date("1970-01-01T00:00:00Z").getTime()
+        ) {
+            return "-";
+        }
+        return date.toLocaleDateString();
+    };
+
     const isLoading = loadingCompanies || loadingActivities;
     const error = errorCompanies || errorActivities;
 
@@ -294,8 +306,8 @@ export const SITable: React.FC<SIProps> = ({
                         <TableBody>
                             {paginatedActivities.map((item) => (
                                 <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                    <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
-                                    <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
+                                    <TableCell>{formatDate(item.delivery_date)}</TableCell>
+                                    <TableCell>{formatDate(item.si_date)}</TableCell>
                                     <TableCell className="text-right">
                                         {item.actual_sales !== undefined && item.actual_sales !== null
                                             ? item.actual_sales.toLocaleString(undefined, {

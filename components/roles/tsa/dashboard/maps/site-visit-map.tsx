@@ -2,6 +2,7 @@
 
 import { Map, MapMarker, MapPopup, MapTileLayer, MapZoomControl, MapLocateControl, } from "@/components/ui/map";
 import MarkerClusterGroup from "react-leaflet-cluster";
+import L from "leaflet";
 
 interface SiteVisit {
     Type?: string;
@@ -18,6 +19,21 @@ interface Props {
 }
 
 export default function SiteVisitMap({ visits, center }: Props) {
+    const createClusterCustomIcon = (cluster: any) => {
+        const count = cluster.getChildCount();
+
+        return L.divIcon({
+            html: `
+          <div class="cluster-circle">
+            ${count}
+          </div>
+        `,
+            className: "custom-cluster-icon",
+            iconSize: L.point(40, 40, true),
+        });
+    };
+
+
     return (
         <Map
             center={center}
@@ -34,7 +50,11 @@ export default function SiteVisitMap({ visits, center }: Props) {
             <MapZoomControl />
             <MapLocateControl />
 
-            <MarkerClusterGroup chunkedLoading>
+            <MarkerClusterGroup
+                chunkedLoading
+                iconCreateFunction={createClusterCustomIcon}
+            >
+
                 {visits.map((visit, idx) => {
                     if (visit.Latitude == null || visit.Longitude == null) return null;
 

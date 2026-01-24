@@ -416,8 +416,7 @@ export const ASTable: React.FC<AccountProps> = ({
 
                         <TableBody>
                             {paginatedGrouped.map((item) => {
-                                const agentName =
-                                    agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
+                                const agentName = agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
 
                                 return (
                                     <TableRow key={item.id} className="hover:bg-muted/30 text-xs">

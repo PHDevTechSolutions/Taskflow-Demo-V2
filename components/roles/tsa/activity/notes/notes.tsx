@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import { db } from "@/lib/firebase";
 import {collection, addDoc, getDocs, query, orderBy, where, Timestamp, deleteDoc, doc, updateDoc, } from "firebase/firestore";
-
+import { Check, Trash, X, Pen } from "lucide-react";
 // Import your dialog component, adjust path accordingly
 import { AccountsActiveDeleteDialog } from "./dialog/delete";
 
@@ -450,7 +450,7 @@ export const Notes: React.FC<NotesProps> = ({
                               handleEditClick(notes.find((n) => n.id === id)!)
                             }
                           >
-                            Edit
+                          <Pen /> Edit
                           </Button>
                         </div>
 
@@ -596,36 +596,13 @@ export const Notes: React.FC<NotesProps> = ({
               </FieldGroup>
             </FieldSet>
 
-            {/* Set Reminder Button */}
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowReminderPicker((prev) => !prev)}
-              >
-                {showReminderPicker ? "Hide Reminder" : "Set Reminder"}
-              </Button>
-            </div>
-
-            {showReminderPicker && (
-              <Field>
-                <FieldLabel htmlFor="remindDateTime">Reminder Date & Time</FieldLabel>
-                <Input
-                  id="remindDateTime"
-                  type="datetime-local"
-                  value={remindDateTime}
-                  onChange={(e) => setRemindDateTime(e.target.value)}
-                />
-              </Field>
-            )}
-
             <div className="flex gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
+               <Check /> {isSubmitting
                   ? "Saving..."
                   : selectedNote
-                  ? "Update Note"
-                  : "Create Note"}
+                  ? "Update"
+                  : "Submit"}
               </Button>
 
               {selectedNote && (
@@ -635,7 +612,7 @@ export const Notes: React.FC<NotesProps> = ({
                   className="flex-1"
                   onClick={openDeleteDialog}
                 >
-                  Delete Note
+                <Trash /> Delete
                 </Button>
               )}
 
@@ -646,7 +623,7 @@ export const Notes: React.FC<NotesProps> = ({
                   className="flex-1"
                   onClick={resetForm}
                 >
-                  Cancel
+                 <X /> Cancel
                 </Button>
               )}
             </div>

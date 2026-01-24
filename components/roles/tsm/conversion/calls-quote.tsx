@@ -325,7 +325,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                                             <span className="capitalize text-sm">{row.agentName}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right">{row.target_quota}</TableCell>
+                                    <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
                                     <TableCell className="text-right">{row.totalCalls}</TableCell>
                                     <TableCell className="text-right">{row.totalQuotes}</TableCell>
                                     <TableCell className="text-right">{row.percentageCallsToQuote.toFixed(2)}%</TableCell>

@@ -320,7 +320,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                                         currency: "PHP",
                                     })}
                                 </TableCell>
-                                <TableCell colSpan={3}></TableCell>
+                                <TableCell colSpan={4}></TableCell>
                             </TableRow>
                         </tfoot>
                     </Table>

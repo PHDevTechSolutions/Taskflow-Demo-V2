@@ -310,6 +310,19 @@ export const SITable: React.FC<SIProps> = ({
         fetchAgents();
     }, [userDetails.referenceid]);
 
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        // Check if date is invalid or Unix epoch (1/1/1970)
+        if (
+            isNaN(date.getTime()) ||
+            date.getTime() === new Date("1970-01-01T00:00:00Z").getTime()
+        ) {
+            return "-";
+        }
+        return date.toLocaleDateString();
+    };
+
+
     return (
         <>
             {/* Search */}
@@ -438,8 +451,8 @@ export const SITable: React.FC<SIProps> = ({
                                             )}
                                             <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                                         </TableCell>
-                                        <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
-                                        <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
+                                        <TableCell>{formatDate(item.delivery_date)}</TableCell>
+                                        <TableCell>{formatDate(item.si_date)}</TableCell>
                                         <TableCell className="text-right">
                                             {item.actual_sales !== undefined && item.actual_sales !== null
                                                 ? item.actual_sales.toLocaleString(undefined, {
@@ -460,11 +473,9 @@ export const SITable: React.FC<SIProps> = ({
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
-                                    Totals:
-                                </TableCell>
+                                <TableCell colSpan={3} className="text-right pr-4"></TableCell>
                                 <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
+                                    Totals: {totalQuotationAmount.toLocaleString(undefined, {
                                         style: "currency",
                                         currency: "PHP",
                                     })}

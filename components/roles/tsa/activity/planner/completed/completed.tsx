@@ -1,28 +1,18 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Truck, FileText } from "lucide-react";
 import { AlertCircleIcon } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { type DateRange } from "react-day-picker";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 /* ================= TYPES ================= */
@@ -287,7 +277,7 @@ export const Completed: React.FC<CompletedProps> = ({
               >
                 <div className="p-2">
                   <div className="flex justify-between items-center">
-                    <AccordionTrigger className="text-xs font-semibold font-mono">
+                    <AccordionTrigger className="text-xs font-semibold font-mono uppercase">
                       {item.company_name}
                     </AccordionTrigger>
 
@@ -297,7 +287,7 @@ export const Completed: React.FC<CompletedProps> = ({
                         <Button
                           variant="outline"
                         >
-                          View Records
+                          <FileText /> View Records
                         </Button>
                       </DialogTrigger>
 
@@ -312,7 +302,7 @@ export const Completed: React.FC<CompletedProps> = ({
                           {sortedHistories.map((h, idx) => (
                             <div
                               key={h.id}
-                              className="border rounded-md p-3 space-y-1 bg-muted/40"
+                              className="border rounded-md p-3 space-y-1 bg-muted/40 uppercase"
                             >
                               <div className="flex justify-between">
                                 <span className="font-mono font-semibold">
@@ -346,7 +336,7 @@ export const Completed: React.FC<CompletedProps> = ({
                                   <strong>Call Status:</strong> {h.call_status}
                                 </p>
                               )}
-                              
+
 
                               {/* QUOTATION */}
                               {h.quotation_number && (
@@ -469,12 +459,14 @@ export const Completed: React.FC<CompletedProps> = ({
                     </Dialog>
                   </div>
 
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    <Badge className="bg-green-500 font-mono">{item.status}</Badge>
+                  <div className="ml-1 flex flex-wrap gap-1 uppercase">
+                    <Badge className="bg-green-500 font-mono flex items-center gap-2 whitespace-nowrap">
+                      <Truck /> {item.status}
+                    </Badge>
                   </div>
                 </div>
 
-                <AccordionContent className="text-xs px-4 py-2 space-y-1">
+                <AccordionContent className="text-xs px-4 py-2 space-y-1 uppercase">
                   <p>
                     <strong>Contact Number:</strong> {item.contact_number}
                   </p>

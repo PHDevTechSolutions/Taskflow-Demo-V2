@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button";
@@ -14,16 +14,6 @@ import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
-
-interface Company {
-    account_reference_number: string;
-    company_name: string;
-    contact_number?: string;
-    type_client?: string;
-    email_address?: string;
-    address?: string;
-    contact_person?: string;
-}
 
 interface Activity {
     id: string;
@@ -39,6 +29,13 @@ interface Activity {
     date_updated: string;
     scheduled_date: string;
     date_created: string;
+
+    company_name: string;
+    contact_number: string;
+    type_client: string;
+    email_address: string;
+    address: string;
+    contact_person: string;
 }
 
 interface HistoryItem {
@@ -85,7 +82,6 @@ export const Progress: React.FC<NewTaskProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
@@ -100,39 +96,6 @@ export const Progress: React.FC<NewTaskProps> = ({
     const [history, setHistory] = useState<HistoryItem[]>([]);
 
     const [searchTerm, setSearchTerm] = useState("");
-
-    // Fetch companies with no cache
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`, {
-            cache: "no-store",
-            headers: {
-                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                Pragma: "no-cache",
-                Expires: "0",
-            },
-        })
-
-            .then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch company data");
-                return res.json();
-            })
-            .then((data) => {
-                setCompanies(data.data || []);
-            })
-            .catch((err) => {
-                setErrorCompanies(err.message || "Error fetching company data");
-            })
-            .finally(() => {
-                setLoadingCompanies(false);
-            });
-    }, [referenceid]);
 
     // Fetch activities with no cache via API route
     const fetchActivities = useCallback(async () => {
@@ -263,20 +226,12 @@ export const Progress: React.FC<NewTaskProps> = ({
     const mergedData = activities
         .filter((a) => allowedStatuses.includes(a.status))
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
-        .filter((a) => !a.scheduled_date || a.scheduled_date === "")
+        .filter((a) => { return !a.scheduled_date || a.scheduled_date === "" || a.status === "Cancelled"; })
         .map((activity) => {
-            const company = companies.find((c) => c.account_reference_number === activity.account_reference_number);
-
             const relatedHistoryItems = history.filter((h) => h.activity_reference_number === activity.activity_reference_number);
 
             return {
                 ...activity,
-                company_name: company?.company_name ?? "Unknown Company",
-                contact_number: company?.contact_number ?? "-",
-                type_client: company?.type_client ?? "",
-                contact_person: company?.contact_person ?? "",
-                email_address: company?.email_address ?? "",
-                address: company?.address ?? "",
                 relatedHistoryItems,
             };
         })
@@ -285,7 +240,7 @@ export const Progress: React.FC<NewTaskProps> = ({
     const filteredData = mergedData.filter((item) => {
         const lowerSearch = searchTerm.toLowerCase();
         return (
-            item.company_name.toLowerCase().includes(lowerSearch) ||
+            (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
             (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ?? false) ||
             item.relatedHistoryItems.some((h) =>
                 (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
@@ -402,7 +357,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                         }
 
                         return (
-                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2 border-gray-200">
+                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2">
                                 <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
                                         <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
@@ -446,20 +401,21 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 }}
                                                 className="cursor-pointer"
                                             >
-                                                {updatingId === item.id ? "Updating..." : "Done"}
+                                                <Check /> {updatingId === item.id ? "Updating..." : "Done"}
                                             </Button>
                                         </div>
                                     </div>
 
-                                    <div className="ml-1 space-x-1">
-                                        <Badge className={`${badgeClass} font-mono`}>
+                                    <div className="ml-1 flex flex-wrap gap-1 uppercase">
+                                        {/* MAIN STATUS BADGE */}
+                                        <Badge className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap`}>
+                                            <LoaderPinwheel size={14} className="animate-spin" />
                                             {item.status.replace("-", " ")}
                                         </Badge>
-                                        {item.relatedHistoryItems.some(
-                                            (h: HistoryItem) =>
-                                                !!h.type_activity &&
-                                                h.type_activity !== "-" &&
-                                                h.type_activity.trim() !== ""
+
+                                        {/* ACTIVITY ICON BADGES */}
+                                        {item.relatedHistoryItems.some((h: HistoryItem) =>
+                                            !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
                                         ) &&
                                             Array.from(
                                                 new Set(
@@ -467,15 +423,37 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                         .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
                                                         .filter((v) => v && v !== "-")
                                                 )
-                                            ).map((activity) => (
-                                                <Badge key={activity} variant="default" className="font-mono">
-                                                    {activity.toUpperCase()}
-                                                </Badge>
-                                            ))}
+                                            ).map((activity) => {
+                                                const getIcon = (act: string) => {
+                                                    const lowerAct = act.toLowerCase();
+                                                    if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
+                                                        return <PhoneOutgoing />;
+                                                    }
+                                                    if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
+                                                        return <PackageCheck />;
+                                                    }
+                                                    if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
+                                                        return <ReceiptText />;
+                                                    }
+                                                    return <Activity />;
+                                                };
+
+                                                return (
+                                                    <Badge
+                                                        key={activity}
+                                                        variant="outline"
+                                                        className="flex items-center justify-center w-8 h-8 p-0"
+                                                        title={activity.toUpperCase()}
+                                                    >
+                                                        {getIcon(activity)}
+                                                    </Badge>
+                                                );
+                                            })
+                                        }
                                     </div>
                                 </div>
 
-                                <AccordionContent className="text-xs px-4 py-2">
+                                <AccordionContent className="text-xs px-4 py-2 uppercase">
                                     <p>
                                         <strong>Contact Number:</strong> {item.contact_number || "-"}
                                     </p>
@@ -489,7 +467,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                             ) && (
                                                     <p>
                                                         <strong>Ticket Reference Number:</strong>{" "}
-                                                        <span className="uppercase">
+                                                        <span>
                                                             {Array.from(
                                                                 new Set(
                                                                     item.relatedHistoryItems
@@ -506,7 +484,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                             ) && (
                                                     <p>
                                                         <strong>Type:</strong>{" "}
-                                                        <span className="uppercase">
+                                                        <span>
                                                             {item.relatedHistoryItems
                                                                 .map((h) => h.call_type ?? "-")
                                                                 .filter((v) => v !== "-")
@@ -516,11 +494,28 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 )}
 
                                             {item.relatedHistoryItems.some(
+                                                (h) => h.type_activity && h.type_activity !== "-"
+                                            ) && (
+                                                    <p>
+                                                        <strong>Type of Activity:</strong>{" "}
+                                                        <span>
+                                                            {Array.from(
+                                                                new Set(
+                                                                    item.relatedHistoryItems
+                                                                        .map((h) => h.type_activity ?? "-")
+                                                                        .filter((v) => v !== "-")
+                                                                )
+                                                            ).join(", ")}
+                                                        </span>
+                                                    </p>
+                                                )}    
+
+                                            {item.relatedHistoryItems.some(
                                                 (h) => h.source && h.source !== "-"
                                             ) && (
                                                     <p>
                                                         <strong>Source:</strong>{" "}
-                                                        <span className="uppercase">
+                                                        <span>
                                                             {Array.from(
                                                                 new Set(
                                                                     item.relatedHistoryItems
@@ -538,7 +533,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                             ) && (
                                                     <p>
                                                         <strong>Quotation Number:</strong>{" "}
-                                                        <span className="uppercase">
+                                                        <span>
                                                             {item.relatedHistoryItems
                                                                 .map((h) => h.quotation_number ?? "-")
                                                                 .filter((v) => v !== "-")

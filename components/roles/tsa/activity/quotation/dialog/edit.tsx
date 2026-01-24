@@ -544,7 +544,7 @@ export default function TaskListEditDialog({
                                                
                                                 {previewStates[index] ? (
                                                     <div
-                                                        className="border p-2 rounded max-h-40 overflow-auto bg-white text-black text-xs"
+                                                        className="border p-2 rounded max-h-40 overflow-auto custom-scrollbar bg-white text-black text-xs"
                                                         dangerouslySetInnerHTML={{
                                                             __html: product.product_description || "<i>No description</i>",
                                                         }}

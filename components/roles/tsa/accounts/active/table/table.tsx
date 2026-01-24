@@ -11,6 +11,7 @@ import { MoreHorizontal, Edit } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { AccountDialog } from "../../../activity/planner/dialog/active";
 import { toast } from "sonner";
+import { Plus, Repeat, Archive } from "lucide-react";
 
 import { AccountsActiveSearch } from "../search";
 import { AccountsActiveFilter } from "../filter";
@@ -479,7 +480,7 @@ export function AccountsTable({
 
 
                     <div className="flex-grow w-full max-w-lg flex items-center gap-3">
-                        <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}>Add Account</Button>
+                        <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}><Plus /> Add </Button>
                         <AccountsActiveSearch
                             globalFilter={globalFilter}
                             setGlobalFilterAction={setGlobalFilter}
@@ -500,10 +501,9 @@ export function AccountsTable({
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
                     />
 
-                    {/*
-                    <Button variant="outline" className="cursor-pointer" onClick={handleDownloadCSV}>
+                    {/*<Button variant="outline" className="cursor-pointer" onClick={handleDownloadCSV}>
                         Download CSV
-                    </Button>
+                    </Button>*/}
 
                     {selectedAccountIds.length > 0 && (
                         <>
@@ -512,7 +512,7 @@ export function AccountsTable({
                                 className="cursor-pointer"
                                 onClick={() => setIsTransferDialogOpen(true)}
                             >
-                                Transfer Selected
+                              <Repeat />  Transfer
                             </Button>
 
                             <Button
@@ -520,11 +520,11 @@ export function AccountsTable({
                                 className="cursor-pointer"
                                 onClick={() => setIsRemoveDialogOpen(true)}
                             >
-                                Remove Selected
+                              <Archive />  Archive
                             </Button>
                         </>
                     )}
-                        */}
+                        
                 </div>
             </div>
 

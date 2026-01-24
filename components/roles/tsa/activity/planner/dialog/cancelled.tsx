@@ -1,13 +1,21 @@
 "use client";
 
-import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
+import React, { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface CancelledDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: (remarks: string) => void;
   loading?: boolean;
 }
 
@@ -17,6 +25,24 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
   onConfirm,
   loading = false,
 }) => {
+  const [cancellationRemarks, setCancellationRemarks] = useState("");
+  const [canConfirm, setCanConfirm] = useState(false);
+
+  useEffect(() => {
+    setCanConfirm(cancellationRemarks.trim().length > 0);
+  }, [cancellationRemarks]);
+
+  // Reset remarks when dialog closes
+  useEffect(() => {
+    if (!open) setCancellationRemarks("");
+  }, [open]);
+
+  const handleConfirm = () => {
+    if (canConfirm) {
+      onConfirm(cancellationRemarks.trim());
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -29,6 +55,20 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="mt-4">
+          <label htmlFor="cancellationRemarks" className="block mb-1 font-medium">
+            Cancellation Reason <span className="text-red-600">*</span>
+          </label>
+          <Textarea
+            id="cancellationRemarks"
+            placeholder="Please provide a reason for cancellation..."
+            value={cancellationRemarks}
+            onChange={(e) => setCancellationRemarks(e.target.value)}
+            rows={4}
+            required
+          />
+        </div>
+
         <DialogFooter className="flex justify-end gap-2 mt-4">
           <Button
             variant="secondary"
@@ -40,8 +80,8 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
 
           <Button
             variant="destructive"
-            onClick={onConfirm}
-            disabled={loading}
+            onClick={handleConfirm}
+            disabled={!canConfirm || loading}
           >
             {loading ? "Cancelling..." : "Yes, Cancel"}
           </Button>

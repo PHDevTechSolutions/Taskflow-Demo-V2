@@ -1,29 +1,15 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle, } from "@/components/ui/alert"
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircleIcon, CheckCircle2Icon, PenIcon, Undo } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-    Table,
-    TableBody,
-    TableCaption,
-    TableCell,
-    TableFooter,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 
 import { TaskListDialog } from "./dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
@@ -364,6 +350,18 @@ export const TaskList: React.FC<CompletedProps> = ({
         return `${hour}:${minute} ${ampm}`;
     }
 
+    function getBadgeClass(status?: string) {
+        switch (status) {
+            case "Delivered": return "bg-green-500";
+            case "SO-Done": return "bg-yellow-400";
+            case "Quote-Done": return "bg-blue-600";
+            case "On Progress": return "bg-orange-500";
+            case "Assisted": return "bg-orange-500";
+            case "Cancelled": return "bg-red-700";
+            default: return "default";
+        }
+    }
+
     return (
         <>
             {/* Search + Filter always visible */}
@@ -498,14 +496,14 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                     className="cursor-pointer"
                                                     onClick={() => openEditDialog(item)}
                                                 >
-                                                    Edit
+                                                    <PenIcon /> Edit
                                                 </Button>
 
                                                 {/* RE-SO Info Button (only for Sales Order Preparation) */}
                                                 {item.type_activity === "Sales Order Preparation" && (
                                                     <Button
                                                         size="sm"
-                                                        className="cursor-pointer text-[10px]"
+                                                        className="cursor-pointer text-[10px] bg-red-600"
                                                         onClick={() => {
                                                             setReSoItem(item);
                                                             setEditSoNumber(item.so_number || "");
@@ -514,7 +512,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                             setReSoOpen(true);
                                                         }}
                                                     >
-                                                        RE-SO ?
+                                                        <Undo /> RE-SO ?
                                                     </Button>
                                                 )}
                                             </div>
@@ -529,7 +527,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                         </TableCell>
                                         <TableCell className="font-semibold">{displayValue(item.company_name)}</TableCell>
                                         <TableCell>
-                                            <Badge variant={badgeColor} className="text-[8px] whitespace-nowrap">
+                                            <Badge variant="default" className={`text-xs whitespace-nowrap ${getBadgeClass(item.status)}`}>
                                                 {item.status?.replace("-", " ")}
                                             </Badge>
                                         </TableCell>

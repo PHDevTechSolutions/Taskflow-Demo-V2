@@ -11,6 +11,8 @@ import { AccountsActiveSearch } from "../../../tsa/accounts/active/search";
 import { AccountsAllFilter } from "../../../tsa/accounts/approval/filter";
 // Removed AccountsActivePagination import since we're doing pagination here directly
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { DownloadCloud } from "lucide-react";
 
 interface Account {
     id: string;
@@ -29,6 +31,7 @@ interface Account {
     industry: string;
     status?: string;
     company_group?: string;
+    scheduled_date?: string;
 }
 
 interface UserDetails {
@@ -282,10 +285,109 @@ export function AccountsTable({
 
     // Calculate total pages
     const totalPages = Math.ceil(filteredData.length / pageSize);
+    const totalAccounts = filteredData.length;
+
+    const tsaCount = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "tsa client"
+        ).length;
+    }, [filteredData]);
+
+    const csrCount = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "csr client"
+        ).length;
+    }, [filteredData]);
+
+    // CARD 3: Count Balance 20, Next 30, Top 50
+    const balance20Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "balance 20"
+        ).length;
+    }, [filteredData]);
+
+    const next30Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "next 30"
+        ).length;
+    }, [filteredData]);
+
+    const top50Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "top 50"
+        ).length;
+    }, [filteredData]);
+
+    // CARD 4: Count companies with scheduled_date = today
+    const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+
+    const scheduledTodayCount = useMemo(() => {
+        return filteredData.filter((a) => {
+            // compare only date part, assuming scheduled_date format is compatible
+            if (!a.scheduled_date) return false;
+            return a.scheduled_date.startsWith(todayDateString);
+        }).length;
+    }, [filteredData, todayDateString]);
 
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                {/* Card 1 */}
+                <Card className="text-center">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-semibold">Total Accounts</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold">{totalAccounts}</p>
+                    </CardContent>
+                </Card>
+
+                {/* Card 3 */}
+                <Card className="text-center">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-semibold">Balance / Next / Top</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>
+                            Balance 20: <span className="font-bold">{balance20Count}</span>
+                        </p>
+                        <p>
+                            Next 30: <span className="font-bold">{next30Count}</span>
+                        </p>
+                        <p>
+                            Top 50: <span className="font-bold">{top50Count}</span>
+                        </p>
+                    </CardContent>
+                </Card>
+
+                {/* Card 2 */}
+                <Card className="text-center">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-semibold">Clients by Type</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>
+                            TSA Client: <span className="font-bold">{tsaCount}</span>
+                        </p>
+                        <p>
+                            CSR Client: <span className="font-bold">{csrCount}</span>
+                        </p>
+                    </CardContent>
+                </Card>
+
+                {/* Card 4 */}
+                <Card className="text-center">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-semibold">Companies Scheduled Today</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold">{scheduledTodayCount}</p>
+                    </CardContent>
+                </Card>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <div className="flex-grow w-full max-w-lg flex items-center gap-3">
@@ -315,20 +417,13 @@ export function AccountsTable({
                     />
 
                     <Button variant="outline" onClick={handleDownloadCSV}>
-                        Download CSV
+                       <DownloadCloud /> Download
                     </Button>
                 </div>
             </div>
 
             {/* Table */}
             <div className="rounded-md border p-4 space-y-2 overflow-x-auto">
-                <Badge
-                    className="h-10 min-w-10 rounded-full px-4 font-mono text-lg font-bold tabular-nums"
-                    variant="outline"
-                >
-                    Total Database: {filteredData.length}
-                </Badge>
-
                 <Table>
                     <TableHeader>
                         <TableRow>

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, } from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ListTree } from "lucide-react";
 
 interface Company {
   type_client?: string;
@@ -148,20 +149,18 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
           "-"
         )}
       </CardContent>
-
-      
       <CardFooter className="flex justify-end border-t">
         <Button
           onClick={() => setOpen(true)}
           disabled={loading || !!error || !totalAccounts}
         >
-          Show Breakdown
+         <ListTree /> Show Breakdown
         </Button>
       </CardFooter>
 
       {/* Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="max-w-sm">
+        <SheetContent side="right" className="max-w-sm p-4">
           <SheetHeader>
             <SheetTitle>Accounts Breakdown</SheetTitle>
             <SheetDescription>

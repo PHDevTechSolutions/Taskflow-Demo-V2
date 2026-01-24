@@ -33,7 +33,7 @@ export function TimeLogComponent({
       {loadingLogs && <p className="text-[10px]">Loading logs...</p>}
       {errorLogs && <p className="text-[10px] text-red-600">{errorLogs}</p>}
       {!loadingLogs && !errorLogs && timeLogs.length === 0 && (
-        <p className="text-[10px]">No logs found.</p>
+        <p className="text-sm text-muted-foreground">No logs found.</p>
       )}
 
       <Accordion

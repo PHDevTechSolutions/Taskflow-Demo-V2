@@ -316,7 +316,7 @@ export const SOSI: React.FC<SOSIProps> = ({
                       <span className="capitalize text-sm">{row.agentName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{row.target_quota}</TableCell>
+                  <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
                   <TableCell className="text-right">{row.totalSO}</TableCell>
                   <TableCell className="text-right">{row.totalSI}</TableCell>
                   <TableCell className="text-right">{row.percentageSOToSI.toFixed(2)}%</TableCell>

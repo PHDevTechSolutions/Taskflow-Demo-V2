@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Plus, TicketIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -330,10 +330,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
       const payload = {
         ticket_reference_number: ticket.ticket_reference_number,
         account_reference_number: ticket.account_reference_number,
+        company_name: ticket.company_name,
+        contact_person: ticket.contact_person,
+        contact_number: ticket.contact_number,
+        email_address: ticket.email_address,
+        address: ticket.address,
         tsm: userDetails.tsm,
         referenceid: userDetails.referenceid, // use userDetails.referenceid
         manager: userDetails.manager,         // use userDetails.manager here
         status: "On-Progress",
+        type_client: "CSR Client",
         agent: ticket.agent,
         activity_reference_number: generateActivityRef(ticket.company_name, region),
       };
@@ -516,11 +522,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 Endorsed Tickets ({endorsedTickets.length})
               </h2>
 
-              <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-red-100 border-red-500">
+              <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-red-500">
                 {endorsedTickets.map((ticket) => (
                   <AccordionItem key={ticket.id} value={ticket.id}>
                     <div className="flex justify-between items-center p-2 select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
                         {ticket.company_name}
                       </AccordionTrigger>
                       <Button
@@ -532,11 +538,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           openConfirmUseTicket(ticket);
                         }}
                       >
-                        Use Ticket
+                       <TicketIcon /> Use Ticket
                       </Button>
-
                     </div>
-                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                    
+                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
                       <p>
                         <strong>Contact Person:</strong> {ticket.contact_person}
                       </p>
@@ -609,7 +615,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               className="shrink-0 cursor-pointer"
               onClick={() => setIsCreateDialogOpen(true)}
             >
-              Create Account
+             <Plus /> Add
             </Button>
           </div>
 
@@ -623,7 +629,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
-                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200">
+                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200">
                   {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
@@ -652,7 +658,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                         </div>
                       </div>
 
-                      <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-gray-700">
+                      <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
                         <p>
                           <strong>Contact:</strong> {account.contact_number}
                         </p>

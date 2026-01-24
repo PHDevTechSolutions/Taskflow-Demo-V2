@@ -74,8 +74,7 @@ export function DRSheet(props: Props) {
     const isStep2Valid =
         drNumber.trim() !== "" &&
         siAmount.trim() !== "" &&
-        !isNaN(Number(siAmount)) &&
-        siDate.trim() !== "";
+        !isNaN(Number(siAmount))
 
     const isStep3Valid =
         paymentTerms.trim() !== "" &&
@@ -88,7 +87,6 @@ export function DRSheet(props: Props) {
     const handleNextStep2 = () => {
         if (!drNumber.trim()) return toast.error("DR Number is required.");
         if (!siAmount || isNaN(Number(siAmount))) return toast.error("Invalid SI Amount.");
-        if (!siDate) return toast.error("Sales Invoice Date is required.");
         handleNext();
     };
 

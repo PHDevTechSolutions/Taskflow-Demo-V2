@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, ColumnDef, flexRender, } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction, } from "@/components/ui/alert-dialog";
-import { RotateCcw } from "lucide-react";
+import { Undo, LoaderPinwheel } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
@@ -189,10 +189,10 @@ export function AccountsTable({
           const status = getValue() as string;
           return (
             <Badge
-              className={status === "Removed" ? "animate-pulse bg-red-600 text-white" : ""}
+              className={status === "Removed" ? "bg-orange-600 text-white" : ""}
               variant={status === "Removed" ? undefined : "default"}
             >
-              {status === "Removed" ? "Waiting for approval of TSM" : status}
+              <LoaderPinwheel className="animate-spin inline-block" /> {status === "Removed" ? "Waiting for approval" : status}
             </Badge>
           );
         },
@@ -217,7 +217,7 @@ export function AccountsTable({
               setOpenDialog(true);
             }}
           >
-            <RotateCcw className="w-4 h-4" />
+            <Undo className="w-4 h-4" />
             Revert
           </Button>
         ),

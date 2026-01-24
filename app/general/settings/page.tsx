@@ -103,6 +103,13 @@ function SettingsContent() {
                       <SelectItem value="light">Light</SelectItem>
                       <SelectItem value="dark">Dark</SelectItem>
                       <SelectItem value="system">System</SelectItem>
+                      <SelectItem value="ecoshift">Ecoshift Corporation</SelectItem>
+                      <SelectItem value="prms">Progressive Material Solutions</SelectItem>
+                      <SelectItem value="vah">Value Acquision Holdings</SelectItem>
+                      <SelectItem value="buildchem">Buildchem Solutions</SelectItem>
+                      <SelectItem value="disruptive">Disruptive Solutions</SelectItem>
+                      <SelectItem value="outlook">Outlook</SelectItem>
+                      <SelectItem value="viber">Viber</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

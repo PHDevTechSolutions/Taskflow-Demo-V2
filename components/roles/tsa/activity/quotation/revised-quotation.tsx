@@ -1,28 +1,24 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle, } from "@/components/ui/alert"
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { AccountsActiveDeleteDialog } from "../planner/dialog/delete";
-
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    type_client?: string;
-    email_address?: string;
-    address?: string;
-    contact_person?: string;
-}
 
 interface Completed {
     id: number;
@@ -47,6 +43,11 @@ interface Completed {
     date_updated?: string;
     account_reference_number?: string;
     quotation_type: string;
+    company_name: string;
+    contact_number: string;
+    email_address: string;
+    address: string;
+    contact_person: string;
 }
 
 interface CompletedProps {
@@ -58,8 +59,9 @@ interface CompletedProps {
     contact?: string;
     tsmname?: string;
     managername?: string;
-    dateCreatedFilterRange: any; // Adjust if you want
+    dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+
 }
 
 export const RevisedQuotation: React.FC<CompletedProps> = ({
@@ -74,14 +76,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<Completed[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
     const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
     const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
-    // Filters state - default to "all" (means no filter)
+    // Filters state
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
     const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
@@ -90,30 +89,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const [editOpen, setEditOpen] = useState(false);
 
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
     // Delete dialog states
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [removeRemarks, setRemoveRemarks] = useState("");
 
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
-
-    // Fetch activities
+    // Fetch activities from API
     const fetchActivities = useCallback(() => {
         if (!referenceid) {
             setActivities([]);
@@ -132,14 +113,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             .finally(() => setLoadingActivities(false));
     }, [referenceid]);
 
-    // Real-time subscription using Supabase
+    // Subscribe to real-time changes with Supabase
     useEffect(() => {
         if (!referenceid) return;
 
-        // Initial fetch
         fetchActivities();
 
-        // Subscribe realtime for history changes that affect activities
         const channel = supabase
             .channel(`history-${referenceid}`)
             .on(
@@ -151,7 +130,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     filter: `referenceid=eq.${referenceid}`,
                 },
                 () => {
-                    // Refetch activities on any history change
                     fetchActivities();
                 }
             )
@@ -162,31 +140,16 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    type_client: company?.type_client ?? "",
-                    email_address: company?.email_address ?? "",
-                    address: company?.address ?? "",
-                    contact_person: company?.contact_person ?? "",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
+    // Sort activities by latest date_updated or date_created
+    const sortedActivities = useMemo(() => {
+        return activities.sort(
+            (a, b) =>
+                new Date(b.date_updated ?? b.date_created).getTime() -
+                new Date(a.date_updated ?? a.date_created).getTime()
+        );
+    }, [activities]);
 
-    // Check if item has any meaningful data in these columns
+    // Check if item has meaningful data
     const hasMeaningfulData = (item: Completed) => {
         const columnsToCheck = [
             "activity_reference_number",
@@ -211,11 +174,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         });
     };
 
-    // Apply search, filters, and only show those with meaningful data
+    // Filtered and searched activities
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
-        return mergedActivities
+        return sortedActivities
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some((val) => {
@@ -225,14 +188,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             })
             .filter((item) => {
                 if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                // dito natin i-force filter type_activity sa "Quotation Preparation"
+                // force filter type_activity to "Quotation Preparation"
                 if (item.type_activity !== "Quotation Preparation") return false;
                 return true;
             })
-
-            /* ⭐⭐⭐ DATE RANGE FILTER HERE ⭐⭐⭐ */
             .filter((item) => {
-                if (!dateCreatedFilterRange || (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)) {
+                if (
+                    !dateCreatedFilterRange ||
+                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
+                ) {
                     return true;
                 }
 
@@ -242,43 +206,43 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
                 if (isNaN(updated.getTime())) return false;
 
-                const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-                const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+                const from = dateCreatedFilterRange.from
+                    ? new Date(dateCreatedFilterRange.from)
+                    : null;
+                const to = dateCreatedFilterRange.to
+                    ? new Date(dateCreatedFilterRange.to)
+                    : null;
 
                 if (from && updated < from) return false;
                 if (to && updated > to) return false;
 
                 return true;
             })
-
             .filter(hasMeaningfulData);
-    }, [
-        mergedActivities,
-        searchTerm,
-        filterStatus,
-        dateCreatedFilterRange,
-    ]);
+    }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
+    const isLoading = loadingActivities;
+    const error = errorActivities;
 
-    // Extract unique status and type_activity values for filter dropdowns
+    // Extract unique status for filter dropdowns
     const statusOptions = useMemo(() => {
         const setStatus = new Set<string>();
-        mergedActivities.forEach((a) => {
+        sortedActivities.forEach((a) => {
             if (a.status) setStatus.add(a.status);
         });
         return Array.from(setStatus).sort();
-    }, [mergedActivities]);
+    }, [sortedActivities]);
 
+    // Extract unique type_activity for filter dropdowns
     const typeActivityOptions = useMemo(() => {
         const setType = new Set<string>();
-        mergedActivities.forEach((a) => {
+        sortedActivities.forEach((a) => {
             if (a.type_activity) setType.add(a.type_activity);
         });
         return Array.from(setType).sort();
-    }, [mergedActivities]);
+    }, [sortedActivities]);
 
+    // Handlers for Edit dialog
     const openEditDialog = (item: Completed) => {
         setEditItem(item);
         setEditOpen(true);
@@ -289,20 +253,17 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         setEditItem(null);
     };
 
-    // When edit is saved, refetch activities or update state accordingly
     const onEditSaved = () => {
-        fetchActivities(); // or you can optimistically update
+        fetchActivities();
         closeEditDialog();
     };
 
+    // Selection toggle for checkboxes
     const toggleSelect = (id: number) => {
         setSelectedIds((prev) => {
             const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
             return newSet;
         });
     };
@@ -311,7 +272,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         setSelectedIds(new Set());
     };
 
-    // Confirm remove function
+    // Delete selected activities
     const onConfirmRemove = async () => {
         try {
             const res = await fetch("/api/act-delete-history", {
@@ -328,20 +289,20 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             setDeleteDialogOpen(false);
             clearSelection();
             setRemoveRemarks("");
-
-            // Refresh activities list
             fetchActivities();
         } catch (error) {
-            // toast.error("Failed to delete activities. Please try again.");
             console.error(error);
         }
     };
 
+    // Helper to display or fallback "-"
+    const displayValue = (v: any) =>
+        v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
+
     return (
         <>
-            {/* Search + Filter always visible */}
+            {/* Search + Filter */}
             <div className="mb-4 flex items-center justify-between gap-4">
-                {/* Left: Search bar */}
                 <Input
                     type="text"
                     placeholder="Search company, reference ID, status, or activity..."
@@ -351,9 +312,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     aria-label="Search activities"
                 />
 
-                {/* Right: filter icon + delete button */}
                 <div className="flex items-center space-x-2">
-                    {/* Filter icon / dialog trigger */}
                     <TaskListDialog
                         filterStatus={filterStatus}
                         filterTypeActivity={filterTypeActivity}
@@ -363,7 +322,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         typeActivityOptions={typeActivityOptions}
                     />
 
-                    {/* Delete button */}
                     {selectedIds.size > 0 && (
                         <Button
                             variant="destructive"
@@ -376,9 +334,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 </div>
             </div>
 
-            {/* Show error message */}
+            {/* Error */}
             {error && (
-                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
+                <Alert
+                    variant="destructive"
+                    className="flex flex-col space-y-4 p-4 text-xs"
+                >
                     <div className="flex items-center space-x-3">
                         <AlertCircleIcon className="h-6 w-6 text-red-600" />
                         <div>
@@ -401,12 +362,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 </Alert>
             )}
 
+            {/* Total records */}
             {filteredActivities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
                     Total Records: {filteredActivities.length}
                 </div>
             )}
 
+            {/* Table */}
             {filteredActivities.length > 0 && (
                 <div className="overflow-auto space-y-8 custom-scrollbar">
                     <Table className="text-xs">
@@ -426,13 +389,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
                         <TableBody>
                             {filteredActivities.map((item) => {
-                                let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
-                                if (item.status === "Assisted" || item.status === "SO-Done") badgeColor = "secondary";
-                                else if (item.status === "Quote-Done") badgeColor = "outline";
-
-                                const displayValue = (v: any) =>
-                                    v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
-
                                 const isSelected = selectedIds.has(item.id);
 
                                 return (
@@ -445,26 +401,49 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             />
                                         </TableCell>
                                         <TableCell className="text-center flex space-x-2 justify-center">
-                                            <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openEditDialog(item)}
+                                            >
                                                 Edit
                                             </Button>
                                         </TableCell>
 
-                                        <TableCell>{new Date(item.date_updated ?? item.date_created).toLocaleDateString()}</TableCell>
                                         <TableCell>
-                                            {new Date(item.date_updated ?? item.date_created).toLocaleTimeString([], {
+                                            {new Date(
+                                                item.date_updated ?? item.date_created
+                                            ).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(
+                                                item.date_updated ?? item.date_created
+                                            ).toLocaleTimeString([], {
                                                 hour: "2-digit",
                                                 minute: "2-digit",
                                             })}
                                         </TableCell>
-                                        <TableCell className="font-semibold">{item.company_name}</TableCell>
+                                        <TableCell className="font-semibold">
+                                            {item.company_name}
+                                        </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
-                                        <TableCell>{displayValue(item.quotation_amount) !== "-" ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                        }) : "-"}</TableCell>
-                                        <TableCell className="capitalize">{displayValue(item.quotation_type)}</TableCell>
+                                        <TableCell className="uppercase">
+                                            {displayValue(item.quotation_number)}
+                                        </TableCell>
+                                        <TableCell>
+                                            {displayValue(item.quotation_amount) !== "-"
+                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(
+                                                    undefined,
+                                                    {
+                                                        minimumFractionDigits: 2,
+                                                        maximumFractionDigits: 2,
+                                                    }
+                                                )
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell className="capitalize">
+                                            {displayValue(item.quotation_type)}
+                                        </TableCell>
                                     </TableRow>
                                 );
                             })}
@@ -479,18 +458,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     item={editItem}
                     onClose={closeEditDialog}
                     onSave={onEditSaved}
-                    company={companies.find(
-                        (c) => c.account_reference_number === editItem.account_reference_number
-                    )}
                     firstname={firstname}
                     lastname={lastname}
                     email={email}
                     contact={contact}
                     tsmname={tsmname}
                     managername={managername}
+                    company={{
+                        company_name: editItem.company_name,
+                        contact_number: editItem.contact_number,
+                        email_address: editItem.email_address,
+                        address: editItem.address,
+                        contact_person: editItem.contact_person,
+                    }}
                 />
-
             )}
+
 
             {/* Delete confirmation dialog */}
             <AccountsActiveDeleteDialog

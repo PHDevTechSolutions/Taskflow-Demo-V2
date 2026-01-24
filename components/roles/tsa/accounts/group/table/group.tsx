@@ -23,13 +23,12 @@ interface Account {
   region: string;
   type_client: string;
   date_created: string;
-  industry: string;
   status?: string;
-  company_group?: string;
+  industry?: string;
 }
 
 interface GroupedAccounts {
-  company_group: string;
+  industry: string;
   accounts: Account[];
 }
 
@@ -89,13 +88,13 @@ export function AccountsTable({
 
     const map = new Map<string, Account[]>();
     localPosts.forEach((acc) => {
-      const group = acc.company_group ?? "Ungrouped";
+      const group = acc.industry ?? "Ungrouped";
       if (!map.has(group)) map.set(group, []);
       map.get(group)!.push(acc);
     });
 
-    return Array.from(map.entries()).map(([company_group, accounts]) => ({
-      company_group,
+    return Array.from(map.entries()).map(([industry, accounts]) => ({
+      industry,
       accounts,
     }));
   }, [localPosts, groupedPosts]);
@@ -103,7 +102,7 @@ export function AccountsTable({
   // Apply globalFilter and dateCreatedFilterRange on groups (accounts inside each group)
   const filteredGroupedPosts = useMemo(() => {
     return computedGroupedPosts
-      .map(({ company_group, accounts }) => {
+      .map(({ industry, accounts }) => {
         let filteredAccounts = accounts;
 
         if (globalFilter.trim()) {
@@ -130,7 +129,7 @@ export function AccountsTable({
           });
         }
 
-        return { company_group, accounts: filteredAccounts };
+        return { industry, accounts: filteredAccounts };
       })
       .filter((group) => group.accounts.length > 0);
   }, [computedGroupedPosts, globalFilter, dateCreatedFilterRange]);
@@ -139,8 +138,8 @@ export function AccountsTable({
   const columns = useMemo<ColumnDef<GroupedAccounts>[]>(
     () => [
       {
-        accessorKey: "company_group",
-        header: "Company Group",
+        accessorKey: "industry",
+        header: "Industry",
         cell: (info) => (
           <button
             className="text-blue-600 hover:underline cursor-pointer"
@@ -178,7 +177,7 @@ export function AccountsTable({
   const table = useReactTable({
     data: filteredGroupedPosts,
     columns,
-    getRowId: (row) => row.company_group,
+    getRowId: (row) => row.industry,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -204,7 +203,7 @@ export function AccountsTable({
           className="h-5 min-w-5 rounded-full px-2 font-mono tabular-nums"
           variant="outline"
         >
-          Total Groups: {filteredGroupedPosts.length}
+          Total Industry: {filteredGroupedPosts.length}
         </Badge>
 
         <Table>
@@ -251,7 +250,7 @@ export function AccountsTable({
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                Companies in Group: {selectedGroup?.company_group}
+                Companies in Industry: {selectedGroup?.industry}
               </DialogTitle>
               <DialogClose />
             </DialogHeader>
@@ -264,7 +263,7 @@ export function AccountsTable({
                   ))}
                 </ul>
               ) : (
-                <p>No companies found in this group.</p>
+                <p>No companies found in this industry.</p>
               )}
             </div>
 

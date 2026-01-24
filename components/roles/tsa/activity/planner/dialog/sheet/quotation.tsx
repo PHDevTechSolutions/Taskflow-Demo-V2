@@ -149,6 +149,7 @@ export function QuotationSheet(props: Props) {
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [noProductsAvailable, setNoProductsAvailable] = useState(false);
+  const [showConfirmFollowUp, setShowConfirmFollowUp] = useState(false);
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -342,29 +343,9 @@ export function QuotationSheet(props: Props) {
   }, [selectedProducts, setQuotationAmount]);
 
   // Validation states
-  const isStep2Valid = source.trim() !== "";
-  const isStep3Valid = selectedProducts.length > 0 && selectedProducts.every((p) => p.quantity > 0 && p.price >= 0);
-  const isStep4Valid = projectType.trim() !== "";
-  const isStep5Valid = productCat.trim().length >= 6 && callType.trim() !== "";
-  const isStep6Valid = status.trim() !== "";
 
   // Save handler with validation
   const saveWithSelectedProducts = () => {
-    if (!isManualEntry && !noProductsAvailable && selectedProducts.length === 0) {
-      toast.error("Please select at least one product.");
-      return;
-    }
-
-    if (!isManualEntry && !noProductsAvailable && selectedProducts.some((p) => p.quantity <= 0 || p.price < 0)) {
-      toast.error("Quantity and Price must be valid numbers.");
-      return;
-    }
-
-    if (!isStep6Valid) {
-      toast.error("Please select status.");
-      return;
-    }
-
     setShowQuotationAlert(true);  // Show the Shadcn alert
 
     handleSave();
@@ -383,7 +364,6 @@ export function QuotationSheet(props: Props) {
     setFollowUpDate(e.target.value);
   };
 
-
   const filteredSources =
     typeClient === "CSR Client"
       ? [
@@ -395,6 +375,24 @@ export function QuotationSheet(props: Props) {
       : Quotation_SOURCES.filter(
         (source) => source.label !== "CSR Endorsement"
       );
+
+  const handleSaveClick = () => {
+    // Show confirmation alert muna bago save
+    setShowConfirmFollowUp(true);
+  };
+
+  // Handler kapag OK na sa follow up alert
+  const handleConfirmFollowUp = () => {
+    setShowConfirmFollowUp(false);
+    // Dito talaga ang save
+    saveWithSelectedProducts();
+  };
+
+  // Handler kapag Cancel sa alert
+  const handleCancelFollowUp = () => {
+    setShowConfirmFollowUp(false);
+  };
+
 
   return (
     <>
@@ -425,7 +423,6 @@ export function QuotationSheet(props: Props) {
                             <Button
                               type="button"
                               onClick={handleNext}
-                              disabled={!isStep2Valid}
                             >
                               Next
                             </Button>
@@ -543,6 +540,7 @@ export function QuotationSheet(props: Props) {
                 type="text"
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
+                className="capitalize"
               />
 
               <FieldLabel className="mt-3">Project Type</FieldLabel>
@@ -585,7 +583,7 @@ export function QuotationSheet(props: Props) {
                             <Button type="button" onClick={handleBack} variant="outline">
                               Back
                             </Button>
-                            <Button type="button" onClick={handleNext} disabled={!isStep4Valid}>
+                            <Button type="button" onClick={handleNext}>
                               Next
                             </Button>
                           </div>
@@ -616,14 +614,14 @@ export function QuotationSheet(props: Props) {
                   </div>
                   {isGenerating ? (
                     <AlertDescription className="text-sm text-gray-700 flex items-center gap-2">
-                      <Spinner className="w-5 h-5 text-gray-500" />
-                      Generating your quotation number, please wait...
+                      <Spinner className="w-5 h-5" />
+                      <p>Generating your quotation number, please wait...</p>
                     </AlertDescription>
                   ) : (
-                    <AlertDescription className="text-sm text-gray-700">
-                      Your quotation number is <strong className="text-black">{localQuotationNumber}</strong>
+                    <AlertDescription className="text-sm">
+                      Your quotation number is <strong>{localQuotationNumber}</strong>
                       <br />
-                      It is automatically generated based on the quotation type, TSM prefix, current year, and a sequential number.
+                      <p>It is automatically generated based on the quotation type, TSM prefix, current year, and a sequential number.</p>
                     </AlertDescription>
                   )}
                 </div>
@@ -740,7 +738,7 @@ export function QuotationSheet(props: Props) {
                 </div>
               )}
 
-              <label className="flex items-center gap-2 mt-4">
+              {/* <label className="flex items-center gap-2 mt-4">
                 <input
                   type="checkbox"
                   checked={isManualEntry}
@@ -750,17 +748,25 @@ export function QuotationSheet(props: Props) {
                     if (!manual) setManualProducts([]);
                   }}
                 />
-                <span className="text-xs font-medium">Manual entry</span>
-              </label>
+                <span className="text-xs font-medium">Add New Products</span>
+              </label> */}
 
               {/* No Products Available Checkbox */}
-              <label className="flex items-center gap-2 mt-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={noProductsAvailable}
                   onChange={(e) => {
-                    setNoProductsAvailable(e.target.checked);
+                    const checked = e.target.checked;
+                    setNoProductsAvailable(checked);
+
+                    if (checked) {
+                      // Reset product related states kapag no products available
+                      setSearchTerm("");
+                      setSearchResults([]);
+                    }
                   }}
+                  className="h-4 w-6"
                 />
                 <span className="text-xs font-medium">No products available</span>
               </label>
@@ -1093,7 +1099,7 @@ export function QuotationSheet(props: Props) {
                   <div>
                     <AlertTitle>Follow Up Date:</AlertTitle>
                     <AlertDescription>
-                      {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
+                      {followUpDate} — This scheduled date will only appear on the exact day it is set for.
                     </AlertDescription>
                   </div>
                   <p className="font-semibold text-red-600">Try Using Manual?</p>
@@ -1109,7 +1115,8 @@ export function QuotationSheet(props: Props) {
                 <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
                   <AlertTitle>No Follow Up Date set</AlertTitle>
                   <AlertDescription>
-                    Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
+                    Please select a call type to auto-generate a follow up date.
+                    This helps ensure timely client follow-ups.
                   </AlertDescription>
                   <Input
                     type="date"
@@ -1152,9 +1159,10 @@ export function QuotationSheet(props: Props) {
                             <Button type="button" variant="outline" onClick={handleBack}>
                               Back
                             </Button>
+
+                            {/* Changed Save button handler */}
                             <Button
-                              onClick={saveWithSelectedProducts}
-                              disabled={!isStep6Valid}
+                              onClick={handleSaveClick}
                             >
                               Save
                             </Button>
@@ -1170,6 +1178,26 @@ export function QuotationSheet(props: Props) {
               </RadioGroup>
             </FieldSet>
           </FieldGroup>
+
+          {/* Confirmation alert modal/dialog */}
+          {showConfirmFollowUp && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-black">
+              <div className="max-w-md rounded-lg bg-white p-6 shadow-lg">
+                <h3 className="mb-4 text-lg font-semibold">Confirm Follow Up Date</h3>
+                <p className="mb-6">
+                  This <strong>activity / transaction</strong> will only appear on the exact day on scheduled card it is set for.
+                  <i>This reminder appears only if the date matches today’s date or if you enable manual mode and manually set today’s date.</i>
+                </p>
+                <p className="mb-6 font-semibold">{followUpDate}</p>
+                <div className="flex justify-end gap-4">
+                  <Button onClick={handleCancelFollowUp}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleConfirmFollowUp}>OK</Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

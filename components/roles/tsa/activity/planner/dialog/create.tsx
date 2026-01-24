@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
 
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -28,6 +29,7 @@ interface Activity {
     contact_person: string;
     contact_number: string;
     email_address: string;
+    address: string;
     activity_reference_number: string;
     account_reference_number: string;
     ticket_reference_number: string;
@@ -432,6 +434,7 @@ export function CreateActivityDialog({
             contact_person,
             contact_number,
             email_address,
+            address,
             date_created: dateCreated,
             date_updated: new Date().toISOString(),
             status,
@@ -658,7 +661,6 @@ export function CreateActivityDialog({
         setSheetOpen(true);
     };
 
-
     return (
         <>
             <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
@@ -672,7 +674,7 @@ export function CreateActivityDialog({
                             setSheetOpen(true);
                         }}
                     >
-                        Create
+                      <Plus /> Create
                     </Button>
                 </SheetTrigger>
 
@@ -683,28 +685,11 @@ export function CreateActivityDialog({
                         <SheetDescription>
                             Fill out the steps to create a new activity.
                         </SheetDescription>
-
                         {startDate && (
-                            <div
-                                className="
-      fixed top-16 left-1/2 z-50
-      bg-gray-900 text-green-400
-      rounded-lg px-4 py-2
-      shadow-[0_0_10px_rgba(16,185,129,0.7)]
-      -translate-x-1/2
-      font-mono font-semibold
-      text-sm
-      select-none
-      flex items-center
-      space-x-1
-      cursor-default
-    "
-                            >
-                                <span>Started:</span>
+                            <div className="fixed bottom-20 right-100 z-50 bg-black/30 text-white rounded-full px-4 py-4 font-mono font-semibold text-lg select-none flex items-center space-x-2 cursor-default min-w-[120px] justify-center">
                                 <span className="tracking-wide">{elapsedTime}</span>
                             </div>
                         )}
-
                     </SheetHeader>
 
                     {loading ? (

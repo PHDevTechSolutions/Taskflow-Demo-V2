@@ -13,8 +13,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referenceid,            // agent
       tsm,                    // manager
       manager,
+      company_name,
+      contact_number,
+      contact_person,
+      email_address,
+      address,
       ticket_reference_number,
       status,
+      type_client,
       agent,
       activity_reference_number
     } = req.body;
@@ -38,8 +44,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referenceid,             // agent
       tsm,                     // manager
       manager,
+      company_name,
+      contact_number,
+      contact_person,
+      email_address,
+      address,
       ticket_reference_number,
       status,
+      type_client,
       agent,
       activity_reference_number
     });

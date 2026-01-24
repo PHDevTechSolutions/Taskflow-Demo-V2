@@ -2,14 +2,13 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2 } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 import { CreateActivityDialog } from "../dialog/create";
-import { DoneDialog } from "../dialog/done";
 import { CancelledDialog } from "../dialog/cancelled";
 
 import { type DateRange } from "react-day-picker";
@@ -17,16 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
-
-interface Company {
-  account_reference_number: string;
-  company_name: string;
-  contact_number?: string;
-  type_client?: string;
-  email_address?: string;
-  address?: string;
-  contact_person?: string;
-}
 
 interface Activity {
   id: string;
@@ -42,6 +31,13 @@ interface Activity {
   date_updated: string;
   scheduled_date: string;
   date_created: string;
+
+  company_name: string;
+  contact_number: string;
+  type_client: string;
+  email_address: string;
+  address: string;
+  contact_person: string;
 }
 
 interface HistoryItem {
@@ -58,6 +54,7 @@ interface HistoryItem {
   source?: string;
   call_status?: string;
   tsm_approved_status: string;
+  type_activity: string;
 }
 
 interface ScheduledProps {
@@ -87,7 +84,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
 }) => {
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
@@ -102,25 +98,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [dialogCancelledOpen, setDialogCancelledOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Fetch companies
-  useEffect(() => {
-    if (!referenceid) {
-      setCompanies([]);
-      return;
-    }
-    setLoadingCompanies(true);
-    setErrorCompanies(null);
-
-    fetch(`/api/com-fetch-companies`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch companies");
-        return res.json();
-      })
-      .then((data) => setCompanies(data.data || []))
-      .catch((err) => setErrorCompanies(err.message))
-      .finally(() => setLoadingCompanies(false));
-  }, [referenceid]);
+  const [cancellationRemarks, setCancellationRemarks] = useState("");
 
   // Fetch activities
   const fetchActivities = useCallback(async () => {
@@ -275,10 +253,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
     .filter((a) => !isDelivered(a.status))
     .map((activity) => {
-      const company = companies.find(
-        (c) => c.account_reference_number === activity.account_reference_number
-      );
-
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
       );
@@ -287,12 +261,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
       return {
         ...activity,
-        company_name: company?.company_name ?? "Unknown Company",
-        contact_number: company?.contact_number ?? "-",
-        type_client: company?.type_client ?? "",
-        email_address: company?.email_address ?? "",
-        contact_person: company?.contact_person ?? "",
-        address: company?.address ?? "",
         relatedHistoryItems,
         overdueDays,
       };
@@ -305,74 +273,43 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const term = searchTerm.toLowerCase();
 
-  const filteredActivities = mergedActivities.filter((item) => {
-    if (item.company_name?.toLowerCase().includes(term)) return true;
-    if (item.ticket_reference_number?.toLowerCase().includes(term)) return true;
-    if (
-      item.relatedHistoryItems.some((h) =>
-        h.quotation_number?.toLowerCase().includes(term)
-      )
-    )
-      return true;
+  const filteredActivities = mergedActivities
+    .filter((item) => {
+      const lowerTerm = term.toLowerCase();
 
-    if (
-      item.relatedHistoryItems.some((h) =>
-        h.so_number?.toLowerCase().includes(term)
-      )
-    )
-      return true;
+      if (item.company_name?.toLowerCase().includes(lowerTerm)) return true;
+      if (item.ticket_reference_number?.toLowerCase().includes(lowerTerm)) return true;
+      if (
+        item.relatedHistoryItems.some((h) =>
+          h.quotation_number?.toLowerCase().includes(lowerTerm)
+        )
+      ) return true;
 
-    return false;
-  });
+      if (
+        item.relatedHistoryItems.some((h) =>
+          h.so_number?.toLowerCase().includes(lowerTerm)
+        )
+      ) return true;
+
+      return false;
+    })
+    .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
 
   const isLoading = loadingCompanies || loadingActivities || loadingHistory;
   const error = errorCompanies || errorActivities || errorHistory;
-
-  const openDoneDialog = (id: string) => {
-    setSelectedActivityId(id);
-    setDialogOpen(true);
-  };
-
-  const handleConfirmDone = async () => {
-    if (!selectedActivityId) return;
-
-    try {
-      setUpdatingId(selectedActivityId);
-      setDialogOpen(false);
-
-      const res = await fetch("/api/act-update-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedActivityId }),
-        cache: "no-store",
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
-        setUpdatingId(null);
-        return;
-      }
-
-      await fetchActivities();
-
-      toast.success("Transaction marked as Done.");
-    } catch {
-      toast.error("An error occurred while updating status.");
-    } finally {
-      setUpdatingId(null);
-      setSelectedActivityId(null);
-    }
-  };
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
     setDialogOpen(true);
   };
 
-  const handleConfirmCancelled = async () => {
+  const handleConfirmCancelled = async (cancellationRemarks: string) => {
     if (!selectedActivityId) return;
+
+    if (!cancellationRemarks) {
+      toast.error("Cancellation remarks are required.");
+      return;
+    }
 
     try {
       setUpdatingId(selectedActivityId);
@@ -381,7 +318,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       const res = await fetch("/api/act-cancelled-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedActivityId }),
+        body: JSON.stringify({
+          id: selectedActivityId,
+          cancellation_remarks: cancellationRemarks,
+        }),
         cache: "no-store",
       });
 
@@ -395,7 +335,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
       await fetchActivities();
 
-      toast.success("Transaction marked as Done.");
+      toast.success("Transaction marked as Cancelled.");
     } catch {
       toast.error("An error occurred while updating status.");
     } finally {
@@ -403,6 +343,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       setSelectedActivityId(null);
     }
   };
+
+  type BadgeVariant = "secondary" | "outline" | "destructive" | "default" | null | undefined;
+
+  function getBadgeProps(status: string): { variant: BadgeVariant; className?: string } {
+    switch (status) {
+      case "Assisted":
+      case "On-Progress":
+        return { variant: "secondary", className: "bg-orange-500 text-white" };
+      case "SO-Done":
+        return { variant: "default", className: "bg-yellow-400 text-white" };
+      case "Quote-Done":
+        return { variant: "outline", className: "bg-blue-500 text-white" };
+      case "Cancelled":
+        return { variant: "destructive", className: "bg-red-600 text-white" };
+      default:
+        return { variant: "default" };
+    }
+  }
 
   if (isLoading) {
     return (
@@ -437,22 +395,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       </Alert>
     );
   }
-  type BadgeVariant = "secondary" | "outline" | "destructive" | "default" | null | undefined;
-  function getBadgeProps(status: string): { variant: BadgeVariant; className?: string } {
-    switch (status) {
-      case "Assisted":
-      case "On-Progress":
-        return { variant: "secondary", className: "bg-orange-500 text-white" };
-      case "SO-Done":
-        return { variant: "default", className: "bg-yellow-400 text-white" };
-      case "Quote-Done":
-        return { variant: "outline", className: "bg-blue-500 text-white" };
-      case "Cancelled":
-        return { variant: "destructive", className: "bg-red-600 text-white" };
-      default:
-        return { variant: "default" };
-    }
-  }
 
   return (
     <>
@@ -482,7 +424,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
               const badgeProps = getBadgeProps(item.status);
 
               return (
-                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2 border-gray-200">
+                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2">
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
                       <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
@@ -515,18 +457,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             fetchActivities();
                           }}
                         />
-                        <Button
-                          type="button"
-                          className="cursor-pointer"
-                          variant="secondary"
-                          disabled={updatingId === item.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDoneDialog(item.id);
-                          }}
-                        >
-                          {updatingId === item.id ? "Updating..." : "Done"}
-                        </Button>
 
                         <Button
                           type="button"
@@ -538,55 +468,60 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             openCancelledDialog(item.id);
                           }}
                         >
-                          {updatingId === item.id ? "Cancelling..." : "Cancelled"}
+                          <AlertCircle /> {updatingId === item.id ? "Cancelling..." : "Cancelled"}
                         </Button>
                       </div>
                     </div>
 
-                    <div className="ml-1 flex flex-wrap gap-1">
+                    <div className="ml-1 flex flex-wrap gap-1 uppercase">
                       {/* Status Badge */}
                       <Badge variant={badgeProps.variant} className={`font-mono ${badgeProps.className || ""}`}>
                         <CheckCircle2 />
-                        {item.status.replace("-", " ")} | {(() => {
-                          if (item.status === "SO-Done") return "Sales Order Preparation";
-                          if (item.status === "Quote-Done") return "Quotation Preparation";
-                          if (item.status === "Assisted") return "Outbound Calls";
-                          if (item.status === "Not Assisted") return "Outbound Calls";
-                          return item.status.replace("-", " ");
-                        })()}
+                        {item.status.replace("-", " ")}
                       </Badge>
+
+                      {item.relatedHistoryItems.some((h: HistoryItem) =>
+                        !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
+                      ) &&
+                        Array.from(
+                          new Set(
+                            item.relatedHistoryItems
+                              .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
+                              .filter((v) => v && v !== "-")
+                          )
+                        ).map((activity) => {
+                          const getIcon = (act: string) => {
+                            const lowerAct = act.toLowerCase();
+                            if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
+                              return <PhoneOutgoing />;
+                            }
+                            if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
+                              return <PackageCheck />;
+                            }
+                            if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
+                              return <ReceiptText />;
+                            }
+                            return <Activity />;
+                          };
+
+                          return (
+                            <Badge
+                              key={activity}
+                              variant="outline"
+                              className="flex items-center justify-center w-8 h-8 p-0"
+                              title={activity.toUpperCase()}
+                            >
+                              {getIcon(activity)}
+                            </Badge>
+                          );
+                        })
+                      }
+
                       {item.overdueDays > 0 && (
                         <Badge variant="destructive" className="font-mono">
                           <Clock /> OVERDUE: {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""}
                         </Badge>
                       )}
-                      {/* SO Number Badge — only if there's at least one valid SO number */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.so_number && h.so_number !== "-" && h.so_number.trim() !== ""
-                      ) && (
-                          <Badge variant="default" className="font-mono">
-                            <strong>SO:</strong>{" "}
-                            {item.relatedHistoryItems
-                              .map((h) => h.so_number ?? "")
-                              .filter((v) => v && v !== "-")
-                              .join(", ")
-                              .toUpperCase()}
-                          </Badge>
-                        )}
-
-                      {/* Quotation Number Badge — only if there's at least one valid Quotation number */}
-                      {item.relatedHistoryItems.some(
-                        (h) => h.quotation_number && h.quotation_number !== "-" && h.quotation_number.trim() !== ""
-                      ) && (
-                          <Badge variant="default" className="font-mono">
-                            <strong>Quotation Number:</strong>{" "}
-                            {item.relatedHistoryItems
-                              .map((h) => h.quotation_number ?? "")
-                              .filter((v) => v && v !== "-")
-                              .join(", ")
-                              .toUpperCase()}
-                          </Badge>
-                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) =>
@@ -594,9 +529,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           h.tsm_approved_status !== "-" &&
                           h.tsm_approved_status.trim() !== ""
                       ) && (
-                          <Badge className="font-mono bg-green-500">
-                            <strong>Feedback by TSM:</strong>{" "}
-                            {Array.from(
+                          <Badge className="font-mono bg-blue-900">
+                            <strong>TSM:</strong>{" "}
+                            <ThumbsUp /> {Array.from(
                               new Set(
                                 item.relatedHistoryItems
                                   .map((h) => h.tsm_approved_status?.trim() ?? "")
@@ -611,7 +546,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </div>
                   </div>
 
-                  <AccordionContent className="text-xs px-4 py-2">
+                  <AccordionContent className="text-xs px-4 py-2 uppercase">
                     <p>
                       <strong>Contact Number:</strong> {item.contact_number || "-"}
                     </p>
@@ -630,6 +565,40 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                   new Set(
                                     item.relatedHistoryItems
                                       .map((h) => h.ticket_reference_number ?? "-")
+                                      .filter((v) => v !== "-")
+                                  )
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
+
+                        {item.relatedHistoryItems.some(
+                          (h) => h.so_number && h.so_number !== "-"
+                        ) && (
+                            <p>
+                              <strong>Sales Order Number:</strong>{" "}
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.so_number ?? "-")
+                                      .filter((v) => v !== "-")
+                                  )
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
+
+                        {item.relatedHistoryItems.some(
+                          (h) => h.quotation_number && h.quotation_number !== "-"
+                        ) && (
+                            <p>
+                              <strong>Quotation Number:</strong>{" "}
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.quotation_number ?? "-")
                                       .filter((v) => v !== "-")
                                   )
                                 ).join(", ")}
@@ -766,22 +735,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       {new Date(item.date_created).toLocaleDateString()}
                     </p>
                   </AccordionContent>
-
-
-
                 </AccordionItem>
               );
             })
           )}
         </Accordion>
       </div>
-
-      <DoneDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onConfirm={handleConfirmDone}
-        loading={updatingId !== null}
-      />
 
       <CancelledDialog
         open={dialogOpen}

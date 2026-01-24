@@ -7,10 +7,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    let { id } = req.body;
+    let { id, cancellation_remarks } = req.body;
 
     if (!id) {
       return res.status(400).json({ error: "Missing ID" });
+    }
+
+    if (typeof cancellation_remarks !== "string" || cancellation_remarks.trim() === "") {
+      return res.status(400).json({ error: "Cancellation remarks are required" });
     }
 
     id = Number(id);
@@ -18,11 +22,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "ID must be a valid number" });
     }
 
-    // Update scheduled_status AND date_updated to current time
+    // Update status, cancellation_remarks, and date_updated to current time
     const { data, error } = await supabase
       .from("activity")
-      .update({ 
+      .update({
         status: "Cancelled",
+        cancellation_remarks: cancellation_remarks.trim(),
         date_updated: new Date().toISOString(),
       })
       .eq("id", id)

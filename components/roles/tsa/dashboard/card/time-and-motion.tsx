@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
+import { ListTree } from "lucide-react";
 
 // Firebase imports
 import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
@@ -500,7 +501,7 @@ export function TimemotionCard({
           className="cursor-pointer"
           onClick={() => setOpen(true)} // <-- open Sheet when clicked
         >
-          Show Breakdown
+        <ListTree />  Show Breakdown
         </Button>
       </CardFooter>
 

@@ -64,7 +64,7 @@ export function AgentMeetings({ agents, agentMeetingMap, formatDate }: Props) {
                       <img
                         src={agent.profilePicture || "/Taskflow.png"}
                         alt={`${agent.Firstname} ${agent.Lastname}`}
-                        className="h-10 w-10 rounded-xs object-cover border"
+                        className="h-10 w-10 rounded-sm object-cover border"
                       />
                       <span className="text-xs font-medium capitalize">
                         {agent.Firstname} {agent.Lastname}

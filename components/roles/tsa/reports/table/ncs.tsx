@@ -295,7 +295,7 @@ export const NCSTable: React.FC<NCSProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                                <TableHead className="text-xs">Quotation Amount</TableHead>
+                                <TableHead className="text-xs text-right">Quotation Amount</TableHead>
                                 <TableHead className="text-xs">Quotation Number</TableHead>
                                 <TableHead className="text-xs">Company Name</TableHead>
                                 <TableHead className="text-xs">Contact Person</TableHead>

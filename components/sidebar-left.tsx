@@ -75,7 +75,7 @@ const data = {
       pages: [
         { name: "Active", url: "/roles/tsa/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/roles/tsa/companies/remove", icon: Trash2 },
-        { name: "Group Affiliate", url: "/roles/tsa/companies/group", icon: Users },
+        { name: "Group / Industry", url: "/roles/tsa/companies/group", icon: Users },
 
         // TSM
         { name: "All", url: "/roles/tsm/companies/all", icon: BookOpen },
@@ -88,7 +88,7 @@ const data = {
         // Admin
         { name: "Active", url: "/roles/admin/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/roles/admin/companies/remove", icon: Trash2 },
-        { name: "Group Affiliate", url: "/roles/admin/companies/group", icon: Users },
+        { name: "Group / Industry", url: "/roles/admin/companies/group", icon: Users },
         { name: "Pending Transferred", url: "/roles/admin/companies/transfer", icon: BookOpen },
         { name: "Account Approval", url: "/roles/admin/companies/approval", icon: Trash2 },
       ],
