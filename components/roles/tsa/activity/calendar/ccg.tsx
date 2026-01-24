@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { TaskListDialog } from "@/components/activity-planner-tasklist-dialog";
+import { TaskListDialog } from "../tasklist/dialog/filter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface Company {

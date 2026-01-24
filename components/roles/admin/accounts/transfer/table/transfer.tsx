@@ -19,9 +19,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { AccountsActiveSearch } from "./accounts-active-search";
-import { AccountsAllFilter } from "./accounts-all-filter";
-import { AccountsApproveDialog } from "./accounts-transfer-approve-dialog";
+import { AccountsActiveSearch } from "../../../../tsa/accounts/active/search";
+import { AccountsAllFilter } from "../../../../tsa/accounts/approval/filter";
+import { AccountsApproveDialog } from "../../../../tsm/accounts/transfer/dialog/transfer-approve";
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
 

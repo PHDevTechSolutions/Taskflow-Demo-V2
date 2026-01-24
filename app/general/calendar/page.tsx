@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { type DateRange } from "react-day-picker";
 
 // 📌 Import Calendar here
-import { SimpleCalendar } from "@/components/calendar";
+import { SimpleCalendar } from "@/components/rightbar/calendar";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
