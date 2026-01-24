@@ -265,6 +265,10 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <>
       <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <div
+          className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] 
+                 bg-[size:24px_24px] z-10 pointer-events-none"
+        />
         <Card className="overflow-hidden p-0">
           <CardContent className="grid p-0 md:grid-cols-2">
             <form onSubmit={handleLoginSubmit} className="p-6 md:p-8">
@@ -313,14 +317,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     {loading ? "Signing in..." : "Login"}
                   </Button>
                 </Field>
-
-                <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                  Or continue with
-                </FieldSeparator>
-
-                <FieldDescription className="text-center">
-                  Don&apos;t have an account? <a href="#">Sign up</a>
-                </FieldDescription>
               </FieldGroup>
 
               <div className="text-xs space-y-2 mt-4 text-center">
@@ -338,7 +334,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   <Calendar size={16} />
                   For Site & Client Visit:{" "}
                   <Link
-                    href="https://acculog.vercel.app/Login"
+                    href="https://acculog-demo-navy.vercel.app/Login"
                     className="underline text-green-700 hover:text-green-800"
                   >
                     Acculog
@@ -360,9 +356,22 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         </Card>
 
         <FieldDescription className="px-6 text-center">
-          By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
-          and <a href="#">Privacy Policy</a>.
+          By clicking continue, you agree to our{" "}
+          <Link
+            href="/terms"
+            className="underline text-green-700 hover:text-green-800"
+          >
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            className="underline text-green-700 hover:text-green-800"
+          >
+            Privacy Policy
+          </Link>.
         </FieldDescription>
+
       </div>
 
       {/* ---------------- Wait Dialog ---------------- */}
