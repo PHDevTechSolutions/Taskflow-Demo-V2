@@ -7,16 +7,17 @@ import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { SalesTable } from "@/components/sales-table";
-
+// Table
+import { SalesTable } from "@/components/roles/tsa/sales-performance/table";
+// Date Range Picker
 import { type DateRange } from "react-day-picker";
-
+// Protected Page Wrapper
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface Account {

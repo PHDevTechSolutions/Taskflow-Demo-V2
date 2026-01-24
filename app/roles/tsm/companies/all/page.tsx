@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { AccountsTable } from "@/components/accounts-all-table";
+import { AccountsTable } from "@/components/roles/tsm/accounts/table/all";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";

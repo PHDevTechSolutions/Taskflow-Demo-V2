@@ -13,10 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { PendingTable } from "@/components/reports-pending-table";
+import { PendingTable } from "@/components/roles/tsa/reports/table/pending";
 
 import { type DateRange } from "react-day-picker";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface Account {

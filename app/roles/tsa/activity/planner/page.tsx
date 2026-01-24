@@ -12,17 +12,14 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/c
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button"
 import { toast } from "sonner";
 
-import { NewTask } from "@/components/activity-planner-newtask";
-import { Progress } from "@/components/activity-planner-progress";
-import { Scheduled } from "@/components/activity-planner-scheduled";
-import { Completed } from "@/components/activity-planner-completed";
+import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
+import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
+import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
+import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
 
 import { type DateRange } from "react-day-picker";
-import { Eye } from "lucide-react";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface Account {

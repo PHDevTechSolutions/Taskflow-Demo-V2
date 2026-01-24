@@ -13,10 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { ASTable } from "@/components/reports-tsm-accounts-table";
+import { ASTable } from "@/components/roles/tsm/reports/table/accounts";
 
 import { type DateRange } from "react-day-picker";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface Account {

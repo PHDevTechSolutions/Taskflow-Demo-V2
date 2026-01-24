@@ -13,10 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { CSRTable } from "@/components/reports-manager-csr-table";
+import { CSRTable } from "@/components/roles/manager/reports/table/csr";
 
 import { type DateRange } from "react-day-picker";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface Account {

@@ -31,10 +31,10 @@ import {
   ShieldIcon
 } from "lucide-react";
 
-import { NavFavorites } from "@/components/nav-favorites";
-import { NavSecondary } from "@/components/nav-secondary";
-import { NavWorkspaces } from "@/components/nav-workspaces";
-import { TeamSwitcher } from "@/components/team-switcher";
+import { NavFavorites } from "@/components/nav/favorites";
+import { NavSecondary } from "@/components/nav/secondary";
+import { NavWorkspaces } from "@/components/nav/workspaces";
+import { TeamSwitcher } from "@/components/nav/team-switcher";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
 
 const data = {

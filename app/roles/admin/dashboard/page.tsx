@@ -19,7 +19,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { toast } from "sonner";
 import { type DateRange } from "react-day-picker";
 
-import { AgentList } from "@/components/admin-list";
+import { AgentList } from "@/components/roles/admin/dashboard/list";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 

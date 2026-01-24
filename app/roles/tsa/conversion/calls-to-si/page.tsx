@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { CallSI } from "@/components/conv-calls-to-si-table";
+import { CallSI } from "@/components/roles/tsa/conversion/table/calls-to-si";
 
 import { type DateRange } from "react-day-picker";
 

@@ -1,15 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { DatePicker } from "@/components/date-picker";
-import { NavUser } from "@/components/nav-user";
+import { DatePicker } from "@/components/rightbar/date-picker";
+import { NavUser } from "@/components/nav/user";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarSeparator, } from "@/components/ui/sidebar";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { useFormat } from "@/contexts/FormatContext";
 import { type DateRange } from "react-day-picker";
 
-import { Meeting } from "@/components/activity-planner-meeting";
-import { TimeLogComponent } from "@/components/activity-planner-timelog";
+import { Meeting } from "@/components/roles/tsa/activity/meeting/meeting";
+import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
   userId?: string;

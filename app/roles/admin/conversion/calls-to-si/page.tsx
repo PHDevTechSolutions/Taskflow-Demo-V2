@@ -13,10 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
-import { CallSI } from "@/components/conv-calls-to-si-table-admin";
+import { CallSI } from "@/components/roles/admin/conversion/calls-to-si";
 
 import { type DateRange } from "react-day-picker";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface UserDetails {

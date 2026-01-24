@@ -6,35 +6,28 @@ import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
+import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
-import { AccountCard } from "@/components/dashboard-accounts-card";
-import { OutboundTouchbaseCard } from "@/components/dashboard-outbound-touchbase-card";
-
-// Assuming you will create these two cards as components
-import { TimemotionCard } from "@/components/dashboard-timemotion";
-import { ActivityCard } from "@/components/dashboard-activity-card";
-
-import { SourceCard } from "@/components/dashboard-source-card";
-import { CSRMetricsCard } from "@/components/dashboard-csr-metrics-card";
-import { OutboundCard } from "@/components/dashboard-outbound-card";
-import { QuotationCard } from "@/components/dashboard-quotation-card";
-import { SOCard } from "@/components/dashboard-so-card";
-import { SiteVisitCard } from "@/components/dashboard-site-visit-card";
+// Cards
+import { AccountCard } from "@/components/roles/tsa/dashboard/card/accounts";
+import { OutboundTouchbaseCard } from "@/components/roles/tsa/dashboard/card/outbound-touchbase";
+import { TimemotionCard } from "@/components/roles/tsa/dashboard/card/time-and-motion";
+import { ActivityCard } from "@/components/roles/tsa/dashboard/card/other-activities";
+// Charts
+import { SourceCard } from "@/components/roles/tsa/dashboard/chart/source";
+import { CSRMetricsCard } from "@/components/roles/tsa/dashboard/chart/csr";
+// Lists
+import { OutboundCard } from "@/components/roles/tsa/dashboard/list/outbound";
+import { QuotationCard } from "@/components/roles/tsa/dashboard/list/quotation";
+import { SOCard } from "@/components/roles/tsa/dashboard/list/so";
+// Maps
+import { SiteVisitCard } from "@/components/roles/tsa/dashboard/maps/site-visit";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface UserDetails {

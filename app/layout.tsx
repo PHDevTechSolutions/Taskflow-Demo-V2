@@ -7,15 +7,16 @@ import { UserProvider } from "@/contexts/UserContext";
 import { Analytics } from "@vercel/analytics/next"
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Reminders } from "@/components/reminders";
-import { TransferAlertDialog } from "@/components/popup-transfer";
-import { ApproveDeletionDialog } from "@/components/popup-deletion";
-import { ApproveTransferDialog } from "@/components/popup-approval-transferred";
-import { RemoveDeletionDialog } from "@/components/popup-approval-deletion";
-import { TicketEndorsed } from "@/components/popup-ticket-endorsed";
-import { ActivityToday } from "@/components/popup-activity-today";
-import { FollowUpToday } from "@/components/popup-follow-up-today";
-import { OfflineDialog } from "@/components/offline-dialog";
+// Popups
+import { Reminders } from "@/components/popup/reminders";
+import { TransferAlertDialog } from "@/components/popup/transfer";
+import { ApproveDeletionDialog } from "@/components/popup/deletion";
+import { ApproveTransferDialog } from "@/components/popup/approval-transferred";
+import { RemoveDeletionDialog } from "@/components/popup/approval-deletion";
+import { TicketEndorsed } from "@/components/popup/ticket-endorsed";
+import { ActivityToday } from "@/components/popup/activity-today";
+import { FollowUpToday } from "@/components/popup/followup-today";
+import { OfflineDialog } from "@/components/popup/offline";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
