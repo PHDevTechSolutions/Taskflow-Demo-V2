@@ -1,8 +1,10 @@
-"use client";
-
 import React, { Suspense } from "react";
+import dynamic from "next/dynamic";
 import ProfileClient from "@/components/general/edit";
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
+const ProtectedPageWrapper = dynamic(() => import("@/components/protected-page-wrapper"), {
+  ssr: false,
+});
 
 export default function ProfilePage() {
   return (
