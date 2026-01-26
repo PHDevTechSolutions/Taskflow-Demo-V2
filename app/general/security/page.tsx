@@ -93,154 +93,154 @@ function SettingsContent() {
 
     return (
         <>
-            <SidebarLeft />
-            <SidebarInset>
-                {/* Header */}
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="text-base font-semibold">Settings</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset>
+                    {/* Header */}
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="text-base font-semibold">Settings</BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
+                    </header>
 
-                {/* Main Content */}
-                <div className="flex-1 flex flex-col gap-4 p-4 w-full">
-                    <Card className="border border-muted shadow-sm w-full">
-                        <CardHeader>
-                            <CardTitle className="text-lg font-semibold">Security Alerts</CardTitle>
-                            <CardDescription className="text-sm text-gray-500">
-                                List of recent security alerts including email, IP address, device, and message details.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="overflow-x-auto w-full">
-                            {loadingUser ? (
-                                <p className="text-center text-muted-foreground">Loading user data...</p>
-                            ) : (
-                                <>
-                                    <table className="w-full border-collapse text-sm">
-                                        <thead>
-                                            <tr className="border-b">
-                                                <th className="p-2 text-left">Email</th>
-                                                <th className="p-2 text-left">Device ID</th>
-                                                <th className="p-2 text-left">Device Type</th>
-                                                <th className="p-2 text-left">Message</th>
-                                                <th className="p-2 text-left">Timestamp</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {paginatedAlerts.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={6} className="p-2 text-center text-muted-foreground">
-                                                        No security alerts for your account
-                                                    </td>
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col gap-4 p-4 w-full">
+                        <Card className="border border-muted shadow-sm w-full">
+                            <CardHeader>
+                                <CardTitle className="text-lg font-semibold">Security Alerts</CardTitle>
+                                <CardDescription className="text-sm text-gray-500">
+                                    List of recent security alerts including email, IP address, device, and message details.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="overflow-x-auto w-full">
+                                {loadingUser ? (
+                                    <p className="text-center text-muted-foreground">Loading user data...</p>
+                                ) : (
+                                    <>
+                                        <table className="w-full border-collapse text-sm">
+                                            <thead>
+                                                <tr className="border-b">
+                                                    <th className="p-2 text-left">Email</th>
+                                                    <th className="p-2 text-left">Device ID</th>
+                                                    <th className="p-2 text-left">Device Type</th>
+                                                    <th className="p-2 text-left">Message</th>
+                                                    <th className="p-2 text-left">Timestamp</th>
                                                 </tr>
-                                            ) : (
-                                                paginatedAlerts.map((alert, idx) => {
-                                                    // Identify device type
-                                                    const parser = new UAParser(alert.userAgent);
-                                                    const deviceType = parser.getDevice().type || "desktop"; // fallback
+                                            </thead>
+                                            <tbody>
+                                                {paginatedAlerts.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="p-2 text-center text-muted-foreground">
+                                                            No security alerts for your account
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    paginatedAlerts.map((alert, idx) => {
+                                                        // Identify device type
+                                                        const parser = new UAParser(alert.userAgent);
+                                                        const deviceType = parser.getDevice().type || "desktop"; // fallback
 
-                                                    let DeviceIcon;
-                                                    switch (deviceType) {
-                                                        case "mobile":
-                                                            DeviceIcon = Smartphone;
-                                                            break;
-                                                        case "tablet":
-                                                            DeviceIcon = Laptop; // optional: could use Tablet icon if available
-                                                            break;
-                                                        case "desktop":
-                                                        default:
-                                                            DeviceIcon = Monitor;
-                                                    }
+                                                        let DeviceIcon;
+                                                        switch (deviceType) {
+                                                            case "mobile":
+                                                                DeviceIcon = Smartphone;
+                                                                break;
+                                                            case "tablet":
+                                                                DeviceIcon = Laptop; // optional: could use Tablet icon if available
+                                                                break;
+                                                            case "desktop":
+                                                            default:
+                                                                DeviceIcon = Monitor;
+                                                        }
 
-                                                    return (
-                                                        <tr key={idx} className="border-b last:border-b-0">
-                                                            <td className="p-2 flex items-center gap-2">
-                                                                <AlertCircle className="w-4 h-4 text-red-500" />
-                                                                Email: {alert.Email}
-                                                            </td>
-                                                            <td className="p-2 flex items-center gap-2">
-                                                                <Globe className="w-4 h-4 text-blue-500" />
-                                                                IP Address: {alert.ipAddress}
-                                                            </td>
-                                                            <td className="p-2">{alert.deviceId}</td>
-                                                            <td className="p-2 flex items-center gap-2 uppercase">
-                                                                <DeviceIcon className="w-4 h-4 text-green-500" />
-                                                                {deviceType}
-                                                            </td>
-                                                            <td className="p-2">{alert.message}</td>
-                                                            <td className="p-2">{new Date(alert.timestamp).toLocaleString()}</td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
-                                        </tbody>
-                                    </table>
+                                                        return (
+                                                            <tr key={idx} className="border-b last:border-b-0">
+                                                                <td className="p-2 flex items-center gap-2">
+                                                                    <AlertCircle className="w-4 h-4 text-red-500" />
+                                                                    Email: {alert.Email}
+                                                                </td>
+                                                                <td className="p-2 flex items-center gap-2">
+                                                                    <Globe className="w-4 h-4 text-blue-500" />
+                                                                    IP Address: {alert.ipAddress}
+                                                                </td>
+                                                                <td className="p-2">{alert.deviceId}</td>
+                                                                <td className="p-2 flex items-center gap-2 uppercase">
+                                                                    <DeviceIcon className="w-4 h-4 text-green-500" />
+                                                                    {deviceType}
+                                                                </td>
+                                                                <td className="p-2">{alert.message}</td>
+                                                                <td className="p-2">{new Date(alert.timestamp).toLocaleString()}</td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
 
-                                    {/* Pagination Controls */}
-                                    {totalPages > 1 && (
-                                        <div className="flex justify-center mt-4 gap-2">
-                                            <button
-                                                className="px-3 py-1 border rounded disabled:opacity-50"
-                                                disabled={currentPage === 1}
-                                                onClick={() => setCurrentPage((p) => p - 1)}
-                                            >
-                                                Prev
-                                            </button>
-                                            {[...Array(totalPages)].map((_, idx) => (
+                                        {/* Pagination Controls */}
+                                        {totalPages > 1 && (
+                                            <div className="flex justify-center mt-4 gap-2">
                                                 <button
-                                                    key={idx}
-                                                    className={`px-3 py-1 border rounded ${currentPage === idx + 1 ? "bg-primary text-white" : ""
-                                                        }`}
-                                                    onClick={() => setCurrentPage(idx + 1)}
+                                                    className="px-3 py-1 border rounded disabled:opacity-50"
+                                                    disabled={currentPage === 1}
+                                                    onClick={() => setCurrentPage((p) => p - 1)}
                                                 >
-                                                    {idx + 1}
+                                                    Prev
                                                 </button>
-                                            ))}
-                                            <button
-                                                className="px-3 py-1 border rounded disabled:opacity-50"
-                                                disabled={currentPage === totalPages}
-                                                onClick={() => setCurrentPage((p) => p + 1)}
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-            </SidebarInset>
+                                                {[...Array(totalPages)].map((_, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        className={`px-3 py-1 border rounded ${currentPage === idx + 1 ? "bg-primary text-white" : ""
+                                                            }`}
+                                                        onClick={() => setCurrentPage(idx + 1)}
+                                                    >
+                                                        {idx + 1}
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    className="px-3 py-1 border rounded disabled:opacity-50"
+                                                    disabled={currentPage === totalPages}
+                                                    onClick={() => setCurrentPage((p) => p + 1)}
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </SidebarInset>
 
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+                <SidebarRight
+                    userId={userId ?? undefined}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function SettingsPage() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <SettingsContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <SettingsContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }
