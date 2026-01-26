@@ -638,7 +638,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
                           {account.next_available_date && (
                             <Badge className="bg-green-600">
-                              <CalendarCheck2 /> Today {new Date(account.next_available_date).toLocaleDateString("en-CA")}
+                              <CalendarCheck2 /> Scheduled {new Date(account.next_available_date).toLocaleDateString("en-CA")}
                             </Badge>
                           )}
                         </AccordionTrigger>
@@ -703,7 +703,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                             <AccordionItem
                               key={account.id}
                               value={account.id}
-                              className="bg-green-100 border border-green-300 rounded mb-2 uppercase"
+                              className="border border-green-300 rounded-sm mb-2 uppercase"
                             >
                               <div className="flex justify-between items-center p-2 select-none">
                                 <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
@@ -713,7 +713,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                 <div className="flex gap-2 ml-4">
                                   <Button
                                     type="button"
-                                    variant="outline"
                                     className="cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -726,12 +725,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                       }
                                     }}
                                   >
-                                    Add
+                                   <Plus /> Add
                                   </Button>
                                 </div>
                               </div>
 
-                              <AccordionContent className="flex flex-col gap-2 p-3 text-xs text-green-800">
+                              <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
                                 <p>
                                   <strong>Contact:</strong> {account.contact_number}
                                 </p>
@@ -772,7 +771,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                     </AlertDescription>
                   </Alert>
 
-                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200 uppercase">
+                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200 uppercase">
                     {groupedNull[firstAvailableCluster].map((account) => (
                       <AccordionItem key={account.id} value={account.id}>
                         <div className="flex justify-between items-center p-2 select-none">
@@ -783,7 +782,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           <div className="flex gap-2 ml-4">
                             <Button
                               type="button"
-                              variant="outline"
                               className="cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -796,7 +794,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                 }
                               }}
                             >
-                              Add
+                            <Plus /> Add
                             </Button>
                           </div>
                         </div>
