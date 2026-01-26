@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { CheckCircle2Icon, AlertCircleIcon, Plus, TicketIcon } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Plus, TicketIcon, CalendarCheck2 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
+import { Badge } from "@/components/ui/badge"
 import { AccountDialog } from "../dialog/active";
 
 interface Account {
@@ -147,7 +148,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       let newDate: Date;
 
       if (account.type_client.toLowerCase() === "top 50") {
-        newDate = new Date(now.setDate(now.getDate() + 15));
+        newDate = new Date(now.setDate(now.getDate() + 14));
       } else {
         newDate = new Date(now.setMonth(now.getMonth() + 1));
       }
@@ -538,10 +539,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           openConfirmUseTicket(ticket);
                         }}
                       >
-                       <TicketIcon /> Use Ticket
+                        <TicketIcon /> Use Ticket
                       </Button>
                     </div>
-                    
+
                     <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
                       <p>
                         <strong>Contact Person:</strong> {ticket.contact_person}
@@ -615,12 +616,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
               className="shrink-0 cursor-pointer"
               onClick={() => setIsCreateDialogOpen(true)}
             >
-             <Plus /> Add
+              <Plus /> Add
             </Button>
           </div>
 
           {/* Show results based on search or grouped */}
-
           {searchTerm.trim() ? (
             <section>
               <h2 className="text-xs font-bold mb-4">
@@ -629,14 +629,19 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
-                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200">
+                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200 uppercase">
                   {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
-                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
-                          {account.company_name}
-                        </AccordionTrigger>
+                        <AccordionTrigger className="flex flex-1 items-center justify-between text-xs font-semibold font-mono">
+                          <span>{account.company_name}</span>
 
+                          {account.next_available_date && (
+                            <Badge className="bg-green-600">
+                              <CalendarCheck2 /> Today {new Date(account.next_available_date).toLocaleDateString("en-CA")}
+                            </Badge>
+                          )}
+                        </AccordionTrigger>
                         <div className="flex gap-2 ml-4">
                           <Button
                             type="button"
@@ -698,7 +703,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                             <AccordionItem
                               key={account.id}
                               value={account.id}
-                              className="bg-green-100 border border-green-300 rounded mb-2"
+                              className="bg-green-100 border border-green-300 rounded mb-2 uppercase"
                             >
                               <div className="flex justify-between items-center p-2 select-none">
                                 <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
@@ -767,7 +772,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                     </AlertDescription>
                   </Alert>
 
-                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200">
+                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 bg-blue-100 border-blue-200 uppercase">
                     {groupedNull[firstAvailableCluster].map((account) => (
                       <AccordionItem key={account.id} value={account.id}>
                         <div className="flex justify-between items-center p-2 select-none">

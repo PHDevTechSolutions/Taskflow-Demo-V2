@@ -731,8 +731,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     )}
 
                     <p>
-                      <strong>Date Created:</strong>{" "}
-                      {new Date(item.date_created).toLocaleDateString()}
+                      <strong>Date Scheduled:</strong>{" "}
+                      {new Date(item.scheduled_date).toLocaleDateString()}
                     </p>
                   </AccordionContent>
                 </AccordionItem>
