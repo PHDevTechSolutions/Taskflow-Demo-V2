@@ -15,6 +15,7 @@ interface Activity {
   start_date?: string;
   end_date?: string;
   activity_reference_number?: string;
+  type_client: string;
 }
 
 interface CSRMetricsCardProps {
@@ -37,11 +38,10 @@ function diffHours(start?: string, end?: string) {
 }
 
 function formatDuration(hours: number) {
-  const totalSeconds = Math.floor(hours * 3600);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return `${h}h ${m}m ${s}s`;
+  const totalMinutes = Math.floor(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}h ${m}m`;
 }
 
 const chartConfig = {
@@ -87,7 +87,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
   const [showTooltipFor, setShowTooltipFor] = useState<MetricKey | null>(null);
 
   const csrActivities = useMemo(
-    () => activities.filter((a) => a.source === "CSR Inquiry"),
+    () => activities.filter((a) => a.type_client === "CSR Client"),
     [activities]
   );
 
@@ -179,9 +179,8 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
           {METRICS.map((key) => (
             <div
               key={key}
-              className={`relative rounded-lg border p-3 ${
-                activeMetric === key ? "bg-blue-200" : "opacity-70"
-              }`}
+              className={`relative rounded-lg border p-3 ${activeMetric === key ? "bg-blue-200" : "opacity-70"
+                }`}
             >
               <div className="flex justify-between items-start relative">
                 <div className="font-medium">{chartConfig[key].label}</div>
