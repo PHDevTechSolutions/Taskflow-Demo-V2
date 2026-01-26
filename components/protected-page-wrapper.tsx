@@ -61,7 +61,7 @@ export default function ProtectedPageWrapper({ children }: { children: React.Rea
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen text-sm text-gray-600">
-        Checking authentication...
+        
       </div>
     );
   }
