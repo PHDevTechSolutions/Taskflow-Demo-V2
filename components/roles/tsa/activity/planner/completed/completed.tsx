@@ -252,7 +252,7 @@ export const Completed: React.FC<CompletedProps> = ({
       />
 
       <div className="mb-2 text-xs font-bold">
-        Total Completed Activities: {filteredData.length}
+        Total Completed Activities: {deliveredData.length}
       </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
