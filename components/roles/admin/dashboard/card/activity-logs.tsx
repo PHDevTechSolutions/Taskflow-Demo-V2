@@ -108,15 +108,6 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
           </div>
         )}
 
-        {tsmAgents.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase">
-              Territory Sales Managers
-            </h4>
-            {renderAgentsGrid(tsmAgents)}
-          </div>
-        )}
-
         {managerAgents.length > 0 && (
           <div className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">

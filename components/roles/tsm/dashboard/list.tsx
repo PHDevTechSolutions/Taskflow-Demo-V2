@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 import { AgentCard } from "@/components/roles/tsm/dashboard/card/agent-list";
 import { AgentActivityLogs } from "@/components/roles/tsm/dashboard/card/activity-logs";
@@ -51,6 +53,12 @@ interface AgentMeeting {
     date_created?: string | null;
 }
 
+interface ScheduledCompany {
+    company_name: string;
+    // add other fields if you have any
+}
+
+
 interface Props {
     referenceid: string;
     dateCreatedFilterRange: any;
@@ -68,6 +76,12 @@ export function AgentList({
 
     const [agents, setAgents] = useState<Agent[]>([]);
     const [selectedAgent, setSelectedAgent] = useState<string>("all");
+    const [count, setCount] = useState<number | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [todayNextAvailableCount, setTodayNextAvailableCount] = useState<number>(0);
+    const [scheduledCompanies, setScheduledCompanies] = useState<ScheduledCompany[]>([]);
+    const [loadingScheduled, setLoadingScheduled] = useState(false);
 
     type AgentActivity = {
         latestLogin: string | null;
@@ -304,6 +318,57 @@ export function AgentList({
         return () => unsubscribes.forEach(u => u());
     }, [selectedAgent, agents]);
 
+    useEffect(() => {
+        // kapag ALL agents, walang count
+        if (selectedAgent === "all") {
+            setCount(null);
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        fetch(`/api/count-database?referenceid=${encodeURIComponent(selectedAgent)}`)
+            .then(async (res) => {
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || "Failed to fetch count");
+                }
+                return res.json();
+            })
+            .then((data) => {
+                setCount(data.count);
+            })
+            .catch((err) => {
+                setError(err.message);
+                setCount(null);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }, [selectedAgent]);
+
+    useEffect(() => {
+        if (selectedAgent === "all") {
+            setTodayNextAvailableCount(0);
+            setScheduledCompanies([]);
+            return;
+        }
+
+        setLoadingScheduled(true);
+        fetch(`/api/count-scheduled?referenceid=${encodeURIComponent(selectedAgent)}`)
+            .then(res => res.json())
+            .then(data => {
+                setTodayNextAvailableCount(data.count ?? 0);
+                // If your API returns the list too, set it here
+                setScheduledCompanies(data.companies ?? []);
+            })
+            .catch(() => {
+                setTodayNextAvailableCount(0);
+                setScheduledCompanies([]);
+            })
+            .finally(() => setLoadingScheduled(false));
+    }, [selectedAgent]);
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
@@ -366,11 +431,76 @@ export function AgentList({
                         )}
 
                         {selectedAgent == "all" && (
-                        <AgentMeetings
-                            agents={agents}
-                            agentMeetingMap={agentMeetingMap}
-                            formatDate={formatDate} // if you use formatDate inside the component
-                        />
+                            <AgentMeetings
+                                agents={agents}
+                                agentMeetingMap={agentMeetingMap}
+                                formatDate={formatDate} // if you use formatDate inside the component
+                            />
+                        )}
+
+                        {selectedAgent !== "all" && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* CARD 1 – TOTAL DATABASE */}
+                                <div className="p-4 rounded-lg border shadow-sm bg-white">
+                                    <h2 className="text-lg font-semibold mb-2">
+                                        Total Database
+                                    </h2>
+
+                                    {loading && <p>Loading...</p>}
+                                    {error && <p className="text-red-500">Error: {error}</p>}
+                                    {count !== null && !loading && !error && (
+                                        <p className="text-2xl font-bold">
+                                            {count.toLocaleString()}
+                                        </p>
+                                    )}
+
+                                    {!referenceid && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Select an agent to see companies count.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* CARD 2 – NEXT AVAILABLE TODAY */}
+                                <div className="p-4 rounded-lg border shadow-sm bg-white">
+                                    <h2 className="text-lg font-semibold mb-2">OB Calls – Scheduled Accounts For Today</h2>
+
+                                    <p className="text-2xl font-bold mb-3">{todayNextAvailableCount.toLocaleString()}</p>
+
+                                    <Sheet>
+                                        <SheetTrigger asChild>
+                                            <Button size="sm" disabled={loadingScheduled}>
+                                                View Accounts
+                                            </Button>
+                                        </SheetTrigger>
+
+                                        <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
+                                            <SheetHeader>
+                                                <SheetTitle>Scheduled Accounts Today</SheetTitle>
+                                            </SheetHeader>
+
+                                            {/* Card container with fixed max height and scroll */}
+                                            <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
+                                                {loadingScheduled && (
+                                                    <p className="text-sm text-muted-foreground">Loading...</p>
+                                                )}
+
+                                                {!loadingScheduled && scheduledCompanies.length === 0 && (
+                                                    <p className="text-sm text-muted-foreground">No scheduled accounts for today.</p>
+                                                )}
+
+                                                {!loadingScheduled &&
+                                                    scheduledCompanies.map((company, idx) => (
+                                                        <div key={idx}>
+                                                            {company.company_name}
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </SheetContent>
+                                    </Sheet>
+
+                                </div>
+                            </div>
                         )}
 
                         <OutboundCallsTableCard
