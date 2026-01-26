@@ -194,111 +194,111 @@ function DashboardContent() {
 
     return (
         <>
-            <SidebarLeft />
-            <SidebarInset className="overflow-hidden">
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">Activity Planners</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset className="overflow-hidden">
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="line-clamp-1">Activity Planners</BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
+                    </header>
 
-                <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                    <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>New Task</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <NewTask
-                                    referenceid={userDetails.referenceid}
-                                    userDetails={userDetails}
-                                    onSaveAccountAction={handleSaveAccount}
-                                    onRefreshAccountsAction={refreshAccounts} />
-                            </CardContent>
-                        </Card>
+                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+                        <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>New Task</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <NewTask
+                                        referenceid={userDetails.referenceid}
+                                        userDetails={userDetails}
+                                        onSaveAccountAction={handleSaveAccount}
+                                        onRefreshAccountsAction={refreshAccounts} />
+                                </CardContent>
+                            </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>In Progress</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <Progress
-                                    referenceid={userDetails.referenceid}
-                                    firstname={userDetails.firstname}
-                                    lastname={userDetails.lastname}
-                                    email={userDetails.email}
-                                    contact={userDetails.contact}
-                                    tsmname={userDetails.tsmname}
-                                    managername={userDetails.managername}
-                                    target_quota={userDetails.target_quota}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
-                            </CardContent>
-                        </Card>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>In Progress</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <Progress
+                                        referenceid={userDetails.referenceid}
+                                        firstname={userDetails.firstname}
+                                        lastname={userDetails.lastname}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        tsmname={userDetails.tsmname}
+                                        managername={userDetails.managername}
+                                        target_quota={userDetails.target_quota}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                </CardContent>
+                            </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Scheduled</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <Scheduled
-                                    referenceid={userDetails.referenceid}
-                                    firstname={userDetails.firstname}
-                                    lastname={userDetails.lastname}
-                                    email={userDetails.email}
-                                    contact={userDetails.contact}
-                                    tsmname={userDetails.tsmname}
-                                    managername={userDetails.managername}
-                                    target_quota={userDetails.target_quota}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
-                            </CardContent>
-                        </Card>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Scheduled</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <Scheduled
+                                        referenceid={userDetails.referenceid}
+                                        firstname={userDetails.firstname}
+                                        lastname={userDetails.lastname}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        tsmname={userDetails.tsmname}
+                                        managername={userDetails.managername}
+                                        target_quota={userDetails.target_quota}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                </CardContent>
+                            </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Completed</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <Completed
-                                    referenceid={userDetails.referenceid}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
-                            </CardContent>
-                        </Card>
-                    </div>
-                </main>
-            </SidebarInset>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Completed</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <Completed
+                                        referenceid={userDetails.referenceid}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </main>
+                </SidebarInset>
 
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+                <SidebarRight
+                    userId={userId ?? undefined}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function Page() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <DashboardContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }

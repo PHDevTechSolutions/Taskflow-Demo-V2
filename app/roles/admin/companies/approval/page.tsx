@@ -186,85 +186,84 @@ function DashboardContent() {
 
     return (
         <>
-            <SidebarLeft />
-
-            <SidebarInset className="overflow-hidden">
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">
-                                        Customer Database - Approval for Deletion
-                                    </BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
-
-                <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                    {loadingUser ? (
-                        <div className="flex items-center space-x-4">
-                            <Skeleton className="h-12 w-12 rounded-full" />
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-[250px]" />
-                                <Skeleton className="h-4 w-[200px]" />
-                            </div>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset className="overflow-hidden">
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="line-clamp-1">
+                                            Customer Database - Approval for Deletion
+                                        </BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
                         </div>
+                    </header>
 
-                    ) : loadingAccounts ? (
-                        <div className="flex items-center space-x-4">
-                            <Skeleton className="h-12 w-12 rounded-full" />
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-[250px]" />
-                                <Skeleton className="h-4 w-[200px]" />
+                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+                        {loadingUser ? (
+                            <div className="flex items-center space-x-4">
+                                <Skeleton className="h-12 w-12 rounded-full" />
+                                <div className="space-y-2">
+                                    <Skeleton className="h-4 w-[250px]" />
+                                    <Skeleton className="h-4 w-[200px]" />
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <>
-                            {error && (
-                                <Alert variant="destructive">
-                                    <AlertCircleIcon />
-                                    <AlertTitle>{error}</AlertTitle>
-                                </Alert>
-                            )}
 
-                            <AccountsTable
-                                posts={filteredData}
-                                dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                userDetails={userDetails}
-                                onRefreshAccountsAction={refreshAccounts}
-                            />
-                        </>
-                    )}
-                </main>
-            </SidebarInset>
+                        ) : loadingAccounts ? (
+                            <div className="flex items-center space-x-4">
+                                <Skeleton className="h-12 w-12 rounded-full" />
+                                <div className="space-y-2">
+                                    <Skeleton className="h-4 w-[250px]" />
+                                    <Skeleton className="h-4 w-[200px]" />
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {error && (
+                                    <Alert variant="destructive">
+                                        <AlertCircleIcon />
+                                        <AlertTitle>{error}</AlertTitle>
+                                    </Alert>
+                                )}
 
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+                                <AccountsTable
+                                    posts={filteredData}
+                                    dateCreatedFilterRange={dateCreatedFilterRange}
+                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                    userDetails={userDetails}
+                                    onRefreshAccountsAction={refreshAccounts}
+                                />
+                            </>
+                        )}
+                    </main>
+                </SidebarInset>
+
+                <SidebarRight
+                    userId={userId ?? undefined}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function Page() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <DashboardContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }

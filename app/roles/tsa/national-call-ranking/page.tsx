@@ -92,52 +92,52 @@ function DashboardContent() {
 
     return (
         <>
-            <SidebarLeft />
-            <SidebarInset className="overflow-hidden">
-                <div
-                    className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
-                />
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">National Call Ranking</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset className="overflow-hidden">
+                    <div
+                        className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
+                    />
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="line-clamp-1">National Call Ranking</BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
+                    </header>
 
-                <NationalRanking
+                    <NationalRanking
+                        dateCreatedFilterRange={dateCreatedFilterRange}
+                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                    />
+                </SidebarInset>
+
+                <SidebarRight
+                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />
-            </SidebarInset>
-
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function Page() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <DashboardContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }

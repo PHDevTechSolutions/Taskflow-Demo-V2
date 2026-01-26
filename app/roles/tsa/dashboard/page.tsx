@@ -172,120 +172,120 @@ function DashboardContent() {
 
   return (
     <>
-      <SidebarLeft />
-      <SidebarInset>
-        <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 z-[50]">
-          <div className="flex flex-1 items-center gap-2 px-3">
-            <SidebarTrigger />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">Dashboard</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+      <ProtectedPageWrapper>
+        <SidebarLeft />
+        <SidebarInset>
+          <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 z-[50]">
+            <div className="flex flex-1 items-center gap-2 px-3">
+              <SidebarTrigger />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="line-clamp-1">Dashboard</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          <div className="flex flex-col gap-4 p-4">
+            {/* Cards container: 4 cards in a row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div
+                className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
+              />
+
+              <AccountCard referenceid={userDetails.referenceid} />
+
+              <OutboundTouchbaseCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+              />
+
+              <TimemotionCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+                referenceid={userDetails.referenceid}
+                dateRange={dateCreatedFilterRange}
+              />
+
+              <ActivityCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+              />
+            </div>
+
+            {/* New: Two large cards side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Large Card 1 */}
+              <SourceCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+              />
+
+              <CSRMetricsCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+              />
+
+              <OutboundCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+                dateRange={dateCreatedFilterRange}
+              />
+
+              <QuotationCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+                dateRange={dateCreatedFilterRange}
+              />
+
+              <SOCard
+                activities={filteredActivities}
+                loading={loadingActivities}
+                error={errorActivities}
+                dateRange={dateCreatedFilterRange}
+              />
+
+              <SiteVisitCard
+                referenceid={userDetails.referenceid}
+                dateRange={dateCreatedFilterRange}
+              />
+
+            </div>
           </div>
-        </header>
-
-        <div className="flex flex-col gap-4 p-4">
-          {/* Cards container: 4 cards in a row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div
-              className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
-            />
-
-            <AccountCard referenceid={userDetails.referenceid} />
-
-            <OutboundTouchbaseCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-            />
-
-            <TimemotionCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-              referenceid={userDetails.referenceid}
-              dateRange={dateCreatedFilterRange}
-            />
-
-            <ActivityCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-            />
-          </div>
-
-          {/* New: Two large cards side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Large Card 1 */}
-            <SourceCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-            />
-
-            <CSRMetricsCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-            />
-
-            <OutboundCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-              dateRange={dateCreatedFilterRange}
-            />
-
-            <QuotationCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-              dateRange={dateCreatedFilterRange}
-            />
-
-            <SOCard
-              activities={filteredActivities}
-              loading={loadingActivities}
-              error={errorActivities}
-              dateRange={dateCreatedFilterRange}
-            />
-
-            <SiteVisitCard
-              referenceid={userDetails.referenceid}
-              dateRange={dateCreatedFilterRange}
-            />
-
-          </div>
-        </div>
-      </SidebarInset>
-      <SidebarRight
-        userId={userId ?? undefined}
-        dateCreatedFilterRange={dateCreatedFilterRange}
-        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-      />
+        </SidebarInset>
+        <SidebarRight
+          userId={userId ?? undefined}
+          dateCreatedFilterRange={dateCreatedFilterRange}
+          setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+        />
+      </ProtectedPageWrapper>
     </>
   );
 }
 
 export default function Page() {
   return (
-    <ProtectedPageWrapper>
-      <UserProvider>
-        <FormatProvider>
-          <SidebarProvider>
-            <Suspense fallback={<div>Loading...</div>}>
-              <DashboardContent />
-            </Suspense>
-          </SidebarProvider>
-        </FormatProvider>
-      </UserProvider>
-    </ProtectedPageWrapper>
+    <UserProvider>
+      <FormatProvider>
+        <SidebarProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            <DashboardContent />
+          </Suspense>
+        </SidebarProvider>
+      </FormatProvider>
+    </UserProvider>
   );
 }

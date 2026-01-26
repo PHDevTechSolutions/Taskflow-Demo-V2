@@ -86,50 +86,50 @@ function DashboardContent() {
 
     return (
         <>
-            <SidebarLeft />
-            <SidebarInset className="overflow-hidden">
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">Agent List</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset className="overflow-hidden">
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="line-clamp-1">Agent List</BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
+                    </header>
 
-                <AgentList
-                    referenceid={userDetails.referenceid}
+                    <AgentList
+                        referenceid={userDetails.referenceid}
+                        dateCreatedFilterRange={dateCreatedFilterRange}
+                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                    />
+                </SidebarInset>
+
+                <SidebarRight
+                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />
-            </SidebarInset>
-
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function Page() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <DashboardContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }

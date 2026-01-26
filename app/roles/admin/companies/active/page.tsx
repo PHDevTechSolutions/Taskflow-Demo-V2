@@ -229,76 +229,76 @@ function DashboardContent() {
 
     return (
         <>
-            <SidebarLeft />
-            <SidebarInset className="overflow-hidden">
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                    <div className="flex flex-1 items-center gap-2 px-3">
-                        <SidebarTrigger />
-                        <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage className="line-clamp-1">
-                                        Customer Database
-                                    </BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
-
-                <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                    {loading ? (
-                        <div className="flex items-center space-x-4">
-                            <Skeleton className="h-12 w-12 rounded-full" />
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-[250px]" />
-                                <Skeleton className="h-4 w-[200px]" />
-                            </div>
+            <ProtectedPageWrapper>
+                <SidebarLeft />
+                <SidebarInset className="overflow-hidden">
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                        <div className="flex flex-1 items-center gap-2 px-3">
+                            <SidebarTrigger />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="line-clamp-1">
+                                            Customer Database
+                                        </BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
                         </div>
-                    ) : (
-                        <>
-                            {error && (
-                                <Alert variant="destructive">
-                                    <AlertCircleIcon />
-                                    <AlertTitle>{error}</AlertTitle>
-                                </Alert>
-                            )}
+                    </header>
 
-                            <AccountsTable
-                                posts={normalizedPosts}
-                                dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                userDetails={userDetails}
-                                onSaveAccountAction={handleSaveAccount}
-                                onRefreshAccountsAction={refreshAccounts}
-                            />
-                        </>
-                    )}
-                </main>
-            </SidebarInset>
+                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+                        {loading ? (
+                            <div className="flex items-center space-x-4">
+                                <Skeleton className="h-12 w-12 rounded-full" />
+                                <div className="space-y-2">
+                                    <Skeleton className="h-4 w-[250px]" />
+                                    <Skeleton className="h-4 w-[200px]" />
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {error && (
+                                    <Alert variant="destructive">
+                                        <AlertCircleIcon />
+                                        <AlertTitle>{error}</AlertTitle>
+                                    </Alert>
+                                )}
 
-            <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-            />
+                                <AccountsTable
+                                    posts={normalizedPosts}
+                                    dateCreatedFilterRange={dateCreatedFilterRange}
+                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                    userDetails={userDetails}
+                                    onSaveAccountAction={handleSaveAccount}
+                                    onRefreshAccountsAction={refreshAccounts}
+                                />
+                            </>
+                        )}
+                    </main>
+                </SidebarInset>
+
+                <SidebarRight
+                    userId={userId ?? undefined}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+            </ProtectedPageWrapper>
         </>
     );
 }
 
 export default function Page() {
     return (
-        <ProtectedPageWrapper>
-            <UserProvider>
-                <FormatProvider>
-                    <SidebarProvider>
-                        <Suspense fallback={<div>Loading...</div>}>
-                            <DashboardContent />
-                        </Suspense>
-                    </SidebarProvider>
-                </FormatProvider>
-            </UserProvider>
-        </ProtectedPageWrapper>
+        <UserProvider>
+            <FormatProvider>
+                <SidebarProvider>
+                    <Suspense fallback={<div>Loading...</div>}>
+                        <DashboardContent />
+                    </Suspense>
+                </SidebarProvider>
+            </FormatProvider>
+        </UserProvider>
     );
 }
