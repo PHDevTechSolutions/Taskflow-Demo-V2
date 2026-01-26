@@ -18,6 +18,7 @@ import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const { userId } = useUser();
@@ -50,8 +51,10 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
   return (
-    <UserProvider>
-      <LayoutContent>{children}</LayoutContent>
-    </UserProvider>
+    <ProtectedPageWrapper>
+      <UserProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </UserProvider>
+    </ProtectedPageWrapper>
   );
 }
