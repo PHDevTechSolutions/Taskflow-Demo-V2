@@ -1,10 +1,9 @@
 "use client";
 
 import React, { Suspense } from "react";
-
-import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Analytics } from "@vercel/analytics/next";
+import { UserProvider, useUser } from "@/contexts/UserContext";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 // Popups
 import { Reminders } from "@/components/popup/reminders";
@@ -17,44 +16,39 @@ import { ActivityToday } from "@/components/popup/activity-today";
 import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
 
-import { UserProvider, useUser } from "@/contexts/UserContext";
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-
-function LayoutContent({ children }: { children: React.ReactNode }) {
+function PopupGate() {
   const { userId } = useUser();
 
+  if (!userId) return null;
+
   return (
-    <>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <Suspense fallback={null}>
-          {userId && (
-            <>
-              <Reminders />
-              <TransferAlertDialog />
-              <ApproveDeletionDialog />
-              <ApproveTransferDialog />
-              <RemoveDeletionDialog />
-              <TicketEndorsed />
-              <ActivityToday />
-              <FollowUpToday />
-            </>
-          )}
-        </Suspense>
-        <Analytics />
-        {children}
-        <OfflineDialog />
-      </ThemeProvider>
-      <Toaster />
-    </>
+    <Suspense fallback={null}>
+      <Reminders />
+      <TransferAlertDialog />
+      <ApproveDeletionDialog />
+      <ApproveTransferDialog />
+      <RemoveDeletionDialog />
+      <TicketEndorsed />
+      <ActivityToday />
+      <FollowUpToday />
+    </Suspense>
   );
 }
 
-export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
+export default function RootClientShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <ProtectedPageWrapper>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <UserProvider>
-        <LayoutContent>{children}</LayoutContent>
+        <ProtectedPageWrapper>
+          <PopupGate />
+          {children}
+          <OfflineDialog />
+        </ProtectedPageWrapper>
       </UserProvider>
-    </ProtectedPageWrapper>
+    </ThemeProvider>
   );
 }
