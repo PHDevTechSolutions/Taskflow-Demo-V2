@@ -62,126 +62,126 @@ function SettingsContent() {
 
   return (
     <>
-      <SidebarLeft />
-      <SidebarInset>
-        {/* Header */}
-        <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-          <div className="flex flex-1 items-center gap-2 px-3">
-            <SidebarTrigger />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="text-base font-semibold">
-                    Settings
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+      <ProtectedPageWrapper>
+        <SidebarLeft />
+        <SidebarInset>
+          {/* Header */}
+          <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+            <div className="flex flex-1 items-center gap-2 px-3">
+              <SidebarTrigger />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-base font-semibold">
+                      Settings
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <div className="mx-auto w-full max-w-3xl space-y-6">
+              {/* Theme Settings */}
+              <Card className="border border-muted shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Theme Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="theme">Select Theme</Label>
+                    <Select value={theme} onValueChange={setTheme}>
+                      <SelectTrigger id="theme" className="w-[160px]">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                        <SelectItem value="ecoshift">Ecoshift Corporation</SelectItem>
+                        <SelectItem value="prms">Progressive Material Solutions</SelectItem>
+                        <SelectItem value="vah">Value Acquision Holdings</SelectItem>
+                        <SelectItem value="buildchem">Buildchem Solutions</SelectItem>
+                        <SelectItem value="disruptive">Disruptive Solutions</SelectItem>
+                        <SelectItem value="outlook">Outlook</SelectItem>
+                        <SelectItem value="viber">Viber</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Time & Date Format Settings */}
+              <Card className="border border-muted shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Time & Date Format</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Time Format */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="time-format">Time Format</Label>
+                    <Select
+                      value={timeFormat}
+                      onValueChange={onTimeFormatChange}
+                    >
+                      <SelectTrigger id="time-format" className="w-[160px]">
+                        <SelectValue placeholder="Select time format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="12h">12-Hour</SelectItem>
+                        <SelectItem value="24h">24-Hour</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Format */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="date-format">Date Format</Label>
+                    <Select
+                      value={dateFormat}
+                      onValueChange={onDateFormatChange}
+                    >
+                      <SelectTrigger id="date-format" className="w-[160px]">
+                        <SelectValue placeholder="Select date format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">MM/DD/YYYY</SelectItem>
+                        <SelectItem value="long">Monday, November 11, 2025</SelectItem>
+                        <SelectItem value="iso">2025-11-11</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </header>
-
-        {/* Main Content */}
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="mx-auto w-full max-w-3xl space-y-6">
-            {/* Theme Settings */}
-            <Card className="border border-muted shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold">Theme Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="theme">Select Theme</Label>
-                  <Select value={theme} onValueChange={setTheme}>
-                    <SelectTrigger id="theme" className="w-[160px]">
-                      <SelectValue placeholder="Select theme" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                      <SelectItem value="ecoshift">Ecoshift Corporation</SelectItem>
-                      <SelectItem value="prms">Progressive Material Solutions</SelectItem>
-                      <SelectItem value="vah">Value Acquision Holdings</SelectItem>
-                      <SelectItem value="buildchem">Buildchem Solutions</SelectItem>
-                      <SelectItem value="disruptive">Disruptive Solutions</SelectItem>
-                      <SelectItem value="outlook">Outlook</SelectItem>
-                      <SelectItem value="viber">Viber</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Time & Date Format Settings */}
-            <Card className="border border-muted shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold">Time & Date Format</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Time Format */}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="time-format">Time Format</Label>
-                  <Select
-                    value={timeFormat}
-                    onValueChange={onTimeFormatChange}
-                  >
-                    <SelectTrigger id="time-format" className="w-[160px]">
-                      <SelectValue placeholder="Select time format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="12h">12-Hour</SelectItem>
-                      <SelectItem value="24h">24-Hour</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Date Format */}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="date-format">Date Format</Label>
-                  <Select
-                    value={dateFormat}
-                    onValueChange={onDateFormatChange}
-                  >
-                    <SelectTrigger id="date-format" className="w-[160px]">
-                      <SelectValue placeholder="Select date format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="short">MM/DD/YYYY</SelectItem>
-                      <SelectItem value="long">Monday, November 11, 2025</SelectItem>
-                      <SelectItem value="iso">2025-11-11</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </SidebarInset>
-      <SidebarRight
-        userId={userId ?? undefined}
-        dateCreatedFilterRange={dateCreatedFilterRange}
-        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-      />
+        </SidebarInset>
+        <SidebarRight
+          userId={userId ?? undefined}
+          dateCreatedFilterRange={dateCreatedFilterRange}
+          setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+        />
+      </ProtectedPageWrapper>
     </>
   );
 }
 
 export default function SettingsPage() {
   return (
-    <ProtectedPageWrapper>
-      <UserProvider>
-        <FormatProvider>
-          <SidebarProvider>
-            <Suspense fallback={<div>Loading...</div>}>
-              <SettingsContent />
-            </Suspense>
-          </SidebarProvider>
-        </FormatProvider>
-      </UserProvider>
-    </ProtectedPageWrapper>
+    <UserProvider>
+      <FormatProvider>
+        <SidebarProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SettingsContent />
+          </Suspense>
+        </SidebarProvider>
+      </FormatProvider>
+    </UserProvider>
   );
 }
