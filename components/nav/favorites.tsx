@@ -24,7 +24,7 @@ export function NavFavorites({
   return (
     <ProtectedPageWrapper>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Favorites</SidebarGroupLabel>
+        <SidebarGroupLabel>Leads</SidebarGroupLabel>
         <SidebarMenu>
           {favorites.map((item) => {
             const Icon = item.icon;

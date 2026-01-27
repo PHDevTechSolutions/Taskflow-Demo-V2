@@ -36,6 +36,7 @@ import { NavSecondary } from "@/components/nav/secondary";
 import { NavWorkspaces } from "@/components/nav/workspaces";
 import { TeamSwitcher } from "@/components/nav/team-switcher";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton"
 
 const data = {
   teams: [
@@ -45,7 +46,7 @@ const data = {
     },
   ],
   navSecondary: [
-    { title: "Security Alerts", url: "/general/security", icon: ShieldIcon },
+    { title: "Security", url: "/general/security", icon: ShieldIcon },
     { title: "Calendar", url: "/general/calendar", icon: CalendarDays },
     { title: "Settings", url: "/general/settings", icon: Settings },
   ],
@@ -401,7 +402,11 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     return (
       <Sidebar className="border-r-0">
         <SidebarContent className="flex items-center justify-center text-sm text-muted-foreground">
-          Loading menu...
+          <div className="flex w-full max-w-xs flex-col gap-2 p-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
         </SidebarContent>
       </Sidebar>
     );

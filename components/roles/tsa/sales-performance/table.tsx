@@ -194,8 +194,8 @@ export const SalesTable: React.FC<SalesProps> = ({
 
     if (loadingActivities) {
         return (
-            <div className="flex justify-center items-center h-40">
-                <Spinner className="size-8" />
+            <div className="flex justify-center items-center py-10">
+                <Spinner className="size-10" />
             </div>
         );
     }

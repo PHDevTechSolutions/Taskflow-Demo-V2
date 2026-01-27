@@ -12,7 +12,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/c
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 
@@ -251,12 +251,8 @@ function DashboardContent() {
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
             {loading ? (
-              <div className="flex items-center space-x-4">
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-[250px]" />
-                  <Skeleton className="h-4 w-[200px]" />
-                </div>
+              <div className="flex justify-center items-center py-10">
+                <Spinner className="size-10" />
               </div>
             ) : (
               <>

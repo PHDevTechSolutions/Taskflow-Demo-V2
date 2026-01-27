@@ -3,13 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner"
 
 interface HistoryItem {
   referenceid: string;
@@ -234,7 +229,9 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
   return (
     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto z-50">
       {loadingHistory ? (
-        <div className="text-center py-10">Loading call history...</div>
+        <div className="flex justify-center items-center py-10">
+          <Spinner className="size-10" />
+        </div>
       ) : errorHistory ? (
         <div className="text-center text-red-500 py-10">{errorHistory}</div>
       ) : (
@@ -297,7 +294,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                       })
                     )}
                   </tbody>
-                 
+
                 </table>
               </CardContent>
               <CardFooter>
