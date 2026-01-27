@@ -36,7 +36,6 @@ interface Account {
     industry: string;
     company_group: string;
     status?: string;
-    next_available_date: string;
 }
 
 interface UserDetails {
@@ -495,19 +494,11 @@ export function AccountsTable({
         }, [filteredData]);
 
         const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
-        
-            const scheduledTodayCount = useMemo(() => {
-                return filteredData.filter((a) => {
-                    // compare only date part, assuming scheduled_date format is compatible
-                    if (!a.next_available_date) return false;
-                    return a.next_available_date.startsWith(todayDateString);
-                }).length;
-            }, [filteredData, todayDateString]);
 
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 {/* Card 1 */}
                 <Card className="text-center">
                     <CardHeader>
@@ -542,16 +533,6 @@ export function AccountsTable({
                         <p>
                             CSR Client: <span className="font-bold">{csrCount}</span>
                         </p>
-                    </CardContent>
-                </Card>
-
-                {/* Card 4 */}
-                <Card className="text-center">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-semibold">Companies Scheduled Today</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{scheduledTodayCount}</p>
                     </CardContent>
                 </Card>
             </div>
