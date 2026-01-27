@@ -277,7 +277,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             <img
               src={agent.profilePicture}
               alt={`${agent.Firstname} ${agent.Lastname}`}
-              className="w-20 h-20 rounded-lg object-cover"
+              className="w-20 h-20 rounded-full object-cover"
             />
           ) : (
             <div className="w-20 h-20 rounded-full bg-gray-300 flex items-center justify-center text-xl text-gray-600">

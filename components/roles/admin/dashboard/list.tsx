@@ -1,13 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
@@ -19,6 +12,8 @@ import { OutboundCallsTableCard } from "@/components/roles/tsm/dashboard/table/o
 import { QuotationTableCard } from "@/components/roles/tsm/dashboard/table/quotation";
 import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sales-order";
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
+
+import ReactSelect from "react-select";
 
 import { db } from "@/lib/firebase";
 import {
@@ -71,6 +66,11 @@ interface AgentMeeting {
 
 interface ScheduledCompany {
     company_name: string;
+}
+
+interface AgentOption {
+    value: string;
+    label: string;
 }
 
 interface Props {
@@ -381,6 +381,16 @@ export function AgentList({
             .finally(() => setLoadingScheduled(false));
     }, [selectedAgent]);
 
+    const agentOptions: AgentOption[] = [
+        { value: "all", label: "All Agents" },
+        ...agents.map(agent => ({
+            value: agent.ReferenceID,
+            label: `${agent.Firstname} ${agent.Lastname}`,
+        })),
+    ];
+
+    const selectedOption = agentOptions.find(opt => opt.value === selectedAgent);
+
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
             {loadingHistory ? (
@@ -390,22 +400,17 @@ export function AgentList({
             ) : (
                 <>
                     {/* AGENT FILTER */}
-                    <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                        <SelectTrigger className="w-[220px] text-xs">
-                            <SelectValue placeholder="Filter by Agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Agents</SelectItem>
-                            {agents.map((agent) => (
-                                <SelectItem className="capitalize"
-                                    key={agent.ReferenceID}
-                                    value={agent.ReferenceID}
-                                >
-                                    {agent.Firstname} {agent.Lastname}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <ReactSelect
+                        options={agentOptions}
+                        value={selectedOption}
+                        onChange={(option) => setSelectedAgent(option?.value ?? "all")}
+                        placeholder="Filter by Agent"
+                        isSearchable={true}
+                        styles={{
+                            control: (base) => ({ ...base, fontSize: 12 }),
+                            menu: (base) => ({ ...base, fontSize: 12 }),
+                        }}
+                    />
 
                     <div className="grid grid-cols-1 gap-4 mt-2">
                         {/* CARD 1 – AGENT SUMMARY */}
