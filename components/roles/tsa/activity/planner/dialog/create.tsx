@@ -204,7 +204,6 @@ export function CreateActivityDialog({
 
     const [tsmState, setTSMState] = useState(tsm || "");
 
-
     const [loading, setLoading] = useState(false);
     const [elapsedTime, setElapsedTime] = useState("");
     const [showExportNotification, setShowExportNotification] = React.useState(false);

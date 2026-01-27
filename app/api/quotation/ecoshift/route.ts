@@ -90,7 +90,6 @@ function setBorderForRow(sheet: ExcelJS.Worksheet, rowNumber: number, startCol =
   }
 }
 
-
 export async function POST(req: Request) {
   const data = await req.json();
 
@@ -120,9 +119,6 @@ export async function POST(req: Request) {
 
   // Clear borders and set white background fill on row 1 only
   clearBordersAndSetWhiteFill(sheet, 1);
-
-  // Reference No
-  addFooterRow(sheet, "");
 
   const refRow = sheet.addRow([""]);
   sheet.mergeCells(refRow.number, 1, refRow.number, 6);  // merge entire row
