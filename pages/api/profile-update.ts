@@ -19,7 +19,12 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     Status,
     ContactNumber,
     Password,
-    profilePicture, // bagong field dito
+    profilePicture,
+    OtherEmail,
+    AnotherNumber,
+    Address,
+    Birthday,
+    Gender
   } = req.body;
 
   if (!id) {
@@ -38,6 +43,11 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
       Department,
       Status,
       ContactNumber,
+      OtherEmail,
+      AnotherNumber,
+      Address,
+      Birthday,
+      Gender,
       updatedAt: new Date(),
     };
 

@@ -9,18 +9,9 @@ import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 import Image from "next/image";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -28,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-import { Eye, WandSparkles, ImagePlus } from "lucide-react";
+import { Eye, WandSparkles, ImagePlus, Save } from "lucide-react";
 
 interface UserDetails {
   id: string;
@@ -42,6 +33,13 @@ interface UserDetails {
   profilePicture: string;
   Password?: string;
   ContactPassword?: string;
+
+  // Others
+  OtherEmail: string;
+  AnotherNumber: string;
+  Address: string;
+  Birthday: string;
+  Gender: string;
 }
 
 export default function ProfileClient() {
@@ -87,6 +85,11 @@ export default function ProfileClient() {
           profilePicture: data.profilePicture || "",
           Password: "",
           ContactPassword: "",
+          OtherEmail: data.OtherEmail || "",
+          AnotherNumber: data.AnotherNumber || "",
+          Address: data.Address || "",
+          Birthday: data.Birthday || "",
+          Gender: data.Gender || "",
         });
       } catch (e) {
         console.error(e);
@@ -265,10 +268,8 @@ export default function ProfileClient() {
                 </header>
 
                 <div className="flex flex-1 flex-col gap-2 p-4">
-                  <h1 className="text-2xl font-semibold mb-4">Update Profile</h1>
-
                   <div className="flex flex-col md:flex-row gap-2">
-                    <div className="w-full md:w-1/2 flex flex-col items-center space-y-4 border rounded p-4">
+                    <div className="w-full md:w-1/2 flex flex-col items-center space-y-4">
                       <AspectRatio
                         ratio={16 / 14}
                         className="w-full bg-muted rounded-lg overflow-hidden border border-gray-300"
@@ -312,11 +313,11 @@ export default function ProfileClient() {
                     <div className="flex-1">
                       <form
                         onSubmit={handleSubmit}
-                        className="space-y-6 border rounded p-2"
+                        className="space-y-6"
                         noValidate
                       >
-                        <fieldset className="flex flex-col md:flex-row space-x-0 md:space-x-4 border border-gray-300 rounded-md p-4">
-                          <legend className="text-sm font-semibold px-2">Name</legend>
+                        <fieldset className="border border-gray-300 rounded-md p-4 grid grid-cols-2 gap-4">
+                          <legend className="text-sm font-semibold px-2">User Information</legend>
 
                           <div className="flex flex-col flex-1 space-y-2">
                             <Label htmlFor="Firstname">First Name</Label>
@@ -343,14 +344,40 @@ export default function ProfileClient() {
                               required
                             />
                           </div>
+
+                          <div className="flex flex-col flex-1 space-y-2">
+                            <Label htmlFor="Gender">Gender</Label>
+                            <Input
+                              type="text"
+                              id="Gender"
+                              name="Gender"
+                              value={userDetails.Gender}
+                              onChange={handleChange}
+                              autoComplete="family-name"
+                              className="capitalize"
+                            />
+                          </div>
+
+                          <div className="flex flex-col flex-1 space-y-2">
+                            <Label htmlFor="Birthday">Birthday</Label>
+                            <Input
+                              type="date"
+                              id="Birthday"
+                              name="Birthday"
+                              value={userDetails.Birthday}
+                              onChange={handleChange}
+                              autoComplete="family-name"
+                              className="capitalize"
+                            />
+                          </div>
                         </fieldset>
 
-                        <fieldset className="flex flex-col md:flex-row space-x-0 md:space-x-4 border border-gray-300 rounded-md p-4">
-                          <legend className="text-sm font-semibold px-2">
+                        <fieldset className="border border-gray-300 rounded-md p-4 grid grid-cols-2 gap-4">
+                          <legend className="text-sm font-semibold px-2 mb-4 col-span-2">
                             Contact Details
                           </legend>
 
-                          <div className="flex flex-col flex-1 space-y-2">
+                          <div className="flex flex-col space-y-2">
                             <Label htmlFor="Email">Email Address</Label>
                             <Input
                               type="email"
@@ -363,15 +390,52 @@ export default function ProfileClient() {
                             />
                           </div>
 
-                          <div className="flex flex-col flex-1 space-y-2">
+                          <div className="flex flex-col space-y-2">
+                            <Label htmlFor="OtherEmail">Other Email (Gmail, Yahoo)</Label>
+                            <Input
+                              type="email"
+                              id="OtherEmail"
+                              name="OtherEmail"
+                              value={userDetails.OtherEmail || ""}
+                              onChange={handleChange}
+                              autoComplete="email"
+                            />
+                          </div>
+
+                          <div className="flex flex-col space-y-2">
                             <Label htmlFor="ContactNumber">Contact Number</Label>
                             <Input
-                              type="text"
+                              type="tel"
                               id="ContactNumber"
                               name="ContactNumber"
                               value={userDetails.ContactNumber}
                               onChange={handleChange}
                               autoComplete="tel"
+                            />
+                          </div>
+
+                          <div className="flex flex-col space-y-2">
+                            <Label htmlFor="AnotherNumber">Another Number (Viber etc)</Label>
+                            <Input
+                              type="tel"
+                              id="AnotherNumber"
+                              name="AnotherNumber"
+                              value={userDetails.AnotherNumber || ""}
+                              onChange={handleChange}
+                              autoComplete="tel"
+                            />
+                          </div>
+
+                          <div className="flex flex-col space-y-2 col-span-2">
+                            <Label htmlFor="Address">Address / Location</Label>
+                            <Input
+                              type="text"
+                              id="Address"
+                              name="Address"
+                              value={userDetails.Address || ""}
+                              onChange={handleChange}
+                              autoComplete="street-address"
+                              className="capitalize"
                             />
                           </div>
                         </fieldset>
@@ -480,7 +544,7 @@ export default function ProfileClient() {
                           disabled={saving || uploading}
                           className="w-full md:w-auto"
                         >
-                          {saving
+                          <Save /> {saving
                             ? "Saving..."
                             : uploading
                               ? "Uploading..."
