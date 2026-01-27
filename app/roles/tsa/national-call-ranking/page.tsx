@@ -98,7 +98,7 @@ function DashboardContent() {
                     <div
                         className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
                     />
-                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b z-50">
                         <div className="flex flex-1 items-center gap-2 px-3">
                             <SidebarTrigger />
                             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />

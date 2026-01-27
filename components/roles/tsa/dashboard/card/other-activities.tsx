@@ -98,7 +98,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
   /* ===================== RENDER ===================== */
 
   return (
-    <Card className="p-3 bg-white text-black min-h-[220px] flex flex-col justify-center">
+    <Card className="p-2 bg-white text-black min-h-[220px] flex flex-col justify-center z-50">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3">
@@ -119,7 +119,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
-                   <TruckElectric /> Total Delivered Transactions
+                   <TruckElectric /> Total Delivered
                   </ItemTitle>
                   <ItemDescription>
                     <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-green-500">
@@ -137,7 +137,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
-                  <Coins /> Total Sales Invoice
+                  <Coins /> Total SI
                   </ItemTitle>
                   <ItemDescription>
                     <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-green-500">
@@ -150,7 +150,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
           )}
 
           {/* Quotation & SO */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {quotationCount > 0 && (
               <Item
                 variant="outline"

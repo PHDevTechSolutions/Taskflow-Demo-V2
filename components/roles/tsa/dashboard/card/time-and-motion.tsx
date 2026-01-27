@@ -445,7 +445,7 @@ export function TimemotionCard({
           <>
             {/* Display GRAND TOTAL (activities + site visits) here */}
             <div>
-              {grandHours}h {grandMinutes}m {grandSeconds}s (of 8h)
+              {grandHours}h {grandMinutes}m {grandSeconds}s (of 6.5h)
             </div>
 
           </>

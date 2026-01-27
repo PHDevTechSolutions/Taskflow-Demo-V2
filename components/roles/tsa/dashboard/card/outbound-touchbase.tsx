@@ -39,7 +39,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
     totalFollowUp > 0;
 
   return (
-    <Card className="p-3 bg-white text-black min-h-[220px] flex flex-col justify-center">
+    <Card className="p-3 bg-white text-black min-h-[220px] flex flex-col justify-center z-50">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3">
@@ -66,7 +66,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneOutgoing /> Total Outbound - Touchbase</ItemTitle>
                   <ItemDescription className="text-xs font-semibold">
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-blue-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-blue-500 m-4">
                       {totalOutboundTouchbase}
                     </Badge>
                   </ItemDescription>
@@ -81,7 +81,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneCall /> Total Successful Calls</ItemTitle>
                   <ItemDescription className="text-xs font-semibold">
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-green-500">
+                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono tabular-nums text-white bg-green-500 m-4">
                       {totalSuccessful}
                     </Badge>
                   </ItemDescription>

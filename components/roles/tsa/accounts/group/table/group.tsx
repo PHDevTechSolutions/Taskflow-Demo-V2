@@ -247,9 +247,9 @@ export function AccountsTable({
 
         {/* Dialog showing companies in selected group */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-xs">
                 Companies in Industry: {selectedGroup?.industry}
               </DialogTitle>
               <DialogClose />

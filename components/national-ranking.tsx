@@ -41,7 +41,7 @@ function Top3Ranking({
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <Card className="mb-6 bg-white text-black">
+    <Card className="mb-6 bg-white text-black z-50">
       <CardHeader>
         <CardTitle className="text-2xl">🏆 Ranking Achievements</CardTitle>
       </CardHeader>
@@ -232,7 +232,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
   const top3 = sortedGroupedByReferenceid.slice(0, 3);
 
   return (
-    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto z-50">
       {loadingHistory ? (
         <div className="text-center py-10">Loading call history...</div>
       ) : errorHistory ? (
@@ -241,7 +241,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
         <>
           <Top3Ranking top3={top3} userTransfers={userTransfers} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
             {/* CARD 1: National Ranking (Associates) */}
             <Card className="bg-white text-black">
               <CardHeader>

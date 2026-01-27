@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, PenIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -406,7 +406,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 size="sm"
                                                 onClick={() => openEditDialog(item)}
                                             >
-                                                Edit
+                                               <PenIcon /> Edit
                                             </Button>
                                         </TableCell>
 

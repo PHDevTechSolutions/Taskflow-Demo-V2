@@ -277,7 +277,7 @@ export const Completed: React.FC<CompletedProps> = ({
               >
                 <div className="p-2">
                   <div className="flex justify-between items-center">
-                    <AccordionTrigger className="text-xs font-semibold font-mono uppercase">
+                    <AccordionTrigger className="text-xs font-semibold font-mono uppercase cursor-pointer">
                       {item.company_name}
                     </AccordionTrigger>
 
@@ -459,8 +459,8 @@ export const Completed: React.FC<CompletedProps> = ({
                     </Dialog>
                   </div>
 
-                  <div className="ml-1 flex flex-wrap gap-1 uppercase">
-                    <Badge className="bg-green-500 font-mono flex items-center gap-2 whitespace-nowrap">
+                  <div className="flex flex-wrap gap-1 uppercase">
+                    <Badge className="bg-green-500 font-mono flex items-center gap-2 p-2 whitespace-nowrap">
                       <Truck /> {item.status}
                     </Badge>
                   </div>
