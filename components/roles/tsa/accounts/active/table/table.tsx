@@ -36,7 +36,7 @@ interface Account {
     industry: string;
     company_group: string;
     status?: string;
-    scheduled_date: string;
+    next_available_date: string;
 }
 
 interface UserDetails {
@@ -499,8 +499,8 @@ export function AccountsTable({
             const scheduledTodayCount = useMemo(() => {
                 return filteredData.filter((a) => {
                     // compare only date part, assuming scheduled_date format is compatible
-                    if (!a.scheduled_date) return false;
-                    return a.scheduled_date.startsWith(todayDateString);
+                    if (!a.next_available_date) return false;
+                    return a.next_available_date.startsWith(todayDateString);
                 }).length;
             }, [filteredData, todayDateString]);
 
