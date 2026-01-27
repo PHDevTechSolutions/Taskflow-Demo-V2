@@ -50,6 +50,7 @@ interface Activity {
   quotation_amount: string;
   so_number: string;
   so_amount: string;
+  type_client: string;
 }
 
 function DashboardContent() {

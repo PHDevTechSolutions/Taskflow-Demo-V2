@@ -36,6 +36,7 @@ interface Account {
     industry: string;
     company_group: string;
     status?: string;
+    next_available_date: string;
 }
 
 interface UserDetails {
@@ -463,42 +464,50 @@ export function AccountsTable({
 
     const totalAccounts = filteredData.length;
     const tsaCount = useMemo(() => {
-            return filteredData.filter(
-                (a) => a.type_client?.toLowerCase() === "tsa client"
-            ).length;
-        }, [filteredData]);
-    
-        const csrCount = useMemo(() => {
-            return filteredData.filter(
-                (a) => a.type_client?.toLowerCase() === "csr client"
-            ).length;
-        }, [filteredData]);
-    
-        // CARD 3: Count Balance 20, Next 30, Top 50
-        const balance20Count = useMemo(() => {
-            return filteredData.filter(
-                (a) => a.type_client?.toLowerCase() === "balance 20"
-            ).length;
-        }, [filteredData]);
-    
-        const next30Count = useMemo(() => {
-            return filteredData.filter(
-                (a) => a.type_client?.toLowerCase() === "next 30"
-            ).length;
-        }, [filteredData]);
-    
-        const top50Count = useMemo(() => {
-            return filteredData.filter(
-                (a) => a.type_client?.toLowerCase() === "top 50"
-            ).length;
-        }, [filteredData]);
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "tsa client"
+        ).length;
+    }, [filteredData]);
 
-        const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+    const csrCount = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "csr client"
+        ).length;
+    }, [filteredData]);
+
+    // CARD 3: Count Balance 20, Next 30, Top 50
+    const balance20Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "balance 20"
+        ).length;
+    }, [filteredData]);
+
+    const next30Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "next 30"
+        ).length;
+    }, [filteredData]);
+
+    const top50Count = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "top 50"
+        ).length;
+    }, [filteredData]);
+
+    const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+
+    const scheduledTodayCount = useMemo(() => {
+        return filteredData.filter((a) => {
+            // compare only date part, assuming scheduled_date format is compatible
+            if (!a.next_available_date) return false;
+            return a.next_available_date.startsWith(todayDateString);
+        }).length;
+    }, [filteredData, todayDateString]);
 
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 {/* Card 1 */}
                 <Card className="text-center">
                     <CardHeader>
@@ -533,6 +542,16 @@ export function AccountsTable({
                         <p>
                             CSR Client: <span className="font-bold">{csrCount}</span>
                         </p>
+                    </CardContent>
+                </Card>
+
+                {/* Card 4 */}
+                <Card className="text-center">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-semibold">Companies Scheduled Today</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold">{scheduledTodayCount}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -585,7 +604,7 @@ export function AccountsTable({
                                 className="cursor-pointer"
                                 onClick={() => setIsTransferDialogOpen(true)}
                             >
-                              <Repeat />  Transfer
+                                <Repeat />  Transfer
                             </Button>
 
                             <Button
@@ -593,11 +612,11 @@ export function AccountsTable({
                                 className="cursor-pointer"
                                 onClick={() => setIsRemoveDialogOpen(true)}
                             >
-                              <Archive />  Archive
+                                <Archive />  Archive
                             </Button>
                         </>
                     )}
-                        
+
                 </div>
             </div>
 
