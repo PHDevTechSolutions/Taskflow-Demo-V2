@@ -428,6 +428,7 @@ export function AgentList({
                             control: (base) => ({ ...base, fontSize: 12 }),
                             menu: (base) => ({ ...base, fontSize: 12 }),
                         }}
+                        className="capitalize"
                     />
 
                     <div className="grid grid-cols-1 gap-4 mt-2">
