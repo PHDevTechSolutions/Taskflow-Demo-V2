@@ -20,16 +20,30 @@ export async function GET(req: Request) {
             );
         }
 
+        // Query to get total count and counts grouped by type_client
         const result = await sql`
-      SELECT COUNT(*)::text AS count
-      FROM accounts
-      WHERE referenceid = ${referenceid};
-    `;
+          SELECT 
+            COUNT(*)::int AS total_count,
+            COUNT(*) FILTER (WHERE LOWER(type_client) = 'top 50')::int AS top_50_count,
+            COUNT(*) FILTER (WHERE LOWER(type_client) = 'next 30')::int AS next_30_count,
+            COUNT(*) FILTER (WHERE LOWER(type_client) = 'balance 20')::int AS balance_20_count,
+            COUNT(*) FILTER (WHERE LOWER(type_client) = 'csr client')::int AS csr_client_count,
+            COUNT(*) FILTER (WHERE LOWER(type_client) = 'tsa client')::int AS tsa_client_count
+          FROM accounts
+          WHERE referenceid = ${referenceid};
+        `;
 
-        const rows = result as { count: string }[];
-        const count = Number(rows[0]?.count ?? 0);
+        const row = result[0];
 
-        return NextResponse.json({ success: true, count }, { status: 200 });
+        return NextResponse.json({
+            success: true,
+            totalCount: row.total_count,
+            top50Count: row.top_50_count,
+            next30Count: row.next_30_count,
+            balance20Count: row.balance_20_count,
+            csrClientCount: row.csr_client_count,
+            tsaClientCount: row.tsa_client_count,
+        }, { status: 200 });
 
     } catch (error: any) {
         console.error("Error counting companies:", error);
@@ -39,6 +53,5 @@ export async function GET(req: Request) {
         );
     }
 }
-
 
 export const dynamic = "force-dynamic";

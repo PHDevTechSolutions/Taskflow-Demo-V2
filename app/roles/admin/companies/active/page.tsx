@@ -42,6 +42,7 @@ interface Account {
     industry: string;
     status?: string;
     company_group: string;
+    scheduled_date: string;
 }
 
 interface UserDetails {

@@ -14,19 +14,9 @@ import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sale
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
 
 import ReactSelect from "react-select";
-
+import { Building2, PhoneForwarded } from 'lucide-react';
 import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    orderBy,
-    where,
-    Timestamp,
-    onSnapshot,
-    QuerySnapshot,
-    DocumentData,
-    limit
-} from "firebase/firestore";
+import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot, DocumentData, limit } from "firebase/firestore";
 
 interface HistoryItem {
     referenceid: string;
@@ -167,9 +157,16 @@ export function AgentList({
                 if (!res.ok) throw new Error("Failed to fetch agents");
                 return res.json();
             })
-            .then(setAgents)
+            .then((data) => {
+                // Filter to Territory Sales Associate only
+                const tsaAgents = data.filter(
+                    (agent: Agent) => agent.Role.toLowerCase() === "territory sales associate"
+                );
+                setAgents(tsaAgents);
+            })
             .catch(() => setErrorHistory("Failed to load agents."));
     }, []);
+
 
     /* =========================
        FETCH HISTORY
@@ -329,10 +326,19 @@ export function AgentList({
         return () => unsubscribes.forEach(u => u());
     }, [selectedAgent, agents]);
 
+    const [countData, setCountData] = useState<{
+        totalCount: number | null;
+        top50Count: number | null;
+        next30Count: number | null;
+        balance20Count: number | null;
+        csrClientCount: number | null;
+        tsaClientCount: number | null;
+    } | null>(null);
+
+
     useEffect(() => {
-        // kapag ALL agents, walang count
         if (selectedAgent === "all") {
-            setCount(null);
+            setCountData(null);
             return;
         }
 
@@ -348,11 +354,23 @@ export function AgentList({
                 return res.json();
             })
             .then((data) => {
-                setCount(data.count);
+                if (data.success) {
+                    setCountData({
+                        totalCount: data.totalCount ?? 0,
+                        top50Count: data.top50Count ?? 0,
+                        next30Count: data.next30Count ?? 0,
+                        balance20Count: data.balance20Count ?? 0,
+                        csrClientCount: data.csrClientCount ?? 0,
+                        tsaClientCount: data.tsaClientCount ?? 0,
+                    });
+                } else {
+                    setError(data.error || "Failed to fetch count");
+                    setCountData(null);
+                }
             })
             .catch((err) => {
                 setError(err.message);
-                setCount(null);
+                setCountData(null);
             })
             .finally(() => {
                 setLoading(false);
@@ -446,70 +464,111 @@ export function AgentList({
                             />
                         )}
 
-                        {selectedAgent !== "all" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* CARD 1 – TOTAL DATABASE */}
-                                <div className="p-4 rounded-lg border shadow-sm bg-white">
-                                    <h2 className="text-lg font-semibold mb-2">
-                                        Total Database
-                                    </h2>
+                        {selectedAgent !== "all" && (() => {
+                            const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
+                            if (!agent) return null;
 
-                                    {loading && <p>Loading...</p>}
-                                    {error && <p className="text-red-500">Error: {error}</p>}
-                                    {count !== null && !loading && !error && (
-                                        <p className="text-2xl font-bold">
-                                            {count.toLocaleString()}
-                                        </p>
-                                    )}
+                            if (agent.Role === "Territory Sales Manager") {
+                                // Do NOT show these cards for TSM role
+                                return null;
+                            }
 
-                                    {!referenceid && (
-                                        <p className="text-sm text-muted-foreground">
-                                            Select an agent to see companies count.
-                                        </p>
-                                    )}
-                                </div>
+                            return (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* CARD 1 – TOTAL DATABASE */}
+                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                                        <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
+                                            <Building2 className="w-5 h-5" />Total Database
+                                        </h2>
 
-                                {/* CARD 2 – NEXT AVAILABLE TODAY */}
-                                <div className="p-4 rounded-lg border shadow-sm bg-white">
-                                    <h2 className="text-lg font-semibold mb-2">OB Calls – Scheduled Accounts For Today</h2>
+                                        {loading && (
+                                            <p className="text-center text-gray-500 italic">Loading...</p>
+                                        )}
 
-                                    <p className="text-2xl font-bold mb-3">{todayNextAvailableCount.toLocaleString()}</p>
+                                        {error && (
+                                            <p className="text-center text-red-600 font-semibold">{error}</p>
+                                        )}
 
-                                    <Sheet>
-                                        <SheetTrigger asChild>
-                                            <Button size="sm" disabled={loadingScheduled}>
-                                                View Accounts
-                                            </Button>
-                                        </SheetTrigger>
-
-                                        <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
-                                            <SheetHeader>
-                                                <SheetTitle>Scheduled Accounts Today</SheetTitle>
-                                            </SheetHeader>
-
-                                            {/* Card container with fixed max height and scroll */}
-                                            <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
-                                                {loadingScheduled && (
-                                                    <p className="text-sm text-muted-foreground">Loading...</p>
-                                                )}
-
-                                                {!loadingScheduled && scheduledCompanies.length === 0 && (
-                                                    <p className="text-sm text-muted-foreground">No scheduled accounts for today.</p>
-                                                )}
-
-                                                {!loadingScheduled &&
-                                                    scheduledCompanies.map((company, idx) => (
-                                                        <div key={idx}>
-                                                            {company.company_name}
-                                                        </div>
-                                                    ))}
+                                        {countData && !loading && !error && countData.totalCount !== null && (
+                                            <div className="space-y-3 text-gray-700 text-sm">
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">Total:</span>
+                                                    <span>{(countData.totalCount ?? 0).toLocaleString()}</span>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">Top 50:</span>
+                                                    <span>{(countData.top50Count ?? 0).toLocaleString()}</span>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">Next 30:</span>
+                                                    <span>{(countData.next30Count ?? 0).toLocaleString()}</span>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">Balance 20:</span>
+                                                    <span>{(countData.balance20Count ?? 0).toLocaleString()}</span>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">CSR Client:</span>
+                                                    <span>{(countData.csrClientCount ?? 0).toLocaleString()}</span>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">TSA Client:</span>
+                                                    <span>{(countData.tsaClientCount ?? 0).toLocaleString()}</span>
+                                                </p>
                                             </div>
-                                        </SheetContent>
-                                    </Sheet>
+                                        )}
 
+                                        {!referenceid && (
+                                            <p className="mt-4 text-center text-sm text-gray-400 italic">
+                                                Select an agent to see companies count.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* CARD 2 – NEXT AVAILABLE TODAY */}
+                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                                        <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
+                                            <PhoneForwarded className="w-5 h-5" /> OB Calls – Scheduled Accounts For Today
+                                        </h2>
+
+                                        <p className="text-2xl font-bold mb-3">{todayNextAvailableCount.toLocaleString()}</p>
+
+                                        <Sheet>
+                                            <SheetTrigger asChild>
+                                                <Button size="sm" disabled={loadingScheduled}>
+                                                    View Accounts
+                                                </Button>
+                                            </SheetTrigger>
+
+                                            <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
+                                                <SheetHeader>
+                                                    <SheetTitle>Scheduled Accounts Today</SheetTitle>
+                                                </SheetHeader>
+
+                                                {/* Card container with fixed max height and scroll */}
+                                                <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
+                                                    {loadingScheduled && (
+                                                        <p className="text-sm text-muted-foreground">Loading...</p>
+                                                    )}
+
+                                                    {!loadingScheduled && scheduledCompanies.length === 0 && (
+                                                        <p className="text-sm text-muted-foreground">No scheduled accounts for today.</p>
+                                                    )}
+
+                                                    {!loadingScheduled &&
+                                                        scheduledCompanies.map((company, idx) => (
+                                                            <div key={idx}>
+                                                                {company.company_name}
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </SheetContent>
+                                        </Sheet>
+
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {selectedAgent == "all" && (
                             <AgentMeetings
