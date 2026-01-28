@@ -523,8 +523,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       }
 
                       {item.overdueDays > 0 && (
-                        <Badge variant="destructive" className="font-mono">
-                          <Clock /> OVERDUE: {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""}
+                        <Badge className="font-mono">
+                          <Clock /> {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago.
                         </Badge>
                       )}
 
