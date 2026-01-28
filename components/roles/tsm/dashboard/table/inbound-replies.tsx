@@ -26,6 +26,7 @@ interface Agent {
   Firstname: string;
   Lastname: string;
   profilePicture: string;
+  Role?: string; // added Role here
 }
 
 function formatDurationMs(ms: number) {
@@ -59,16 +60,23 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
   const [expandedActivityName, setExpandedActivityName] = useState<string | null>(null);
 
+  // Filter agents to only Territory Sales Associate
+  const filteredAgents = useMemo(() => {
+    return agents.filter(
+      (agent) => (agent.Role || "").toLowerCase() === "territory sales associate"
+    );
+  }, [agents]);
+
   // Map agents for quick lookup
   const agentMap = useMemo(() => {
     const map = new Map<string, Agent>();
-    agents.forEach((a) => map.set(a.ReferenceID.toLowerCase(), a));
+    filteredAgents.forEach((a) => map.set(a.ReferenceID.toLowerCase(), a));
     return map;
-  }, [agents]);
+  }, [filteredAgents]);
 
   // Organize data per agent -> activities
   const agentList = useMemo(() => {
-    return agents.map((agent) => {
+    return filteredAgents.map((agent) => {
       const agentId = agent.ReferenceID.toLowerCase();
       // Filter history for this agent
       const agentHistory = history.filter(
@@ -117,7 +125,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
         totalDurationMs,
       };
     });
-  }, [agents, history]);
+  }, [filteredAgents, history]);
 
   return (
     <Card className="flex flex-col h-full bg-white">

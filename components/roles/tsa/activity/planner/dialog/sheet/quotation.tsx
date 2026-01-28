@@ -158,9 +158,9 @@ export function QuotationSheet(props: Props) {
   }
 
   useEffect(() => {
-    if (callType === "Sent Quotation Standard" || callType === "Sent Quotation with Special Price") {
+    if (callType === "Quotation Standard" || callType === "Quotation with Special Price") {
       setFollowUpDate(addDaysToDate(1)); // after 1 day (tomorrow)
-    } else if (callType === "Sent Quotation with SPF") {
+    } else if (callType === "Quotation with SPF") {
       setFollowUpDate(addDaysToDate(5)); // after 5 days
     } else {
       setFollowUpDate(""); // clear or keep empty for others
@@ -461,7 +461,7 @@ export function QuotationSheet(props: Props) {
                   },
                   {
                     label: "Quotation with SPF",
-                    description: "Preparation of Quotation including SPF (Special Pricing Framework).",
+                    description: "Preparation of Quotation including SPF.",
                   },
                   {
                     label: "With SPFS",
