@@ -21,7 +21,7 @@ import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot
 
 interface HistoryItem {
     referenceid: string;
-    manager: string;
+    tsm: string;
     source: string;
     call_status: string;
     type_activity: string;
@@ -35,6 +35,8 @@ interface HistoryItem {
     end_date: string;
     status: string;
     date_created: string;
+    company_name: string;
+    remarks: string;
 }
 
 interface Agent {
