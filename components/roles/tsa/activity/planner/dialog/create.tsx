@@ -521,110 +521,6 @@ export function CreateActivityDialog({
             // Success save + status update toast
             toast.success("Activity created and status updated successfully!");
 
-            if (typeActivity === "Quotation Preparation") {
-                // Check if productCat is empty/undefined/blank
-                if (!productCat || productCat.trim() === "") {
-                    toast.error("Cannot export quotation: Product Category is empty.");
-                    resetForm();
-                    setStep(1);
-                    setSheetOpen(false);
-                } else {
-                    // Proceed with export only if productCat is present
-
-                    const productCats = productCat.split(",");
-                    const quantities = productQuantity ? productQuantity.split(",") : [];
-                    const amounts = productAmount ? productAmount.split(",") : [];
-                    const photos = productPhoto ? productPhoto.split(",") : [];
-                    const titles = productTitle ? productTitle.split(",") : [];
-                    const skus = productSku ? productSku.split(",") : [];
-                    const descriptions = productDescription ? productDescription.split("||") : [];
-
-                    const salesRepresentativeName = `${firstname} ${lastname}`;
-
-                    // Extract username part before '@' if email already has domain
-                    const emailUsername = email.split("@")[0];
-
-                    // Determine email domain based on quotationType
-                    let emailDomain = "";
-                    if (quotationType === "Disruptive Solutions Inc") {
-                        emailDomain = "disruptivesolutionsinc.com";
-                    } else if (quotationType === "Ecoshift Corporation") {
-                        emailDomain = "ecoshiftcorp.com";
-                    } else {
-                        emailDomain = email.split("@")[1] || ""; // fallback to original domain if any
-                    }
-
-                    const salesemail = `${emailUsername}@${emailDomain}`;
-                    const salescontact = `${contact}`;
-                    const salestsmname = `${tsmname}`;
-                    const salesmanagername = `${managername}`;
-
-                    const items = productCats.map((_, index) => {
-                        const qty = Number(quantities[index] || 0);
-                        const amount = Number(amounts[index] || 0);
-                        const photo = photos[index] || "";
-                        const title = titles[index] || "";
-                        const sku = skus[index] || "";
-                        const description = descriptions[index] || "";
-
-                        const descriptionTable = `<table>
-            <tr><td>${title}</td></tr>
-            <tr><td>${sku}</td></tr>
-            <tr><td>${description}</td></tr>
-          </table>`;
-
-                        return {
-                            itemNo: index + 1,
-                            qty,
-                            referencePhoto: photo,
-                            description: descriptionTable,
-                            unitPrice: qty > 0 ? amount / qty : 0,
-                            totalAmount: amount,
-                        };
-                    });
-
-                    const quotationData = {
-                        referenceNo: quotationNumber || activityRef,
-                        date: formattedDate,
-                        companyName: company_name,
-                        address: address,
-                        telNo: contact_number,
-                        email: email_address,
-                        attention: `${contact_person}, ${address}`,
-                        subject: "For Quotation",
-                        items,
-                        vatType: "Vat Inc",
-                        totalPrice: Number(quotationAmount),
-                        salesRepresentative: salesRepresentativeName,
-                        salesemail,
-                        salescontact,
-                        salestsmname,
-                        salesmanagername,
-                    };
-
-                    // Determine API endpoint based on quotationType
-                    let apiEndpoint = "/api/quotation/disruptive"; // default
-
-                    if (quotationType === "Ecoshift Corporation") {
-                        apiEndpoint = "/api/quotation/ecoshift";
-                    } else if (quotationType === "Disruptive Solutions Inc") {
-                        apiEndpoint = "/api/quotation/disruptive";
-                    }
-
-                    // Call server API to generate Excel
-                    const resExport = await fetch(apiEndpoint, {
-                        method: "POST",
-                        body: JSON.stringify(quotationData),
-                    });
-
-                    const blob = await resExport.blob();
-                    const url = URL.createObjectURL(blob);
-
-                    startProgressAndDownload(url, quotationData.referenceNo || activityRef);
-
-                }
-            }
-
             resetForm();
             setStep(1);
             setSheetOpen(false);
@@ -673,7 +569,7 @@ export function CreateActivityDialog({
                             setSheetOpen(true);
                         }}
                     >
-                      <Plus /> Create
+                        <Plus /> Create
                     </Button>
                 </SheetTrigger>
 
@@ -947,11 +843,24 @@ export function CreateActivityDialog({
 
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
-                                    tsm={tsmState}
+                                    tsm={tsm}
                                     setTSM={setTSMState}
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}
+
+                                    // The props you want to pass down:
+                                    firstname={firstname}
+                                    lastname={lastname}
+                                    email={email}
+                                    contact={contact}
+                                    tsmname={tsmname}
+                                    managername={managername}
+                                    company_name={company_name}
+                                    address={address}
+                                    contact_number={contact_number}
+                                    email_address={email_address}
+                                    contact_person={contact_person}
                                 />
                             )}
 

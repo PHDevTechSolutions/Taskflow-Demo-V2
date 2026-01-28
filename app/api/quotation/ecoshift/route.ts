@@ -105,9 +105,6 @@ export async function POST(req: Request) {
     extension: "png",
   });
 
-  // Add an empty row for spacing (optional)
-  addFooterRow(sheet, "");
-
   // Place image spanning columns 1 to 6, with explicit size to fit row height 80
   sheet.addImage(imageId, {
     tl: { col: 0, row: 0 } as any,

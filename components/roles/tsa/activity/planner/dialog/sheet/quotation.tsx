@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemHeader, ItemMedia, ItemTitle, } from "@/components/ui/item";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
+import { Trash, Download } from "lucide-react";
 
 interface Props {
   step: number;
@@ -58,6 +58,17 @@ interface Props {
   handleBack: () => void;
   handleNext: () => void;
   handleSave: () => void;
+  firstname: string;
+  lastname: string;
+  email: string;
+  contact: string;
+  tsmname: string;
+  managername: string;
+  company_name: string;
+  address: string;
+  contact_number: string;
+  email_address: string;
+  contact_person: string;
 }
 
 const Quotation_SOURCES = [
@@ -85,6 +96,7 @@ interface Product {
 interface SelectedProduct extends Product {
   quantity: number;
   price: number;
+  vatDiscounted?: boolean;
 }
 
 function extractTsmPrefix(tsm: string): string {
@@ -140,6 +152,17 @@ export function QuotationSheet(props: Props) {
     handleBack,
     handleNext,
     handleSave,
+    firstname,
+    lastname,
+    email,
+    contact,
+    tsmname,
+    managername,
+    company_name,
+    address,
+    contact_number,
+    email_address,
+    contact_person,
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -150,6 +173,9 @@ export function QuotationSheet(props: Props) {
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [noProductsAvailable, setNoProductsAvailable] = useState(false);
   const [showConfirmFollowUp, setShowConfirmFollowUp] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [discount, setDiscount] = React.useState(0);
+  const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("vat_inc");
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -170,10 +196,8 @@ export function QuotationSheet(props: Props) {
   const [localQuotationNumber, setLocalQuotationNumber] = useState(quotationNumber);
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
-
   // Manual Creation and Submission to Shopify
   const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
-
 
   async function fetchNextQuotationSequence(prefixBase: string): Promise<string> {
     const currentYear = new Date().getFullYear();
@@ -333,24 +357,12 @@ export function QuotationSheet(props: Props) {
     return match ? match[0] : "";
   }
 
-  // Auto compute total quotation amount when selectedProducts changes
-  useEffect(() => {
-    const total = selectedProducts.reduce(
-      (sum, p) => sum + p.quantity * p.price,
-      0
-    );
-    setQuotationAmount(total.toFixed(2));
-  }, [selectedProducts, setQuotationAmount]);
-
-  // Validation states
-
   // Save handler with validation
   const saveWithSelectedProducts = () => {
     setShowQuotationAlert(true);  // Show the Shadcn alert
 
     handleSave();
   };
-
 
   function setDescriptionAtIndex(idx: number, newDesc: string) {
     setManualProducts((prev) => {
@@ -393,6 +405,180 @@ export function QuotationSheet(props: Props) {
     setShowConfirmFollowUp(false);
   };
 
+  // Function to extract <table>...</table> from full HTML string
+  function extractTableHtml(html: string): string {
+    const match = html.match(/<table[\s\S]*?<\/table>/i);
+    return match ? match[0] : "";
+  }
+
+  useEffect(() => {
+    const subtotal = selectedProducts.reduce(
+      (sum, p) => sum + p.quantity * p.price,
+      0
+    );
+
+    let total = subtotal;
+
+    // PH VAT = 12%
+    if (vatType === "vat_exe") {
+      total = subtotal * 1.12; // add VAT
+    }
+
+    if (vatType === "vat_inc") {
+      total = subtotal; // already VAT inclusive
+    }
+
+    if (vatType === "zero_rated") {
+      total = subtotal; // no VAT
+    }
+
+    // Apply discount AFTER VAT
+    total = Math.max(0, total - discount);
+
+    setQuotationAmount(total.toFixed(2));
+  }, [selectedProducts, vatType, discount]);
+
+  const today = new Date();
+  const formattedDate = today.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const handleDownloadQuotation = async () => {
+    if (!productCat || productCat.trim() === "") {
+      toast.error("Cannot export quotation: Product Category is empty.");
+      return;
+    }
+
+    try {
+      // Prepare arrays from comma-separated strings
+      const productCats = productCat.split(",");
+      const quantities = productQuantity ? productQuantity.split(",") : [];
+      const amounts = productAmount ? productAmount.split(",") : [];
+      const photos = productPhoto ? productPhoto.split(",") : [];
+      const titles = productTitle ? productTitle.split(",") : [];
+      const skus = productSku ? productSku.split(",") : [];
+      const descriptions = productDescription ? productDescription.split("||") : [];
+
+      // Compose other details
+      const salesRepresentativeName = `${firstname} ${lastname}`;
+      const emailUsername = email.split("@")[0];
+
+      let emailDomain = "";
+      if (quotationType === "Disruptive Solutions Inc") {
+        emailDomain = "disruptivesolutionsinc.com";
+      } else if (quotationType === "Ecoshift Corporation") {
+        emailDomain = "ecoshiftcorp.com";
+      } else {
+        emailDomain = email.split("@")[1] || "";
+      }
+
+      const salesemail = `${emailUsername}@${emailDomain}`;
+      const salescontact = `${contact}`;
+      const salestsmname = `${tsmname}`;
+      const salesmanagername = `${managername}`;
+
+      const items = productCats.map((_, index) => {
+        const qty = Number(quantities[index] || 0);
+        const amount = Number(amounts[index] || 0);
+        const photo = photos[index] || "";
+        const title = titles[index] || "";
+        const sku = skus[index] || "";
+        const description = descriptions[index] || "";
+
+        const descriptionTable = `<table>
+        <tr><td>${title}</td></tr>
+        <tr><td>${sku}</td></tr>
+        <tr><td>${description}</td></tr>
+      </table>`;
+
+        return {
+          itemNo: index + 1,
+          qty,
+          referencePhoto: photo,
+          description: descriptionTable,
+          unitPrice: qty > 0 ? amount / qty : 0,
+          totalAmount: amount,
+        };
+      });
+
+      const formattedDate = new Date().toLocaleDateString();
+
+      const quotationData = {
+        referenceNo: quotationNumber,
+        date: formattedDate,
+        companyName: company_name,
+        address: address,
+        telNo: contact_number,
+        email: email_address,
+        attention: `${contact_person}, ${address}`,
+        subject: "For Quotation",
+        items,
+        vatType: vatType === "vat_inc" ? "VAT Inc"
+          : vatType === "vat_exe" ? "VAT Exe"
+            : "Zero-Rated",
+
+        totalPrice: Number(quotationAmount),
+        salesRepresentative: salesRepresentativeName,
+        salesemail,
+        salescontact,
+        salestsmname,
+        salesmanagername,
+      };
+
+      let apiEndpoint = "/api/quotation/disruptive"; // default
+      if (quotationType === "Ecoshift Corporation") {
+        apiEndpoint = "/api/quotation/ecoshift";
+      } else if (quotationType === "Disruptive Solutions Inc") {
+        apiEndpoint = "/api/quotation/disruptive";
+      }
+
+      const resExport = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(quotationData),
+      });
+
+      if (!resExport.ok) {
+        const errorText = await resExport.text();
+        toast.error("Failed to download quotation: " + errorText);
+        return;
+      }
+
+      const blob = await resExport.blob();
+      const url = URL.createObjectURL(blob);
+
+      // Trigger the download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Quotation_${quotationNumber || "unknown"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error("Failed to download quotation. Please try again.");
+    }
+  };
+
+  function toggleVatDiscount(idx: number) {
+  setSelectedProducts((prev) => {
+    const copy = [...prev];
+    copy[idx] = {
+      ...copy[idx],
+      vatDiscounted: !copy[idx].vatDiscounted,
+    };
+    return copy;
+  });
+}
+
+function getDiscountedPrice(p: typeof selectedProducts[number]) {
+  if (p.vatDiscounted) {
+    return Math.max(0, p.price * (1 - discount / 100));
+  }
+  return p.price;
+}
 
   return (
     <>
@@ -594,7 +780,6 @@ export function QuotationSheet(props: Props) {
               </RadioGroup>
             </FieldSet>
           </FieldGroup>
-
         </div>
       )}
 
@@ -622,117 +807,6 @@ export function QuotationSheet(props: Props) {
                   )}
                 </div>
               </Alert>
-
-              {!noProductsAvailable && !isManualEntry && (
-                <>
-                  <FieldLabel>Product Name</FieldLabel>
-                  <Input
-                    type="text"
-                    className="uppercase"
-                    value={searchTerm}
-                    placeholder="Search product..."
-                    onChange={async (e) => {
-                      if (isManualEntry) return; // skip searching if manual
-                      const value = e.target.value.toLowerCase();
-                      setSearchTerm(value);
-
-                      if (value.length < 2) {
-                        setSearchResults([]);
-                        return;
-                      }
-
-                      setIsSearching(true);
-                      try {
-                        const res = await fetch(`/api/shopify/products?q=${value}`);
-                        let data = await res.json();
-                        let products: Product[] = data.products || [];
-
-                        // Filter client-side for SKU match as well
-                        products = products.filter((product) => {
-                          const titleMatch = product.title.toLowerCase().includes(value);
-                          const skuMatch = product.skus?.some((sku) =>
-                            sku.toLowerCase().includes(value)
-                          );
-                          return titleMatch || skuMatch;
-                        });
-
-                        setSearchResults(products);
-                      } catch (err) {
-                        console.error(err);
-                      }
-                      setIsSearching(false);
-                    }}
-                  />
-                </>
-              )}
-
-              {isSearching && <p className="text-sm mt-1">Searching...</p>}
-
-              {/* RESULTS AS CHECKBOX CARDS */}
-              {!isManualEntry && searchResults.length > 0 && (
-                <div className="mt-2 space-y-3 max-h-60 overflow-y-auto">
-                  {searchResults.map((item) => {
-                    const isChecked = selectedProducts.some((p) => p.id === item.id);
-
-                    return (
-                      <Card key={item.id} className="cursor-pointer hover:bg-gray-50">
-                        <CardHeader className="flex items-center justify-between gap-3">
-                          <label className="flex items-center gap-2 cursor-pointer flex-1">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedProducts((prev) => [
-                                    ...prev,
-                                    {
-                                      ...item,
-                                      quantity: 1,
-                                      price: 0,
-                                      description: item.description || "",
-                                    },
-                                  ]);
-                                } else {
-                                  setSelectedProducts((prev) =>
-                                    prev.filter((p) => p.id !== item.id)
-                                  );
-                                  setVisibleDescriptions((prev) => {
-                                    const copy = { ...prev };
-                                    delete copy[item.id];
-                                    return copy;
-                                  });
-                                }
-                              }}
-                              className="mt-0.5"
-                            />
-                            <CardTitle className="text-base text-xs font-semibold">{item.title}</CardTitle>
-                          </label>
-                        </CardHeader>
-
-                        <CardContent className="flex justify-center p-2">
-                          {item.images?.[0]?.src ? (
-                            <img
-                              src={item.images[0].src}
-                              alt={item.title}
-                              className="w-24 h-24 object-cover rounded"
-                            />
-                          ) : (
-                            <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400">
-                              No Image
-                            </div>
-                          )}
-                        </CardContent>
-
-                        <CardFooter className="text-xs text-gray-600">
-                          {item.skus && item.skus.length > 0
-                            ? `SKU${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
-                            : "No SKU available"}
-                        </CardFooter>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
 
               {/* <label className="flex items-center gap-2 mt-4">
                 <input
@@ -768,93 +842,7 @@ export function QuotationSheet(props: Props) {
               </label>
 
               {/* Selected Products with quantity and price inputs */}
-              {!isManualEntry && selectedProducts.length > 0 && (
-                <div className="mt-3 space-y-4">
-                  <h4 className="font-semibold mb-2 text-xs">
-                    Selected Products: ({selectedProducts.length})
-                  </h4>
-                  {selectedProducts.map((p, idx) => (
-                    <Item
-                      key={p.id}
-                      variant="outline"
-                      className="flex flex-col md:flex-row md:items-center md:gap-4"
-                    >
-                      {/* Product Title */}
-                      <ItemContent className="flex-1 text-xs font-medium">{p.title}</ItemContent>
-
-                      {/* Quantity, Price, Total grouped */}
-                      <ItemActions className="flex items-center gap-4 mt-2 md:mt-0">
-                        <label className="flex flex-col text-xs">
-                          Quantity
-                          <Input
-                            type="number"
-                            min={1}
-                            value={p.quantity}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value) || 1);
-                              setSelectedProducts((prev) => {
-                                const copy = [...prev];
-                                copy[idx] = { ...copy[idx], quantity: val };
-                                return copy;
-                              });
-                            }}
-                            className="w-20"
-                          />
-                        </label>
-
-                        <label className="flex flex-col text-xs">
-                          Price
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={p.price}
-                            onChange={(e) => {
-                              const val = Math.max(0, parseFloat(e.target.value) || 0);
-                              setSelectedProducts((prev) => {
-                                const copy = [...prev];
-                                copy[idx] = { ...copy[idx], price: val };
-                                return copy;
-                              });
-                            }}
-                            className="w-28"
-                          />
-                        </label>
-
-                        <div className="text-xs font-semibold whitespace-nowrap">
-                          Total: ₱{(p.quantity * p.price).toFixed(2)}
-                        </div>
-                      </ItemActions>
-
-                      {/* View Description Button aligned to left side */}
-                      <ItemActions className="flex justify-start items-center mt-2 md:mt-0 md:flex-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setVisibleDescriptions((prev) => ({
-                              ...prev,
-                              [p.id]: !prev[p.id],
-                            }))
-                          }
-                          className="whitespace-nowrap"
-                        >
-                          {visibleDescriptions[p.id] ? "Hide Description" : "View Description"}
-                        </Button>
-                      </ItemActions>
-
-                      {/* Description Section */}
-                      {visibleDescriptions[p.id] && p.description && (
-                        <div
-                          className="mt-2 text-xs prose max-w-none md:col-span-3"
-                          style={{ whiteSpace: "pre-wrap" }}
-                          dangerouslySetInnerHTML={{ __html: p.description }}
-                        />
-                      )}
-                    </Item>
-                  ))}
-                </div>
-              )}
+              <Button onClick={() => setOpen(true)}>Open Product Selector</Button>
 
               {isManualEntry && (
                 <p className="text-sm text-gray-600">
@@ -1196,6 +1184,372 @@ export function QuotationSheet(props: Props) {
           )}
         </div>
       )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          className="w-[90vw] max-h-[90vh] overflow-y-auto p-6"
+          style={{ maxWidth: '1600px', width: '100vw' }}
+        >
+          <DialogHeader>
+            <DialogTitle>Select Products</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-[1fr_2.5fr] gap-6 mt-4 max-h-[75vh] overflow-hidden">
+            {/* Left side: Search + checkbox selected */}
+            <div className="flex flex-col gap-4 overflow-y-auto pr-2">
+              {!noProductsAvailable && !isManualEntry && (
+                <>
+                  <FieldLabel>Product Name</FieldLabel>
+                  <Input
+                    type="text"
+                    className="uppercase"
+                    value={searchTerm}
+                    placeholder="Search product..."
+                    onChange={async (e) => {
+                      if (isManualEntry) return;
+                      const value = e.target.value.toLowerCase();
+                      setSearchTerm(value);
+
+                      if (value.length < 2) {
+                        setSearchResults([]);
+                        return;
+                      }
+
+                      setIsSearching(true);
+                      try {
+                        const res = await fetch(`/api/shopify/products?q=${value}`);
+                        let data = await res.json();
+                        let products: Product[] = data.products || [];
+
+                        products = products.filter((product) => {
+                          const titleMatch = product.title.toLowerCase().includes(value);
+                          const skuMatch = product.skus?.some((sku) =>
+                            sku.toLowerCase().includes(value)
+                          );
+                          return titleMatch || skuMatch;
+                        });
+
+                        setSearchResults(products);
+                      } catch (err) {
+                        console.error(err);
+                      }
+                      setIsSearching(false);
+                    }}
+                  />
+                  {isSearching && <p className="text-sm mt-1">Searching...</p>}
+
+                  {/* Selected Products checkboxes */}
+                  <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh]">
+                    {selectedProducts.length === 0 && (
+                      <p className="text-xs text-gray-500">No products selected.</p>
+                    )}
+                    {selectedProducts.map((item) => (
+                      <label key={item.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={true}
+                          onChange={() => {
+                            setSelectedProducts((prev) =>
+                              prev.filter((p) => p.id !== item.id)
+                            );
+                            setVisibleDescriptions((prev) => {
+                              const copy = { ...prev };
+                              delete copy[item.id];
+                              return copy;
+                            });
+                          }}
+                          className="mt-0.5"
+                        />
+                        {item.title}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {!isManualEntry && searchResults.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+                  {searchResults.map((item) => {
+                    const isChecked = selectedProducts.some((p) => p.id === item.id);
+
+                    return (
+                      <Card key={item.id} className="cursor-pointer hover:bg-gray-50">
+                        <CardHeader className="flex items-center justify-between gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedProducts((prev) => [
+                                    ...prev,
+                                    {
+                                      ...item,
+                                      quantity: 1,
+                                      price: 0,
+                                      description: item.description || "",
+                                    },
+                                  ]);
+                                  setOpen(true);
+                                } else {
+                                  setSelectedProducts((prev) =>
+                                    prev.filter((p) => p.id !== item.id)
+                                  );
+                                  setVisibleDescriptions((prev) => {
+                                    const copy = { ...prev };
+                                    delete copy[item.id];
+                                    return copy;
+                                  });
+                                }
+                              }}
+                              className="mt-0.5"
+                            />
+                            <CardTitle className="text-base text-xs font-semibold">
+                              {item.title}
+                            </CardTitle>
+                          </label>
+                        </CardHeader>
+
+                        <CardContent className="flex justify-center p-2">
+                          {item.images?.[0]?.src ? (
+                            <img
+                              src={item.images[0].src}
+                              alt={item.title}
+                              className="w-24 h-24 object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400">
+                              No Image
+                            </div>
+                          )}
+                        </CardContent>
+
+                        <CardFooter className="text-xs text-gray-600">
+                          {item.skus && item.skus.length > 0
+                            ? `SKU${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
+                            : "No SKU available"}
+                        </CardFooter>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right side: Selected Products as Table with Image & Editable Description */}
+            <div className="overflow-y-auto max-h-[75vh]">
+              {selectedProducts.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    {/* LEFT */}
+                    <h4 className="font-semibold text-xs">
+                      Selected Products: ({selectedProducts.length})
+                    </h4>
+
+                    {/* RIGHT */}
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs font-medium">VAT Type:</span>
+
+                      <RadioGroup
+                        value={vatType}
+                        onValueChange={(value) =>
+                          setVatType(value as "vat_inc" | "vat_exe" | "zero_rated")
+                        }
+                        className="flex items-center gap-3"
+                      >
+                        <div className="flex items-center gap-1">
+                          <RadioGroupItem value="vat_inc" id="vat-inc" />
+                          <label htmlFor="vat-inc" className="text-xs cursor-pointer">
+                            VAT Inc
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <RadioGroupItem value="vat_exe" id="vat-exe" />
+                          <label htmlFor="vat-exe" className="text-xs cursor-pointer">
+                            VAT Exe
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <RadioGroupItem value="zero_rated" id="zero-rated" />
+                          <label htmlFor="zero-rated" className="text-xs cursor-pointer">
+                            Zero Rated
+                          </label>
+                        </div>
+                      </RadioGroup>
+
+                      {/* DISCOUNT */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium">Discount:</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={discount}
+                          onChange={(e) =>
+                            setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
+                          }
+                          className="w-24 text-xs h-8"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-300 p-2 text-left">Product</th>
+                        <th className="border border-gray-300 p-2 text-left w-30">Quantity</th>
+                        <th className="border border-gray-300 p-2 text-left w-30">Price</th>
+                        <th className="border border-gray-300 p-2 text-left w-30">Total</th>
+                        <th className="border border-gray-300 p-2 text-center w-20">Remove</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedProducts.map((p, idx) => (
+                        <React.Fragment key={p.id}>
+                          <tr className="even:bg-gray-50">
+                            <td className="p-2 flex items-center gap-3">
+                              {p.images?.[0]?.src ? (
+                                <img
+                                  src={p.images[0].src}
+                                  alt={p.title}
+                                  className="w-12 h-12 object-cover rounded"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
+                                  No Image
+                                </div>
+                              )}
+
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                className="flex-1 outline-none"
+                                onBlur={(e) => {
+                                  const text = e.currentTarget.innerText;
+                                  setSelectedProducts((prev) => {
+                                    const copy = [...prev];
+                                    copy[idx] = { ...copy[idx], title: text };
+                                    return copy;
+                                  });
+                                }}
+                              >
+                                {p.title}
+                              </div>
+
+                            </td>
+
+                            <td className="border border-gray-300 p-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                value={p.quantity}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 1);
+                                  setSelectedProducts((prev) => {
+                                    const copy = [...prev];
+                                    copy[idx] = { ...copy[idx], quantity: val };
+                                    return copy;
+                                  });
+                                }}
+                                className="border-none shadow-none w-full"
+                              />
+                            </td>
+                            <td className="border border-gray-300 p-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={p.price}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                  setSelectedProducts((prev) => {
+                                    const copy = [...prev];
+                                    copy[idx] = { ...copy[idx], price: val };
+                                    return copy;
+                                  });
+                                }}
+                                className="border-none shadow-none w-full"
+                              />
+                            </td>
+                            <td className="border border-gray-300 p-2 font-semibold">
+                              ₱{(p.quantity * p.price).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center">
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  setSelectedProducts((prev) =>
+                                    prev.filter((item) => item.id !== p.id)
+                                  );
+                                  setVisibleDescriptions((prev) => {
+                                    const copy = { ...prev };
+                                    delete copy[p.id];
+                                    return copy;
+                                  });
+                                }}
+                              >
+                                <Trash />
+                              </Button>
+                            </td>
+                          </tr>
+
+                          {/* Description row */}
+                          <tr className="even:bg-gray-50">
+                            <td
+                              colSpan={5}
+                              className="border border-gray-300 p-2"
+                            >
+                              <label className="block text-xs font-medium mb-1">Description:</label>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                className="w-full max-h-48 overflow-auto border border-gray-300 rounded p-2 text-xs"
+                                dangerouslySetInnerHTML={{
+                                  __html: extractTableHtml(p.description || "")
+                                }}
+                                onBlur={(e) => {
+                                  const html = e.currentTarget.innerHTML;
+                                  setSelectedProducts((prev) => {
+                                    const copy = [...prev];
+                                    copy[idx] = { ...copy[idx], description: html };
+                                    return copy;
+                                  });
+                                }}
+                              />
+
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+
+          </div>
+
+          <DialogFooter className="flex items-center justify-between">
+            {/* Left side: Close button */}
+            <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
+
+            {/* Right side: Total + Download button */}
+            <div className="flex items-center gap-4">
+              <div className="text-sm font-semibold">
+                Total: ₱{quotationAmount}
+              </div>
+              <Button onClick={handleDownloadQuotation}>
+               <Download /> Download
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
