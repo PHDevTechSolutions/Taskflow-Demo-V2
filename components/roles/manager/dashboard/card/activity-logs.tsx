@@ -1,7 +1,16 @@
 "use client";
 
-import { Card, CardHeader, CardContent, } from "@/components/ui/card";
-import { Item, ItemContent, ItemDescription, ItemTitle, } from "@/components/ui/item";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
+
+/* =======================
+   Types
+======================= */
 
 interface Agent {
   ReferenceID: string;
@@ -9,6 +18,7 @@ interface Agent {
   Lastname: string;
   profilePicture: string;
   Role: string;
+  Status?: string | null;
 }
 
 interface Activity {
@@ -21,42 +31,70 @@ interface Props {
   agentActivityMap: Record<string, Activity>;
 }
 
-export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
-  // 👉 Group agents by role
-  const tsaAgents = agents.filter(
+/* =======================
+   Component
+======================= */
+
+export function AgentActivityLogs({
+  agents,
+  agentActivityMap,
+}: Props) {
+  /* 🔹 FILTER OUT resigned & terminated */
+  const activeAgents = agents.filter(
+    (a) =>
+      !["resigned", "terminated"].includes(
+        (a.Status || "").toLowerCase()
+      )
+  );
+
+  /* 🔹 GROUP BY ROLE */
+  const tsaAgents = activeAgents.filter(
     (a) => a.Role === "Territory Sales Associate"
   );
 
-  const tsmAgents = agents.filter(
+  const tsmAgents = activeAgents.filter(
     (a) => a.Role === "Territory Sales Manager"
   );
 
+  /* 🔹 RENDER GRID */
   const renderAgentsGrid = (list: Agent[]) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {list.map((agent) => {
-        const activity = agentActivityMap[agent.ReferenceID];
+        const activity =
+          agentActivityMap?.[agent.ReferenceID];
 
         return (
-          <Item key={agent.ReferenceID} variant="outline">
+          <Item
+            key={agent.ReferenceID}
+            variant="outline"
+          >
             <ItemContent className="flex gap-3 font-mono">
               <div className="flex items-center gap-4">
                 <img
-                  src={agent.profilePicture || "/Taskflow.png"}
+                  src={
+                    agent.profilePicture ||
+                    "/Taskflow.png"
+                  }
                   alt={`${agent.Firstname} ${agent.Lastname}`}
                   className="h-20 w-20 rounded-full shadow-sm object-cover border flex-shrink-0"
                 />
 
                 <div className="flex flex-col">
                   <ItemTitle className="text-xs capitalize leading-tight">
-                    {agent.Firstname} {agent.Lastname}
+                    {agent.Firstname}{" "}
+                    {agent.Lastname}
                   </ItemTitle>
 
                   <ItemDescription className="flex flex-col gap-0.5 text-xs">
                     <span>
-                      Latest login: {activity?.latestLogin ?? "—"}
+                      Latest login:{" "}
+                      {activity?.latestLogin ??
+                        "—"}
                     </span>
                     <span>
-                      Latest logout: {activity?.latestLogout ?? "—"}
+                      Latest logout:{" "}
+                      {activity?.latestLogout ??
+                        "—"}
                     </span>
                   </ItemDescription>
                 </div>
@@ -68,14 +106,18 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
     </div>
   );
 
+  /* =======================
+     Render
+  ======================= */
+
   return (
     <Card>
       <CardHeader className="font-semibold">
-        User's Login Activity
+        User&apos;s Login Activity
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6">
-        {/* Territory Sales Associates */}
+        {/* TSA */}
         {tsaAgents.length > 0 && (
           <div className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
@@ -85,7 +127,7 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
           </div>
         )}
 
-        {/* Territory Sales Managers */}
+        {/* TSM */}
         {tsmAgents.length > 0 && (
           <div className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
@@ -94,6 +136,14 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
             {renderAgentsGrid(tsmAgents)}
           </div>
         )}
+
+        {/* EMPTY STATE */}
+        {tsaAgents.length === 0 &&
+          tsmAgents.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center">
+              No active agents to display
+            </p>
+          )}
       </CardContent>
     </Card>
   );

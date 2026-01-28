@@ -81,7 +81,6 @@ export function AgentList({
     const [agents, setAgents] = useState<Agent[]>([]);
     const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-    const [count, setCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [todayNextAvailableCount, setTodayNextAvailableCount] = useState<number>(0);
@@ -151,22 +150,17 @@ export function AgentList({
     /* =========================
    FETCH AGENTS
 ========================= */
+
     useEffect(() => {
+
         fetch(`/api/fetch-all-users-admin`)
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch agents");
                 return res.json();
             })
-            .then((data) => {
-                // Filter to Territory Sales Associate only
-                const tsaAgents = data.filter(
-                    (agent: Agent) => agent.Role.toLowerCase() === "territory sales associate"
-                );
-                setAgents(tsaAgents);
-            })
+            .then(setAgents)
             .catch(() => setErrorHistory("Failed to load agents."));
     }, []);
-
 
     /* =========================
        FETCH HISTORY

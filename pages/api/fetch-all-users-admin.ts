@@ -1,23 +1,27 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/mongodb";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
-    return res.status(405).json({ error: `Method ${req.method} not allowed` });
+    return res
+      .status(405)
+      .json({ error: `Method ${req.method} not allowed` });
   }
 
   try {
     const db = await connectToDatabase();
 
-    // Fetch all agents whose Role is Territory Sales Associate, Territory Sales Manager, or Manager
-    // and Department is Sales, and Status is NOT "Resigned" or "Terminated"
     const agents = await db
       .collection("users")
       .find({
-        Role: { $in: ["Territory Sales Associate", "Territory Sales Manager", "Manager"] },
         Department: "Sales",
-        Status: { $nin: ["Resigned", "Terminated"] },
+        Status: {
+          $nin: ["Resigned", "Terminated"],
+        },
       })
       .project({
         Firstname: 1,
@@ -34,12 +38,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .toArray();
 
     if (agents.length === 0) {
-      return res.status(404).json({ error: "No agents found" });
+      return res
+        .status(404)
+        .json({ error: "No agents found" });
     }
 
-    res.status(200).json(agents);
+    return res.status(200).json(agents);
   } catch (error) {
     console.error("Error fetching agents:", error);
-    res.status(500).json({ error: "Server error fetching agents" });
+    return res
+      .status(500)
+      .json({ error: "Server error fetching agents" });
   }
 }
