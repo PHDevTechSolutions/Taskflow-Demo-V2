@@ -961,8 +961,6 @@ export function CreateActivityDialog({
                                     setStep={setStep}
                                     source={source}
                                     setSource={setSource}
-                                    soNumber={soNumber}
-                                    setSoNumber={setSoNumber}
                                     soAmount={soAmount}
                                     setSoAmount={setSoAmount}
                                     callType={callType}
@@ -986,6 +984,8 @@ export function CreateActivityDialog({
                                     setStep={setStep}
                                     drNumber={drNumber}
                                     setDrNumber={setDrNumber}
+                                    soNumber={soNumber}
+                                    setSoNumber={setSoNumber}
                                     siAmount={siAmount}
                                     setSiAmount={setSiAmount}
                                     siDate={siDate}

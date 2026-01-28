@@ -452,20 +452,20 @@ export function QuotationSheet(props: Props) {
               <RadioGroup value={callType} onValueChange={setCallType}>
                 {[
                   {
-                    label: "Sent Quotation Standard",
-                    description: "Standard quotation sent to client.",
+                    label: "Quotation Standard",
+                    description: "Preparation of Standard quotation to client.",
                   },
                   {
-                    label: "Sent Quotation with Special Price",
-                    description: "Quotation with a special pricing offer.",
+                    label: "Quotation with Special Price",
+                    description: "Preparation of Quotation with a special pricing offer.",
                   },
                   {
-                    label: "Sent Quotation with SPF",
-                    description: "Quotation including SPF (Special Pricing Framework).",
+                    label: "Quotation with SPF",
+                    description: "Preparation of Quotation including SPF (Special Pricing Framework).",
                   },
                   {
                     label: "With SPFS",
-                    description: "Quotation with SPFS details included.",
+                    description: "Preparation of Quotation with SPFS details included.",
                   },
                 ].map(({ label, description }) => (
                   <FieldLabel key={label}>

@@ -13,8 +13,6 @@ interface Props {
     setStep: (step: number) => void;
     source: string;
     setSource: (v: string) => void;
-    soNumber: string;
-    setSoNumber: (v: string) => void;
     soAmount: string;
     setSoAmount: (v: string) => void;
     callType: string;
@@ -110,8 +108,6 @@ export function SOSheet(props: Props) {
         setStep,
         source,
         setSource,
-        soNumber,
-        setSoNumber,
         soAmount,
         setSoAmount,
         callType,
@@ -129,16 +125,10 @@ export function SOSheet(props: Props) {
 
     // Validation helpers
     const isStep2Valid = source.trim() !== "";
-    const isStep3Valid = soNumber.trim() !== "" && soAmount.trim() !== "" && !isNaN(Number(soAmount));
     const isStep4Valid = callType.trim() !== "";
-    const isStep5Valid = remarks.trim() !== "";
 
     // Step 3 Next handler with validation
     const handleNextStep3 = () => {
-        if (soNumber.trim() === "") {
-            toast.error("Please enter SO Number.");
-            return;
-        }
         if (soAmount.trim() === "" || isNaN(Number(soAmount))) {
             toast.error("Please enter valid SO Amount.");
             return;
@@ -219,21 +209,6 @@ export function SOSheet(props: Props) {
             {step === 3 && (
                 <div>
                     <FieldGroup>
-                        {/* SO Number */}
-                        <FieldSet>
-                            <FieldLabel>SO Number</FieldLabel>
-                            <p className="text-xs text-muted-foreground mb-1">
-                                Enter the official Sales Order number provided by the client or internal system.
-                            </p>
-                            <Input
-                                type="text"
-                                value={soNumber}
-                                onChange={(e) => setSoNumber(e.target.value)}
-                                placeholder="Enter SO Number ex. SO-0000-0000"
-                                className="uppercase"
-                            />
-                        </FieldSet>
-
                         {/* SO Amount */}
                         <FieldSet className="mt-3">
                             <FieldLabel>SO Amount</FieldLabel>
@@ -255,7 +230,7 @@ export function SOSheet(props: Props) {
                         <Button variant="outline" onClick={handleBack}>
                             Back
                         </Button>
-                        <Button onClick={handleNextStep3} disabled={!isStep3Valid}>
+                        <Button onClick={handleNextStep3}>
                             Next
                         </Button>
                     </div>

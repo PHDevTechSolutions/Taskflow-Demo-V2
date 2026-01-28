@@ -475,10 +475,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                     <div className="ml-1 flex flex-wrap gap-1 uppercase">
                       {/* Status Badge */}
-                      <Badge variant={badgeProps.variant} className={`font-mono ${badgeProps.className || ""}`}>
-                        <CheckCircle2 />
-                        {item.status.replace("-", " ")}
-                      </Badge>
+                      {!["assisted", "not assisted"].includes(item.status.toLowerCase()) && (
+                        <Badge
+                          variant={badgeProps.variant}
+                          className={`font-mono ${badgeProps.className || ""}`}
+                        >
+                          <CheckCircle2 />
+                          {item.status.replace("-", " ")}
+                        </Badge>
+                      )}
 
                       {item.relatedHistoryItems.some((h: HistoryItem) =>
                         !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
