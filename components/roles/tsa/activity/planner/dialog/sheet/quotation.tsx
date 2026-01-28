@@ -158,9 +158,9 @@ export function QuotationSheet(props: Props) {
   }
 
   useEffect(() => {
-    if (callType === "Quotation Standard" || callType === "Quotation with Special Price") {
+    if (callType === "Quotation Standard Preparation" || callType === "Quotation with Special Price Preparation") {
       setFollowUpDate(addDaysToDate(1)); // after 1 day (tomorrow)
-    } else if (callType === "Quotation with SPF") {
+    } else if (callType === "Quotation with SPF Preparation") {
       setFollowUpDate(addDaysToDate(5)); // after 5 days
     } else {
       setFollowUpDate(""); // clear or keep empty for others
@@ -452,20 +452,16 @@ export function QuotationSheet(props: Props) {
               <RadioGroup value={callType} onValueChange={setCallType}>
                 {[
                   {
-                    label: "Quotation Standard",
+                    label: "Quotation Standard Preparation",
                     description: "Preparation of Standard quotation to client.",
                   },
                   {
-                    label: "Quotation with Special Price",
+                    label: "Quotation with Special Price Preparation",
                     description: "Preparation of Quotation with a special pricing offer.",
                   },
                   {
-                    label: "Quotation with SPF",
+                    label: "Quotation with SPF Preparation",
                     description: "Preparation of Quotation including SPF.",
-                  },
-                  {
-                    label: "With SPFS",
-                    description: "Preparation of Quotation with SPFS details included.",
                   },
                 ].map(({ label, description }) => (
                   <FieldLabel key={label}>
