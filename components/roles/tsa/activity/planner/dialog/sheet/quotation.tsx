@@ -490,18 +490,16 @@ export function QuotationSheet(props: Props) {
     }
 
     try {
-      // Prepare arrays from comma-separated strings (if still needed)
-      const productCats = productCat.split(",");
-      const quantities = productQuantity ? productQuantity.split(",") : [];
-      const amounts = productAmount ? productAmount.split(",") : [];
-      const photos = productPhoto ? productPhoto.split(",") : [];
-      const titles = productTitle ? productTitle.split(",") : [];
-      const skus = productSku ? productSku.split(",") : [];
-      const descriptions = productDescription ? productDescription.split("||") : [];
+      // --- SAFE DEFAULTS (OPTIONAL FIELDS) ---
+      const safeCompanyName = company_name ?? "";
+      const safeAddress = address ?? "";
+      const safeContactNumber = contact_number ?? "";
+      const safeEmailAddress = email_address ?? "";
+      const safeContactPerson = contact_person ?? "";
 
-      // Compose other details
-      const salesRepresentativeName = `${firstname} ${lastname}`;
-      const emailUsername = email.split("@")[0];
+      // --- SALES DETAILS ---
+      const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+      const emailUsername = email?.split("@")[0] ?? "";
 
       let emailDomain = "";
       if (quotationType === "Disruptive Solutions Inc") {
@@ -509,39 +507,41 @@ export function QuotationSheet(props: Props) {
       } else if (quotationType === "Ecoshift Corporation") {
         emailDomain = "ecoshiftcorp.com";
       } else {
-        emailDomain = email.split("@")[1] || "";
+        emailDomain = email?.split("@")[1] ?? "";
       }
 
-      const salesemail = `${emailUsername}@${emailDomain}`;
-      const salescontact = `${contact}`;
-      const salestsmname = `${tsmname}`;
-      const salesmanagername = `${managername}`;
+      const salesemail = emailUsername && emailDomain
+        ? `${emailUsername}@${emailDomain}`
+        : "";
 
-      // Use discount state from component
-      // Assuming 'discount' is accessible here (else pass as parameter or use ref)
+      const salescontact = contact ?? "";
+      const salestsmname = tsmname ?? "";
+      const salesmanagername = managername ?? "";
 
+      // --- ITEMS ---
       const items = selectedProducts.map((p, index) => {
-        const qty = p.quantity;
-        const unitPrice = p.price;
+        const qty = p.quantity ?? 0;
+        const unitPrice = p.price ?? 0;
         const isDiscounted = p.isDiscounted ?? false;
 
         const baseAmount = qty * unitPrice;
-        let discountedAmount = 0;
-        if (isDiscounted && discount > 0) {
-          discountedAmount = (baseAmount * discount) / 100;
-        }
+        const discountedAmount =
+          isDiscounted && discount > 0 ? (baseAmount * discount) / 100 : 0;
+
         const totalAmount = baseAmount - discountedAmount;
 
-        const photo = p.images?.[0]?.src || "";
-        const title = p.title || "";
-        const sku = p.skus?.join(", ") || "";
-        const description = p.description || "";
+        const title = p.title ?? "";
+        const sku = p.skus?.join(", ") ?? "";
+        const description = p.description ?? "";
+        const photo = p.images?.[0]?.src ?? "";
 
-        const descriptionTable = `<table>
-        <tr><td>${title}</td></tr>
-        <tr><td>${sku}</td></tr>
-        <tr><td>${description}</td></tr>
-      </table>`;
+        const descriptionTable = `
+        <table>
+          <tr><td>${title}</td></tr>
+          <tr><td>${sku}</td></tr>
+          <tr><td>${description}</td></tr>
+        </table>
+      `;
 
         return {
           itemNo: index + 1,
@@ -555,14 +555,18 @@ export function QuotationSheet(props: Props) {
 
       const formattedDate = new Date().toLocaleDateString();
 
+      // --- QUOTATION DATA (ALL OPTIONAL SAFE) ---
       const quotationData = {
-        referenceNo: quotationNumber,
+        referenceNo: quotationNumber ?? "",
         date: formattedDate,
-        companyName: company_name,
-        address: address,
-        telNo: contact_number,
-        email: email_address,
-        attention: `${contact_person}, ${address}`,
+        companyName: safeCompanyName,
+        address: safeAddress,
+        telNo: safeContactNumber,
+        email: safeEmailAddress,
+        attention:
+          safeContactPerson || safeAddress
+            ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
+            : "",
         subject: "For Quotation",
         items,
         vatType:
@@ -571,8 +575,7 @@ export function QuotationSheet(props: Props) {
             : vatType === "vat_exe"
               ? "VAT Exe"
               : "Zero-Rated",
-
-        totalPrice: Number(quotationAmount), // If you want totalPrice to reflect discount, calculate here too
+        totalPrice: Number(quotationAmount ?? 0),
         salesRepresentative: salesRepresentativeName,
         salesemail,
         salescontact,
@@ -580,11 +583,9 @@ export function QuotationSheet(props: Props) {
         salesmanagername,
       };
 
-      let apiEndpoint = "/api/quotation/disruptive"; // default
+      let apiEndpoint = "/api/quotation/disruptive";
       if (quotationType === "Ecoshift Corporation") {
         apiEndpoint = "/api/quotation/ecoshift";
-      } else if (quotationType === "Disruptive Solutions Inc") {
-        apiEndpoint = "/api/quotation/disruptive";
       }
 
       const resExport = await fetch(apiEndpoint, {
@@ -602,7 +603,6 @@ export function QuotationSheet(props: Props) {
       const blob = await resExport.blob();
       const url = URL.createObjectURL(blob);
 
-      // Trigger the download
       const a = document.createElement("a");
       a.href = url;
       a.download = `Quotation_${quotationNumber || "unknown"}.xlsx`;
