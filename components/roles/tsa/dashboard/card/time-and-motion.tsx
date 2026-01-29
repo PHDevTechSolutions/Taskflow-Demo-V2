@@ -466,11 +466,11 @@ export function TimemotionCard({
             </div>
 
             <div className="text-lg font-semibold">
-              {grandMinutes}m {grandSeconds}s
+              {grandMinutes}m {grandSeconds}s / 6.5h
             </div>
 
             <div className="text-sm text-gray-500 text-center max-w-xs">
-              Total time logged today (goal: 6.5h)
+              Total time logged today
             </div>
           </div>
         )}
