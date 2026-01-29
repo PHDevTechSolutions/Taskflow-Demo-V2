@@ -52,17 +52,21 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMessage, setDialogMessage] = useState("");
-    const [manualOverride, setManualOverride] = useState(false);
+    const [useToday, setUseToday] = useState(false);
 
     useEffect(() => {
         if (!callType) {
             props.setFollowUpDate("");
-            setManualOverride(false); // reset manual override if no call type
+            setUseToday(false);
             return;
         }
 
-        if (manualOverride) {
-            // User manually changed the date, do NOT overwrite
+        // ✅ if checkbox "Today" is checked, FORCE today
+        if (useToday) {
+            const today = new Date().toISOString().split("T")[0];
+            if (followUpDate !== today) {
+                props.setFollowUpDate(today);
+            }
             return;
         }
 
@@ -98,12 +102,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
         if (formattedDate !== followUpDate) {
             props.setFollowUpDate(formattedDate);
         }
-    }, [callType, followUpDate, manualOverride, props]);
+    }, [callType, useToday, followUpDate]);
 
     useEffect(() => {
-        setManualOverride(false);
+        setUseToday(false);
     }, [callType]);
-
 
     // Validation function to check if current step inputs are filled
     function validateStep() {
@@ -162,12 +165,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
             handleNext();
         }
     }
-
-    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setManualOverride(true);
-        props.setFollowUpDate(e.target.value);
-    };
-
 
     return (
         <>
@@ -382,35 +379,26 @@ export function OutboundSheet(props: OutboundSheetProps) {
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     {followUpDate ? (
-                        <Alert variant="default" className="mb-4 flex flex-col gap-2">
+                        <Alert variant="default" className="mb-4 flex flex-col gap-3">
                             <div>
                                 <AlertTitle>Follow Up Date:</AlertTitle>
                                 <AlertDescription>
-                                    {followUpDate} — This is the scheduled date to reconnect with the client for further updates or actions.
+                                    {followUpDate} — This is the scheduled date to reconnect with the client.
                                 </AlertDescription>
                             </div>
-                            <p className="font-semibold text-red-600">Try Using Manual?</p>
-                            <Input
-                                type="date"
-                                value={followUpDate}
-                                onChange={handleDateChange}
-                                aria-label="Edit follow up date"
-                                className="max-w-xs"
-                            />
+
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                                <Input
+                                    type="checkbox"
+                                    checked={useToday}
+                                    onChange={(e) => setUseToday(e.target.checked)}
+                                    className="h-4 w-4"
+                                />
+                                <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
+                            </label>
                         </Alert>
                     ) : (
-                        <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
-                            <AlertTitle>No Follow Up Date set</AlertTitle>
-                            <AlertDescription>
-                                Please select a call type to auto-generate a follow up date. This helps ensure timely client follow-ups.
-                            </AlertDescription>
-                            <Input
-                                type="date"
-                                onChange={handleDateChange}
-                                aria-label="Set follow up date"
-                                className="max-w-xs"
-                            />
-                        </Alert>
+                        <></>
                     )}
                     <FieldGroup>
                         <FieldSet>

@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
-import { Trash, Download } from "lucide-react";
+import { Trash, Download, ImagePlus } from "lucide-react";
 
 interface Props {
   step: number;
@@ -96,7 +96,7 @@ interface Product {
 interface SelectedProduct extends Product {
   quantity: number;
   price: number;
-  vatDiscounted?: boolean;
+  isDiscounted?: boolean;
 }
 
 function extractTsmPrefix(tsm: string): string {
@@ -177,6 +177,8 @@ export function QuotationSheet(props: Props) {
   const [discount, setDiscount] = React.useState(0);
   const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("vat_inc");
 
+  const [useToday, setUseToday] = useState(false);
+
   function addDaysToDate(days: number): string {
     const date = new Date();
     date.setDate(date.getDate() + days);
@@ -184,13 +186,35 @@ export function QuotationSheet(props: Props) {
   }
 
   useEffect(() => {
-    if (callType === "Quotation Standard Preparation" || callType === "Quotation with Special Price Preparation") {
-      setFollowUpDate(addDaysToDate(1)); // after 1 day (tomorrow)
+    if (!callType) {
+      setFollowUpDate("");
+      return;
+    }
+
+    // ✅ PRIORITY: Today checkbox
+    if (useToday) {
+      const today = new Date().toISOString().split("T")[0];
+      if (followUpDate !== today) {
+        setFollowUpDate(today);
+      }
+      return; // ⛔ stop here, wag na mag auto
+    }
+
+    // 🔁 AUTO FOLLOW UP LOGIC
+    if (
+      callType === "Quotation Standard Preparation" ||
+      callType === "Quotation with Special Price Preparation"
+    ) {
+      setFollowUpDate(addDaysToDate(1)); // tomorrow
     } else if (callType === "Quotation with SPF Preparation") {
       setFollowUpDate(addDaysToDate(5)); // after 5 days
     } else {
-      setFollowUpDate(""); // clear or keep empty for others
+      setFollowUpDate("");
     }
+  }, [callType, useToday]);
+
+  useEffect(() => {
+    setUseToday(false);
   }, [callType]);
 
   const [localQuotationNumber, setLocalQuotationNumber] = useState(quotationNumber);
@@ -248,6 +272,25 @@ export function QuotationSheet(props: Props) {
 
     generateQuotationNumber();
   }, [quotationType, tsm, setQuotationNumber]);
+
+  useEffect(() => {
+    // Calculate total quotation amount considering discount per product
+    const total = selectedProducts.reduce((acc, p) => {
+      const isDiscounted = p.isDiscounted ?? false;
+      const baseAmount = p.price * p.quantity;
+      let discountedAmount = 0;
+
+      if (isDiscounted && discount > 0) {
+        discountedAmount = (baseAmount * discount) / 100;
+        // You can customize discount logic based on vatType here if needed
+      }
+
+      const totalAfterDiscount = baseAmount - discountedAmount;
+      return acc + totalAfterDiscount;
+    }, 0);
+
+    setQuotationAmount(total.toFixed(2)); // Assuming quotationAmount is string, else remove toFixed
+  }, [selectedProducts, discount, vatType]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -372,10 +415,6 @@ export function QuotationSheet(props: Props) {
     });
   }
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFollowUpDate(e.target.value);
-  };
-
   const filteredSources =
     typeClient === "CSR Client"
       ? [
@@ -412,38 +451,37 @@ export function QuotationSheet(props: Props) {
   }
 
   useEffect(() => {
-    const subtotal = selectedProducts.reduce(
-      (sum, p) => sum + p.quantity * p.price,
-      0
-    );
+    // PH VAT rate
+    const VAT_RATE = 0.12;
 
-    let total = subtotal;
+    const totalAfterDiscountAndVAT = selectedProducts.reduce((acc, p) => {
+      const baseAmount = p.price * p.quantity;
 
-    // PH VAT = 12%
-    if (vatType === "vat_exe") {
-      total = subtotal * 1.12; // add VAT
-    }
+      // If the row is discounted (checkbox checked)
+      const discountedAmount = p.isDiscounted
+        ? (baseAmount * discount) / 100
+        : 0;
 
-    if (vatType === "vat_inc") {
-      total = subtotal; // already VAT inclusive
-    }
+      // Subtotal for this product after discount
+      const subtotalAfterDiscount = baseAmount - discountedAmount;
 
-    if (vatType === "zero_rated") {
-      total = subtotal; // no VAT
-    }
+      // Apply VAT based on vatType
+      let totalWithVat = subtotalAfterDiscount;
+      if (vatType === "vat_exe") {
+        totalWithVat = subtotalAfterDiscount * (1 + VAT_RATE);
+      } else if (vatType === "vat_inc") {
+        // price already includes VAT, do nothing
+        totalWithVat = subtotalAfterDiscount;
+      } else if (vatType === "zero_rated") {
+        // no VAT, do nothing
+        totalWithVat = subtotalAfterDiscount;
+      }
 
-    // Apply discount AFTER VAT
-    total = Math.max(0, total - discount);
+      return acc + totalWithVat;
+    }, 0);
 
-    setQuotationAmount(total.toFixed(2));
-  }, [selectedProducts, vatType, discount]);
-
-  const today = new Date();
-  const formattedDate = today.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+    setQuotationAmount(totalAfterDiscountAndVAT.toFixed(2));
+  }, [selectedProducts, discount, vatType]);
 
   const handleDownloadQuotation = async () => {
     if (!productCat || productCat.trim() === "") {
@@ -479,27 +517,28 @@ export function QuotationSheet(props: Props) {
       const salestsmname = `${tsmname}`;
       const salesmanagername = `${managername}`;
 
-      const items = productCats.map((_, index) => {
-        const qty = Number(quantities[index] || 0);
-        const amount = Number(amounts[index] || 0);
-        const photo = photos[index] || "";
-        const title = titles[index] || "";
-        const sku = skus[index] || "";
-        const description = descriptions[index] || "";
+      const items = selectedProducts.map((p, index) => {
+        const qty = p.quantity;
+        const unitPrice = p.price;
+        const totalAmount = qty * unitPrice;
+        const photo = p.images?.[0]?.src || "";
+        const title = p.title || "";
+        const sku = p.skus?.join(", ") || "";
+        const description = p.description || "";
 
         const descriptionTable = `<table>
-        <tr><td>${title}</td></tr>
-        <tr><td>${sku}</td></tr>
-        <tr><td>${description}</td></tr>
-      </table>`;
+    <tr><td>${title}</td></tr>
+    <tr><td>${sku}</td></tr>
+    <tr><td>${description}</td></tr>
+  </table>`;
 
         return {
           itemNo: index + 1,
           qty,
           referencePhoto: photo,
           description: descriptionTable,
-          unitPrice: qty > 0 ? amount / qty : 0,
-          totalAmount: amount,
+          unitPrice,
+          totalAmount,
         };
       });
 
@@ -562,24 +601,6 @@ export function QuotationSheet(props: Props) {
     }
   };
 
-  function toggleVatDiscount(idx: number) {
-  setSelectedProducts((prev) => {
-    const copy = [...prev];
-    copy[idx] = {
-      ...copy[idx],
-      vatDiscounted: !copy[idx].vatDiscounted,
-    };
-    return copy;
-  });
-}
-
-function getDiscountedPrice(p: typeof selectedProducts[number]) {
-  if (p.vatDiscounted) {
-    return Math.max(0, p.price * (1 - discount / 100));
-  }
-  return p.price;
-}
-
   return (
     <>
       {/* STEP 2 — SOURCE */}
@@ -588,10 +609,7 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
           <FieldGroup>
             <FieldSet>
               <FieldLabel>Source</FieldLabel>
-              <RadioGroup
-                value={source}
-                onValueChange={setSource}
-              >
+              <RadioGroup value={source} onValueChange={setSource}>
                 {filteredSources.map(({ label, description }) => (
                   <FieldLabel key={label}>
                     <Field orientation="horizontal" className="w-full items-start">
@@ -615,17 +633,14 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                           </div>
                         )}
                       </FieldContent>
-
                       {/* RIGHT */}
                       <RadioGroupItem value={label} />
                     </Field>
                   </FieldLabel>
                 ))}
               </RadioGroup>
-
             </FieldSet>
           </FieldGroup>
-
         </div>
       )}
 
@@ -842,7 +857,16 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
               </label>
 
               {/* Selected Products with quantity and price inputs */}
-              <Button onClick={() => setOpen(true)}>Open Product Selector</Button>
+              {!noProductsAvailable && (
+                <Button onClick={() => setOpen(true)}
+                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed bg-white text-black h-40 w-full hover:bg-gray-100 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98]">
+                  <ImagePlus className="h-10 w-10 text-gray-500" />
+                  <span className="text-sm font-semibold">Select Products</span>
+                  <span className="text-xs text-gray-500">
+                    Browse and add items to this quotation
+                  </span>
+                </Button>
+              )}
 
               {isManualEntry && (
                 <p className="text-sm text-gray-600">
@@ -999,13 +1023,7 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                           </div>
 
                           <div className="flex gap-2 mt-4">
-                            <Button
-                              onClick={() => submitProductToShopify(p)}
-                              className="ml-auto"
-                            >
-                              Submit to Shopify
-                            </Button>
-
+                            <Button onClick={() => submitProductToShopify(p)} className="ml-auto">Submit to Shopify</Button>
                             <Button
                               variant="destructive"
                               onClick={() =>
@@ -1042,9 +1060,7 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                         Add More
                       </Button>
 
-                      <Button variant="outline" onClick={() => setIsManualEntry(false)}>
-                        Close
-                      </Button>
+                      <Button variant="outline" onClick={() => setIsManualEntry(false)}>Close</Button>
                     </DialogFooter>
                   )}
                 </DialogContent>
@@ -1079,36 +1095,27 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
           <FieldGroup>
             <FieldSet>
               {followUpDate ? (
-                <Alert variant="default" className="mb-4 flex flex-col gap-2">
+                <Alert variant="default" className="mb-4 flex flex-col gap-3">
                   <div>
                     <AlertTitle>Follow Up Date:</AlertTitle>
                     <AlertDescription>
-                      {followUpDate} — This scheduled date will only appear on the exact day it is set for.
+                      {followUpDate} — This is the scheduled date to reconnect with the client.
                     </AlertDescription>
                   </div>
-                  <p className="font-semibold text-red-600">Try Using Manual?</p>
-                  <Input
-                    type="date"
-                    value={followUpDate}
-                    onChange={handleDateChange}
-                    aria-label="Edit follow up date"
-                    className="max-w-xs"
-                  />
+
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Input
+                      type="checkbox"
+                      checked={useToday}
+                      onChange={(e) => setUseToday(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
+                  </label>
                 </Alert>
+
               ) : (
-                <Alert variant="destructive" className="mb-4 flex flex-col gap-2">
-                  <AlertTitle>No Follow Up Date set</AlertTitle>
-                  <AlertDescription>
-                    Please select a call type to auto-generate a follow up date.
-                    This helps ensure timely client follow-ups.
-                  </AlertDescription>
-                  <Input
-                    type="date"
-                    onChange={handleDateChange}
-                    aria-label="Set follow up date"
-                    className="max-w-xs"
-                  />
-                </Alert>
+                <></>
               )}
 
               <FieldLabel className="mt-3">Remarks</FieldLabel>
@@ -1187,14 +1194,27 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="w-[90vw] max-h-[90vh] overflow-y-auto p-6"
-          style={{ maxWidth: '1600px', width: '100vw' }}
+          className={`max-h-[90vh] overflow-y-auto p-6 transition-all duration-300 ${selectedProducts.length === 0
+            ? "w-[60vw]"
+            : "w-[90vw]"
+            }`}
+          style={{
+            maxWidth: selectedProducts.length === 0 ? "900px" : "1600px",
+            width: "100vw",
+          }}
         >
+
           <DialogHeader>
             <DialogTitle>Select Products</DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-[1fr_2.5fr] gap-6 mt-4 max-h-[75vh] overflow-hidden">
+          <div
+            className={`grid gap-6 mt-4 max-h-[75vh] overflow-hidden ${selectedProducts.length === 0
+              ? "grid-cols-1"
+              : "grid-cols-[1fr_2.5fr]"
+              }`}
+          >
+
             {/* Left side: Search + checkbox selected */}
             <div className="flex flex-col gap-4 overflow-y-auto pr-2">
               {!noProductsAvailable && !isManualEntry && (
@@ -1237,33 +1257,6 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                     }}
                   />
                   {isSearching && <p className="text-sm mt-1">Searching...</p>}
-
-                  {/* Selected Products checkboxes */}
-                  <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh]">
-                    {selectedProducts.length === 0 && (
-                      <p className="text-xs text-gray-500">No products selected.</p>
-                    )}
-                    {selectedProducts.map((item) => (
-                      <label key={item.id} className="flex items-center gap-2 cursor-pointer text-xs">
-                        <input
-                          type="checkbox"
-                          checked={true}
-                          onChange={() => {
-                            setSelectedProducts((prev) =>
-                              prev.filter((p) => p.id !== item.id)
-                            );
-                            setVisibleDescriptions((prev) => {
-                              const copy = { ...prev };
-                              delete copy[item.id];
-                              return copy;
-                            });
-                          }}
-                          className="mt-0.5"
-                        />
-                        {item.title}
-                      </label>
-                    ))}
-                  </div>
                 </>
               )}
 
@@ -1334,6 +1327,33 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                   })}
                 </div>
               )}
+
+              {/* Selected Products checkboxes */}
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh] border border-dashed p-2 rounded-sm">
+                {selectedProducts.length === 0 && (
+                  <p className="text-xs text-gray-500">No products selected.</p>
+                )}
+                {selectedProducts.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={true}
+                      onChange={() => {
+                        setSelectedProducts((prev) =>
+                          prev.filter((p) => p.id !== item.id)
+                        );
+                        setVisibleDescriptions((prev) => {
+                          const copy = { ...prev };
+                          delete copy[item.id];
+                          return copy;
+                        });
+                      }}
+                      className="mt-0.5"
+                    />
+                    {item.title}
+                  </label>
+                ))}
+              </div>
             </div>
 
             {/* Right side: Selected Products as Table with Image & Editable Description */}
@@ -1352,9 +1372,17 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
 
                       <RadioGroup
                         value={vatType}
-                        onValueChange={(value) =>
-                          setVatType(value as "vat_inc" | "vat_exe" | "zero_rated")
-                        }
+                        onValueChange={(value) => {
+                          const newVatType = value as "vat_inc" | "vat_exe" | "zero_rated";
+                          setVatType(newVatType);
+
+                          // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
+                          if (newVatType === "vat_inc") {
+                            setDiscount(12);
+                          } else {
+                            setDiscount(0);
+                          }
+                        }}
                         className="flex items-center gap-3"
                       >
                         <div className="flex items-center gap-1">
@@ -1377,11 +1405,11 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                             Zero Rated
                           </label>
                         </div>
-                      </RadioGroup>
+                      </RadioGroup> |
 
                       {/* DISCOUNT */}
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-medium">Discount:</span>
+                        <span className="text-xs font-medium">Discount (%)</span>
                         <Input
                           type="number"
                           min={0}
@@ -1395,137 +1423,180 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
                         />
                       </div>
                     </div>
-
                   </div>
 
                   <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
+                        <th className="border border-gray-300 p-2 text-center w-12"></th>
                         <th className="border border-gray-300 p-2 text-left">Product</th>
                         <th className="border border-gray-300 p-2 text-left w-30">Quantity</th>
                         <th className="border border-gray-300 p-2 text-left w-30">Price</th>
-                        <th className="border border-gray-300 p-2 text-left w-30">Total</th>
-                        <th className="border border-gray-300 p-2 text-center w-20">Remove</th>
+                        <th className="border border-gray-300 p-2 text-right w-30">Discounted</th>
+                        <th className="border border-gray-300 p-2 text-right w-30">Subtotal</th>
+                        <th className="border border-gray-300 p-2 text-center w-20">Tool</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedProducts.map((p, idx) => (
-                        <React.Fragment key={p.id}>
-                          <tr className="even:bg-gray-50">
-                            <td className="p-2 flex items-center gap-3">
-                              {p.images?.[0]?.src ? (
-                                <img
-                                  src={p.images[0].src}
-                                  alt={p.title}
-                                  className="w-12 h-12 object-cover rounded"
+                      {selectedProducts.map((p, idx) => {
+                        // Ensure p.isDiscounted exists; if not, default false
+                        const isDiscounted = p.isDiscounted ?? false;
+
+                        // Calculate discount amount based on VAT type and discount %
+                        const baseAmount = p.price * p.quantity;
+                        let discountedAmount = 0;
+                        if (isDiscounted && discount > 0) {
+                          // Simplified: apply discount directly on baseAmount
+                          discountedAmount = (baseAmount * discount) / 100;
+                          // You can adjust logic here based on vatType if needed
+                        }
+                        const totalAfterDiscount = baseAmount - discountedAmount;
+
+                        return (
+                          <React.Fragment key={p.id}>
+                            <tr className="even:bg-gray-50">
+                              {/* Checkbox for discount */}
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isDiscounted}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], isDiscounted: checked };
+                                      return copy;
+                                    });
+                                  }}
+                                  className="cursor-pointer"
                                 />
-                              ) : (
-                                <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
-                                  No Image
+                              </td>
+
+                              {/* Product + Image */}
+                              <td className="p-2 flex items-center gap-3">
+                                {p.images?.[0]?.src ? (
+                                  <img
+                                    src={p.images[0].src}
+                                    alt={p.title}
+                                    className="w-12 h-12 object-cover rounded"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
+                                    No Image
+                                  </div>
+                                )}
+
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  className="flex-1 outline-none"
+                                  onBlur={(e) => {
+                                    const text = e.currentTarget.innerText;
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], title: text };
+                                      return copy;
+                                    });
+                                  }}
+                                >
+                                  {p.title}
                                 </div>
-                              )}
+                              </td>
 
-                              <div
-                                contentEditable
-                                suppressContentEditableWarning
-                                className="flex-1 outline-none"
-                                onBlur={(e) => {
-                                  const text = e.currentTarget.innerText;
-                                  setSelectedProducts((prev) => {
-                                    const copy = [...prev];
-                                    copy[idx] = { ...copy[idx], title: text };
-                                    return copy;
-                                  });
-                                }}
-                              >
-                                {p.title}
-                              </div>
+                              {/* Quantity */}
+                              <td className="border border-gray-300 p-2">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={p.quantity}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], quantity: val };
+                                      return copy;
+                                    });
+                                  }}
+                                  className="border-none shadow-none w-full p-0"
+                                />
+                              </td>
 
-                            </td>
+                              {/* Price */}
+                              <td className="border border-gray-300 p-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={p.price}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], price: val };
+                                      return copy;
+                                    });
+                                  }}
+                                  className="border-none shadow-none w-full p-2"
+                                />
+                              </td>
 
-                            <td className="border border-gray-300 p-2">
-                              <Input
-                                type="number"
-                                min={1}
-                                value={p.quantity}
-                                onChange={(e) => {
-                                  const val = Math.max(1, parseInt(e.target.value) || 1);
-                                  setSelectedProducts((prev) => {
-                                    const copy = [...prev];
-                                    copy[idx] = { ...copy[idx], quantity: val };
-                                    return copy;
-                                  });
-                                }}
-                                className="border-none shadow-none w-full"
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-2">
-                              <Input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={p.price}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                  setSelectedProducts((prev) => {
-                                    const copy = [...prev];
-                                    copy[idx] = { ...copy[idx], price: val };
-                                    return copy;
-                                  });
-                                }}
-                                className="border-none shadow-none w-full"
-                              />
-                            </td>
-                            <td className="border border-gray-300 p-2 font-semibold">
-                              ₱{(p.quantity * p.price).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center">
-                              <Button
-                                variant="destructive"
-                                onClick={() => {
-                                  setSelectedProducts((prev) =>
-                                    prev.filter((item) => item.id !== p.id)
-                                  );
-                                  setVisibleDescriptions((prev) => {
-                                    const copy = { ...prev };
-                                    delete copy[p.id];
-                                    return copy;
-                                  });
-                                }}
-                              >
-                                <Trash />
-                              </Button>
-                            </td>
-                          </tr>
+                              {/* Discounted amount */}
+                              <td className="border border-gray-300 p-2 font-semibold text-right">
+                                {isDiscounted && discountedAmount > 0
+                                  ? `₱${discountedAmount.toFixed(2)}`
+                                  : "₱0.00"}
+                              </td>
 
-                          {/* Description row */}
-                          <tr className="even:bg-gray-50">
-                            <td
-                              colSpan={5}
-                              className="border border-gray-300 p-2"
-                            >
-                              <label className="block text-xs font-medium mb-1">Description:</label>
-                              <div
-                                contentEditable
-                                suppressContentEditableWarning
-                                className="w-full max-h-48 overflow-auto border border-gray-300 rounded p-2 text-xs"
-                                dangerouslySetInnerHTML={{
-                                  __html: extractTableHtml(p.description || "")
-                                }}
-                                onBlur={(e) => {
-                                  const html = e.currentTarget.innerHTML;
-                                  setSelectedProducts((prev) => {
-                                    const copy = [...prev];
-                                    copy[idx] = { ...copy[idx], description: html };
-                                    return copy;
-                                  });
-                                }}
-                              />
+                              {/* Total after discount */}
+                              <td className="border border-gray-300 p-2 font-semibold text-right">
+                                ₱{totalAfterDiscount.toFixed(2)}
+                              </td>
 
-                            </td>
-                          </tr>
-                        </React.Fragment>
-                      ))}
+                              {/* Remove */}
+                              <td className="border border-gray-300 p-2 text-center">
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedProducts((prev) =>
+                                      prev.filter((item) => item.id !== p.id)
+                                    );
+                                    setVisibleDescriptions((prev) => {
+                                      const copy = { ...prev };
+                                      delete copy[p.id];
+                                      return copy;
+                                    });
+                                  }}
+                                >
+                                  <Trash />
+                                </Button>
+                              </td>
+                            </tr>
+
+                            {/* Description row */}
+                            <tr className="even:bg-gray-50">
+                              <td colSpan={7} className="border border-gray-300 p-2">
+                                <label className="block text-xs font-medium mb-1">Description:</label>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  className="w-full max-h-90 overflow-auto border border-gray-300 rounded p-2 text-xs"
+                                  dangerouslySetInnerHTML={{
+                                    __html: extractTableHtml(p.description || ""),
+                                  }}
+                                  onBlur={(e) => {
+                                    const html = e.currentTarget.innerHTML;
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], description: html };
+                                      return copy;
+                                    });
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </>
@@ -1537,16 +1608,17 @@ function getDiscountedPrice(p: typeof selectedProducts[number]) {
           <DialogFooter className="flex items-center justify-between">
             {/* Left side: Close button */}
             <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
-
             {/* Right side: Total + Download button */}
-            <div className="flex items-center gap-4">
-              <div className="text-sm font-semibold">
-                Total: ₱{quotationAmount}
+            {selectedProducts.length > 0 && (
+              <div className="flex items-center gap-4">
+                <div className="text-sm font-semibold">
+                  Overall Total: ₱{quotationAmount}
+                </div>
+                <Button onClick={handleDownloadQuotation}>
+                  <Download /> Download
+                </Button>
               </div>
-              <Button onClick={handleDownloadQuotation}>
-               <Download /> Download
-              </Button>
-            </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -231,24 +231,29 @@ export async function POST(req: Request) {
       item.itemNo,
       item.qty,
       "", // placeholder for image
-      "", // description placeholder
+      "", // placeholder for description
       item.unitPrice,
       item.totalAmount,
     ]);
 
-    // Description processing (same as before)
+    // Process description to plain text with line breaks
     const descriptionRows = parseDescriptionToRows(item.description);
     const combined = descriptionRows.map(r => r.join(": ")).join("\n");
+
+    // Set description cell value and styling
     const descCell = sheet.getRow(row.number).getCell(4);
     descCell.value = combined;
     descCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+    descCell.font = { size: 8 };
 
-    const minHeight = 15;
-    const lineHeight = 15;
-    const lineCount = combined.split("\n").length;
-    row.height = Math.max(minHeight, lineCount * lineHeight);
+    // Calculate row height based on number of lines in description
+    const linesCount = combined.split("\n").length;
+    const lineHeight = 15; // points per line - adjust if needed
+    const minRowHeight = 15; // minimum height
 
-    // Image handling with dynamic width
+    row.height = Math.max(minRowHeight, linesCount * lineHeight);
+
+    // Handle image for reference photo
     try {
       const res = await fetch(item.referencePhoto);
       const arrayBuffer = await res.arrayBuffer();
@@ -259,23 +264,47 @@ export async function POST(req: Request) {
         extension: "png",
       });
 
-      const columnWidthInChars = sheet.getColumn(3).width || 20; // col 3 is index 3 (1-based)
-      const estimatedPixelWidth = columnWidthInChars * 7;
+      const colIndex = 3; // image in column 3 (0-based: 2)
+      const rowIndex = row.number;
 
-      // Adjust aspect ratio if you know the original size, else keep fixed height
+      const colWidthChars = sheet.getColumn(colIndex).width || 20;
+      const colWidthPx = colWidthChars * 7;
+
+      const rowHeightPt = row.height || 15;
+      const rowHeightPx = rowHeightPt * 1.33;
+
+      const paddingPx = 4;
+
+      const maxWidth = colWidthPx - paddingPx * 2;
+      const maxHeight = rowHeightPx - paddingPx * 2;
+
+      // Assume original image size (you can adjust or fetch real image size if needed)
       const originalImageWidth = 100;
       const originalImageHeight = 100;
-      const aspectRatio = originalImageHeight / originalImageWidth;
-      const imageWidth = estimatedPixelWidth;
-      const imageHeight = imageWidth * aspectRatio;
+      const aspectRatio = originalImageWidth / originalImageHeight;
+
+      let imageWidth = maxWidth;
+      let imageHeight = imageWidth / aspectRatio;
+
+      if (imageHeight > maxHeight) {
+        imageHeight = maxHeight;
+        imageWidth = imageHeight * aspectRatio;
+      }
+
+      const leftoverX = maxWidth - imageWidth;
+      const leftoverY = maxHeight - imageHeight;
+
+      // Fixed left padding in fractional columns
+      const fixedLeftPaddingCols = 0.1;
+
+      // Offset for centering image inside the cell with padding
+      const offsetX = fixedLeftPaddingCols + (leftoverX / colWidthPx) / 2;
+      const offsetY = (leftoverY / rowHeightPx) / 2;
 
       sheet.addImage(imageId, {
-        tl: { col: 2, row: row.number - 1 },
+        tl: { col: colIndex - 1 + offsetX, row: rowIndex - 1 + offsetY },
         ext: { width: imageWidth, height: imageHeight },
       });
-
-      // Adjust row height to fit image and description
-      row.height = Math.max(row.height || 0, imageHeight / 1.33);
     } catch (err) {
       console.error(`Failed to load image for item ${item.itemNo}:`, err);
     }
@@ -601,7 +630,7 @@ export async function POST(req: Request) {
   sheet.mergeCells(rowTSMName.number, 5, rowTSMName.number, 6);
   rowTSMName.getCell(5).value = "";
   clearBordersAndSetWhiteFill(sheet, rowTSMName.number);
-  
+
   // Sales Manager Contact
   const rowManagerMobile = sheet.addRow([]);
   sheet.mergeCells(rowManagerMobile.number, 1, rowManagerMobile.number, 3);
