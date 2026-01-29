@@ -9,9 +9,8 @@ import { Plus } from "lucide-react";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, } from "@/components/ui/empty";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemMedia, ItemTitle, } from "@/components/ui/item"
-import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner";
+
 // Dialogs and Sheets
 import { CancelDialog } from "./cancel";
 import { OutboundSheet } from "./sheet/outbound";
@@ -24,7 +23,7 @@ import { DRSheet } from "./sheet/dr";
 
 interface Activity {
     id: string;
-    type_client: string; // now required
+    type_client: string;
     company_name: string;
     contact_person: string;
     contact_number: string;
@@ -78,7 +77,6 @@ interface Activity {
     remarks: string;
     // CSR
     agent: string;
-
     start_date?: string;
     end_date?: string;
 }
@@ -155,18 +153,12 @@ export function CreateActivityDialog({
     const [sheetOpen, setSheetOpen] = useState(false);
     // Confirmation dialog state
     const [showConfirmCancel, setShowConfirmCancel] = useState(false);
-
     // STEPPER
     const [step, setStep] = useState(1);
-
     // FORM STATES (all required except callback)
     const [activityRef, setActivityRef] = useState(activityReferenceNumber || "");
     const [accountRef, setAccountRef] = useState(accountReferenceNumber || "");
     const [typeClient, setTypeClient] = useState(type_client || "");
-    const [CompanyName, setCompanyName] = useState(company_name || "");
-    const [ContactPerson, setContactPerson] = useState(contact_person || "");
-    const [ContactNumber, setContactNumber] = useState(contact_number || "");
-    const [EmailAddress, setEmailAddress] = useState(email_address || "");
     const [typeActivity, setTypeActivity] = useState("");
     const [source, setSource] = useState("");
     const [callback, setCallback] = useState(""); // optional
@@ -207,7 +199,6 @@ export function CreateActivityDialog({
     const [loading, setLoading] = useState(false);
     const [elapsedTime, setElapsedTime] = useState("");
     const [showExportNotification, setShowExportNotification] = React.useState(false);
-    const [exportStatusMessage, setExportStatusMessage] = useState("");
 
     // AUTO SET DATE CREATED
     useEffect(() => {
@@ -345,13 +336,6 @@ export function CreateActivityDialog({
         }
     };
 
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-
     // Set export in progress
     localStorage.setItem('exportInProgress', 'true');
 
@@ -366,60 +350,6 @@ export function CreateActivityDialog({
             // Simulate progress resume or start counting from 0 again
         }
     }, []);
-
-
-    // Sa loob ng component mo, i-add state para sa progress:
-    const [progress, setProgress] = useState(0);
-
-    // Function to handle export with progress bar + delayed download
-    const startProgressAndDownload = (url: string, refNo: string) => {
-        setShowExportNotification(true);
-        setProgress(0);
-        setExportStatusMessage("Initializing product table creation...");
-
-        const duration = 1000; // 20 seconds total progress duration
-        const intervalTime = 50; // update every 50ms
-        const totalSteps = duration / intervalTime;
-        let step = 0;
-
-        const interval = setInterval(() => {
-            step++;
-            const newProgress = Math.min(100, (step / totalSteps) * 100);
-            setProgress(newProgress);
-
-            // Update status messages based on progress ranges
-            if (newProgress <= 30) {
-                setExportStatusMessage("Creating product tables...");
-            } else if (newProgress <= 60) {
-                setExportStatusMessage("Processing media and content...");
-            } else if (newProgress < 90) {
-                setExportStatusMessage("Finalizing export and packaging...");
-            } else if (newProgress < 100) {
-                setExportStatusMessage("Almost done! Preparing download...");
-            } else if (newProgress === 100) {
-                setExportStatusMessage("Your quotation has been successfully created.");
-            }
-
-            if (newProgress === 100) {
-                clearInterval(interval);
-
-                // Trigger download when progress hits 100%
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `Quotation_${refNo}.xlsx`;
-                a.click();
-
-                // Close notification and reset form after short delay so user can see final message
-                setTimeout(() => {
-                    setShowExportNotification(false);
-                    resetForm();
-                    setStep(1);
-                    setSheetOpen(false);
-                    setExportStatusMessage(""); // reset message
-                }, 1500);
-            }
-        }, intervalTime);
-    };
 
     const handleSave = async () => {
         setLoading(true);
@@ -525,6 +455,8 @@ export function CreateActivityDialog({
             setStep(1);
             setSheetOpen(false);
 
+             window.location.reload();
+
         } catch (error) {
             toast.error("Server error. Please try again.");
         } finally {
@@ -573,7 +505,6 @@ export function CreateActivityDialog({
                     </Button>
                 </SheetTrigger>
 
-
                 <SheetContent side="right" className="w-full sm:w-[600px] overflow-auto custom-scrollbar">
                     <SheetHeader>
                         <SheetTitle>Create New Activity for <br />{company_name}</SheetTitle>
@@ -586,7 +517,6 @@ export function CreateActivityDialog({
                             </div>
                         )}
                     </SheetHeader>
-
                     {loading ? (
                         <SpinnerEmpty
                             onCancel={() => {
@@ -746,7 +676,6 @@ export function CreateActivityDialog({
                                                                     </div>
                                                                 )}
                                                             </FieldContent>
-
                                                             <RadioGroupItem value={item.value} />
                                                         </Field>
                                                     </FieldLabel>
@@ -981,35 +910,6 @@ export function CreateActivityDialog({
 
                 </SheetContent>
             </Sheet>
-
-            {showExportNotification && (
-                <div style={{
-                    position: "fixed",
-                    top: "1rem",
-                    right: "1rem",
-                    zIndex: 9999,
-                    backgroundColor: "white",
-                }}>
-                    <Item variant="outline">
-                        <ItemMedia variant="icon">
-                            <Spinner />
-                        </ItemMedia>
-                        <ItemContent>
-                            <ItemTitle>Quotation Export</ItemTitle>
-                            <ItemDescription>{exportStatusMessage}</ItemDescription>
-                        </ItemContent>
-                        <ItemActions className="hidden sm:flex">
-                            <Button variant="outline" size="sm" onClick={() => setShowExportNotification(false)}>
-                                Close
-                            </Button>
-                        </ItemActions>
-                        <ItemFooter>
-                            <Progress value={progress} />
-                            {Math.round(progress)}%
-                        </ItemFooter>
-                    </Item>
-                </div>
-            )}
         </>
     );
 }
