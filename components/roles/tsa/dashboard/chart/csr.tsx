@@ -2,10 +2,24 @@
 
 import React, { useMemo, useState } from "react";
 import { TrendingUp, Info } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-import { Spinner } from "@/components/ui/spinner"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig, } from "@/components/ui/chart";
+import {
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 interface Activity {
@@ -48,10 +62,9 @@ const chartConfig = {
   response: { label: "Response Time", color: "var(--chart-1)" },
   rfq: { label: "RFQ Handling", color: "var(--chart-2)" },
   nonRfq: { label: "Non-RFQ Handling", color: "var(--chart-3)" },
-} satisfies ChartConfig;
+} as const;
 
 const METRICS = ["response", "rfq", "nonRfq"] as const;
-
 type MetricKey = (typeof METRICS)[number];
 
 const explanations: Record<MetricKey, React.ReactNode> = {
@@ -83,14 +96,23 @@ const explanations: Record<MetricKey, React.ReactNode> = {
 };
 
 export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardProps) {
-  const [activeMetric, setActiveMetric] = useState<MetricKey>("response");
+  const [visibleMetrics, setVisibleMetrics] = useState<Record<MetricKey, boolean>>({
+    response: true,
+    rfq: true,
+    nonRfq: true,
+  });
   const [showTooltipFor, setShowTooltipFor] = useState<MetricKey | null>(null);
 
+  // Filter only CSR Client activities
   const csrActivities = useMemo(
-    () => activities.filter((a) => a.type_client === "CSR Client"),
+    () =>
+      activities.filter(
+        (a) => a.type_client?.trim().toLowerCase() === "csr client"
+      ),
     [activities]
   );
 
+  // Prepare chart data grouped by activity_reference_number
   const chartData: CSRMetricRow[] = useMemo(() => {
     const grouped: Record<string, Activity[]> = {};
 
@@ -144,6 +166,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
     );
   }, [csrActivities]);
 
+  // Totals for each metric
   const totals = useMemo(() => {
     return {
       response: chartData.reduce((s, r) => s + r.response, 0),
@@ -152,11 +175,18 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
     };
   }, [chartData]);
 
+  // Toggle metric visibility
+  const toggleMetric = (key: MetricKey) => {
+    setVisibleMetrics((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <Card className="bg-white text-black z-10">
       <CardHeader>
         <CardTitle>CSR Metrics Overview</CardTitle>
-        <CardDescription>Toggle metrics and view total handling durations</CardDescription>
+        <CardDescription>
+          Toggle metrics and view total handling durations
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -166,8 +196,8 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
             <Button
               key={key}
               size="sm"
-              variant={activeMetric === key ? "default" : "outline"}
-              onClick={() => setActiveMetric(key)}
+              variant={visibleMetrics[key] ? "default" : "outline"}
+              onClick={() => toggleMetric(key)}
             >
               {chartConfig[key].label}
             </Button>
@@ -179,13 +209,13 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
           {METRICS.map((key) => (
             <div
               key={key}
-              className={`relative rounded-lg border p-3 ${activeMetric === key ? "bg-blue-200" : "opacity-70"
+              className={`relative rounded-lg border p-3 ${visibleMetrics[key] ? "bg-blue-200" : "opacity-50"
                 }`}
             >
               <div className="flex justify-between items-start relative">
                 <div className="font-medium">{chartConfig[key].label}</div>
 
-                {/* Info Icon container - relative so tooltip absolute works */}
+                {/* Info Icon container */}
                 <div
                   className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
                   onMouseEnter={() => setShowTooltipFor(key)}
@@ -197,7 +227,6 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
                 >
                   <Info className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
 
-                  {/* Tooltip */}
                   {showTooltipFor === key && (
                     <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
                       {explanations[key]}
@@ -215,7 +244,9 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
 
         {/* Chart */}
         {loading ? (
-          <div className="py-12 text-center font-medium"><Spinner /></div>
+          <div className="py-12 text-center font-medium">
+            <Spinner />
+          </div>
         ) : error ? (
           <div className="py-12 text-center text-red-500">{error}</div>
         ) : chartData.length === 0 ? (
@@ -223,35 +254,52 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
             No CSR data available
           </div>
         ) : (
-          <ChartContainer config={chartConfig}>
-            <AreaChart data={chartData} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-
-              <defs>
-                <linearGradient id="fillMetric" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={`var(--color-${activeMetric})`}
-                    stopOpacity={0.8}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor={`var(--color-${activeMetric})`}
-                    stopOpacity={0.1}
-                  />
-                </linearGradient>
-              </defs>
-
-              <Area
-                dataKey={activeMetric}
-                type="natural"
-                fill="url(#fillMetric)"
-                stroke={`var(--color-${activeMetric})`}
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={chartData} margin={{ left: 12, right: 12 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 12, fill: '#000' }}
               />
-            </AreaChart>
-          </ChartContainer>
+              <RechartsTooltip
+                formatter={(value: number) => formatDuration(value)}
+                cursor={{ fill: "rgba(0,0,0,0.1)" }}
+                contentStyle={{ fontSize: 12 }}
+                labelStyle={{ fontSize: 12 }}
+              />
+
+
+              {visibleMetrics.response && (
+                <Bar
+                  dataKey="response"
+                  fill={chartConfig.response.color}
+                  stackId="stack"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
+                />
+              )}
+              {visibleMetrics.rfq && (
+                <Bar
+                  dataKey="rfq"
+                  fill={chartConfig.rfq.color}
+                  stackId="stack"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
+                />
+              )}
+              {visibleMetrics.nonRfq && (
+                <Bar
+                  dataKey="nonRfq"
+                  fill={chartConfig.nonRfq.color}
+                  stackId="stack"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
+                />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </CardContent>
 

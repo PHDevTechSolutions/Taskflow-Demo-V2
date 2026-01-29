@@ -5,6 +5,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, } from 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ListTree } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner"
+
+import CountUp from 'react-countup';
 
 interface Company {
   type_client?: string;
@@ -138,23 +141,31 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex justify-center items-center text-5xl font-semibold">
+      <CardContent className="flex flex-col justify-center items-center p-6 space-y-2">
         {loading ? (
-          "Loading..."
+          <Spinner />
         ) : error ? (
-          <span className="text-red-600">{error}</span>
+          <span className="text-red-600 font-semibold">{error}</span>
         ) : totalAccounts !== null ? (
-          totalAccounts
+          <>
+            <CountUp
+              end={totalAccounts}
+              duration={1.5}
+              className="text-6xl font-extrabold text-black"
+            />
+            <div className="text-sm text-gray-500">Total Accounts</div>
+          </>
         ) : (
-          "-"
+          <div className="text-gray-400 text-3xl">-</div>
         )}
       </CardContent>
+
       <CardFooter className="flex justify-end border-t">
         <Button
           onClick={() => setOpen(true)}
           disabled={loading || !!error || !totalAccounts}
         >
-         <ListTree /> Show Breakdown
+          <ListTree /> Show Breakdown
         </Button>
       </CardFooter>
 

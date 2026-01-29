@@ -67,7 +67,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
   } satisfies Record<string, { label: string; color: string }>;
 
   return (
-    <Card className="bg-white z-20 text-black">
+    <Card className="bg-white z-10 text-black">
       <CardHeader className="flex justify-between items-center">
         <div>
           <CardTitle>Source Breakdown</CardTitle>

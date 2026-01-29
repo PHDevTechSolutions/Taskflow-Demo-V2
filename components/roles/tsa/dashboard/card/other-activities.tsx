@@ -98,7 +98,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
   /* ===================== RENDER ===================== */
 
   return (
-    <Card className="p-2 bg-white text-black min-h-[220px] flex flex-col justify-center z-50">
+    <Card className="p-2 bg-white text-black min-h-[220px] flex flex-col justify-center z-30">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3">

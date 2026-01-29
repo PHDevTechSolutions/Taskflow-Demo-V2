@@ -1,13 +1,19 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { AlertDescription } from "@/components/ui/alert";
+import { AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
+import { AreaChart, Area, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+import { supabase } from "@/utils/supabase";
+
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig, } from "@/components/ui/chart";
 
 interface SI {
     id: number;
@@ -185,15 +191,6 @@ export const SITable: React.FC<SIProps> = ({
         return filteredActivities.reduce((acc, item) => acc + (item.actual_sales ?? 0), 0);
     }, [filteredActivities]);
 
-    // Count unique quotation_number (non-null)
-    const uniqueQuotationCount = useMemo(() => {
-        const uniqueSet = new Set<string>();
-        filteredActivities.forEach((item) => {
-            if (item.dr_number) uniqueSet.add(item.dr_number);
-        });
-        return uniqueSet.size;
-    }, [filteredActivities]);
-
     // Pagination logic
     const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
     const paginatedActivities = useMemo(() => {
@@ -205,6 +202,32 @@ export const SITable: React.FC<SIProps> = ({
     useEffect(() => {
         setPage(1);
     }, [searchTerm, filterStatus, dateCreatedFilterRange]);
+
+    const chartData = useMemo(() => {
+        const dataByDate: Record<string, { count: number; amount: number }> = {};
+
+        filteredActivities.forEach(({ date_created, actual_sales }) => {
+            const date = new Date(date_created).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+            });
+            if (!dataByDate[date]) {
+                dataByDate[date] = { count: 0, amount: 0 };
+            }
+            dataByDate[date].count += 1;
+            dataByDate[date].amount += actual_sales ?? 0;
+        });
+
+        return Object.entries(dataByDate)
+            .map(([date, { count, amount }]) => ({ date, count, amount }))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [filteredActivities]);
+
+    // Chart config for colors to feed to ChartContainer
+    const chartConfig = {
+        count: { label: "Count", color: "var(--chart-1)" },
+        amount: { label: "SO Amount", color: "var(--chart-2)" },
+    } satisfies ChartConfig;
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -223,160 +246,203 @@ export const SITable: React.FC<SIProps> = ({
 
     return (
         <>
-            {/* Search */}
-            <div className="mb-4 flex items-center justify-between gap-4">
-                <Input
-                    type="text"
-                    placeholder="Search company, quotation number or remarks..."
-                    className="input input-bordered input-sm flex-grow max-w-md"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-label="Search quotations"
-                />
-            </div>
-
-            {/* Loading */}
             {isLoading && (
                 <div className="flex justify-center items-center h-40">
                     <Spinner className="size-8" />
                 </div>
             )}
 
-            {/* Error */}
-            {error && (
-                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-                    <div className="flex items-center space-x-3">
-                        <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                        <div>
-                            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                Please check your internet connection or try again later.
-                            </AlertDescription>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                        <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                        <div>
-                            <AlertTitle className="text-black">Create New Data</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                You can start by adding new entries to populate your database.
-                            </AlertDescription>
-                        </div>
-                    </div>
-                </Alert>
-            )}
-
-            {/* No Data Alert */}
             {!isLoading && !error && filteredActivities.length === 0 && (
-                <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-                    <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                    <div>
+                <div className="flex justify-center items-center h-40">
+                    <Alert
+                        variant="destructive"
+                        className="flex flex-col items-center space-y-2 p-4 text-center text-xs"
+                    >
                         <AlertTitle>No Data Found</AlertTitle>
-                        <AlertDescription>Please check your filters or try again later.</AlertDescription>
-                    </div>
-                </Alert>
-            )}
-
-
-            {/* Total info */}
-            {filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length} | Unique DR Number: {uniqueQuotationCount}
+                        <AlertDescription>Please check your date range or try again later.</AlertDescription>
+                    </Alert>
                 </div>
             )}
 
-            {/* Table */}
-            {filteredActivities.length > 0 && (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
-                                <TableHead className="text-xs">SI Date</TableHead>
-                                <TableHead className="text-xs text-right">SI Amount</TableHead>
-                                <TableHead className="text-xs">DR Number</TableHead>
-                                <TableHead className="text-xs">Company Name</TableHead>
-                                <TableHead className="text-xs">Contact Person</TableHead>
-                                <TableHead className="text-xs">Contact Number</TableHead>
-                                <TableHead className="text-xs">Remarks</TableHead>
-                                <TableHead className="text-xs">Payment Terms</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {paginatedActivities.map((item) => (
-                                <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                    <TableCell>{formatDate(item.delivery_date)}</TableCell>
-                                    <TableCell>{formatDate(item.si_date)}</TableCell>
-                                    <TableCell className="text-right">
-                                        {item.actual_sales !== undefined && item.actual_sales !== null
-                                            ? item.actual_sales.toLocaleString(undefined, {
-                                                style: "currency",
-                                                currency: "PHP",
-                                            })
-                                            : "-"}
-                                    </TableCell>
-                                    <TableCell className="uppercase">{item.dr_number || "-"}</TableCell>
-                                    <TableCell>{item.company_name}</TableCell>
-                                    <TableCell>{item.contact_person}</TableCell>
-                                    <TableCell>{item.contact_number}</TableCell>
-                                    <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
-                                    <TableCell>{item.payment_terms}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                        <tfoot>
-                            <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
-                                    Totals:
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
-                                        style: "currency",
-                                        currency: "PHP",
-                                    })}
-                                </TableCell>
-                                <TableCell colSpan={6}></TableCell>
-                            </TableRow>
-                        </tfoot>
-                    </Table>
-                </div>
-            )}
+            {!isLoading && !error && filteredActivities.length !== 0 && (
+                <div className={`flex flex-col md:flex-row gap-2`}>
+                    {/* Left: Area Chart */}
+                    {chartData.length > 0 && (
+                        <Card className="md:w-1/2 bg-white rounded-md shadow p-4">
+                            <CardHeader>
+                                <CardTitle>SI Activities Over Time</CardTitle>
+                                <CardDescription>{`Showing ${filteredActivities.length} records`}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? (
+                                    <div className="flex justify-center items-center h-40">
+                                        <Spinner />
+                                    </div>
+                                ) : (
+                                    <ChartContainer config={chartConfig}>
+                                        <ResponsiveContainer width="100%" height={250}>
+                                            <AreaChart
+                                                data={chartData}
+                                                margin={{ left: 12, right: 12, top: 10, bottom: 0 }}
+                                            >
+                                                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                                                <XAxis
+                                                    dataKey="date"
+                                                    tickLine={false}
+                                                    axisLine={false}
+                                                    tickMargin={8}
+                                                    tick={{ fontSize: 12 }}
+                                                />
+                                                <ChartTooltip
+                                                    cursor={false}
+                                                    content={<ChartTooltipContent indicator="line" />}
+                                                    formatter={(value: number, name: string) => {
+                                                        if (name === "amount") {
+                                                            return value.toLocaleString(undefined, {
+                                                                style: "currency",
+                                                                currency: "PHP",
+                                                            });
+                                                        }
+                                                        return value;
+                                                    }}
+                                                    labelFormatter={(label) => `Date: ${label}`}
+                                                />
+                                                <Area
+                                                    type="natural"
+                                                    dataKey="count"
+                                                    name="Count"
+                                                    fill="var(--chart-1)"
+                                                    fillOpacity={0.4}
+                                                    stroke="var(--chart-1)"
+                                                    strokeWidth={2}
+                                                />
+                                                <Area
+                                                    type="natural"
+                                                    dataKey="amount"
+                                                    name="SI Amount"
+                                                    fill="var(--chart-2)"
+                                                    fillOpacity={0.4}
+                                                    stroke="var(--chart-2)"
+                                                    strokeWidth={2}
+                                                />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </ChartContainer>
+                                )}
+                            </CardContent>
+                            <CardFooter>
+                                <div className="flex w-full items-center gap-2 text-sm text-muted-foreground">
+                                    <div>
+                                        Data from {chartData[0]?.date} to {chartData[chartData.length - 1]?.date}
+                                    </div>
+                                </div>
+                            </CardFooter>
+                        </Card>
+                    )}
 
-            {pageCount > 1 && (
-                <Pagination>
-                    <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-                        <PaginationItem>
-                            <PaginationPrevious
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page > 1) setPage(page - 1);
-                                }}
-                                aria-disabled={page === 1}
-                                className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                    {/* Right: Table */}
+                    <div
+                        className={`${chartData.length > 1 ? "md:w-1/2" : "w-full"
+                            } overflow-auto bg-white rounded-md shadow p-4`}
+                    >
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                            <Input
+                                type="text"
+                                placeholder="Search company, quotation number or remarks..."
+                                className="input input-bordered input-sm"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                aria-label="Search quotations"
                             />
-                        </PaginationItem>
-
-                        {/* Current page / total pages */}
-                        <div className="px-4 font-medium select-none">
-                            {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
                         </div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
+                                    <TableHead className="text-xs">SI Date</TableHead>
+                                    <TableHead className="text-xs text-right">SI Amount</TableHead>
+                                    <TableHead className="text-xs">DR Number</TableHead>
+                                    <TableHead className="text-xs">Company Name</TableHead>
+                                    <TableHead className="text-xs">Contact Person</TableHead>
+                                    <TableHead className="text-xs">Contact Number</TableHead>
+                                    <TableHead className="text-xs">Remarks</TableHead>
+                                    <TableHead className="text-xs">Payment Terms</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedActivities.map((item) => (
+                                    <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
+                                        <TableCell>{formatDate(item.delivery_date)}</TableCell>
+                                        <TableCell>{formatDate(item.si_date)}</TableCell>
+                                        <TableCell className="text-right">
+                                            {item.actual_sales !== undefined && item.actual_sales !== null
+                                                ? item.actual_sales.toLocaleString(undefined, {
+                                                    style: "currency",
+                                                    currency: "PHP",
+                                                })
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell className="uppercase">{item.dr_number || "-"}</TableCell>
+                                        <TableCell>{item.company_name}</TableCell>
+                                        <TableCell>{item.contact_person}</TableCell>
+                                        <TableCell>{item.contact_number}</TableCell>
+                                        <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
+                                        <TableCell>{item.payment_terms}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                            <tfoot>
+                                <TableRow className="bg-muted font-semibold text-xs">
+                                    <TableCell colSpan={2} className="text-right pr-4">
+                                        Totals:
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {totalQuotationAmount.toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency: "PHP",
+                                        })}
+                                    </TableCell>
+                                    <TableCell colSpan={6}></TableCell>
+                                </TableRow>
+                            </tfoot>
+                        </Table>
+                        {pageCount > 1 && (
+                            <Pagination>
+                                <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
+                                    <PaginationItem>
+                                        <PaginationPrevious
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (page > 1) setPage(page - 1);
+                                            }}
+                                            aria-disabled={page === 1}
+                                            className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                                        />
+                                    </PaginationItem>
 
-                        <PaginationItem>
-                            <PaginationNext
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page < pageCount) setPage(page + 1);
-                                }}
-                                aria-disabled={page === pageCount}
-                                className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
+                                    <div className="px-4 font-medium select-none">
+                                        {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
+                                    </div>
+
+                                    <PaginationItem>
+                                        <PaginationNext
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (page < pageCount) setPage(page + 1);
+                                            }}
+                                            aria-disabled={page === pageCount}
+                                            className={page === pageCount ? "pointer-events-none opacity-50" : ""}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        )}
+                    </div>
+                </div>
             )}
+
         </>
     );
 };

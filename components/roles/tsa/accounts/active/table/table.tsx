@@ -11,7 +11,7 @@ import { MoreHorizontal, Edit } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { AccountDialog } from "../../../activity/planner/dialog/active";
 import { toast } from "sonner";
-import { Plus, Repeat, Archive } from "lucide-react";
+import { Plus, Repeat, Archive, Users, Layers, Calendar } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
 import { AccountsActiveSearch } from "../search";
@@ -507,54 +507,59 @@ export function AccountsTable({
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                {/* Card 1 */}
-                <Card className="text-center">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-semibold">Total Accounts</CardTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                <Card className="text-center transition-transform hover:scale-[1.03] hover:shadow-lg duration-200 cursor-pointer border-l-4 border-yellow-500">
+                    <CardHeader className="bg-indigo-50 rounded-t-md flex items-center justify-center gap-2">
+                        <Users className="w-5 h-5 text-yellow-600" />
+                        <CardTitle className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">
+                            Total Accounts
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold">{totalAccounts}</p>
+                        <p className="text-3xl font-extrabold text-yellow-700">{totalAccounts}</p>
                     </CardContent>
                 </Card>
 
-                {/* Card 3 */}
-                <Card className="text-center">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-semibold">Balance / Next / Top</CardTitle>
+                <Card className="text-center transition-transform hover:scale-[1.03] hover:shadow-lg duration-200 cursor-pointer border-l-4 border-green-500">
+                    <CardHeader className="bg-green-50 rounded-t-md flex items-center justify-center gap-2">
+                        <Layers className="w-5 h-5 text-green-600" />
+                        <CardTitle className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                            Balance / Next / Top
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <p>Top 50: <span className="font-bold">{top50Count}</span></p>
-                        <p>Next 30: <span className="font-bold">{next30Count}</span></p>
-                        <p>Balance 20: <span className="font-bold">{balance20Count}</span></p>
+                    <CardContent className="space-y-1 text-left max-w-xs mx-auto">
+                        <p>Top 50: <span className="font-bold text-green-700">{top50Count}</span></p>
+                        <p>Next 30: <span className="font-bold text-green-700">{next30Count}</span></p>
+                        <p>Balance 20: <span className="font-bold text-green-700">{balance20Count}</span></p>
                     </CardContent>
                 </Card>
 
-                {/* Card 2 */}
-                <Card className="text-center">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-semibold">Clients by Type</CardTitle>
+                <Card className="text-center transition-transform hover:scale-[1.03] hover:shadow-lg duration-200 cursor-pointer border-l-4 border-blue-500">
+                    <CardHeader className="bg-blue-50 rounded-t-md flex items-center justify-center gap-2">
+                        <Users className="w-5 h-5 text-blue-600" />
+                        <CardTitle className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                            Clients by Type
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <p>
-                            TSA Client: <span className="font-bold">{tsaCount}</span>
-                        </p>
-                        <p>
-                            CSR Client: <span className="font-bold">{csrCount}</span>
-                        </p>
+                    <CardContent className="space-y-1 text-left max-w-xs mx-auto">
+                        <p>TSA Client: <span className="font-bold text-blue-700">{tsaCount}</span></p>
+                        <p>CSR Client: <span className="font-bold text-blue-700">{csrCount}</span></p>
                     </CardContent>
                 </Card>
 
-                {/* Card 4 */}
-                <Card className="text-center">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-semibold">Companies Scheduled Today</CardTitle>
+                <Card className="text-center transition-transform hover:scale-[1.03] hover:shadow-lg duration-200 cursor-pointer border-l-4 border-purple-500">
+                    <CardHeader className="bg-purple-50 rounded-t-md flex items-center justify-center gap-2">
+                        <Calendar className="w-5 h-5 text-purple-600" />
+                        <CardTitle className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
+                            Companies Scheduled Today
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold">{scheduledTodayCount}</p>
+                        <p className="text-3xl font-extrabold text-purple-700">{scheduledTodayCount}</p>
                     </CardContent>
                 </Card>
             </div>
+
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 {/* Left side: Add Account + Search */}

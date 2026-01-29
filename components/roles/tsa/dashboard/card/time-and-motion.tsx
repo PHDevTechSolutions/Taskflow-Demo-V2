@@ -388,6 +388,14 @@ export function TimemotionCard({
     fill: getColor(type, i),
   }));
 
+  const MAX_HOURS = 6.5;
+
+  const totalHours = grandHours + grandMinutes / 60 + grandSeconds / 3600;
+
+  // Calculate percent progress capped at 100%
+  const progressPercent = Math.min((totalHours / MAX_HOURS) * 100, 100);
+
+
   function ChartPieDonutActive() {
     return (
       <Card className="flex flex-col">
@@ -434,23 +442,38 @@ export function TimemotionCard({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex justify-center items-center text-5xl font-semibold">
+      <CardContent className="flex flex-col justify-center items-center p-6 space-y-3">
         {(loading || loadingMeetings || loadingNotes || loadingSiteVisits) ? (
-          < div className="flex justify-center items-center w-full min-h-[100px]">
+          <div className="flex justify-center items-center w-full min-h-[100px]">
             <Spinner />
           </div>
         ) : error || errorMeetings || errorNotes || errorSiteVisits ? (
           <div className="text-red-500 text-center w-full">{error || errorMeetings || errorNotes || errorSiteVisits}</div>
         ) : (
-          <>
-            {/* Display GRAND TOTAL (activities + site visits) here */}
-            <div>
-              {grandHours}h {grandMinutes}m {grandSeconds}s (of 6.5h)
+          <div className="flex flex-col justify-center items-center space-y-2">
+            {/* Circle container */}
+            <div
+              className="relative rounded-full w-32 h-32 flex items-center justify-center border-4 border-green-700"
+              style={{
+                background: `conic-gradient(#15803d ${progressPercent * 3.6}deg, #d1d5db 0deg)`,
+              }}
+            >
+
+              {/* Inner circle to make donut */}
+              <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center">
+                <span className="text-6xl font-bold text-black">{grandHours}h</span>
+              </div>
             </div>
 
-          </>
-        )}
+            <div className="text-lg font-semibold">
+              {grandMinutes}m {grandSeconds}s
+            </div>
 
+            <div className="text-sm text-gray-500 text-center max-w-xs">
+              Total time logged today (goal: 6.5h)
+            </div>
+          </div>
+        )}
       </CardContent>
 
       <Sheet open={open} onOpenChange={setOpen}>
@@ -482,7 +505,7 @@ export function TimemotionCard({
           <Separator />
           <div>
             {Object.keys(siteVisitDurations).length === 0 ? (
-              <p className="text-sm text-gray-500">No site visits found.</p>
+              <p></p>
             ) : (
               Object.entries(siteVisitDurations).map(([type, ms]) => (
                 <div key={type} className="flex justify-between text-xs font-medium py-1 border-b border-gray-200">
@@ -501,7 +524,7 @@ export function TimemotionCard({
           className="cursor-pointer"
           onClick={() => setOpen(true)} // <-- open Sheet when clicked
         >
-        <ListTree />  Show Breakdown
+          <ListTree />  Show Breakdown
         </Button>
       </CardFooter>
 
