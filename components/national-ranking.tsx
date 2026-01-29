@@ -278,7 +278,7 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                               {user ? (
                                 <>
                                   <img
-                                    src={user.profilePicture}
+                                    src={user.profilePicture || "/Taskflow.png"}
                                     alt={`${user.Firstname} ${user.Lastname}`}
                                     className="w-8 h-8 rounded-full object-cover"
                                   />
@@ -344,14 +344,21 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
                             {user ? (
                               <>
                                 <img
-                                  src={user.profilePicture}
-                                  alt={`${user.Firstname} ${user.Lastname}`}
+                                  src={user.profilePicture || "/Taskflow.png"}
+                                  alt={`${user.Firstname || "Sette"} ${user.Lastname || "Hosena"}`}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
-                                {user.Firstname} {user.Lastname}
+                                {user.Firstname || "Sette"} {user.Lastname || "Hosena"}
                               </>
                             ) : (
-                              <span className="italic text-gray-400">Unknown User</span>
+                              <>
+                                <img
+                                  src="/Taskflow.png"
+                                  alt="Sette Hosena"
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                                Sette Hosena
+                              </>
                             )}
                           </td>
                           <td className="px-4 py-2 text-xs">{total}</td>

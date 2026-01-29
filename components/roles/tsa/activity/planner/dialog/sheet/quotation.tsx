@@ -490,7 +490,7 @@ export function QuotationSheet(props: Props) {
     }
 
     try {
-      // Prepare arrays from comma-separated strings
+      // Prepare arrays from comma-separated strings (if still needed)
       const productCats = productCat.split(",");
       const quantities = productQuantity ? productQuantity.split(",") : [];
       const amounts = productAmount ? productAmount.split(",") : [];
@@ -517,20 +517,31 @@ export function QuotationSheet(props: Props) {
       const salestsmname = `${tsmname}`;
       const salesmanagername = `${managername}`;
 
+      // Use discount state from component
+      // Assuming 'discount' is accessible here (else pass as parameter or use ref)
+
       const items = selectedProducts.map((p, index) => {
         const qty = p.quantity;
         const unitPrice = p.price;
-        const totalAmount = qty * unitPrice;
+        const isDiscounted = p.isDiscounted ?? false;
+
+        const baseAmount = qty * unitPrice;
+        let discountedAmount = 0;
+        if (isDiscounted && discount > 0) {
+          discountedAmount = (baseAmount * discount) / 100;
+        }
+        const totalAmount = baseAmount - discountedAmount;
+
         const photo = p.images?.[0]?.src || "";
         const title = p.title || "";
         const sku = p.skus?.join(", ") || "";
         const description = p.description || "";
 
         const descriptionTable = `<table>
-    <tr><td>${title}</td></tr>
-    <tr><td>${sku}</td></tr>
-    <tr><td>${description}</td></tr>
-  </table>`;
+        <tr><td>${title}</td></tr>
+        <tr><td>${sku}</td></tr>
+        <tr><td>${description}</td></tr>
+      </table>`;
 
         return {
           itemNo: index + 1,
@@ -554,11 +565,14 @@ export function QuotationSheet(props: Props) {
         attention: `${contact_person}, ${address}`,
         subject: "For Quotation",
         items,
-        vatType: vatType === "vat_inc" ? "VAT Inc"
-          : vatType === "vat_exe" ? "VAT Exe"
-            : "Zero-Rated",
+        vatType:
+          vatType === "vat_inc"
+            ? "VAT Inc"
+            : vatType === "vat_exe"
+              ? "VAT Exe"
+              : "Zero-Rated",
 
-        totalPrice: Number(quotationAmount),
+        totalPrice: Number(quotationAmount), // If you want totalPrice to reflect discount, calculate here too
         salesRepresentative: salesRepresentativeName,
         salesemail,
         salescontact,

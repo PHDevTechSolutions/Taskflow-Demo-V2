@@ -455,7 +455,7 @@ export function CreateActivityDialog({
             setStep(1);
             setSheetOpen(false);
 
-             window.location.reload();
+            window.location.reload();
 
         } catch (error) {
             toast.error("Server error. Please try again.");

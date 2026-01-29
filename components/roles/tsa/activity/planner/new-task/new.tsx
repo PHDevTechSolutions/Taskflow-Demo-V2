@@ -108,12 +108,15 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Add Account Handler
   const handleAdd = async (account: Account) => {
+    setLoading(true);  // <-- start loading
+
     const region = account.region || "NCR";
     const tsm = account.tsm;
     const manager = account.manager;
 
     if (!tsm || !manager) {
       alert("TSM or Manager information is missing. Please check the account data.");
+      setLoading(false); // stop loading if early return
       return;
     }
 
@@ -170,13 +173,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       // Remove added account from state
       setAccounts((prev) => prev.filter((acc) => acc.id !== account.id));
+      window.location.reload();
 
       toast.success(`Successfully added and updated date for: ${account.company_name}`);
     } catch (err) {
       console.error(err);
       toast.error("Error saving or updating account. Please try again.");
+    } finally {
+      setLoading(false);  // <-- always stop loading at the end
     }
   };
+
 
   // Normalize date string or return null
   const normalizeDate = (dateStr?: string | null): string | null => {
@@ -397,6 +404,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
         playedTicketIdsRef.current.delete(ticket.id);
         return prev.filter((t) => t.id !== ticket.id);
       });
+
+      window.location.reload();
 
       // close dialog
       setConfirmOpen(false);
@@ -725,7 +734,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                       }
                                     }}
                                   >
-                                   <Plus /> Add
+                                    <Plus /> Add
                                   </Button>
                                 </div>
                               </div>
@@ -794,7 +803,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                 }
                               }}
                             >
-                            <Plus /> Add
+                              <Plus /> Add
                             </Button>
                           </div>
                         </div>

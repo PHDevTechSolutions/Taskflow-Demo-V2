@@ -381,7 +381,7 @@ export function AccountDialog({
   }
 
   // --- Form submission ---
-  function handleSubmit() {
+  async function handleSubmit() {
     if (submitLock.current) return;
     submitLock.current = true;
 
@@ -398,6 +398,7 @@ export function AccountDialog({
         return;
       }
     }
+
     const cleanData = {
       ...formData,
       company_name: cleanCompanyName(formData.company_name),
@@ -410,13 +411,22 @@ export function AccountDialog({
       status: mode === "create" ? "Active" : formData.status,
     };
 
-    onSaveAction(cleanData);
+    try {
+      await onSaveAction(cleanData);  // wait for save to complete
+      toast.success("Saved successfully!");
 
-    setTimeout(() => {
+      onOpenChangeAction(false);
+
+      // Reload after a short delay to let UI update
+      setTimeout(() => {
+        submitLock.current = false;
+        window.location.reload();
+      }, 500);
+
+    } catch (error) {
+      toast.error("Save failed. Please try again.");
       submitLock.current = false;
-    }, 1500);
-
-    onOpenChangeAction(false);
+    }
   }
 
   useEffect(() => {
@@ -456,20 +466,20 @@ export function AccountDialog({
                 </FieldDescription>
               </FieldContent>
 
-              
-                <Input
-                  required
-                  value={formData.company_name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      company_name: e.target.value,
-                    }))
-                  }
-                  placeholder="Company Name"
-                  className="uppercase"
-                />
-           
+
+              <Input
+                required
+                value={formData.company_name}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    company_name: e.target.value,
+                  }))
+                }
+                placeholder="Company Name"
+                className="uppercase"
+              />
+
               {isCheckingDuplicate && (
                 <Alert>
                   <CheckCircle2Icon />
