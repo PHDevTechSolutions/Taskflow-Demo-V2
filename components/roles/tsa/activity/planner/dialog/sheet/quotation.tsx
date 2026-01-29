@@ -175,7 +175,7 @@ export function QuotationSheet(props: Props) {
   const [showConfirmFollowUp, setShowConfirmFollowUp] = useState(false);
   const [open, setOpen] = useState(false);
   const [discount, setDiscount] = React.useState(0);
-  const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("vat_inc");
+  const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
 
   const [useToday, setUseToday] = useState(false);
 
