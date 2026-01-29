@@ -95,10 +95,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogCancelledOpen, setDialogCancelledOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [cancellationRemarks, setCancellationRemarks] = useState("");
 
   // Fetch activities
   const fetchActivities = useCallback(async () => {
@@ -218,19 +216,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     };
   }, [referenceid, fetchActivities, fetchHistory]);
 
-  const allowedStatuses = ["Assisted", "Quote-Done", "SO-Done", "Not Assisted"];
-
-  function isScheduledToday(dateStr: string): boolean {
-    const scheduledDate = new Date(dateStr);
-    const today = new Date();
-
-    return (
-      scheduledDate.getFullYear() === today.getFullYear() &&
-      scheduledDate.getMonth() === today.getMonth() &&
-      scheduledDate.getDate() === today.getDate()
-    );
-  }
-
   function isDelivered(status: string) {
     return ["Delivered", "Done", "Completed", "Cancelled"].includes(status);
   }
@@ -273,27 +258,50 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const term = searchTerm.toLowerCase();
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const filteredActivities = mergedActivities
+    // ✅ filter scheduled_date (today & past only)
+    .filter((item) => {
+      if (!item.scheduled_date) return false;
+
+      const scheduledDate = new Date(item.scheduled_date);
+      scheduledDate.setHours(0, 0, 0, 0);
+
+      return scheduledDate <= today;
+    })
+
+    // 🔍 search filter
     .filter((item) => {
       const lowerTerm = term.toLowerCase();
 
       if (item.company_name?.toLowerCase().includes(lowerTerm)) return true;
       if (item.ticket_reference_number?.toLowerCase().includes(lowerTerm)) return true;
+
       if (
         item.relatedHistoryItems.some((h) =>
           h.quotation_number?.toLowerCase().includes(lowerTerm)
         )
-      ) return true;
+      )
+        return true;
 
       if (
         item.relatedHistoryItems.some((h) =>
           h.so_number?.toLowerCase().includes(lowerTerm)
         )
-      ) return true;
+      )
+        return true;
 
       return false;
     })
-    .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
+
+    // 🔽 sort newest first
+    .sort(
+      (a, b) =>
+        new Date(b.date_updated).getTime() -
+        new Date(a.date_updated).getTime()
+    );
 
   const isLoading = loadingCompanies || loadingActivities || loadingHistory;
   const error = errorCompanies || errorActivities || errorHistory;
@@ -334,6 +342,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       }
 
       await fetchActivities();
+      window.location.reload();
 
       toast.success("Transaction marked as Cancelled.");
     } catch {
