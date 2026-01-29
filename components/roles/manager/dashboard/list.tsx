@@ -335,7 +335,6 @@ export function AgentList({
         tsaClientCount: number | null;
     } | null>(null);
 
-
     useEffect(() => {
         if (selectedAgent === "all") {
             setCountData(null);

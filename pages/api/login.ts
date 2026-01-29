@@ -126,12 +126,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // ❗ SALES ONLY
-  if (user.Department !== "Sales") {
+  // ❗ SALES & IT ONLY
+  if (user.Department !== "Sales" && user.Department !== "IT") {
     return res.status(403).json({
-      message: "Only Sales department users are allowed to log in.",
+      message: "Only Sales or IT department users are allowed to log in.",
     });
   }
+
 
   // ✅ RESET AFTER SUCCESS and save deviceId
   await users.updateOne(

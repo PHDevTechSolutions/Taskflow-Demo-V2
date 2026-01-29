@@ -447,7 +447,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
+                                <TableCell colSpan={3} className="text-right pr-4">
                                     Totals:
                                 </TableCell>
                                 <TableCell className="text-right">

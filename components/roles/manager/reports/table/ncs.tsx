@@ -461,7 +461,7 @@ export const NCSTable: React.FC<NCSProps> = ({
                         </TableBody>
                         <tfoot>
                             <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={1} className="text-right pr-4">
+                                <TableCell colSpan={2} className="text-right pr-4">
                                     Totals:
                                 </TableCell>
                                 <TableCell className="text-right">
