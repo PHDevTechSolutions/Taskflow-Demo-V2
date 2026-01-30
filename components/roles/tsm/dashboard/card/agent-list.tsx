@@ -583,7 +583,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             </ul>
           </div>
         ) : (
-          <p className="mt-6 text-sm font-mono text-indigo-400 text-center italic">No meetings available.</p>
+          <></>
         )}
       </CardContent>
     </Card>
