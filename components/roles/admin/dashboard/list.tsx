@@ -258,70 +258,6 @@ export function AgentList({
         return () => unsubscribes.forEach(u => u());
     }, [selectedAgent, agents]);
 
-    // Fetch Meetings
-    useEffect(() => {
-        if (!agents.length) return;
-
-        // clear old data
-        setAgentMeetingMap({});
-
-        const unsubscribes: (() => void)[] = [];
-
-        const agentsToWatch =
-            selectedAgent === "all"
-                ? agents
-                : agents.filter(a => a.ReferenceID === selectedAgent);
-
-        agentsToWatch.forEach((agent) => {
-            const q = query(
-                collection(db, "meetings"),
-                where("referenceid", "==", agent.ReferenceID),
-                orderBy("date_created", "desc"),
-                limit(1) // 🔑 latest meeting lang
-            );
-
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    setAgentMeetingMap(prev => ({
-                        ...prev,
-                        [agent.ReferenceID]: {
-                            start_date: null,
-                            end_date: null,
-                            remarks: null,
-                            type_activity: null,
-                            date_created: null
-                        },
-                    }));
-                    return;
-                }
-
-                const data = snapshot.docs[0].data();
-
-                const formatDate = (d: any) => {
-                    if (!d) return null;
-                    if (d.toDate) return d.toDate().toLocaleString();
-                    if (typeof d === "string") return new Date(d).toLocaleString();
-                    return null;
-                };
-
-                setAgentMeetingMap(prev => ({
-                    ...prev,
-                    [agent.ReferenceID]: {
-                        start_date: formatDate(data.start_date),
-                        end_date: formatDate(data.end_date),
-                        remarks: data.remarks ?? "—",
-                        type_activity: data.type_activity ?? "—",
-                        date_created: data.date_created ?? "—",
-                    },
-                }));
-            });
-
-            unsubscribes.push(unsubscribe);
-        });
-
-        return () => unsubscribes.forEach(u => u());
-    }, [selectedAgent, agents]);
-
     const [countData, setCountData] = useState<{
         totalCount: number | null;
         top50Count: number | null;
@@ -568,11 +504,7 @@ export function AgentList({
                         })()}
 
                         {selectedAgent == "all" && (
-                            <AgentMeetings
-                                agents={agents}
-                                agentMeetingMap={agentMeetingMap}
-                                formatDate={formatDate} // if you use formatDate inside the component
-                            />
+                            <AgentMeetings agents={agents} selectedAgent={selectedAgent} />
                         )}
 
                         <OutboundCallsTableCard

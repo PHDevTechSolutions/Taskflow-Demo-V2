@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent,CardHeader, } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, } from "@/components/ui/card";
 import { Item, ItemContent, ItemDescription, ItemFooter, ItemTitle, ItemActions, } from "@/components/ui/item";
 import { Badge } from "@/components/ui/badge";
 import { Map, MapMarker, MapTileLayer, } from "@/components/ui/map";
@@ -88,6 +88,14 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
 
   const [latestLogin, setLatestLogin] = useState<string | null>(null);
   const [latestLogout, setLatestLogout] = useState<string | null>(null);
+
+  const [meetings, setMeetings] = useState<Array<{
+    start_date: string | null;
+    end_date: string | null;
+    remarks: string | null;
+    type_activity: string | null;
+    date_created: string | null;
+  }>>([]);
 
   useEffect(() => {
     if (!agent?.ReferenceID) return;
@@ -258,6 +266,45 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
   const mapCenter: LatLngExpression =
     selectedVisit ?? (mapMarkers.length > 0 ? mapMarkers[0].position : [0, 0]);
   const mapZoom = selectedVisit ? 16 : 13;
+
+  useEffect(() => {
+    if (!agent?.ReferenceID) return;
+
+    const q = query(
+      collection(db, "meetings"),
+      where("referenceid", "==", agent.ReferenceID),
+      orderBy("date_created", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        setMeetings([]);
+        return;
+      }
+
+      const formatDate = (d: any) => {
+        if (!d) return null;
+        if (d.toDate) return d.toDate().toLocaleString();
+        if (typeof d === "string") return new Date(d).toLocaleString();
+        return null;
+      };
+
+      const allMeetings = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          start_date: formatDate(data.start_date),
+          end_date: formatDate(data.end_date),
+          remarks: data.remarks ?? "—",
+          type_activity: data.type_activity ?? "—",
+          date_created: formatDate(data.date_created),
+        };
+      });
+
+      setMeetings(allMeetings);
+    });
+
+    return () => unsubscribe();
+  }, [agent?.ReferenceID]);
 
   return (
     <Card className="min-h-[160px]">
@@ -494,6 +541,30 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             )}
           </div>
         </div>
+
+        {/* Meetings List */}
+        {meetings.length > 0 ? (
+          <div className="mt-6 p-5 bg-white rounded-xl shadow-md max-h-64 overflow-auto font-mono text-sm text-gray-900">
+            <h4 className="font-bold mb-4 text-green-600 border-b border-green-300 pb-2">Meetings</h4>
+            <ul className="space-y-5">
+              {meetings.map((meeting, idx) => (
+                <li
+                  key={idx}
+                  className="p-4 rounded-lg border-l-4 border-green-500 bg-green-50 hover:bg-green-100 transition-colors"
+                >
+                  <p><strong>Start:</strong> {meeting.start_date ?? "N/A"}</p>
+                  <p><strong>End:</strong> {meeting.end_date ?? "N/A"}</p>
+                  <p><strong>Type:</strong> {meeting.type_activity ?? "N/A"}</p>
+                  <p><strong>Remarks:</strong> {meeting.remarks ?? "N/A"}</p>
+                  <p className="text-xs text-green-700"><strong>Recorded:</strong> {meeting.date_created ?? "N/A"}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="mt-6 text-sm font-mono text-indigo-400 text-center italic">No meetings available.</p>
+        )}
+
       </CardContent>
     </Card>
   );
