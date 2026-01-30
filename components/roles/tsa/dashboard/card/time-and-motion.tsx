@@ -226,6 +226,7 @@ export function TimemotionCard({
         const data = await res.json();
 
         const filteredSiteVisits = (data.siteVisits || []).filter((visit: SiteVisitItem) => {
+          if (visit.Type === "HR Attendance") return false;  // <-- exclude HR Attendance
           if (!dateRange || !dateRange.from || !dateRange.to) return true;
           if (!visit.date_created) return false;
           const visitDate = new Date(visit.date_created);
