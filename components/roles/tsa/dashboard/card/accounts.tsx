@@ -162,7 +162,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
         {loading ? (
           <Spinner />
         ) : error ? (
-          <span className="text-red-600 font-semibold">{error}</span>
+          <ZeroState />
         ) : totalAccounts === 0 ? (
           <ZeroState />
         ) : totalAccounts !== null ? (
@@ -188,7 +188,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
           </Button>
         )}
 
-        {totalAccounts === 0 && (
+        {(totalAccounts === null || error) && (
           <Button asChild>
             <Link
               href={
@@ -197,10 +197,11 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
                   : "/roles/tsa/companies/active"
               }
             >
-              <User2 />  Add Accounts
+              <User2 /> Add Accounts
             </Link>
           </Button>
         )}
+
       </CardFooter>
 
 
