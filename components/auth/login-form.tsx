@@ -9,21 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel, FieldSeparator, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Globe, Calendar } from "lucide-react";
 import Link from "next/link";
 
 // Firestore imports
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-
 // Supabase import
 import { supabase } from "@/utils/supabase-ticket";
 
@@ -51,7 +43,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
 
   const [ticket, setTicket] = useState<Ticket[]>([]);
-  const [ticket_id, setTicketId] = useState<string>("");
 
   const router = useRouter();
   const { setUserId } = useUser();
@@ -413,18 +404,27 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       {/* ---------------- Location Permission Dialog ---------------- */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Allow Location Access?</DialogTitle>
-            <DialogDescription>
+
+            {/* GIF */}
+            <div className="flex justify-center my-4">
+              <iframe src="https://lottie.host/embed/2cbdf7c4-ad28-4a75-8bfd-68e4cd759a26/9PTYn6qNh6.lottie"></iframe>
+            </div>
+
+            <DialogDescription className="text-center">
               Would you like to share your location for login activity tracking?
             </DialogDescription>
           </DialogHeader>
+
           <DialogFooter className="flex justify-end gap-2">
             <Button variant="outline" onClick={onDenyLocation}>
               Deny
             </Button>
-            <Button onClick={onAllowLocation}>Allow</Button>
+            <Button onClick={onAllowLocation}>
+              Allow
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

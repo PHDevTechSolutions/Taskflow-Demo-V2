@@ -4,9 +4,10 @@ import React, { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, } from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListTree } from "lucide-react";
+import { ListTree, User2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner"
-
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import CountUp from 'react-countup';
 
 interface Company {
@@ -35,6 +36,9 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
+
+  const searchParams = useSearchParams();
+  const userId = searchParams?.get("id") ?? null;
 
   useEffect(() => {
     if (!referenceid) {
@@ -132,42 +136,73 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
       });
   }, [open, referenceid]);
 
-  return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between">
-      <CardHeader>
-        <CardTitle>Total Accounts</CardTitle>
-        <CardDescription>
-          Number of accounts excluding removed or invalid statuses
-        </CardDescription>
-      </CardHeader>
+  const ZeroState = () => (
+    <div className="flex flex-col items-center justify-center text-center gap-3 mt-10">
+      <div className="flex items-center justify-center w-24 h-24 mb-8">
+        <iframe
+          src="https://lottie.host/embed/bab2820e-0597-4b03-8756-90b19a7f68e8/nvLI7NIuZQ.lottie"
+          className="w-50 h-50 border-0 pointer-events-none"
+          title="No Data Animation"
+        />
+      </div>
 
-      <CardContent className="flex flex-col justify-center items-center p-6 space-y-2">
+      <p className="text-sm font-medium text-gray-700">
+        No accounts Available
+      </p>
+      <p className="text-xs text-gray-500">
+        Create more accounts to see counts
+      </p>
+    </div>
+  );
+
+  return (
+    <Card className="bg-white z-10 text-black flex flex-col">
+
+      <CardContent className="flex-1 flex items-center justify-center p-6">
         {loading ? (
           <Spinner />
         ) : error ? (
           <span className="text-red-600 font-semibold">{error}</span>
+        ) : totalAccounts === 0 ? (
+          <ZeroState />
         ) : totalAccounts !== null ? (
-          <>
+          <div className="flex flex-col items-center justify-center text-center">
             <CountUp
               end={totalAccounts}
               duration={1.5}
               className="text-6xl font-extrabold text-black"
             />
-            <div className="text-sm text-gray-500">Total Accounts</div>
-          </>
+            <div className="text-sm text-gray-500 mt-1">
+              Total Accounts
+            </div>
+          </div>
         ) : (
           <div className="text-gray-400 text-3xl">-</div>
         )}
       </CardContent>
 
-      <CardFooter className="flex justify-end border-t">
-        <Button
-          onClick={() => setOpen(true)}
-          disabled={loading || !!error || !totalAccounts}
-        >
-          <ListTree /> Show Breakdown
-        </Button>
+      <CardFooter className="flex justify-end gap-2 border-t">
+        {totalAccounts !== null && totalAccounts > 0 && (
+          <Button onClick={() => setOpen(true)} disabled={loading || !!error}>
+            <ListTree /> Show Breakdown
+          </Button>
+        )}
+
+        {totalAccounts === 0 && (
+          <Button asChild>
+            <Link
+              href={
+                userId
+                  ? `/roles/tsa/companies/active?id=${encodeURIComponent(userId)}`
+                  : "/roles/tsa/companies/active"
+              }
+            >
+              <User2 />  Add Accounts
+            </Link>
+          </Button>
+        )}
       </CardFooter>
+
 
       {/* Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>

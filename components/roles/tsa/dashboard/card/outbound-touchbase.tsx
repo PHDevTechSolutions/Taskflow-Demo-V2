@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button"
 
-import { PhoneOutgoing, PhoneCall, PhoneMissed, PhoneForwarded } from "lucide-react";
+import { PhoneOutgoing, PhoneCall, PhoneMissed, PhoneForwarded, Activity } from "lucide-react";
 
 interface Activity {
   call_status?: string;
@@ -39,27 +39,21 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
     totalFollowUp > 0;
 
   return (
-    <Card className="p-3 bg-white text-black min-h-[220px] flex flex-col justify-center z-30">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
-        <div className="flex flex-col items-center justify-center text-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-xl">📊</div>
+        <div className="flex flex-col items-center justify-center text-center gap-3 mt-20">
+          {/* LOTTIE CONTAINER */}
+          <div className="flex items-center justify-center w-24 h-24 mb-8">
+            <iframe src="https://lottie.host/embed/bcb66921-23b0-42e0-8c0e-38cca063563f/jaQLwTIXFi.lottie" className="w-50 h-50 border-0 pointer-events-none"
+              title="No Data Animation"></iframe>
+          </div>
+
           <p className="text-sm font-medium text-gray-700">No Data Available</p>
           <p className="text-xs text-gray-500">Create more activities to see analytics</p>
-          <Button asChild>
-            <Link
-              href={
-                userId
-                  ? `/roles/tsa/activity/planner?id=${encodeURIComponent(userId)}`
-                  : "/roles/tsa/activity/planner"
-              }
-            >
-              Create Activity
-            </Link>
-          </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 p-2">
           {totalOutboundTouchbase > 0 && (
             <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
               <ItemContent className="w-full">
@@ -121,6 +115,20 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
           )}
         </div>
       )}
+
+      <CardFooter className="flex justify-end border-t">
+        <Button asChild>
+          <Link
+            href={
+              userId
+                ? `/roles/tsa/activity/planner?id=${encodeURIComponent(userId)}`
+                : "/roles/tsa/activity/planner"
+            }
+          >
+           <Activity /> Create Activity
+          </Link>
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
