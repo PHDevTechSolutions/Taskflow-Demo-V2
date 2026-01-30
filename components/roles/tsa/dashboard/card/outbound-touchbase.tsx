@@ -125,7 +125,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
                 : "/roles/tsa/activity/planner"
             }
           >
-           <Activity /> Create Activity
+           <Activity /> Add Activity
           </Link>
         </Button>
       </CardFooter>
