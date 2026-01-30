@@ -254,10 +254,10 @@ function DashboardContent() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>In Progress</CardTitle>
+                                    <CardTitle>Scheduled</CardTitle>
                                     <CardDescription>
-                                        View and track all ongoing tasks to ensure timely completion and effective follow-up.
-                                    </CardDescription>
+    View all upcoming scheduled tasks and track their progress for timely completion.
+</CardDescription>
                                 </CardHeader>
 
                                 <CardContent>
