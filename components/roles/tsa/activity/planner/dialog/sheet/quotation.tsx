@@ -217,11 +217,37 @@ export function QuotationSheet(props: Props) {
     setUseToday(false);
   }, [callType]);
 
-  const [localQuotationNumber, setLocalQuotationNumber] = useState(quotationNumber);
+
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
+
   // Manual Creation and Submission to Shopify
   const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
+
+  async function handleGenerateQuotation() {
+    if (!quotationType || !tsm || isGenerating || hasGenerated) return;
+
+    setIsGenerating(true);
+
+    try {
+      const cleanQuotationType = quotationType.trim();
+      const prefixBase = `${getQuotationPrefix(cleanQuotationType)}-${extractTsmPrefix(tsm)}`;
+      const currentYear = new Date().getFullYear();
+
+      const nextSeq = await fetchNextQuotationSequence(prefixBase);
+      const newQuotationNumber = `${prefixBase}-${currentYear}-${nextSeq}`;
+
+      setLocalQuotationNumber(newQuotationNumber);
+      setQuotationNumber(newQuotationNumber);
+      setHasGenerated(true);
+    } catch (err) {
+      console.error("Generate quotation failed", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   async function fetchNextQuotationSequence(prefixBase: string): Promise<string> {
     const currentYear = new Date().getFullYear();
@@ -251,27 +277,6 @@ export function QuotationSheet(props: Props) {
       return "0001";
     }
   }
-
-  // Generate quotation number when quotationType or tsm changes
-  useEffect(() => {
-    if (!quotationType || !tsm) return;
-
-    async function generateQuotationNumber() {
-      setIsGenerating(true);
-      const cleanQuotationType = quotationType.trim();
-      const prefixBase = `${getQuotationPrefix(cleanQuotationType)}-${extractTsmPrefix(tsm)}`;
-      const currentYear = new Date().getFullYear();
-
-      const nextSeq = await fetchNextQuotationSequence(prefixBase);
-      const newQuotationNumber = `${prefixBase}-${currentYear}-${nextSeq}`;
-
-      setLocalQuotationNumber(newQuotationNumber);
-      setQuotationNumber(newQuotationNumber);
-      setIsGenerating(false);
-    }
-
-    generateQuotationNumber();
-  }, [quotationType, tsm, setQuotationNumber]);
 
   useEffect(() => {
     // Calculate total quotation amount considering discount per product
@@ -817,26 +822,6 @@ export function QuotationSheet(props: Props) {
         <div>
           <FieldGroup>
             <FieldSet>
-              <Alert variant="default" className="p-4 flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="mb-1">
-                    <AlertTitle>Quotation Number</AlertTitle>
-                  </div>
-                  {isGenerating ? (
-                    <AlertDescription className="text-sm text-gray-700 flex items-center gap-2">
-                      <Spinner className="w-5 h-5" />
-                      <p>Generating your quotation number, please wait...</p>
-                    </AlertDescription>
-                  ) : (
-                    <AlertDescription className="text-sm">
-                      Your quotation number is <strong>{localQuotationNumber}</strong>
-                      <br />
-                      <p>It is automatically generated based on the quotation type, TSM prefix, current year, and a sequential number.</p>
-                    </AlertDescription>
-                  )}
-                </div>
-              </Alert>
-
               {/* <label className="flex items-center gap-2 mt-4">
                 <input
                   type="checkbox"
@@ -1188,21 +1173,75 @@ export function QuotationSheet(props: Props) {
           {showConfirmFollowUp && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-black">
               <div className="max-w-md rounded-lg bg-white p-6 shadow-lg">
-                <h3 className="mb-4 text-lg font-semibold">Confirm Follow Up Date</h3>
-                <p className="mb-6">
-                  This <strong>activity / transaction</strong> will only appear on the exact day on scheduled card it is set for.
-                  <i>This reminder appears only if the date matches today’s date or if you enable manual mode and manually set today’s date.</i>
-                </p>
-                <p className="mb-6 font-semibold">{followUpDate}</p>
-                <div className="flex justify-end gap-4">
-                  <Button onClick={handleCancelFollowUp}>
-                    Cancel
+                <Alert variant="default" className="p-4 flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="mb-1">
+                      <AlertTitle>Quotation Number</AlertTitle>
+                    </div>
+
+                    {isGenerating ? (
+                      <AlertDescription className="text-sm text-gray-700 flex items-center gap-2">
+                        <Spinner className="w-5 h-5" />
+                        <p>Generating your quotation number, please wait...</p>
+                      </AlertDescription>
+                    ) : hasGenerated ? (
+                      <AlertDescription className="text-sm">
+                        Your quotation number is{" "}
+                        <strong>{localQuotationNumber}</strong>
+                        <br />
+                        <p className="mt-1 text-xs text-gray-600">
+                          It is automatically generated based on the quotation type, TSM
+                          prefix, current year, and a sequential number.
+                        </p>
+                      </AlertDescription>
+                    ) : (
+                      <AlertDescription className="text-sm text-gray-500">
+                        Click <strong>Generate</strong> to create a quotation number.
+                      </AlertDescription>
+                    )}
+                  </div>
+                </Alert>
+
+                {/* Generate button */}
+                {/* Action buttons */}
+                <div className="mt-4 flex flex-col gap-3">
+                  {/* Generate button */}
+                  <Button
+                    onClick={handleGenerateQuotation}
+                    disabled={isGenerating || hasGenerated}
+                    className="w-full"
+                    variant={hasGenerated ? "secondary" : "default"}
+                  >
+                    {isGenerating
+                      ? "Generating..."
+                      : hasGenerated
+                        ? "Generated"
+                        : "Generate Quotation Number"}
                   </Button>
-                  <Button onClick={handleConfirmFollowUp}>OK</Button>
+
+                  {/* Footer buttons */}
+                  <div className="flex justify-end gap-4 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelFollowUp}
+                      disabled={isGenerating}
+                    >
+                      Cancel
+                    </Button>
+
+                    <Button
+                      onClick={handleConfirmFollowUp}
+                      disabled={!hasGenerated}
+                    >
+                      OK
+                    </Button>
+                  </div>
                 </div>
+
               </div>
             </div>
           )}
+
         </div>
       )}
 
