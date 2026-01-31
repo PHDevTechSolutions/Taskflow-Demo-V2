@@ -217,11 +217,11 @@ export function QuotationSheet(props: Props) {
     setUseToday(false);
   }, [callType]);
 
-
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   // Manual Creation and Submission to Shopify
   const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
@@ -1205,7 +1205,6 @@ export function QuotationSheet(props: Props) {
                 {/* Generate button */}
                 {/* Action buttons */}
                 <div className="mt-4 flex flex-col gap-3">
-                  {/* Generate button */}
                   <Button
                     onClick={handleGenerateQuotation}
                     disabled={isGenerating || hasGenerated}
@@ -1219,20 +1218,22 @@ export function QuotationSheet(props: Props) {
                         : "Generate Quotation Number"}
                   </Button>
 
-                  {/* Footer buttons */}
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer" style={{ padding: "2.5rem" }}>
+                    <Download /> Download Quotation
+                  </Button>
+
+                  {!hasDownloaded && hasGenerated && (
+                    <p className="text-sm text-yellow-600 mt-2">
+                      ⚠️ Please download the quotation before saving.
+                    </p>
+                  )}
+
                   <div className="flex justify-end gap-4 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={handleCancelFollowUp}
-                      disabled={isGenerating}
-                    >
+                    <Button variant="outline" onClick={handleCancelFollowUp} disabled={isGenerating}>
                       Cancel
                     </Button>
 
-                    <Button
-                      onClick={handleConfirmFollowUp}
-                      disabled={!hasGenerated}
-                    >
+                    <Button onClick={handleConfirmFollowUp} disabled={!hasGenerated}>
                       OK
                     </Button>
                   </div>
@@ -1668,7 +1669,7 @@ export function QuotationSheet(props: Props) {
                   Overall Total: ₱{quotationAmount}
                 </div>
                 <Button onClick={handleDownloadQuotation}>
-                  <Download /> Download
+                  <Download /> Preview Sample
                 </Button>
               </div>
             )}

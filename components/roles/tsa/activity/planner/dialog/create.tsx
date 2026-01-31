@@ -450,7 +450,6 @@ export function CreateActivityDialog({
 
             // Success save + status update toast
             toast.success("Activity created and status updated successfully!");
-
             resetForm();
             setStep(1);
             setSheetOpen(false);
