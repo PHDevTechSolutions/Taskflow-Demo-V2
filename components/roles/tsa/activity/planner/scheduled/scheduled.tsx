@@ -651,21 +651,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             </p>
                           )}
 
-                        {/* Quotation Number */}
-                        {item.relatedHistoryItems.some(
-                          (h) => h.quotation_number && h.quotation_number !== "-"
-                        ) && (
-                            <p>
-                              <strong>Quotation Number:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.quotation_number ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
-
                         {/* TOTAL Quotation Amount */}
                         {item.relatedHistoryItems.some(
                           (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
