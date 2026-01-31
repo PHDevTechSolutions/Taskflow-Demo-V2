@@ -325,7 +325,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   <Calendar size={16} />
                   For Site & Client Visit:{" "}
                   <Link
-                    href="https://acculog-demo-navy.vercel.app/Login"
+                    href="https://acculog-hris.vercel.app/"
                     className="underline text-green-700 hover:text-green-800"
                   >
                     Acculog
