@@ -1646,18 +1646,28 @@ export function QuotationSheet(props: Props) {
 
           </div>
 
+          {/* Description above the footer */}
+          <div className="text-xs text-red-600 text-right italic mb-2">
+            Note: Quotation Number is not included in the Preview Sample (only appears on the final downloaded quotation).
+          </div>
+
           <DialogFooter className="flex items-center justify-between">
             {/* Left side: Close button */}
-            <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+
             {/* Right side: Total + Download button */}
             {selectedProducts.length > 0 && (
               <div className="flex items-center gap-4">
                 <div className="text-sm font-semibold">
                   Overall Total: ₱{quotationAmount}
                 </div>
-                <Button onClick={handleDownloadQuotation}>
-                  <Download /> Preview Sample
-                </Button>
+                <div className="flex flex-col items-start">
+                  <Button className="bg-orange-500" onClick={handleDownloadQuotation}>
+                    <Download /> Preview Sample
+                  </Button>
+                </div>
               </div>
             )}
           </DialogFooter>
