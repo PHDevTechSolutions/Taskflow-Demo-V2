@@ -18,7 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Fetch all agents whose TSM field matches the provided ReferenceID
     const agents = await db
       .collection("users")
-      .find({ Manager: referenceId })
+      .find({
+        Manager: referenceId,
+        Status: { $nin: ["Resigned", "Terminated"] },
+      })
       .project({
         Firstname: 1,
         Lastname: 1,
@@ -31,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         _id: 0,
       })
       .toArray();
+
 
     if (agents.length === 0) {
       return res.status(404).json({ error: "No agents found for this TSM" });
