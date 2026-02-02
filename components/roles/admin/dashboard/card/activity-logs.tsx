@@ -88,8 +88,7 @@ export function AgentActivityLogs({
           agentActivityMap?.[agent.ReferenceID];
 
         const activeNow = isToday(activity?.latestLogin);
-
-
+        
         return (
           <Item
             key={agent.ReferenceID}

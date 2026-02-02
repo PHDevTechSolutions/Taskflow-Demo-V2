@@ -28,7 +28,7 @@ import {
   Rocket,
   ClipboardList,
   ClipboardPenLine,
-  ShieldIcon
+  ShieldIcon,
 } from "lucide-react";
 
 import { NavFavorites } from "@/components/nav/favorites";
@@ -84,7 +84,7 @@ const data = {
         { name: "Account Deletion", url: "/roles/tsm/companies/approval", icon: Trash2 },
 
         // Manager
-        { name: "- All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
+        { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
 
         // Admin
         { name: "Active", url: "/roles/admin/companies/active", icon: BookOpen },
@@ -105,7 +105,8 @@ const data = {
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
 
         // TSM
-        { name: "Team Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
+        { name: "Follow Ups", url: "/roles/tsm/activity/planner", icon: CalendarDays },
+        { name: "Decline Quotations", url: "/roles/tsm/activity/quotation", icon: XCircle },
 
         // Admin
         { name: "Activity Planner", url: "/roles/admin/activity/planner", icon: Target },

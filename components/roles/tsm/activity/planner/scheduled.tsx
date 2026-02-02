@@ -5,8 +5,21 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationPrevious,
+    PaginationNext,
+} from "@/components/ui/pagination";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { DoneDialog } from "./dialog/done";
@@ -36,9 +49,19 @@ interface HistoryItem {
     date_updated?: string;
     referenceid: string;
 
-    company_name?: string;      // Assuming these fields are present in the history data
-    contact_number?: string;    // If not present, fallback to "-" in UI
-    contact_person?: string;    // Optional if you want to show contact person
+    company_name?: string;
+    contact_number?: string;
+    contact_person?: string;
+
+    // Comma-separated product info
+    product_quantity: string;
+    product_amount: string;
+    product_description: string;
+    product_photo: string;
+    product_sku: string;
+    product_title: string;
+    quotation_type: string;
+    vat_type: string;
 }
 
 interface UserDetails {
@@ -76,10 +99,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(
         null
     );
-
+    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
     const [agents, setAgents] = useState<any[]>([]);
 
-    // Fetch history data only, no fetching or merging of companies
     const fetchAll = useCallback(async () => {
         if (!referenceid) return;
         setLoading(true);
@@ -87,7 +109,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
         try {
             const res = await fetch(
-                `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(referenceid)}`
+                `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(
+                    referenceid
+                )}`
             );
             if (!res.ok) throw new Error("Failed to load history data");
             const data = await res.json();
@@ -132,38 +156,45 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         "Quotation with SPF Preparation",
     ];
 
-    // Filtered history directly from fetched history, no merging companies
     const filteredHistory = useMemo(() => {
         const term = search.toLowerCase();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // zero time for date-only comparison
 
         return history
             .filter((h) => allowedType.includes(h.call_type ?? ""))
             .filter((item) => {
-                // Search filter
                 if (
-                    (item.company_name ?? "").toLowerCase().includes(term) ||
-                    (item.ticket_reference_number ?? "").toLowerCase().includes(term) ||
-                    (item.quotation_number ?? "").toLowerCase().includes(term) ||
-                    (item.so_number ?? "").toLowerCase().includes(term) ||
-                    (item.remarks ?? "").toLowerCase().includes(term)
+                    !(item.company_name ?? "").toLowerCase().includes(term) &&
+                    !(item.ticket_reference_number ?? "").toLowerCase().includes(term) &&
+                    !(item.quotation_number ?? "").toLowerCase().includes(term) &&
+                    !(item.so_number ?? "").toLowerCase().includes(term) &&
+                    !(item.remarks ?? "").toLowerCase().includes(term)
                 ) {
-                    // pass
-                } else {
                     return false;
                 }
 
-                // Date range filter
                 if (
                     dateCreatedFilterRange?.from &&
                     new Date(item.date_created ?? "") < dateCreatedFilterRange.from
-                )
-                    return false;
+                ) return false;
 
                 if (
                     dateCreatedFilterRange?.to &&
                     new Date(item.date_created ?? "") > dateCreatedFilterRange.to
-                )
-                    return false;
+                ) return false;
+
+                // FILTER BY FOLLOW-UP DATE: only show if follow-up date is today or earlier (not future)
+                if (item.date_followup) {
+                    const followUpDate = new Date(item.date_followup);
+                    followUpDate.setHours(0, 0, 0, 0);
+                    if (followUpDate > today) return false;
+                }
+
+                // Show only if status is approved or pending
+                const status = item.tsm_approved_status?.toLowerCase() || "";
+                if (status !== "approved" && status !== "pending") return false;
 
                 return true;
             })
@@ -174,8 +205,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             );
     }, [history, search, dateCreatedFilterRange]);
 
-    const openDone = (activityRef: string) => {
-        setSelectedActivityRef(activityRef);
+    const openDone = (item: HistoryItem) => {
+        setSelectedActivityRef(item.activity_reference_number);
+        setSelectedItem(item);
         setDoneOpen(true);
     };
 
@@ -233,7 +265,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         currentPage * ITEMS_PER_PAGE
     );
 
-    // Agent fetching and mapping (same as before)
     useEffect(() => {
         if (!userDetails.referenceid) return;
 
@@ -268,23 +299,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return map;
     }, [agents]);
 
-    if (loading) {
-        return (
-            <div className="flex justify-center py-10">
-                <Spinner className="size-8" />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <Alert variant="destructive" className="text-xs">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-            </Alert>
-        );
-    }
-
     return (
         <>
             <Input
@@ -300,9 +314,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         <TableRow>
                             <TableHead className="text-xs whitespace-nowrap">Agent</TableHead>
                             <TableHead className="text-xs whitespace-nowrap">Company</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Type</TableHead>
                             <TableHead className="text-xs whitespace-nowrap">Quotation #</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Quotation Amount</TableHead>
                             <TableHead className="text-xs whitespace-nowrap">TSA Remarks</TableHead>
                             <TableHead className="text-xs whitespace-nowrap">Feedback</TableHead>
                             <TableHead className="text-xs whitespace-nowrap">Follow-Up Date</TableHead>
@@ -314,7 +326,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     <TableBody>
                         {paginatedHistory.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={10} className="text-center text-xs whitespace-nowrap">
+                                <TableCell
+                                    colSpan={10}
+                                    className="text-center text-xs whitespace-nowrap"
+                                >
                                     No records found
                                 </TableCell>
                             </TableRow>
@@ -324,7 +339,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <TableRow key={item.id} className="text-xs">
                                 <TableCell className="whitespace-nowrap">
                                     <div className="flex items-center gap-2 capitalize">
-                                        {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
+                                        {agentMap[item.referenceid?.toLowerCase() ?? ""]
+                                            ?.profilePicture ? (
                                             <img
                                                 src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
                                                 alt={agentMap[item.referenceid?.toLowerCase()]!.name}
@@ -339,18 +355,20 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                     </div>
                                 </TableCell>
 
-                                <TableCell className="font-semibold whitespace-nowrap">{item.company_name ?? "-"}</TableCell>
-                                <TableCell className="whitespace-nowrap">
+                                <TableCell className="font-semibold whitespace-nowrap">
+                                    {item.company_name ?? "-"} <br />
                                     <Badge className="text-[10px]">{item.call_type}</Badge>
                                 </TableCell>
-                                <TableCell className="whitespace-nowrap">{item.quotation_number ?? "-"}</TableCell>
+
                                 <TableCell className="whitespace-nowrap">
+                                    {item.quotation_number ?? "-"}
+                                    <br />
                                     {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
                                         style: "currency",
                                         currency: "PHP",
                                     })}
                                 </TableCell>
-                                <TableCell className="whitespace-nowrap">{item.remarks ?? "-"}</TableCell>
+                                <TableCell className="whitespace-nowrap capitalize">{item.remarks ?? "-"}</TableCell>
                                 <TableCell className="whitespace-nowrap">
                                     {item.tsm_approved_status ? (
                                         <Badge
@@ -359,7 +377,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                                     ? "bg-green-600 text-white hover:bg-green-600"
                                                     : item.tsm_approved_status.toLowerCase() === "declined"
                                                         ? "bg-red-600 text-white hover:bg-red-600"
-                                                        : "bg-gray-400 text-white hover:bg-gray-400"
+                                                        : "bg-red-600 text-white hover:bg-red-400"
                                             }
                                         >
                                             {item.tsm_approved_status.toUpperCase()}
@@ -390,9 +408,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                     <Button
                                         size="sm"
                                         disabled={updatingId === item.activity_reference_number}
-                                        onClick={() => openDone(item.activity_reference_number)}
+                                        onClick={() => openDone(item)}
                                     >
-                                      <Stamp /> {updatingId === item.activity_reference_number ? "Validating..." : "Validate"}
+                                        <Stamp />{" "}
+                                        {updatingId === item.activity_reference_number
+                                            ? "Validating..."
+                                            : "Validate"}
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -416,7 +437,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         />
                     </PaginationItem>
 
-                    {/* Current page / total pages */}
                     <div className="px-4 font-medium">
                         {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
                     </div>
@@ -440,6 +460,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 onOpenChange={setDoneOpen}
                 onConfirm={confirmDone}
                 loading={updatingId !== null}
+                quotation_number={selectedItem?.quotation_number ?? null}
+                quotation_amount={selectedItem?.quotation_amount ?? null}
+                quotation_type={selectedItem?.quotation_type ?? null}
+
+                product_quantity={selectedItem?.product_quantity ?? ""}
+                product_amount={selectedItem?.product_amount ?? ""}
+                product_description={selectedItem?.product_description ?? ""}
+                product_photo={selectedItem?.product_photo ?? ""}
+                product_sku={selectedItem?.product_sku ?? ""}
+                product_title={selectedItem?.product_title ?? ""}
+                vat_type={selectedItem?.vat_type ?? ""}
             />
         </>
     );
