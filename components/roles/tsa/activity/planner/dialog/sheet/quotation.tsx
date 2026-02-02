@@ -1322,10 +1322,14 @@ export function QuotationSheet(props: Props) {
               )}
 
               {!isManualEntry && searchResults.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
-                  {searchResults.map((item) => {
+                <>
+                  <div className="text-xs text-green-600 mb-2">
+                    Shopify Product List | Note: you can choose the same products.
+                  </div>
 
-                    return (
+                  <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+
+                    {searchResults.map((item) => (
                       <Card key={item.id} className="cursor-pointer hover:bg-gray-50">
                         <CardHeader className="flex items-center justify-between gap-3">
                           <label className="flex items-center gap-2 cursor-pointer flex-1">
@@ -1372,10 +1376,11 @@ export function QuotationSheet(props: Props) {
                             : "No SKU available"}
                         </CardFooter>
                       </Card>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
+
 
               {/* Selected Products checkboxes */}
               <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh] border border-dashed p-2 rounded-sm">
