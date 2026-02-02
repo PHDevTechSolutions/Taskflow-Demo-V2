@@ -46,6 +46,7 @@ interface Agent {
     Position: string;
     Status: string;
     Role: string;
+    TargetQuota: string;
 }
 
 interface AgentMeeting {
