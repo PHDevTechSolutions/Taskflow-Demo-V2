@@ -379,7 +379,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     {followUpDate ? (
-                        <Alert variant="default" className="mb-4 flex flex-col gap-3">
+                        <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-4 bg-cyan-100">
                             <div>
                                 <AlertTitle>Follow Up Date:</AlertTitle>
                                 <AlertDescription>
