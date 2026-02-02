@@ -127,9 +127,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }, [referenceid, fetchAll]);
 
     const allowedType = [
-        "Sent Quotation Standard",
-        "Sent Quotation with Special Price",
-        "Sent Quotation with SPF",
+        "Quotation Standard Preparation",
+        "Quotation with Special Price Preparation",
+        "Quotation with SPF Preparation",
     ];
 
     // Filtered history directly from fetched history, no merging companies
