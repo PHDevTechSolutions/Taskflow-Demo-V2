@@ -1101,7 +1101,7 @@ export function QuotationSheet(props: Props) {
           <FieldGroup>
             <FieldSet>
               {followUpDate ? (
-                <Alert variant="default" className="mb-4 flex flex-col gap-3">
+                <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-4 bg-cyan-100">
                   <div>
                     <AlertTitle>Follow Up Date:</AlertTitle>
                     <AlertDescription>
