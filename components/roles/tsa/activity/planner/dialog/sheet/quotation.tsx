@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
-import { Trash, Download, ImagePlus, Plus } from "lucide-react";
+import { Trash, Download, ImagePlus, Plus, RefreshCcw } from "lucide-react";
 
 interface Props {
   step: number;
@@ -228,11 +228,16 @@ export function QuotationSheet(props: Props) {
   const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
 
   async function handleGenerateQuotation() {
-    if (!quotationType || !tsm || isGenerating || hasGenerated) return;
+    if (!quotationType || !tsm || isGenerating) return;
 
     setIsGenerating(true);
 
     try {
+      // reset previous generated state (optional but recommended)
+      setHasGenerated(false);
+      setLocalQuotationNumber("");
+      setQuotationNumber("");
+
       const cleanQuotationType = quotationType.trim();
       const prefixBase = `${getQuotationPrefix(cleanQuotationType)}-${extractTsmPrefix(tsm)}`;
       const currentYear = new Date().getFullYear();
@@ -1209,20 +1214,25 @@ export function QuotationSheet(props: Props) {
                   </div>
                 </Alert>
 
-                {/* Generate button */}
                 {/* Action buttons */}
                 <div className="mt-4 flex flex-col gap-3">
-                  <Button
-                    onClick={handleGenerateQuotation}
-                    disabled={isGenerating || hasGenerated}
-                    className="w-full"
-                    variant={hasGenerated ? "secondary" : "default"}
-                  >
-                    {isGenerating
-                      ? "Generating..."
-                      : hasGenerated
-                        ? "Generated"
-                        : "Generate Quotation Number"}
+                  <Button onClick={handleGenerateQuotation} variant="outline" className="w-full flex items-center justify-center gap-2">
+                    {isGenerating ? (
+                      <>
+                        <RefreshCcw className="h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : hasGenerated ? (
+                      <>
+                        <RefreshCcw className="h-4 w-4" />
+                        Generate Again
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCcw className="h-4 w-4" />
+                        Generate Quotation Number
+                      </>
+                    )}
                   </Button>
 
                   <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer" style={{ padding: "2.5rem" }}>
@@ -1249,7 +1259,6 @@ export function QuotationSheet(props: Props) {
               </div>
             </div>
           )}
-
         </div>
       )}
 

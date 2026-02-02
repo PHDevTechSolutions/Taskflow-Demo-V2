@@ -19,6 +19,7 @@ interface Agent {
   profilePicture: string;
   Role: string;
   Status?: string | null;
+  TargetQuota: string;
 }
 
 interface Activity {
@@ -56,12 +57,29 @@ export function AgentActivityLogs({
     (a) => a.Role === "Territory Sales Manager"
   );
 
+  const isToday = (dateStr?: string | null) => {
+    if (!dateStr) return false;
+
+    // Clean date string to be parseable by JS Date
+    const cleanedStr = dateStr.replace(" at ", " ").replace(/ GMT.*$/, "");
+    const date = new Date(cleanedStr);
+    const today = new Date();
+
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  };
+
   /* 🔹 RENDER GRID */
   const renderAgentsGrid = (list: Agent[]) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {list.map((agent) => {
         const activity =
           agentActivityMap?.[agent.ReferenceID];
+
+        const activeNow = isToday(activity?.latestLogin);
 
         return (
           <Item
@@ -86,6 +104,14 @@ export function AgentActivityLogs({
                   </ItemTitle>
 
                   <ItemDescription className="flex flex-col gap-0.5 text-xs">
+                    <span
+                      className={`inline-block font-semibold select-none text-[10px]
+                        ${activeNow ? "text-green-600" : "text-red-400"}`}
+                      aria-label={activeNow ? "Active today" : "Inactive"}
+                      title={activeNow ? "Active today" : "Inactive"}
+                    >
+                      {activeNow ? "Active" : "Inactive"} | {agent.TargetQuota}
+                    </span>
                     <span>
                       Latest login:{" "}
                       {activity?.latestLogin ??

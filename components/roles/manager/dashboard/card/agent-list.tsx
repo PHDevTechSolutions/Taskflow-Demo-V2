@@ -44,6 +44,7 @@ interface Agent {
   Position?: string;
   Status?: string;
   Role: string;
+  TargetQuota: string;
 }
 
 interface Props {
@@ -328,7 +329,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
             </p>
             {agent.Position && (
               <p className="text-xs text-muted-foreground font-mono mb-2">
-                {agent.Position}
+                {agent.Position} | Target Quota: {agent.TargetQuota}
               </p>
             )}
 
