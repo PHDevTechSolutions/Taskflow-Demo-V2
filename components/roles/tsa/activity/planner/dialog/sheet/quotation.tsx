@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
-import { Trash, Download, ImagePlus } from "lucide-react";
+import { Trash, Download, ImagePlus, Plus } from "lucide-react";
 
 interface Props {
   step: number;
@@ -94,6 +94,7 @@ interface Product {
 }
 
 interface SelectedProduct extends Product {
+  uid: string;
   quantity: number;
   price: number;
   isDiscounted?: boolean;
@@ -169,7 +170,7 @@ export function QuotationSheet(props: Props) {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [visibleDescriptions, setVisibleDescriptions] = useState<Record<number, boolean>>({});
+  const [visibleDescriptions, setVisibleDescriptions] = useState<Record<string, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [noProductsAvailable, setNoProductsAvailable] = useState(false);
   const [showConfirmFollowUp, setShowConfirmFollowUp] = useState(false);
@@ -488,6 +489,12 @@ export function QuotationSheet(props: Props) {
     setQuotationAmount(totalAfterDiscountAndVAT.toFixed(2));
   }, [selectedProducts, discount, vatType]);
 
+  function formatCurrency(value: number | null | undefined): string {
+    if (value == null) return "₱0.00";
+    return `₱${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+
   const handleDownloadQuotation = async () => {
     if (!productCat || productCat.trim() === "") {
       toast.error("Cannot export quotation: Product Category is empty.");
@@ -553,8 +560,8 @@ export function QuotationSheet(props: Props) {
           qty,
           referencePhoto: photo,
           description: descriptionTable,
-          unitPrice,
-          totalAmount,
+          unitPrice: formatCurrency(unitPrice),
+          totalAmount: formatCurrency(totalAmount),
         };
       });
 
@@ -568,10 +575,10 @@ export function QuotationSheet(props: Props) {
         address: safeAddress,
         telNo: safeContactNumber,
         email: safeEmailAddress,
-        attention:
-          safeContactPerson || safeAddress
-            ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
-            : "",
+        attention: safeContactPerson || safeAddress
+          ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
+          : "",
+
         subject: "For Quotation",
         items,
         vatType:
@@ -1317,40 +1324,28 @@ export function QuotationSheet(props: Props) {
               {!isManualEntry && searchResults.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
                   {searchResults.map((item) => {
-                    const isChecked = selectedProducts.some((p) => p.id === item.id);
 
                     return (
                       <Card key={item.id} className="cursor-pointer hover:bg-gray-50">
                         <CardHeader className="flex items-center justify-between gap-3">
                           <label className="flex items-center gap-2 cursor-pointer flex-1">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedProducts((prev) => [
-                                    ...prev,
-                                    {
-                                      ...item,
-                                      quantity: 1,
-                                      price: 0,
-                                      description: item.description || "",
-                                    },
-                                  ]);
-                                  setOpen(true);
-                                } else {
-                                  setSelectedProducts((prev) =>
-                                    prev.filter((p) => p.id !== item.id)
-                                  );
-                                  setVisibleDescriptions((prev) => {
-                                    const copy = { ...prev };
-                                    delete copy[item.id];
-                                    return copy;
-                                  });
-                                }
+                            <Button
+                              onClick={() => {
+                                setSelectedProducts((prev) => [
+                                  ...prev,
+                                  {
+                                    ...item,
+                                    uid: crypto.randomUUID(),
+                                    quantity: 1,
+                                    price: 0,
+                                    description: item.description || "",
+                                  },
+                                ]);
                               }}
-                              className="mt-0.5"
-                            />
+                              className="w-6 h-6 p-0 flex items-center justify-center rounded-full"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
                             <CardTitle className="text-base text-xs font-semibold">
                               {item.title}
                             </CardTitle>
@@ -1387,22 +1382,25 @@ export function QuotationSheet(props: Props) {
                 {selectedProducts.length === 0 && (
                   <p className="text-xs text-gray-500">No products selected.</p>
                 )}
+
                 {selectedProducts.map((item) => (
-                  <label key={item.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                  <label
+                    key={item.uid}
+                    className="flex items-center gap-2 text-xs cursor-pointer"
+                  >
                     <input
                       type="checkbox"
-                      checked={true}
+                      checked
                       onChange={() => {
                         setSelectedProducts((prev) =>
-                          prev.filter((p) => p.id !== item.id)
+                          prev.filter((p) => p.uid !== item.uid)
                         );
                         setVisibleDescriptions((prev) => {
                           const copy = { ...prev };
-                          delete copy[item.id];
+                          delete copy[item.uid];
                           return copy;
                         });
                       }}
-                      className="mt-0.5"
                     />
                     {item.title}
                   </label>
@@ -1485,7 +1483,7 @@ export function QuotationSheet(props: Props) {
                         <th className="border border-gray-300 p-2 text-center w-12"></th>
                         <th className="border border-gray-300 p-2 text-left">Product</th>
                         <th className="border border-gray-300 p-2 text-left w-30">Quantity</th>
-                        <th className="border border-gray-300 p-2 text-left w-30">Price</th>
+                        <th className="border border-gray-300 p-2 text-left w-30">Price per item</th>
                         <th className="border border-gray-300 p-2 text-right w-30">Discounted</th>
                         <th className="border border-gray-300 p-2 text-right w-30">Subtotal</th>
                         <th className="border border-gray-300 p-2 text-center w-20">Tool</th>
@@ -1493,23 +1491,18 @@ export function QuotationSheet(props: Props) {
                     </thead>
                     <tbody>
                       {selectedProducts.map((p, idx) => {
-                        // Ensure p.isDiscounted exists; if not, default false
                         const isDiscounted = p.isDiscounted ?? false;
 
-                        // Calculate discount amount based on VAT type and discount %
                         const baseAmount = p.price * p.quantity;
                         let discountedAmount = 0;
                         if (isDiscounted && discount > 0) {
-                          // Simplified: apply discount directly on baseAmount
                           discountedAmount = (baseAmount * discount) / 100;
-                          // You can adjust logic here based on vatType if needed
                         }
                         const totalAfterDiscount = baseAmount - discountedAmount;
 
                         return (
-                          <React.Fragment key={p.id}>
+                          <React.Fragment key={p.uid}>
                             <tr className="even:bg-gray-50">
-                              {/* Checkbox for discount */}
                               <td className="border border-gray-300 p-2 text-center">
                                 <input
                                   type="checkbox"
@@ -1526,7 +1519,6 @@ export function QuotationSheet(props: Props) {
                                 />
                               </td>
 
-                              {/* Product + Image */}
                               <td className="p-2 flex items-center gap-3">
                                 {p.images?.[0]?.src ? (
                                   <img
@@ -1557,7 +1549,6 @@ export function QuotationSheet(props: Props) {
                                 </div>
                               </td>
 
-                              {/* Quantity */}
                               <td className="border border-gray-300 p-2">
                                 <Input
                                   type="number"
@@ -1575,7 +1566,6 @@ export function QuotationSheet(props: Props) {
                                 />
                               </td>
 
-                              {/* Price */}
                               <td className="border border-gray-300 p-2">
                                 <Input
                                   type="number"
@@ -1594,29 +1584,26 @@ export function QuotationSheet(props: Props) {
                                 />
                               </td>
 
-                              {/* Discounted amount */}
                               <td className="border border-gray-300 p-2 font-semibold text-right">
                                 {isDiscounted && discountedAmount > 0
                                   ? `₱${discountedAmount.toFixed(2)}`
                                   : "₱0.00"}
                               </td>
 
-                              {/* Total after discount */}
                               <td className="border border-gray-300 p-2 font-semibold text-right">
                                 ₱{totalAfterDiscount.toFixed(2)}
                               </td>
 
-                              {/* Remove */}
                               <td className="border border-gray-300 p-2 text-center">
                                 <Button
                                   variant="destructive"
                                   onClick={() => {
                                     setSelectedProducts((prev) =>
-                                      prev.filter((item) => item.id !== p.id)
+                                      prev.filter((item) => item.uid !== p.uid)
                                     );
                                     setVisibleDescriptions((prev) => {
                                       const copy = { ...prev };
-                                      delete copy[p.id];
+                                      delete copy[p.uid];
                                       return copy;
                                     });
                                   }}
@@ -1626,7 +1613,6 @@ export function QuotationSheet(props: Props) {
                               </td>
                             </tr>
 
-                            {/* Description row */}
                             <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
@@ -1651,6 +1637,7 @@ export function QuotationSheet(props: Props) {
                           </React.Fragment>
                         );
                       })}
+
                     </tbody>
                   </table>
                 </>

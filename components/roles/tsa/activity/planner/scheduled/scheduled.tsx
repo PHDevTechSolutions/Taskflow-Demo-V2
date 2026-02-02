@@ -235,8 +235,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   }
 
   const mergedActivities = activities
-    .filter((a) => a.scheduled_date && a.scheduled_date.trim() !== "")
-    .filter((a) => !isDelivered(a.status))
+    .filter((a) => !isDelivered(a.status)) // Tanggal na yung scheduled_date filter dito
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
@@ -258,19 +257,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const term = searchTerm.toLowerCase();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const filteredActivities = mergedActivities
-    // ✅ filter scheduled_date (today & past only)
-    .filter((item) => {
-      if (!item.scheduled_date) return false;
-
-      const scheduledDate = new Date(item.scheduled_date);
-      scheduledDate.setHours(0, 0, 0, 0);
-
-      return scheduledDate <= today;
-    })
+    // ❌ REMOVE scheduled_date filter dito, kaya wala na ito
 
     // 🔍 search filter
     .filter((item) => {

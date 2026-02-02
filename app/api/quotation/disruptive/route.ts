@@ -330,9 +330,10 @@ export async function POST(req: Request) {
     {
       richText: [
         { text: "Total Price: ", font: { bold: true } },
-        { text: `${data.totalPrice.toFixed(2)}` }
+        { text: `₱${Number(data.totalPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
       ]
-    }, // col 5
+    }
+    ,
     "" // col 6 placeholder for merge
   ]);
 

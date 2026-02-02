@@ -5,8 +5,21 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Sales {
   id: number;
@@ -18,7 +31,7 @@ interface Sales {
 }
 
 interface UserDetails {
-  referenceid: string; // this is the TSM's referenceid
+  referenceid: string;
   tsm: string;
   manager: string;
   firstname: string;
@@ -170,7 +183,7 @@ export const SalesTable: React.FC<SalesProps> = ({
     });
   }, [activities, dateCreatedFilterRange]);
 
-  // Group activities by agent ReferenceID (without combining target quota from sales)
+  // Group activities by agent ReferenceID only (no TSM grouping or aggregation)
   const activitiesByAgent = useMemo(() => {
     const map: Record<string, Sales[]> = {};
 
@@ -180,67 +193,38 @@ export const SalesTable: React.FC<SalesProps> = ({
       map[key].push(activity);
     });
 
-    // Combine TSA sales for TSM (optional, depends if you want TSM aggregate row)
-    const tsaAgents = agents.filter(
-      (a) => a.Role === "Territory Sales Associate"
-    );
-    const tsmSales: Sales[] = [];
-    tsaAgents.forEach((tsa) => {
-      if (map[tsa.ReferenceID]) {
-        tsmSales.push(...map[tsa.ReferenceID]);
-      }
-    });
-
-    if (userDetails?.referenceid && tsmSales.length > 0) {
-      map[userDetails.referenceid] = tsmSales;
-    }
-
     return map;
-  }, [filteredActivitiesByDate, agents, userDetails.referenceid]);
+  }, [filteredActivitiesByDate]);
 
-  // Compute sales data with target quota from Agent interface
+  // Compute sales data per agent with target quota from Agent interface
+  // Compute sales data per agent with target quota from Agent interface
   const salesDataPerAgent = useMemo(() => {
-    const tsaAgents = agents.filter(
-      (a) => a.Role === "Territory Sales Associate"
-    );
-
-    return Object.entries(activitiesByAgent).map(([agentId, sales]) => {
-      const totalActualSales = sales.reduce(
-        (sum, s) => sum + (s.actual_sales ?? 0),
-        0
-      );
-
-      let totalTargetQuota = 0;
-
-      if (agentId.toLowerCase() === userDetails.referenceid.toLowerCase()) {
-        totalTargetQuota = tsaAgents.reduce((sum, tsa) => {
-          return (
-            sum +
-            (parseFloat((tsa.TargetQuota ?? "0").replace(/[^0-9.-]+/g, "")) || 0)
-          );
-        }, 0);
-      } else {
-        const agent = agents.find(
-          (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
+    return agents
+      .filter(a => a.Role === "Territory Sales Associate") // Only TSA agents
+      .map((agent) => {
+        const agentId = agent.ReferenceID;
+        const sales = activitiesByAgent[agentId] || []; // may empty array kung walang sales
+        const totalActualSales = sales.reduce(
+          (sum, s) => sum + (s.actual_sales ?? 0),
+          0
         );
-        totalTargetQuota = agent
-          ? parseFloat((agent.TargetQuota ?? "0").replace(/[^0-9.-]+/g, "")) || 0
-          : 0;
-      }
 
-      const variance = totalTargetQuota - totalActualSales;
-      const achievement =
-        totalTargetQuota === 0 ? 0 : (totalActualSales / totalTargetQuota) * 100;
+        const totalTargetQuota =
+          parseFloat((agent.TargetQuota ?? "0").replace(/[^0-9.-]+/g, "")) || 0;
 
-      return {
-        agentId,
-        totalActualSales,
-        totalTargetQuota,
-        variance,
-        achievement,
-      };
-    });
-  }, [activitiesByAgent, agents, userDetails.referenceid]);
+        const variance = totalTargetQuota - totalActualSales;
+        const achievement =
+          totalTargetQuota === 0 ? 0 : (totalActualSales / totalTargetQuota) * 100;
+
+        return {
+          agentId,
+          totalActualSales,
+          totalTargetQuota,
+          variance,
+          achievement,
+        };
+      });
+  }, [agents, activitiesByAgent]);
 
   // Filter sales data for selected agent or show all
   const filteredSalesData = useMemo(() => {
@@ -249,74 +233,6 @@ export const SalesTable: React.FC<SalesProps> = ({
       (d) => d.agentId.toLowerCase() === selectedAgent.toLowerCase()
     );
   }, [salesDataPerAgent, selectedAgent]);
-
-  // --- Group salesDataPerAgent by TSM ---
-
-  const groupedByTSM = useMemo(() => {
-    // Key: TSM ReferenceID
-    // Value: { tsmName: string, agents: {agentId, agentName, salesData}[] }
-    const map: Record<
-      string,
-      {
-        tsmName: string;
-        agents: {
-          agentId: string;
-          agentName: string;
-          salesData: {
-            totalActualSales: number;
-            totalTargetQuota: number;
-            variance: number;
-            achievement: number;
-          };
-        }[];
-      }
-    > = {};
-
-    // First create entry for TSM
-    map[userDetails.referenceid] = {
-      tsmName: `${userDetails.firstname} ${userDetails.lastname}`,
-      agents: [],
-    };
-
-    // Filter agents with role TSA only
-    const tsaAgents = agents.filter(
-      (a) => a.Role === "Territory Sales Associate"
-    );
-
-    tsaAgents.forEach((agent) => {
-      // Find sales for this agent
-      const sales = salesDataPerAgent.find(
-        (d) => d.agentId.toLowerCase() === agent.ReferenceID.toLowerCase()
-      );
-
-      map[userDetails.referenceid].agents.push({
-        agentId: agent.ReferenceID,
-        agentName: `${agent.Firstname} ${agent.Lastname}`,
-        salesData:
-          sales || {
-            totalActualSales: 0,
-            totalTargetQuota: 0,
-            variance: 0,
-            achievement: 0,
-          },
-      });
-    });
-
-    // Add TSM as an agent also (their own sales)
-    const tsmSales = salesDataPerAgent.find(
-      (d) => d.agentId.toLowerCase() === userDetails.referenceid.toLowerCase()
-    );
-
-    if (tsmSales) {
-      map[userDetails.referenceid].agents.push({
-        agentId: userDetails.referenceid,
-        agentName: `${userDetails.firstname} ${userDetails.lastname} (TSM)`,
-        salesData: tsmSales,
-      });
-    }
-
-    return map;
-  }, [agents, salesDataPerAgent, userDetails]);
 
   // Working days excluding Sundays (for par)
   const getWorkingDaysCount = (date: Date) => {
@@ -367,106 +283,82 @@ export const SalesTable: React.FC<SalesProps> = ({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Agents</SelectItem>
-          {agents.map((agent) => (
-            <SelectItem
-              className="capitalize"
-              key={agent.ReferenceID}
-              value={agent.ReferenceID}
-            >
-              {agent.Firstname} {agent.Lastname}
-            </SelectItem>
-          ))}
-          {/* Add TSM option too */}
-          {userDetails.referenceid && (
-            <SelectItem
-              className="capitalize font-bold"
-              value={userDetails.referenceid}
-            >
-              {userDetails.firstname} {userDetails.lastname} (TSM)
-            </SelectItem>
-          )}
+          {agents
+            .filter((a) => a.Role === "Territory Sales Associate")
+            .map((agent) => (
+              <SelectItem
+                className="capitalize"
+                key={agent.ReferenceID}
+                value={agent.ReferenceID}
+              >
+                {agent.Firstname} {agent.Lastname}
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
 
       <div className="rounded-md border p-4 bg-white shadow-sm font-mono">
         <h2 className="font-semibold text-sm mb-4">Sales Metrics</h2>
 
-        {Object.entries(groupedByTSM).map(([tsmId, group]) => (
-          <div key={tsmId} className="mb-6">
-            {/* TSM Header */}
-            <div className="font-bold text-base mb-2 border-b border-gray-300 pb-1 capitalize">
-              {group.tsmName}
-            </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Agent</TableHead>
+              <TableHead className="w-[120px] text-xs">Target Quota</TableHead>
+              <TableHead className="text-xs text-right">Total Sales Invoice</TableHead>
+              <TableHead className="text-xs">Variance</TableHead>
+              <TableHead className="text-xs">Achievement</TableHead>
+              <TableHead className="text-xs">Par</TableHead>
+              <TableHead className="text-xs">% To Plan</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredSalesData.map(
+              ({
+                agentId,
+                totalActualSales,
+                totalTargetQuota,
+                variance,
+                achievement,
+              }) => {
+                const agent = agents.find(
+                  (a) => a.ReferenceID.toLowerCase() === agentId.toLowerCase()
+                );
+                const agentName = agent
+                  ? `${agent.Firstname} ${agent.Lastname}`
+                  : agentId;
+                const percentToPlan = Math.round(achievement);
 
-            {/* Agents Table */}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Agent</TableHead>
-                  <TableHead className="w-[120px] text-xs">Target Quota</TableHead>
-                  <TableHead className="text-xs text-right">
-                    Total Sales Invoice
-                  </TableHead>
-                  <TableHead className="text-xs">Variance</TableHead>
-                  <TableHead className="text-xs">Achievement</TableHead>
-                  <TableHead className="text-xs">Par</TableHead>
-                  <TableHead className="text-xs">% To Plan</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {group.agents
-                  .filter((agent) =>
-                    selectedAgent === "all"
-                      ? true
-                      : agent.agentId.toLowerCase() === selectedAgent.toLowerCase()
-                  )
-                  .map(
-                    ({
-                      agentId,
-                      agentName,
-                      salesData: {
-                        totalActualSales,
-                        totalTargetQuota,
-                        variance,
-                        achievement,
-                      },
-                    }) => {
-                      const percentToPlan = Math.round(achievement);
-                      return (
-                        <TableRow
-                          key={agentId}
-                          className="hover:bg-muted/30 text-xs"
-                        >
-                          <TableCell className="capitalize">{agentName}</TableCell>
-                          <TableCell>
-                            {totalTargetQuota.toLocaleString(undefined, {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {totalActualSales.toLocaleString(undefined, {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                          </TableCell>
-                          <TableCell className="uppercase text-red-500">
-                            {variance.toLocaleString(undefined, {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                          </TableCell>
-                          <TableCell>{achievement.toFixed(2)}%</TableCell>
-                          <TableCell>{parPercentage.toFixed(2)}%</TableCell>
-                          <TableCell>{percentToPlan}%</TableCell>
-                        </TableRow>
-                      );
-                    }
-                  )}
-              </TableBody>
-            </Table>
-          </div>
-        ))}
+                return (
+                  <TableRow key={agentId} className="hover:bg-muted/30 text-xs">
+                    <TableCell className="capitalize">{agentName}</TableCell>
+                    <TableCell>
+                      {totalTargetQuota.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {totalActualSales.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell className="uppercase text-red-500">
+                      {variance.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PHP",
+                      })}
+                    </TableCell>
+                    <TableCell>{achievement.toFixed(2)}%</TableCell>
+                    <TableCell>{parPercentage.toFixed(2)}%</TableCell>
+                    <TableCell>{percentToPlan}%</TableCell>
+                  </TableRow>
+                );
+              }
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       {/* Computation Explanation Card */}
