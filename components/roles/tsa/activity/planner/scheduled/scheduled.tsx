@@ -217,7 +217,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   }, [referenceid, fetchActivities, fetchHistory]);
 
   function isDelivered(status: string) {
-    return ["Delivered", "Done", "Completed", "Cancelled"].includes(status);
+    return ["Delivered", "Done", "Completed", "Cancelled", "On Progress"].includes(status);
   }
 
   function getOverdueDays(scheduledDate: string): number {
