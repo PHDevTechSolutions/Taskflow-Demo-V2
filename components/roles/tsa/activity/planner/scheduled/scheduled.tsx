@@ -549,9 +549,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                   </div>
 
                   <AccordionContent className="text-xs px-4 py-2 uppercase">
-                    <p>
-                      <strong>Contact Number:</strong> {item.contact_number || "-"}
-                    </p>
+                    <p><strong>Contact Number:</strong> {item.contact_number || "-"}</p>
+                    <p><strong>Contact Person:</strong> {item.contact_person || "-"}</p>
+                    <p><strong>Email Address:</strong> {item.email_address || "-"}</p>
+                    <p><strong>Address:</strong> {item.address || "-"}</p>
+
+                    <Separator className="mb-2 mt-2"/>
 
                     {item.relatedHistoryItems.length === 0 ? (
                       <p>No quotation or SO history available.</p>
