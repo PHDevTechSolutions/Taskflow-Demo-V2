@@ -323,102 +323,108 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Use Endorsed Ticket handler
   const handleConfirmUseEndorsed = async () => {
-    if (!selectedTicket) return;
-    if (!userDetails) {
-      toast.error("User details not available.");
+  if (confirmLoading) return;
+  if (!selectedTicket) return;
+
+  if (!userDetails) {
+    toast.error("User details not available.");
+    return;
+  }
+
+  try {
+    setConfirmLoading(true);
+
+    const ticket = selectedTicket;
+    const region = ticket.region ?? "NCR";
+
+    const payload = {
+      ticket_reference_number: ticket.ticket_reference_number,
+      account_reference_number: ticket.account_reference_number,
+      company_name: ticket.company_name,
+      contact_person: ticket.contact_person,
+      contact_number: ticket.contact_number,
+      email_address: ticket.email_address,
+      address: ticket.address,
+      tsm: userDetails.tsm,
+      referenceid: userDetails.referenceid,
+      manager: userDetails.manager,
+      status: "On-Progress",
+      type_client: "CSR Client",
+      agent: ticket.agent,
+      activity_reference_number: generateActivityRef(
+        ticket.company_name || "Taskflow",
+        region
+      ),
+    };
+
+    // 1. Save endorsed ticket to activity
+    const res = await fetch("/api/act-save-endorsed-ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data?.error || "Failed to use endorsed ticket");
       return;
     }
 
-    try {
-      setConfirmLoading(true);
-
-      const ticket = selectedTicket;
-      const region = "NCR";
-
-      const payload = {
+    // 2. Update ticket status
+    const updateStatusRes = await fetch("/api/act-update-ticket-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         ticket_reference_number: ticket.ticket_reference_number,
-        account_reference_number: ticket.account_reference_number,
-        company_name: ticket.company_name,
-        contact_person: ticket.contact_person,
-        contact_number: ticket.contact_number,
-        email_address: ticket.email_address,
-        address: ticket.address,
-        tsm: userDetails.tsm,
-        referenceid: userDetails.referenceid, // use userDetails.referenceid
-        manager: userDetails.manager,         // use userDetails.manager here
-        status: "On-Progress",
-        type_client: "CSR Client",
-        agent: ticket.agent,
-        activity_reference_number: generateActivityRef(ticket.company_name, region),
-      };
+        status: "Received",
+      }),
+    });
 
-      // 1. Save endorsed ticket to activity
-      const res = await fetch("/api/act-save-endorsed-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Failed to use endorsed ticket");
-        return;
-      }
-
-      // 2. Update endorsed ticket status
-      const updateStatusRes = await fetch("/api/act-update-ticket-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticket_reference_number: ticket.ticket_reference_number,
-          status: "Received",
-        }),
-      });
-
-      const updateStatusData = await updateStatusRes.json();
-      if (!updateStatusRes.ok) {
-        toast.error(updateStatusData.error || "Failed to update ticket status");
-        return;
-      }
-
-      // 3. Update company ticket referenceid using new API
-      const updateCompanyRefRes = await fetch("/api/com-update-company-ticket", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          account_reference_number: ticket.account_reference_number,
-          referenceid: userDetails.referenceid,
-          tsm: userDetails.tsm,
-          manager: userDetails.manager,
-        }),
-      });
-
-      const updateCompanyRefData = await updateCompanyRefRes.json();
-      if (!updateCompanyRefRes.ok) {
-        toast.error(updateCompanyRefData.error || "Failed to update company referenceid");
-        return;
-      }
-
-      toast.success(`Ticket used successfully: ${ticket.company_name}`);
-
-      // Optimistic UI remove + cleanup sound memory
-      setEndorsedTickets((prev) => {
-        playedTicketIdsRef.current.delete(ticket.id);
-        return prev.filter((t) => t.id !== ticket.id);
-      });
-
-      window.location.reload();
-
-      // close dialog
-      setConfirmOpen(false);
-      setSelectedTicket(null);
-    } catch (err) {
-      console.error(err);
-      toast.error("Error using endorsed ticket.");
-    } finally {
-      setConfirmLoading(false);
+    const updateStatusData = await updateStatusRes.json();
+    if (!updateStatusRes.ok) {
+      toast.error(updateStatusData?.error || "Failed to update ticket status");
+      return;
     }
-  };
+
+    // 3. Update company reference
+    const updateCompanyRefRes = await fetch("/api/com-update-company-ticket", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_reference_number: ticket.account_reference_number,
+        referenceid: userDetails.referenceid,
+        tsm: userDetails.tsm,
+        manager: userDetails.manager,
+      }),
+    });
+
+    const updateCompanyRefData = await updateCompanyRefRes.json();
+    if (!updateCompanyRefRes.ok) {
+      toast.error(
+        updateCompanyRefData?.error ||
+          "Ticket processed but company update failed. Please contact admin."
+      );
+      return;
+    }
+
+    toast.success(`Ticket used successfully: ${ticket.company_name}`);
+
+    // Optimistic UI update
+    setEndorsedTickets((prev) => {
+      playedTicketIdsRef.current.delete(ticket.id);
+      return prev.filter((t) => t.id !== ticket.id);
+    });
+
+    // Cleanup
+    setConfirmOpen(false);
+    setSelectedTicket(null);
+  } catch (err) {
+    console.error(err);
+    toast.error("Unexpected error while using endorsed ticket.");
+  } finally {
+    setConfirmLoading(false);
+  }
+};
 
   // Filter accounts by search term - includes all regardless of date
   const filteredBySearch = React.useMemo(() => {
