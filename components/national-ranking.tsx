@@ -135,36 +135,22 @@ d1.getMonth() === d2.getMonth() &&
 d1.getDate() === d2.getDate();
 
 // Helper to check if a date is inside the filter range (if any)
+// Helper to check if a date matches the selected filter day
 const isDateInRange = (dateStr: string) => {
-const date = new Date(dateStr);
-if (isNaN(date.getTime())) return false;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return false;
 
-if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) {  
-  // No filter = only today  
-  const today = new Date();  
-  today.setHours(0, 0, 0, 0);  
-  return isSameDay(date, today);  
-}  
+  // If no filter, include all data
+  if (!dateCreatedFilterRange?.from) return true;
 
-let fromDate = dateCreatedFilterRange?.from  
-  ? new Date(dateCreatedFilterRange.from)  
-  : null;  
-let toDate = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;  
+  // Only care about the day of the filter
+  const filterDate = new Date(dateCreatedFilterRange.from);
+  filterDate.setHours(0, 0, 0, 0);
 
-if (toDate) toDate.setHours(23, 59, 59, 999);  
+  const targetDate = new Date(date);
+  targetDate.setHours(0, 0, 0, 0);
 
-if (fromDate && toDate) {  
-  if (isSameDay(fromDate, toDate)) {  
-    return isSameDay(date, fromDate);  
-  }  
-  return date >= fromDate && date <= toDate;  
-}  
-
-if (fromDate && !toDate) return date >= fromDate;  
-if (!fromDate && toDate) return date <= toDate;  
-
-return true;
-
+  return filterDate.getTime() === targetDate.getTime();
 };
 
 // Card 1: Group successful Outbound Calls by referenceid (associates)
