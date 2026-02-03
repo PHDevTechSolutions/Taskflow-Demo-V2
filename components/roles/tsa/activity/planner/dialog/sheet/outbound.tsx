@@ -94,9 +94,14 @@ export function OutboundSheet(props: OutboundSheetProps) {
                 newDate.setDate(today.getDate() + 30);
                 break;
 
+            case "With RFQ": // ✅ ADD THIS
+                newDate = new Date(today);
+                break;
+
             default:
                 return;
         }
+
 
         const formattedDate = newDate.toISOString().split("T")[0];
         if (formattedDate !== followUpDate) {
