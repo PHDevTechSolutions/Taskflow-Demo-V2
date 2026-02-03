@@ -133,44 +133,44 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
     d1.getDate() === d2.getDate();
 
   // Helper to check if a date is inside the filter range (if any)
+const toDateOnly = (d: Date) => d.toISOString().split("T")[0];
+
   const isDateInRange = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return false;
+  if (!dateStr) return false;
 
-    if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) {
-      // No filter = only today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return isSameDay(date, today);
-    }
+  // DB date → YYYY-MM-DD (UTC-based)
+  const recordDate = toDateOnly(new Date(dateStr));
 
-    let fromDate = dateCreatedFilterRange?.from
-      ? new Date(dateCreatedFilterRange.from)
-      : null;
-    let toDate = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;
+  const from = dateCreatedFilterRange?.from
+    ? toDateOnly(new Date(dateCreatedFilterRange.from))
+    : null;
 
-    if (toDate) toDate.setHours(23, 59, 59, 999);
+  const to = dateCreatedFilterRange?.to
+    ? toDateOnly(new Date(dateCreatedFilterRange.to))
+    : null;
 
-    if (fromDate && toDate) {
-      if (isSameDay(fromDate, toDate)) {
-        return isSameDay(date, fromDate);
-      }
-      return date >= fromDate && date <= toDate;
-    }
+  // No filter = include all
+  if (!from && !to) return true;
 
-    if (fromDate && !toDate) return date >= fromDate;
-    if (!fromDate && toDate) return date <= toDate;
+  // Same day (kahapon → kahapon)
+  if (from && to && from === to) {
+    return recordDate === from;
+  }
 
-    return true;
-  };
+  if (from && to) return recordDate >= from && recordDate <= to;
+  if (from && !to) return recordDate === from;
+  if (!from && to) return recordDate === to;
+
+  return true;
+};
 
   // Card 1: Group successful Outbound Calls by referenceid (associates)
   const groupedByReferenceid = React.useMemo(() => {
   const map = new Map<string, number>();
 
   history.forEach((item) => {
-    if (!isDateInRange(item.date_created)) return;
     if (!item.referenceid) return;
+    if (!isDateInRange(item.date_created)) return;
 
     const status = item.call_status?.trim().toLowerCase();
     if (status !== "successful") return;
@@ -189,8 +189,8 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
   const map = new Map<string, number>();
 
   history.forEach((item) => {
-    if (!isDateInRange(item.date_created)) return;
     if (!item.tsm) return;
+    if (!isDateInRange(item.date_created)) return;
 
     const status = item.call_status?.trim().toLowerCase();
     if (status !== "successful") return;
