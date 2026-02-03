@@ -10,20 +10,26 @@ const Xchire_sql = neon(Xchire_databaseUrl);
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { account_reference_number, referenceid } = body;
+    const { account_reference_number, referenceid, tsm, manager } = body;
 
-    if (!account_reference_number || !referenceid) {
+    if (!account_reference_number || !referenceid || !tsm || !manager) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields: account_reference_number or referenceid" },
+        {
+          success: false,
+          error: "Missing required fields: account_reference_number, referenceid, or manager",
+        },
         { status: 400 }
       );
     }
 
     const updated = await Xchire_sql`
       UPDATE accounts
-      SET referenceid = ${referenceid}
+      SET
+        referenceid = ${referenceid},
+        manager = ${manager},
+        tsm = ${tsm}
       WHERE account_reference_number = ${account_reference_number}
-      RETURNING id, account_reference_number, referenceid;
+      RETURNING id, account_reference_number, referenceid, manager, tsm;
     `;
 
     if (updated.length === 0) {
@@ -39,9 +45,12 @@ export async function PUT(req: Request) {
     );
 
   } catch (error: any) {
-    console.error("Error updating company ticket referenceid:", error);
+    console.error("Error updating account referenceid and manager:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update company ticket referenceid." },
+      {
+        success: false,
+        error: error.message || "Failed to update account referenceid and manager.",
+      },
       { status: 500 }
     );
   }
