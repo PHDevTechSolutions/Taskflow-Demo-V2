@@ -51,14 +51,14 @@ return (
 key={referenceid}  
 className="flex flex-col items-center bg-yellow-50 rounded-xl shadow-md p-4 w-full max-w-xs"  
 >
-<div className="text-5xl mb-2">{medals[index] || #${index + 1}}</div>
+<div className="text-5xl mb-2">{medals[index] || `#${index + 1}`}</div>
 <img
-src={user?.profilePicture ?? "/Taskflow.png"}
-alt={user ? ${user.Firstname} ${user.Lastname} : "Unknown User"}
-className="w-30 h-30 rounded-full object-cover mb-2 border-4 border-yellow-400"
+  src={user?.profilePicture ?? "/Taskflow.png"}
+  alt={user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
+  className="w-30 h-30 rounded-full object-cover mb-2 border-4 border-yellow-400"
 />
 <h3 className="text-lg font-semibold text-center uppercase">
-{user ? ${user.Firstname} ${user.Lastname} : "Unknown User"}
+  {user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
 </h3>
 <p className="text-yellow-700 font-bold text-xl mt-1">
 {successful} Successful Calls
