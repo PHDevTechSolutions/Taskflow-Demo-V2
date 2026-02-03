@@ -92,19 +92,29 @@ export function NavUser({
     try {
       await logLogoutActivity();
 
+      // Update connection status to Offline
+      await fetch("/api/logout-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
       // Clear session and related data
       localStorage.removeItem("userId");
       localStorage.removeItem("deviceId");
       sessionStorage.clear();
 
-      // Redirect to login and force reload to prevent back button cache
+      // Redirect to login and force reload
       router.replace("/auth/login");
       window.location.reload();
+    } catch (error) {
+      console.error("Logout error", error);
     } finally {
       setIsLoggingOut(false);
       setIsDialogOpen(false);
     }
   };
+
 
   return (
     <>

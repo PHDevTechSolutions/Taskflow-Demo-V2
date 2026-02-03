@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
 import { Trash, Download, ImagePlus, Plus, RefreshCcw } from "lucide-react";
+import parse from "html-react-parser";
 
 interface Props {
   step: number;
@@ -455,12 +456,6 @@ export function QuotationSheet(props: Props) {
     setShowConfirmFollowUp(false);
   };
 
-  // Function to extract <table>...</table> from full HTML string
-  function extractTableHtml(html: string): string {
-    const match = html.match(/<table[\s\S]*?<\/table>/i);
-    return match ? match[0] : "";
-  }
-
   useEffect(() => {
     // PH VAT rate
     const VAT_RATE = 0.12;
@@ -498,7 +493,6 @@ export function QuotationSheet(props: Props) {
     if (value == null) return "₱0.00";
     return `₱${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
-
 
   const handleDownloadQuotation = async () => {
     if (!productCat || productCat.trim() === "") {
@@ -1639,7 +1633,7 @@ export function QuotationSheet(props: Props) {
                                   suppressContentEditableWarning
                                   className="w-full max-h-90 overflow-auto border border-gray-300 rounded p-2 text-xs"
                                   dangerouslySetInnerHTML={{
-                                    __html: extractTableHtml(p.description || ""),
+                                    __html:(p.description || ""),
                                   }}
                                   onBlur={(e) => {
                                     const html = e.currentTarget.innerHTML;

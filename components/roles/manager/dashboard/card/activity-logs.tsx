@@ -20,6 +20,7 @@ interface Agent {
   Role: string;
   Status?: string | null;
   TargetQuota: string;
+  Connection: string;
 }
 
 interface Activity {
@@ -36,31 +37,26 @@ interface Props {
    Component
 ======================= */
 
-export function AgentActivityLogs({
-  agents,
-  agentActivityMap,
-}: Props) {
-  /* 🔹 FILTER OUT resigned & terminated */
+export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
+  // Filter out resigned or terminated agents (case insensitive)
   const activeAgents = agents.filter(
     (a) =>
-      !["resigned", "terminated"].includes(
-        (a.Status || "").toLowerCase()
-      )
+      !["resigned", "terminated"].includes((a.Status || "").toLowerCase())
   );
 
-  /* 🔹 GROUP BY ROLE */
+  // Group by role
   const tsaAgents = activeAgents.filter(
     (a) => a.Role === "Territory Sales Associate"
   );
-
   const tsmAgents = activeAgents.filter(
     (a) => a.Role === "Territory Sales Manager"
   );
 
+  // Check if a date string is today
   const isToday = (dateStr?: string | null) => {
     if (!dateStr) return false;
 
-    // Clean date string to be parseable by JS Date
+    // Clean date string to parse correctly
     const cleanedStr = dateStr.replace(" at ", " ").replace(/ GMT.*$/, "");
     const date = new Date(cleanedStr);
     const today = new Date();
@@ -72,55 +68,51 @@ export function AgentActivityLogs({
     );
   };
 
-  /* 🔹 RENDER GRID */
+  // Render a responsive grid of agent cards
   const renderAgentsGrid = (list: Agent[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {list.map((agent) => {
-        const activity =
-          agentActivityMap?.[agent.ReferenceID];
-
-        const activeNow = isToday(activity?.latestLogin);
+        const activity = agentActivityMap?.[agent.ReferenceID];
 
         return (
-          <Item
-            key={agent.ReferenceID}
-            variant="outline"
-          >
+          <Item key={agent.ReferenceID} variant="outline">
             <ItemContent className="flex gap-3 font-mono">
               <div className="flex items-center gap-4">
                 <img
-                  src={
-                    agent.profilePicture ||
-                    "/Taskflow.png"
-                  }
+                  src={agent.profilePicture || "/Taskflow.png"}
                   alt={`${agent.Firstname} ${agent.Lastname}`}
                   className="h-20 w-20 rounded-full shadow-sm object-cover border flex-shrink-0"
                 />
 
                 <div className="flex flex-col">
                   <ItemTitle className="text-xs capitalize leading-tight">
-                    {agent.Firstname}{" "}
-                    {agent.Lastname}
+                    {agent.Firstname} {agent.Lastname}
                   </ItemTitle>
 
-                  <ItemDescription className="flex flex-col gap-0.5 text-xs">
-                    <span
-                      className={`inline-block font-semibold select-none text-[10px]
-                        ${activeNow ? "text-green-600" : "text-red-400"}`}
-                      aria-label={activeNow ? "Active today" : "Inactive"}
-                      title={activeNow ? "Active today" : "Inactive"}
-                    >
-                      {activeNow ? "Active" : "Inactive"} | {agent.TargetQuota}
+                  <ItemDescription className="flex flex-col gap-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      {/* Connection status circle */}
+                      <span
+                        className={`inline-block w-3 h-3 rounded-full ${
+                          agent.Connection === "Online"
+                            ? "bg-green-500 animate-pulse border border-black"
+                            : agent.Connection
+                            ? "bg-red-600 animate-pulse border border-black"
+                            : "bg-gray-400 border border-black"
+                        }`}
+                        aria-label={`Connection status: ${
+                          agent.Connection || "Not Connected"
+                        }`}
+                      />
+                      <span>{agent.Connection || "Not Connected"}</span> |{" "}
+                      <span>TQ: {agent.TargetQuota}</span>
+                    </div>
+
+                    <span>
+                      Latest login: {activity?.latestLogin ?? "—"}
                     </span>
                     <span>
-                      Latest login:{" "}
-                      {activity?.latestLogin ??
-                        "—"}
-                    </span>
-                    <span>
-                      Latest logout:{" "}
-                      {activity?.latestLogout ??
-                        "—"}
+                      Latest logout: {activity?.latestLogout ?? "—"}
                     </span>
                   </ItemDescription>
                 </div>
@@ -132,10 +124,6 @@ export function AgentActivityLogs({
     </div>
   );
 
-  /* =======================
-     Render
-  ======================= */
-
   return (
     <Card>
       <CardHeader className="font-semibold">
@@ -143,33 +131,32 @@ export function AgentActivityLogs({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6">
-        {/* TSA */}
+        {/* Territory Sales Associates */}
         {tsaAgents.length > 0 && (
-          <div className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
               Territory Sales Associates
             </h4>
             {renderAgentsGrid(tsaAgents)}
-          </div>
+          </section>
         )}
 
-        {/* TSM */}
+        {/* Territory Sales Managers */}
         {tsmAgents.length > 0 && (
-          <div className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
               Territory Sales Managers
             </h4>
             {renderAgentsGrid(tsmAgents)}
-          </div>
+          </section>
         )}
 
-        {/* EMPTY STATE */}
-        {tsaAgents.length === 0 &&
-          tsmAgents.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center">
-              No active agents to display
-            </p>
-          )}
+        {/* Empty state */}
+        {tsaAgents.length === 0 && tsmAgents.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center">
+            No active agents to display
+          </p>
+        )}
       </CardContent>
     </Card>
   );
