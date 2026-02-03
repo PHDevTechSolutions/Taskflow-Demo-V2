@@ -335,7 +335,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     setConfirmLoading(true);
 
     const ticket = selectedTicket;
-    const region = ticket.region ?? "NCR";
+    const region = "NCR";
 
     const payload = {
       ticket_reference_number: ticket.ticket_reference_number,
