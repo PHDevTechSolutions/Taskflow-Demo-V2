@@ -136,6 +136,7 @@ d1.getDate() === d2.getDate();
 
 // Helper to check if a date is inside the filter range (if any)
 // Helper to check if a date matches the selected filter day
+// Helper to check if a date is inside the filter range
 const isDateInRange = (dateStr: string) => {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return false;
@@ -143,60 +144,64 @@ const isDateInRange = (dateStr: string) => {
   // If no filter, include all data
   if (!dateCreatedFilterRange?.from) return true;
 
-  // Only care about the day of the filter
-  const filterDate = new Date(dateCreatedFilterRange.from);
-  filterDate.setHours(0, 0, 0, 0);
+  const from = dateCreatedFilterRange.from
+    ? new Date(dateCreatedFilterRange.from)
+    : new Date();
+  const to = dateCreatedFilterRange.to
+    ? new Date(dateCreatedFilterRange.to)
+    : from;
 
-  const targetDate = new Date(date);
-  targetDate.setHours(0, 0, 0, 0);
+  // Set from to start of day, to to end of day
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
 
-  return filterDate.getTime() === targetDate.getTime();
+  return date >= from && date <= to;
 };
 
 // Card 1: Group successful Outbound Calls by referenceid (associates)
+// Card 1: Group successful Outbound Calls by referenceid (associates)
 const groupedByReferenceid = React.useMemo(() => {
-const map = new Map<string, number>();
+  const map = new Map<string, number>();
 
-history.forEach((item) => {
-if (!isDateInRange(item.date_created)) return;
-if (!item.referenceid) return;
+  history.forEach((item) => {
+    if (!isDateInRange(item.date_created)) return; // <- apply filter here
+    if (!item.referenceid) return;
 
-const status = item.call_status?.trim().toLowerCase();  
-if (status !== "successful") return;  
+    const status = item.call_status?.trim().toLowerCase();
+    if (status !== "successful") return;
 
-map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
+    map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
+  });
 
-});
-
-return Array.from(map.entries()).map(([referenceid, successful]) => ({
-referenceid,
-successful,
-}));
+  return Array.from(map.entries()).map(([referenceid, successful]) => ({
+    referenceid,
+    successful,
+  }));
 }, [history, dateCreatedFilterRange]);
 
 // Card 2: Group successful Outbound Calls by tsm (managers)
+// Card 2: Group successful Outbound Calls by tsm (managers)
 const groupedByTsm = React.useMemo(() => {
-const map = new Map<string, number>();
+  const map = new Map<string, number>();
 
-history.forEach((item) => {
-if (!isDateInRange(item.date_created)) return;
-if (!item.tsm) return;
+  history.forEach((item) => {
+    if (!isDateInRange(item.date_created)) return; // <- apply filter here
+    if (!item.tsm) return;
 
-const status = item.call_status?.trim().toLowerCase();  
-if (status !== "successful") return;  
+    const status = item.call_status?.trim().toLowerCase();
+    if (status !== "successful") return;
 
-map.set(item.tsm, (map.get(item.tsm) ?? 0) + 1);
+    map.set(item.tsm, (map.get(item.tsm) ?? 0) + 1);
+  });
 
-});
+  const array = Array.from(map.entries()).map(([tsm, total]) => {
+    const user = userTransfers.find((u) => u.ReferenceID === tsm);
+    return { tsm, user, total };
+  });
 
-const array = Array.from(map.entries()).map(([tsm, total]) => {
-const user = userTransfers.find((u) => u.ReferenceID === tsm);
-return { tsm, user, total };
-});
+  const grandTotal = array.reduce((acc, cur) => acc + cur.total, 0);
 
-const grandTotal = array.reduce((acc, cur) => acc + cur.total, 0);
-
-return { array, grandTotal };
+  return { array, grandTotal };
 }, [history, dateCreatedFilterRange, userTransfers]);
 
 // Sort groupedByReferenceid by successful calls descending
