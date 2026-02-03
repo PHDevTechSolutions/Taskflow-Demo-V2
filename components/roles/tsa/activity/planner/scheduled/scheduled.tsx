@@ -465,7 +465,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             openCancelledDialog(item.id);
                           }}
                         >
-                          <AlertCircle /> {updatingId === item.id ? "Cancelling..." : "Cancelled"}
+                          <AlertCircle /> {updatingId === item.id ? "Cancelling..." : "Cancel?"}
                         </Button>
                       </div>
                     </div>
