@@ -136,50 +136,35 @@ d1.getDate() === d2.getDate();
 
 // Helper to check if a date is inside the filter range (if any)
 const isDateInRange = (dateStr: string) => {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return false;
+const date = new Date(dateStr);
+if (isNaN(date.getTime())) return false;
 
-  // Philippine Time offset = UTC+8
-  const phOffset = 8 * 60; // minutes
+if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) {  
+  // No filter = only today  
+  const today = new Date();  
+  today.setHours(0, 0, 0, 0);  
+  return isSameDay(date, today);  
+}  
 
-  // Convert date to PH time
-  const phTime = new Date(date.getTime() + phOffset * 60 * 1000);
+let fromDate = dateCreatedFilterRange?.from  
+  ? new Date(dateCreatedFilterRange.from)  
+  : null;  
+let toDate = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;  
 
-  if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) {
-    // No filter = today, 7:00 AM → 8:00 PM PH time
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      7, 0, 0, 0
-    );
-    const todayEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      20, 0, 0, 0
-    );
+if (toDate) toDate.setHours(23, 59, 59, 999);  
 
-    return phTime >= todayStart && phTime <= todayEnd;
-  }
+if (fromDate && toDate) {  
+  if (isSameDay(fromDate, toDate)) {  
+    return isSameDay(date, fromDate);  
+  }  
+  return date >= fromDate && date <= toDate;  
+}  
 
-  // If there’s a filter range, use it
-  let fromDate = dateCreatedFilterRange?.from
-    ? new Date(dateCreatedFilterRange.from)
-    : null;
-  let toDate = dateCreatedFilterRange?.to
-    ? new Date(dateCreatedFilterRange.to)
-    : null;
+if (fromDate && !toDate) return date >= fromDate;  
+if (!fromDate && toDate) return date <= toDate;  
 
-  if (fromDate) fromDate.setHours(7, 0, 0, 0);
-  if (toDate) toDate.setHours(20, 0, 0, 0);
+return true;
 
-  if (fromDate && toDate) return phTime >= fromDate && phTime <= toDate;
-  if (fromDate && !toDate) return phTime >= fromDate;
-  if (!fromDate && toDate) return phTime <= toDate;
-
-  return true;
 };
 
 // Card 1: Group successful Outbound Calls by referenceid (associates)
