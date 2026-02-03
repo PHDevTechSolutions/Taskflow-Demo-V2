@@ -166,49 +166,47 @@ export function NationalRanking({ dateCreatedFilterRange }: Props) {
 
   // Card 1: Group successful Outbound Calls by referenceid (associates)
   const groupedByReferenceid = React.useMemo(() => {
-    const map = new Map<string, number>();
+  const map = new Map<string, number>();
 
-    history.forEach((item) => {
-      if (item.type_activity !== "Outbound Calls" || item.call_status !== "Successful")
-        return;
-      if (!isDateInRange(item.date_created)) return;
-      if (!item.referenceid) return;
+  history.forEach((item) => {
+    if (!isDateInRange(item.date_created)) return;
+    if (!item.referenceid) return;
 
-      map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
-    });
+    const status = item.call_status?.trim().toLowerCase();
+    if (status !== "successful") return;
 
-    return Array.from(map.entries()).map(([referenceid, successful]) => ({
-      referenceid,
-      successful,
-    }));
-  }, [history, dateCreatedFilterRange]);
+    map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
+  });
+
+  return Array.from(map.entries()).map(([referenceid, successful]) => ({
+    referenceid,
+    successful,
+  }));
+}, [history, dateCreatedFilterRange]);
 
   // Card 2: Group successful Outbound Calls by tsm (managers)
   const groupedByTsm = React.useMemo(() => {
-    const map = new Map<string, number>();
+  const map = new Map<string, number>();
 
-    history.forEach((item) => {
-      if (item.type_activity !== "Outbound Calls" || item.call_status !== "Successful")
-        return;
-      if (!isDateInRange(item.date_created)) return;
-      if (!item.tsm) return;
+  history.forEach((item) => {
+    if (!isDateInRange(item.date_created)) return;
+    if (!item.tsm) return;
 
-      map.set(item.tsm, (map.get(item.tsm) ?? 0) + 1);
-    });
+    const status = item.call_status?.trim().toLowerCase();
+    if (status !== "successful") return;
 
-    const array = Array.from(map.entries()).map(([tsm, total]) => {
-      const user = userTransfers.find((u) => u.ReferenceID === tsm);
-      return {
-        tsm,
-        user,
-        total,
-      };
-    });
+    map.set(item.tsm, (map.get(item.tsm) ?? 0) + 1);
+  });
 
-    const grandTotal = array.reduce((acc, cur) => acc + cur.total, 0);
+  const array = Array.from(map.entries()).map(([tsm, total]) => {
+    const user = userTransfers.find((u) => u.ReferenceID === tsm);
+    return { tsm, user, total };
+  });
 
-    return { array, grandTotal };
-  }, [history, dateCreatedFilterRange, userTransfers]);
+  const grandTotal = array.reduce((acc, cur) => acc + cur.total, 0);
+
+  return { array, grandTotal };
+}, [history, dateCreatedFilterRange, userTransfers]);
 
   // Sort groupedByReferenceid by successful calls descending
   const sortedGroupedByReferenceid = React.useMemo(() => {
