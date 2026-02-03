@@ -1240,8 +1240,12 @@ export function QuotationSheet(props: Props) {
                   </Button>
 
                   {!hasDownloaded && hasGenerated && (
-                    <p className="text-sm text-yellow-600 mt-2">
+                    <p className="text-sm text-yellow-700 mt-2">
                       ⚠️ Please download the quotation before saving.
+                      <br />
+                      <span className="text-xs text-red-600 italic">
+                        Note: If there are no products or the quotation is empty, please do not download.
+                      </span>
                     </p>
                   )}
 

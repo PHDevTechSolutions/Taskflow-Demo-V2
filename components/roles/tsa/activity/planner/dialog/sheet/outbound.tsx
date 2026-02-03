@@ -16,7 +16,6 @@ interface OutboundSheetProps {
     setStep: React.Dispatch<React.SetStateAction<number>>;
     source: string;
     setSource: React.Dispatch<React.SetStateAction<string>>;
-    // Removed callback and setCallback here
     callStatus: string;
     setCallStatus: React.Dispatch<React.SetStateAction<string>>;
     callType: string;
