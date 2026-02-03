@@ -22,8 +22,8 @@ interface UserTransfer {
 }
 
 interface Props {
-  dateCreatedFilterRange: { from: Date; to: Date } | null;
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+dateCreatedFilterRange: any;
+setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 function Top3Ranking({
