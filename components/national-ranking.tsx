@@ -158,7 +158,10 @@ export function NationalRanking({
     if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return true;
 
     const from = new Date(dateCreatedFilterRange.from);
+    from.setHours(0, 0, 0, 0);
+
     const to = new Date(dateCreatedFilterRange.to);
+    to.setHours(23, 59, 59, 999);
 
     return date >= from && date <= to;
   };
@@ -353,9 +356,8 @@ export function NationalRanking({
                               <>
                                 <img
                                   src={user.profilePicture || "/Taskflow.png"}
-                                  alt={`${user.Firstname || "Sette"} ${
-                                    user.Lastname || "Hosena"
-                                  }`}
+                                  alt={`${user.Firstname || "Sette"} ${user.Lastname || "Hosena"
+                                    }`}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
                                 {user.Firstname || "Sette"} {user.Lastname || "Hosena"}
