@@ -430,6 +430,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   const filteredBySearch = React.useMemo(() => {
     if (!searchTerm.trim()) return accounts.filter(acc =>
       acc.status?.toLowerCase() !== "subject for transfer" &&
+      acc.status?.toLowerCase() !== "approved for deletion" &&
       acc.status?.toLowerCase() !== "removed"
     );
 
@@ -437,7 +438,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return accounts.filter((acc) => {
       const status = acc.status?.toLowerCase();
       const isStatusAllowed =
-        status !== "subject for transfer" && status !== "removed";
+        status !== "subject for transfer" && status !== "removed" && status !== "approved for deletion";
 
       return (
         isStatusAllowed &&
