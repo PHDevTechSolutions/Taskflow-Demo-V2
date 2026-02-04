@@ -6,17 +6,28 @@ import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
-
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-    type_client?: string;
-}
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationPrevious,
+    PaginationNext,
+} from "@/components/ui/pagination";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface SO {
     id: number;
@@ -25,8 +36,8 @@ interface SO {
     remarks?: string;
     date_created: string;
     date_updated?: string;
-    account_reference_number?: string;
     company_name?: string;
+    contact_person?: string;
     contact_number?: string;
     type_activity: string;
     status: string;
@@ -35,8 +46,6 @@ interface SO {
 
 interface UserDetails {
     referenceid: string;
-    tsm: string;
-    manager: string;
     firstname: string;
     lastname: string;
     profilePicture: string;
@@ -44,7 +53,6 @@ interface UserDetails {
 
 interface SOProps {
     referenceid: string;
-    target_quota?: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
     userDetails: UserDetails;
@@ -54,73 +62,48 @@ const PAGE_SIZE = 10;
 
 export const SOTable: React.FC<SOProps> = ({
     referenceid,
-    target_quota,
     dateCreatedFilterRange,
     userDetails,
-    setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<SO[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
-
-    // Pagination state
+    const [filterStatus, setFilterStatus] = useState("all");
     const [page, setPage] = useState(1);
 
     const [agents, setAgents] = useState<any[]>([]);
-    const [selectedAgent, setSelectedAgent] = useState<string>("all");
+    const [selectedAgent, setSelectedAgent] = useState("all");
 
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
-        }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
-
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
-
-    // Fetch activities
+    // ================= FETCH ACTIVITIES =================
     const fetchActivities = useCallback(() => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
-        setLoadingActivities(true);
-        setErrorActivities(null);
+        if (!referenceid) return;
 
-        fetch(`/api/act-fetch-manager-history?referenceid=${encodeURIComponent(referenceid)}`)
-            .then(async (res) => {
+        setLoading(true);
+        setError(null);
+
+        fetch(
+            `/api/act-fetch-manager-history?referenceid=${encodeURIComponent(
+                referenceid
+            )}`
+        )
+            .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
             })
             .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
     }, [referenceid]);
 
-    // Real-time subscription using Supabase
+    // ================= REALTIME =================
     useEffect(() => {
         fetchActivities();
-
         if (!referenceid) return;
 
         const channel = supabase
-            .channel(`public:history:manager=eq.${referenceid}`)
+            .channel(`history-manager-${referenceid}`)
             .on(
                 "postgres_changes",
                 {
@@ -130,23 +113,22 @@ export const SOTable: React.FC<SOProps> = ({
                     filter: `manager=eq.${referenceid}`,
                 },
                 (payload) => {
-                    const newRecord = payload.new as SO;
-                    const oldRecord = payload.old as SO;
-
                     setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
-                            case "UPDATE":
-                                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
+                        const next = payload.new as SO;
+                        const prev = payload.old as SO;
+
+                        if (payload.eventType === "INSERT")
+                            return curr.some((a) => a.id === next.id)
+                                ? curr
+                                : [...curr, next];
+
+                        if (payload.eventType === "UPDATE")
+                            return curr.map((a) => (a.id === next.id ? next : a));
+
+                        if (payload.eventType === "DELETE")
+                            return curr.filter((a) => a.id !== prev.id);
+
+                        return curr;
                     });
                 }
             )
@@ -157,349 +139,226 @@ export const SOTable: React.FC<SOProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
+    // ================= AGENTS =================
+    useEffect(() => {
+        if (!userDetails.referenceid) return;
+
+        fetch(
+            `/api/fetch-manager-all-user?id=${encodeURIComponent(
+                userDetails.referenceid
+            )}`
+        )
+            .then((res) => res.json())
+            .then(setAgents)
+            .catch(() => setError("Failed to load agents"));
+    }, [userDetails.referenceid]);
+
+    const agentMap = useMemo(() => {
+        const map: Record<string, { name: string; profilePicture: string }> = {};
+        agents.forEach((a) => {
+            map[a.ReferenceID?.toLowerCase()] = {
+                name: `${a.Firstname} ${a.Lastname}`,
+                profilePicture: a.profilePicture || "",
+            };
+        });
+        return map;
+    }, [agents]);
+
+    // ================= FILTER =================
+    const filteredActivities = useMemo(() => {
+        const search = searchTerm.toLowerCase();
+
         return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
+            .filter(
+                (a) =>
+                    a.type_activity?.toLowerCase() === "sales order preparation"
+            )
+            .filter((a) => {
+                if (!search) return true;
+                return (
+                    a.company_name?.toLowerCase().includes(search) ||
+                    a.so_number?.toLowerCase().includes(search) ||
+                    a.remarks?.toLowerCase().includes(search)
                 );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    contact_person: company?.contact_person ?? "-",
-                };
+            })
+            .filter((a) => filterStatus === "all" || a.status === filterStatus)
+            .filter((a) => selectedAgent === "all" || a.referenceid === selectedAgent)
+            .filter((a) => {
+                if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to)
+                    return true;
+
+                const d = new Date(a.date_updated ?? a.date_created);
+                if (isNaN(d.getTime())) return false;
+
+                const from = dateCreatedFilterRange.from
+                    ? new Date(dateCreatedFilterRange.from)
+                    : null;
+                const to = dateCreatedFilterRange.to
+                    ? new Date(dateCreatedFilterRange.to)
+                    : null;
+
+                if (from && d < from) return false;
+                if (to && d > to) return false;
+                return true;
             })
             .sort(
                 (a, b) =>
                     new Date(b.date_updated ?? b.date_created).getTime() -
                     new Date(a.date_updated ?? a.date_created).getTime()
             );
-    }, [activities, companies]);
-
-    // Filter logic
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase();
-
-        return mergedActivities
-            .filter((item) => item.type_activity?.toLowerCase() === "sales order preparation")
-            .filter((item) => {
-                if (!search) return true;
-                return (
-                    (item.company_name?.toLowerCase().includes(search) ?? false) ||
-                    (item.so_number?.toLowerCase().includes(search) ?? false) ||
-                    (item.remarks?.toLowerCase().includes(search) ?? false)
-                );
-            })
-            .filter((item) => {
-                if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                return true;
-            })
-            .filter((item) => {
-                if (selectedAgent === "all") return true;
-                return item.referenceid === selectedAgent;
-            })
-            .filter((item) => {
-                if (
-                    !dateCreatedFilterRange ||
-                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-                ) {
-                    return true;
-                }
-
-                const updatedDate = item.date_updated
-                    ? new Date(item.date_updated)
-                    : new Date(item.date_created);
-
-                if (isNaN(updatedDate.getTime())) return false;
-
-                const fromDate = dateCreatedFilterRange.from
-                    ? new Date(dateCreatedFilterRange.from)
-                    : null;
-                const toDate = dateCreatedFilterRange.to
-                    ? new Date(dateCreatedFilterRange.to)
-                    : null;
-
-                // Helper function to check if two dates are on the same day (ignoring time)
-                const isSameDay = (d1: Date, d2: Date) =>
-                    d1.getFullYear() === d2.getFullYear() &&
-                    d1.getMonth() === d2.getMonth() &&
-                    d1.getDate() === d2.getDate();
-
-                if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                    // Exact one-day filter: match any record in that day
-                    return isSameDay(updatedDate, fromDate);
-                }
-
-                if (fromDate && updatedDate < fromDate) return false;
-                if (toDate && updatedDate > toDate) return false;
-
-                return true;
-            });
-
-    }, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
+    }, [
+        activities,
+        searchTerm,
+        filterStatus,
+        selectedAgent,
+        dateCreatedFilterRange,
+    ]);
 
     useEffect(() => {
         setPage(1);
-    }, [searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
+    }, [searchTerm, filterStatus, selectedAgent, dateCreatedFilterRange]);
 
-    // Calculate totals for footer (for filteredActivities, not paginated subset)
-    const totalQuotationAmount = useMemo(() => {
-        return filteredActivities.reduce((acc, item) => acc + (item.so_amount ?? 0), 0);
+    // ================= TOTALS =================
+    const totalSOAmount = useMemo(
+        () =>
+            filteredActivities.reduce(
+                (acc, i) => acc + (i.so_amount ?? 0),
+                0
+            ),
+        [filteredActivities]
+    );
+
+    const uniqueSOCount = useMemo(() => {
+        const s = new Set<string>();
+        filteredActivities.forEach((i) => i.so_number && s.add(i.so_number));
+        return s.size;
     }, [filteredActivities]);
 
-    // Count unique quotation_number (non-null)
-    const uniqueQuotationCount = useMemo(() => {
-        const uniqueSet = new Set<string>();
-        filteredActivities.forEach((item) => {
-            if (item.so_number) uniqueSet.add(item.so_number);
-        });
-        return uniqueSet.size;
-    }, [filteredActivities]);
-
-    // Pagination logic
     const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-    const paginatedActivities = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredActivities.slice(start, start + PAGE_SIZE);
-    }, [filteredActivities, page]);
+    const paginatedActivities = filteredActivities.slice(
+        (page - 1) * PAGE_SIZE,
+        page * PAGE_SIZE
+    );
 
-    // Reset to page 1 if filter or search changes
-    useEffect(() => {
-        setPage(1);
-    }, [searchTerm, filterStatus, dateCreatedFilterRange]);
-
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
-
-    const agentMap = useMemo(() => {
-        const map: Record<string, { name: string; profilePicture: string }> = {};
-        agents.forEach((agent) => {
-            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
-                map[agent.ReferenceID.toLowerCase()] = {
-                    name: `${agent.Firstname} ${agent.Lastname}`,
-                    profilePicture: agent.profilePicture || "", // use actual key for profile picture
-                };
-            }
-        });
-        return map;
-    }, [agents]);
-
-    useEffect(() => {
-        if (!userDetails.referenceid) return;
-
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch(
-                    `/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
-                );
-                if (!response.ok) throw new Error("Failed to fetch agents");
-
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
-                setErrorActivities("Failed to load agents.");
-            }
-        };
-
-        fetchAgents();
-    }, [userDetails.referenceid]);
-
+    // ================= UI =================
     return (
         <>
-            {/* Search */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            {/* SEARCH + FILTER */}
+            <div className="mb-4 flex gap-4">
                 <Input
-                    type="text"
                     placeholder="Search company or remarks..."
-                    className="max-w-md"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
 
-                <Select
-                    value={selectedAgent}
-                    onValueChange={(value) => {
-                        setSelectedAgent(value);
-                        setPage(1);
-                    }}
-                >
+                <Select value={selectedAgent} onValueChange={setSelectedAgent}>
                     <SelectTrigger className="w-[220px] text-xs">
                         <SelectValue placeholder="Filter by Agent" />
                     </SelectTrigger>
-
                     <SelectContent>
                         <SelectItem value="all">All Agents</SelectItem>
-
-                        {agents.map((agent) => (
-                            <SelectItem className="capitalize"
-                                key={agent.ReferenceID}
-                                value={agent.ReferenceID}
-                            >
-                                {agent.Firstname} {agent.Lastname}
+                        {agents.map((a) => (
+                            <SelectItem key={a.ReferenceID} value={a.ReferenceID}>
+                                {a.Firstname} {a.Lastname}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
 
-            {/* Loading */}
-            {isLoading && (
-                <div className="flex justify-center items-center h-40">
-                    <Spinner className="size-8" />
+            {loading && (
+                <div className="flex justify-center h-40">
+                    <Spinner />
                 </div>
             )}
 
-            {/* Error */}
             {error && (
-                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-                    <div className="flex items-center space-x-3">
-                        <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                        <div>
-                            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                Please check your internet connection or try again later.
-                            </AlertDescription>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                        <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                        <div>
-                            <AlertTitle className="text-black">Create New Data</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                You can start by adding new entries to populate your database.
-                            </AlertDescription>
-                        </div>
-                    </div>
+                <Alert variant="destructive">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
                 </Alert>
             )}
 
-            {/* No Data Alert */}
-            {!isLoading && !error && filteredActivities.length === 0 && (
-                <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-                    <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                    <div>
-                        <AlertTitle>No Data Found</AlertTitle>
-                        <AlertDescription>Please check your filters or try again later.</AlertDescription>
-                    </div>
-                </Alert>
-            )}
-
-
-            {/* Total info */}
             {filteredActivities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length} | Unique SO: {uniqueQuotationCount}
+                    Total Activities: {filteredActivities.length} | Unique SO:{" "}
+                    {uniqueSOCount}
                 </div>
             )}
 
-            {/* Table */}
-            {filteredActivities.length > 0 && (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="text-xs">Agent</TableHead>
-                                <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                                <TableHead className="text-xs">SO Number</TableHead>
-                                <TableHead className="text-right text-xs">SO Amount</TableHead>
-                                <TableHead className="text-xs">Company Name</TableHead>
-                                <TableHead className="text-xs">Contact Person</TableHead>
-                                <TableHead className="text-xs">Contact Number</TableHead>
-                                <TableHead className="text-xs">Remarks</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {paginatedActivities.map((item) => {
-                                const agentName =
-                                    agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
-                                return (
-
-                                    <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                        <TableCell className="flex items-center gap-2 capitalize">
-                                            {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
-                                                <img
-                                                    src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
-                                                    alt={agentMap[item.referenceid?.toLowerCase()]!.name}
-                                                    className="w-6 h-6 rounded-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                                                    N/A
-                                                </div>
-                                            )}
-                                            <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
-                                        </TableCell>
-                                        <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                                        <TableCell className="uppercase">{item.so_number || "-"}</TableCell>
-                                        <TableCell className="text-right">
-                                            {item.so_amount !== undefined && item.so_amount !== null
-                                                ? item.so_amount.toLocaleString(undefined, {
-                                                    style: "currency",
-                                                    currency: "PHP",
-                                                })
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell>{item.company_name}</TableCell>
-                                        <TableCell>{item.contact_person}</TableCell>
-                                        <TableCell>{item.contact_number}</TableCell>
-                                        <TableCell className="capitalize italic font-semibold">{item.remarks || "-"}</TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                        <tfoot>
-                            <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={3} className="text-right pr-4">
-                                    Totals:
+            {/* TABLE */}
+            <div className="overflow-auto rounded-md border p-4 font-mono">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Agent</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Contact Person</TableHead>
+                            <TableHead>Contact</TableHead>
+                            <TableHead>Remarks</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {paginatedActivities.map((i) => (
+                            <TableRow key={i.id}>
+                                <TableCell className="flex gap-2">
+                                    {agentMap[i.referenceid?.toLowerCase()]?.profilePicture ? (
+                                        <img
+                                            src={
+                                                agentMap[i.referenceid.toLowerCase()].profilePicture
+                                            }
+                                            className="w-6 h-6 rounded-full"
+                                        />
+                                    ) : (
+                                        <div className="w-6 h-6 bg-gray-300 rounded-full text-xs flex items-center justify-center">
+                                            N/A
+                                        </div>
+                                    )}
+                                    {agentMap[i.referenceid?.toLowerCase()]?.name || "-"}
+                                </TableCell>
+                                <TableCell>
+                                    {new Date(i.date_created).toLocaleDateString()}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
+                                    {i.so_amount?.toLocaleString("en-PH", {
                                         style: "currency",
                                         currency: "PHP",
                                     })}
                                 </TableCell>
-                                <TableCell colSpan={4}></TableCell>
+                                <TableCell>{i.company_name}</TableCell>
+                                <TableCell>{i.contact_person}</TableCell>
+                                <TableCell>{i.contact_number}</TableCell>
+                                <TableCell className="italic">{i.remarks}</TableCell>
                             </TableRow>
-                        </tfoot>
-                    </Table>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+
+            {filteredActivities.length > 0 && (
+                <div className="mt-2 text-xs font-semibold">
+                    Total Amount:{" "}
+                    {totalSOAmount.toLocaleString("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                    })}
                 </div>
             )}
 
             {pageCount > 1 && (
                 <Pagination>
-                    <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-                        <PaginationItem>
-                            <PaginationPrevious
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page > 1) setPage(page - 1);
-                                }}
-                                aria-disabled={page === 1}
-                                className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                            />
-                        </PaginationItem>
-
-                        {/* Current page / total pages */}
-                        <div className="px-4 font-medium select-none">
-                            {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
-                        </div>
-
-                        <PaginationItem>
-                            <PaginationNext
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page < pageCount) setPage(page + 1);
-                                }}
-                                aria-disabled={page === pageCount}
-                                className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-                            />
-                        </PaginationItem>
+                    <PaginationContent className="justify-center mt-4">
+                        <PaginationPrevious
+                            onClick={() => page > 1 && setPage(page - 1)}
+                        />
+                        <span className="px-4">
+                            {page} / {pageCount}
+                        </span>
+                        <PaginationNext
+                            onClick={() => page < pageCount && setPage(page + 1)}
+                        />
                     </PaginationContent>
                 </Pagination>
             )}

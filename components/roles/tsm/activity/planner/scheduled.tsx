@@ -192,10 +192,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     if (followUpDate > today) return false;
                 }
 
-                // Show only if status is approved or pending
-                const status = item.tsm_approved_status?.toLowerCase() || "";
-                if (status !== "approved" && status !== "pending") return false;
-
                 return true;
             })
             .sort(
