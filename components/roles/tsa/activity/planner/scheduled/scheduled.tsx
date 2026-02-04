@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { CreateActivityDialog } from "../dialog/create";
 import { CancelledDialog } from "../dialog/cancelled";
+import { DoneDialog } from "../dialog/done";
 
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +96,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -359,6 +361,44 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
+  const openDoneDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogDoneOpen(true);
+  };
+
+  const handleConfirmDone = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogDoneOpen(false);
+
+      const res = await fetch("/api/act-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchActivities();
+
+      toast.success("Transaction marked as Done.");
+    } catch {
+      toast.error("An error occurred while updating status.");
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -457,6 +497,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                         <Button
                           type="button"
+                          variant="secondary"
+                          disabled={updatingId === item.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDoneDialog(item.id);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Check />
+                        </Button>
+
+                        <Button
+                          type="button"
                           className="cursor-pointer"
                           variant="destructive"
                           disabled={updatingId === item.id}
@@ -465,7 +518,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             openCancelledDialog(item.id);
                           }}
                         >
-                          <AlertCircle /> {updatingId === item.id ? "Cancelling..." : "Cancel?"}
+                          <AlertCircle />
                         </Button>
                       </div>
                     </div>
@@ -554,7 +607,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     <p><strong>Email Address:</strong> {item.email_address || "-"}</p>
                     <p><strong>Address:</strong> {item.address || "-"}</p>
 
-                    <Separator className="mb-2 mt-2"/>
+                    <Separator className="mb-2 mt-2" />
 
                     {item.relatedHistoryItems.length === 0 ? (
                       <p>No quotation or SO history available.</p>
@@ -731,6 +784,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           )}
         </Accordion>
       </div>
+
+      <DoneDialog
+        open={dialogDoneOpen}
+        onOpenChange={setDialogDoneOpen}
+        onConfirm={handleConfirmDone}
+        loading={updatingId !== null}
+      />
 
       <CancelledDialog
         open={dialogOpen}

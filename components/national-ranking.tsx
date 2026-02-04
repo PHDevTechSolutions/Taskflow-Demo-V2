@@ -1,9 +1,16 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import { supabase } from "@/utils/supabase"; // Your direct supabase client import here
 import { useUser } from "@/contexts/UserContext";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 
 interface HistoryItem {
@@ -22,8 +29,8 @@ interface UserTransfer {
 }
 
 interface Props {
-dateCreatedFilterRange: any;
-setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 function Top3Ranking({
@@ -60,7 +67,9 @@ function Top3Ranking({
                 <h3 className="text-lg font-semibold text-center uppercase">
                   {user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
                 </h3>
-                <p className="text-yellow-700 font-bold text-xl mt-1">{successful} Successful Calls</p>
+                <p className="text-yellow-700 font-bold text-xl mt-1">
+                  {successful} Successful Calls
+                </p>
               </div>
             );
           })
@@ -70,7 +79,10 @@ function Top3Ranking({
   );
 }
 
-export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRangeAction }: Props) {
+export function NationalRanking({
+  dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
+}: Props) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [errorHistory, setErrorHistory] = useState<string | null>(null);
@@ -81,9 +93,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
 
   const { userId } = useUser();
 
-  // =======================
-  // Set default date range = Today
-  // =======================
+  // Set default date range = Today if not set
   useEffect(() => {
     if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) {
       const today = new Date();
@@ -93,9 +103,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
     }
   }, [dateCreatedFilterRange, setDateCreatedFilterRangeAction]);
 
-  // =======================
-  // Fetch all user transfers
-  // =======================
+  // Fetch user transfers
   useEffect(() => {
     if (!userId) return;
 
@@ -103,7 +111,9 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
       setLoadingTransfers(true);
       setErrorTransfers(null);
       try {
-        const res = await fetch(`/api/fetch-users?referenceid=${encodeURIComponent(userId)}`);
+        const res = await fetch(
+          `/api/fetch-users?referenceid=${encodeURIComponent(userId)}`
+        );
         if (!res.ok) throw new Error("Failed to fetch user transfers");
         setUserTransfers(await res.json());
       } catch (err: any) {
@@ -116,18 +126,20 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
     fetchUserTransfers();
   }, [userId]);
 
-  // =======================
-  // Fetch all history records
-  // =======================
+  // Fetch history **directly from Supabase with server side filter on call_status = Successful**
   useEffect(() => {
     const fetchAllHistory = async () => {
       setLoadingHistory(true);
       setErrorHistory(null);
       try {
-        const res = await fetch("/api/all-history");
-        if (!res.ok) throw new Error("Failed to fetch history data");
-        const data = await res.json();
-        setHistory(data.activities ?? []);
+        const { data, error } = await supabase
+          .from("history")
+          .select("referenceid, tsm, type_activity, call_status, date_created")
+          .eq("call_status", "Successful"); // Server side filter here
+
+        if (error) throw error;
+
+        setHistory(data ?? []);
       } catch (err: any) {
         setErrorHistory(err.message);
       } finally {
@@ -138,9 +150,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
     fetchAllHistory();
   }, []);
 
-  // =======================
-  // Helper: Check if date is in range
-  // =======================
+  // Helper to check if date is within filter range
   const isDateInRange = (dateStr: string) => {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return false;
@@ -153,9 +163,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
     return date >= from && date <= to;
   };
 
-  // =======================
   // Group successful calls by referenceid (Associates)
-  // =======================
   const groupedByReferenceid = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -163,18 +171,20 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
       if (!isDateInRange(item.date_created)) return;
       if (!item.referenceid) return;
 
+      // call_status filter is redundant here since we filtered server-side but keep for safety
       const status = item.call_status?.trim().toLowerCase();
       if (status !== "successful") return;
 
       map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
     });
 
-    return Array.from(map.entries()).map(([referenceid, successful]) => ({ referenceid, successful }));
+    return Array.from(map.entries()).map(([referenceid, successful]) => ({
+      referenceid,
+      successful,
+    }));
   }, [history, dateCreatedFilterRange]);
 
-  // =======================
   // Group successful calls by TSM (Managers)
-  // =======================
   const groupedByTsm = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -197,9 +207,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
     return { array, grandTotal };
   }, [history, dateCreatedFilterRange, userTransfers]);
 
-  // =======================
   // Sorting
-  // =======================
   const sortedGroupedByReferenceid = useMemo(
     () => groupedByReferenceid.slice().sort((a, b) => b.successful - a.successful),
     [groupedByReferenceid]
@@ -216,9 +224,7 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
 
   const top3 = sortedGroupedByReferenceid.slice(0, 3);
 
-  // =======================
   // Render
-  // =======================
   return (
     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto z-50">
       {loadingHistory ? (
@@ -241,42 +247,59 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Successful Calls</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Rank
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        User
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Successful Calls
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedGroupedByReferenceid.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                        <td
+                          colSpan={3}
+                          className="px-4 py-6 text-center text-gray-500"
+                        >
                           No data available
                         </td>
                       </tr>
                     ) : (
-                      sortedGroupedByReferenceid.map(({ referenceid, successful }, index) => {
-                        const user = userTransfers.find((u) => u.ReferenceID === referenceid);
-                        return (
-                          <tr key={referenceid}>
-                            <td className="px-4 py-2 text-xs">{index + 1}</td>
-                            <td className="px-4 py-2 flex items-center gap-2 capitalize font-semibold text-xs">
-                              {user ? (
-                                <>
-                                  <img
-                                    src={user.profilePicture || "/Taskflow.png"}
-                                    alt={`${user.Firstname} ${user.Lastname}`}
-                                    className="w-8 h-8 rounded-full object-cover"
-                                  />
-                                  {user.Firstname} {user.Lastname}
-                                </>
-                              ) : (
-                                <span className="italic text-gray-400">Unknown User</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2 text-xs font-bold">{successful}</td>
-                          </tr>
-                        );
-                      })
+                      sortedGroupedByReferenceid.map(
+                        ({ referenceid, successful }, index) => {
+                          const user = userTransfers.find(
+                            (u) => u.ReferenceID === referenceid
+                          );
+                          return (
+                            <tr key={referenceid}>
+                              <td className="px-4 py-2 text-xs">{index + 1}</td>
+                              <td className="px-4 py-2 flex items-center gap-2 capitalize font-semibold text-xs">
+                                {user ? (
+                                  <>
+                                    <img
+                                      src={user.profilePicture || "/Taskflow.png"}
+                                      alt={`${user.Firstname} ${user.Lastname}`}
+                                      className="w-8 h-8 rounded-full object-cover"
+                                    />
+                                    {user.Firstname} {user.Lastname}
+                                  </>
+                                ) : (
+                                  <span className="italic text-gray-400">
+                                    Unknown User
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-xs font-bold">
+                                {successful}
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )
                     )}
                   </tbody>
                 </table>
@@ -300,15 +323,24 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">TSM</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Successful Calls</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Rank
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        TSM
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Total Successful Calls
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedGroupedByTsm.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                        <td
+                          colSpan={3}
+                          className="px-4 py-6 text-center text-gray-500"
+                        >
                           No data available
                         </td>
                       </tr>
@@ -321,7 +353,9 @@ export function NationalRanking({ dateCreatedFilterRange, setDateCreatedFilterRa
                               <>
                                 <img
                                   src={user.profilePicture || "/Taskflow.png"}
-                                  alt={`${user.Firstname || "Sette"} ${user.Lastname || "Hosena"}`}
+                                  alt={`${user.Firstname || "Sette"} ${
+                                    user.Lastname || "Hosena"
+                                  }`}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
                                 {user.Firstname || "Sette"} {user.Lastname || "Hosena"}

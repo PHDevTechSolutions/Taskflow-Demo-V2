@@ -474,7 +474,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 />
             )}
 
-
             {/* Delete confirmation dialog */}
             <AccountsActiveDeleteDialog
                 open={deleteDialogOpen}

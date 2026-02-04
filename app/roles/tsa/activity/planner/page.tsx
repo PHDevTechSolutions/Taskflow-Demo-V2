@@ -18,6 +18,7 @@ import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
 import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
 import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
+import { Done } from "@/components/roles/tsa/activity/planner/done/done";
 
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
@@ -256,8 +257,8 @@ function DashboardContent() {
                                 <CardHeader>
                                     <CardTitle>Scheduled</CardTitle>
                                     <CardDescription>
-    View all upcoming scheduled tasks and track their progress for timely completion.
-</CardDescription>
+                                        View all upcoming scheduled tasks and track their progress for timely completion.
+                                    </CardDescription>
                                 </CardHeader>
 
                                 <CardContent>
@@ -286,6 +287,29 @@ function DashboardContent() {
                                 <CardContent>
                                     <Completed
                                         referenceid={userDetails.referenceid}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Done</CardTitle>
+                                    <CardDescription>
+                                        Done Task.
+                                    </CardDescription>
+                                </CardHeader>
+
+                                <CardContent>
+                                    <Done
+                                        referenceid={userDetails.referenceid}
+                                        firstname={userDetails.firstname}
+                                        lastname={userDetails.lastname}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        tsmname={userDetails.tsmname}
+                                        managername={userDetails.managername}
+                                        target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
                                 </CardContent>
