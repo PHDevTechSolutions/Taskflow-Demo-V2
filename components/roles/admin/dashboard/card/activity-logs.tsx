@@ -24,6 +24,7 @@ interface Agent {
   Role: string;
   Status?: string | null;
   TargetQuota: string;
+  Connection: string;
 }
 
 interface Activity {
@@ -88,7 +89,7 @@ export function AgentActivityLogs({
           agentActivityMap?.[agent.ReferenceID];
 
         const activeNow = isToday(activity?.latestLogin);
-        
+
         return (
           <Item
             key={agent.ReferenceID}
@@ -112,23 +113,25 @@ export function AgentActivityLogs({
                   </ItemTitle>
 
                   <ItemDescription className="flex flex-col gap-0.5 text-xs">
-                    <span
-                      className={`inline-block font-semibold select-none text-[10px]
-                        ${activeNow ? "text-green-600" : "text-red-400"}`}
-                      aria-label={activeNow ? "Active today" : "Inactive"}
-                      title={activeNow ? "Active today" : "Inactive"}
-                    >
-                      {activeNow ? "Active" : "Inactive"}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-block w-3 h-3 rounded-full ${agent.Connection === "Online"
+                          ? "bg-green-500 animate-pulse border border-black"
+                          : agent.Connection
+                            ? "bg-red-600 animate-pulse border border-black"
+                            : "bg-red-600 border border-black"
+                          }`}
+                        aria-label={`Connection status: ${agent.Connection || "Offline"
+                          }`}
+                      />
+                      <span>{agent.Connection || "Offline"}</span> |{" "}
+                      <span>TQ: {Number(agent.TargetQuota).toLocaleString()}</span>
+                    </div>
+                    <span>
+                      Latest login: {activity?.latestLogin ?? "—"}
                     </span>
                     <span>
-                      Latest login:{" "}
-                      {activity?.latestLogin ??
-                        "—"}
-                    </span>
-                    <span>
-                      Latest logout:{" "}
-                      {activity?.latestLogout ??
-                        "—"}
+                      Latest logout: {activity?.latestLogout ?? "—"}
                     </span>
                   </ItemDescription>
                 </div>

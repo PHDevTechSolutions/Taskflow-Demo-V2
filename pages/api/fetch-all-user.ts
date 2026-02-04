@@ -32,6 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Status: 1,
         Role: 1,
         TargetQuota: 1,
+        Connection: 1,
         _id: 0,
       })
       .toArray();

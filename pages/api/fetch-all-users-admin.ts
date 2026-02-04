@@ -33,6 +33,7 @@ export default async function handler(
         Role: 1,
         TargetQuota: 1,
         Department: 1,
+        Connection: 1,
         _id: 0,
       })
       .toArray();

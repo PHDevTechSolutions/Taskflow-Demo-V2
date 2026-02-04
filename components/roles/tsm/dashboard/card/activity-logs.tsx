@@ -8,6 +8,8 @@ interface Agent {
     Firstname: string;
     Lastname: string;
     profilePicture: string;
+    TargetQuota: string;
+    Connection: string;
 }
 
 interface Activity {
@@ -52,38 +54,36 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
                             <ItemContent className="flex gap-3 font-mono">
                                 <div className="flex items-center gap-4">
                                     <img
-                                        src={
-                                            agent.profilePicture ||
-                                            "/Taskflow.png"
-                                        }
+                                        src={agent.profilePicture || "/Taskflow.png"}
                                         alt={`${agent.Firstname} ${agent.Lastname}`}
                                         className="h-20 w-20 rounded-full shadow-sm object-cover border flex-shrink-0"
                                     />
 
                                     <div className="flex flex-col">
                                         <ItemTitle className="text-xs capitalize leading-tight">
-                                            {agent.Firstname}{" "}
-                                            {agent.Lastname}
+                                            {agent.Firstname} {agent.Lastname}
                                         </ItemTitle>
 
                                         <ItemDescription className="flex flex-col gap-0.5 text-xs">
-                                            <span
-                                                className={`inline-block font-semibold select-none text-[10px]
-                        ${activeNow ? "text-green-600" : "text-red-400"}`}
-                                                aria-label={activeNow ? "Active today" : "Inactive"}
-                                                title={activeNow ? "Active today" : "Inactive"}
-                                            >
-                                                {activeNow ? "Active" : "Inactive"}
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className={`inline-block w-3 h-3 rounded-full ${agent.Connection === "Online"
+                                                        ? "bg-green-500 animate-pulse border border-black"
+                                                        : agent.Connection
+                                                            ? "bg-red-600 animate-pulse border border-black"
+                                                            : "bg-red-600 border border-black"
+                                                        }`}
+                                                    aria-label={`Connection status: ${agent.Connection || "Offline"
+                                                        }`}
+                                                />
+                                                <span>{agent.Connection || "Not Connected"}</span> |{" "}
+                                                <span>TQ: {Number(agent.TargetQuota).toLocaleString()}</span>
+                                            </div>
+                                            <span>
+                                                Latest login: {activity?.latestLogin ?? "—"}
                                             </span>
                                             <span>
-                                                Latest login:{" "}
-                                                {activity?.latestLogin ??
-                                                    "—"}
-                                            </span>
-                                            <span>
-                                                Latest logout:{" "}
-                                                {activity?.latestLogout ??
-                                                    "—"}
+                                                Latest logout: {activity?.latestLogout ?? "—"}
                                             </span>
                                         </ItemDescription>
                                     </div>
@@ -93,6 +93,7 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
                     );
                 })}
             </CardContent>
+
         </Card>
     );
 }

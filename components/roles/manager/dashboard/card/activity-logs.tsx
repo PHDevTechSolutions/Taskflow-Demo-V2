@@ -93,19 +93,17 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
                     <div className="flex items-center gap-2">
                       {/* Connection status circle */}
                       <span
-                        className={`inline-block w-3 h-3 rounded-full ${
-                          agent.Connection === "Online"
-                            ? "bg-green-500 animate-pulse border border-black"
-                            : agent.Connection
+                        className={`inline-block w-3 h-3 rounded-full ${agent.Connection === "Online"
+                          ? "bg-green-500 animate-pulse border border-black"
+                          : agent.Connection
                             ? "bg-red-600 animate-pulse border border-black"
-                            : "bg-gray-400 border border-black"
-                        }`}
-                        aria-label={`Connection status: ${
-                          agent.Connection || "Not Connected"
-                        }`}
+                            : "bg-red-600 border border-black"
+                          }`}
+                        aria-label={`Connection status: ${agent.Connection || "Offline"
+                          }`}
                       />
                       <span>{agent.Connection || "Not Connected"}</span> |{" "}
-                      <span>TQ: {agent.TargetQuota}</span>
+                      <span>TQ: {Number(agent.TargetQuota).toLocaleString()}</span>
                     </div>
 
                     <span>
