@@ -98,6 +98,7 @@ export default function TaskListEditDialog({
     const [isSearching, setIsSearching] = useState<boolean>(false);
     const [isManualEntry, setIsManualEntry] = useState<boolean>(false);
 
+    const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
     const [discount, setDiscount] = React.useState(0);
     const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
     // Confirmation dialog state
@@ -122,7 +123,6 @@ export default function TaskListEditDialog({
 
         return () => clearInterval(interval);
     }, [item.end_date]);
-
 
     // These can be from props or item or company info
     const company_name = company?.company_name || "";
@@ -180,16 +180,22 @@ export default function TaskListEditDialog({
     }, [products]);
 
     useEffect(() => {
-        const total = products.reduce((sum, p) => {
-            const qty = parseFloat(p.product_quantity ?? "0");
-            const amt = parseFloat(p.product_amount ?? "0");
-            if (!isNaN(qty) && !isNaN(amt)) {
-                return sum + qty * amt;
+        let total = 0;
+        products.forEach((p, idx) => {
+            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+            const amt = parseFloat(p.product_amount ?? "0") || 0;
+            let lineTotal = qty * amt;
+
+            // If this row is checked AND vatType is vat_inc, apply discount
+            if (checkedRows[idx] && vatType === "vat_inc") {
+                const discounted = lineTotal * ((100 - discount) / 100);
+                lineTotal = discounted;
             }
-            return sum;
-        }, 0);
+
+            total += lineTotal;
+        });
         setQuotationAmount(total);
-    }, [products]);
+    }, [products, checkedRows, discount, vatType]);
 
     const handleProductChange = (
         index: number,
@@ -403,6 +409,13 @@ export default function TaskListEditDialog({
         setShowConfirmDialog(true);
     };
 
+    const toggleCheckbox = (index: number) => {
+        setCheckedRows((prev) => ({
+            ...prev,
+            [index]: !prev[index],
+        }));
+    };
+
     // Prepare live clock display with fixed date from endDate
     const displayDateTime = liveTime;
 
@@ -415,25 +428,6 @@ export default function TaskListEditDialog({
                             Edit Quotation: {item.quotation_number || item.id} - {item.quotation_type}
                         </DialogTitle>
                     </DialogHeader>
-
-                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-semibold">Duration</label>
-                            <p className="mt-1 text-sm text-gray-700">
-                                {displayDateTime
-                                    ? displayDateTime.toLocaleString("en-US", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                        second: "2-digit",
-                                        hour12: true,
-                                    })
-                                    : "—"}
-                            </p>
-                        </div>
-                    </div>
 
                     {/* Container for left (search grid) and right (table) */}
                     <div className="flex space-x-4" style={{ height: "70vh" }}>
@@ -579,6 +573,7 @@ export default function TaskListEditDialog({
                                         <TableHead className="text-xs">Description</TableHead>
                                         <TableHead className="text-xs">Quantity</TableHead>
                                         <TableHead className="text-xs">Amount</TableHead>
+                                        <TableHead className="text-xs">Total Amount</TableHead>
                                         <TableHead className="text-xs">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -592,106 +587,137 @@ export default function TaskListEditDialog({
                                         </TableRow>
                                     )}
 
-                                    {products.map((product, index) => (
-                                        <TableRow key={index}>
-                                            <TableCell className="font-semibold align-top text-xs">{index + 1}</TableCell>
-                                            <TableCell className="align-top text-xs">
-                                                {product.product_photo && (
-                                                    <img
-                                                        src={product.product_photo}
-                                                        alt={`Product ${index + 1}`}
-                                                        className="max-h-24 object-contain rounded border text-xs"
+                                    {products.map((product, index) => {
+                                        const qty = parseFloat(product.product_quantity ?? "0") || 0;
+                                        const amt = parseFloat(product.product_amount ?? "0") || 0;
+                                        const lineTotal = qty * amt;
+                                        const isChecked = checkedRows[index] || false;
+
+                                        // Calculate discounted total for this row if applicable
+                                        const discountedTotal =
+                                            isChecked && vatType === "vat_inc"
+                                                ? lineTotal * ((100 - discount) / 100)
+                                                : lineTotal;
+
+                                        return (
+                                            <TableRow key={index}>
+                                                <TableCell className="font-semibold align-top text-xs">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => toggleCheckbox(index)}
+                                                        disabled={vatType !== "vat_inc"}
+                                                        className="h-5 w-5 rounded-full"
                                                     />
-                                                )}
-                                            </TableCell>
-
-                                            <TableCell className="align-top ">
-                                                <Textarea
-                                                    value={product.product_title ?? ""}
-                                                    onChange={(e) =>
-                                                        handleProductChange(index, "product_title", e.target.value)
-                                                    }
-                                                    className="border-none shadow-none"
-                                                />
-                                                <div className="mt-1 text-xs text-gray-500">
-                                                    SKU: {product.product_sku || <i>None</i>}
-                                                </div>
-                                            </TableCell>
-
-                                            <TableCell className="align-top">
-                                                <div className="flex flex-col">
-                                                    {previewStates[index] ? (
-                                                        <div
-                                                            className="border p-2 rounded max-h-40 overflow-auto custom-scrollbar bg-white text-black text-xs"
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: product.product_description || "<i>No description</i>",
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <Textarea
-                                                            value={product.product_description ?? ""}
-                                                            onChange={(e) =>
-                                                                handleProductChange(index, "product_description", e.target.value)
-                                                            }
-                                                            rows={6}
-                                                            className="text-xs"
-                                                            placeholder="Paste or edit product description HTML here"
+                                                </TableCell>
+                                                <TableCell className="align-top text-xs">
+                                                    {product.product_photo && (
+                                                        <img
+                                                            src={product.product_photo}
+                                                            alt={`Product ${index + 1}`}
+                                                            className="max-h-24 object-contain rounded-sm border text-xs"
                                                         />
                                                     )}
-                                                </div>
-                                            </TableCell>
+                                                </TableCell>
 
-                                            <TableCell className="align-top">
-                                                <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step="any"
-                                                    value={product.product_quantity ?? ""}
-                                                    onChange={(e) =>
-                                                        handleProductChange(index, "product_quantity", e.target.value)
-                                                    }
-                                                    className="border-none shadow-none text-xs"
-                                                />
-                                            </TableCell>
+                                                <TableCell className="align-top ">
+                                                    <Textarea
+                                                        value={product.product_title ?? ""}
+                                                        onChange={(e) =>
+                                                            handleProductChange(index, "product_title", e.target.value)
+                                                        }
+                                                        className="border-none p-0 shadow-none"
+                                                    />
+                                                    <div className="text-xs text-gray-500">
+                                                        SKU: {product.product_sku || <i>None</i>}
+                                                    </div>
+                                                </TableCell>
 
-                                            <TableCell className="align-top">
-                                                <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step="any"
-                                                    value={product.product_amount ?? ""}
-                                                    onChange={(e) =>
-                                                        handleProductChange(index, "product_amount", e.target.value)
-                                                    }
-                                                    className="border-none shadow-none text-xs"
-                                                />
-                                            </TableCell>
+                                                <TableCell className="align-top">
+                                                    <div className="flex flex-col">
+                                                        {previewStates[index] ? (
+                                                            <div
+                                                                className="border p-2 rounded max-h-40 overflow-auto custom-scrollbar bg-white text-black text-xs"
+                                                                dangerouslySetInnerHTML={{
+                                                                    __html: product.product_description || "<i>No description</i>",
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Textarea
+                                                                value={product.product_description ?? ""}
+                                                                onChange={(e) =>
+                                                                    handleProductChange(index, "product_description", e.target.value)
+                                                                }
+                                                                rows={6}
+                                                                className="text-xs"
+                                                                placeholder="Paste or edit product description HTML here"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </TableCell>
 
-                                            <TableCell className="align-top">
-                                                <Button variant="destructive" size="sm" onClick={() => handleRemoveRow(index)}>
-                                                    <Trash />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                                <TableCell className="align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step="any"
+                                                        value={product.product_quantity ?? ""}
+                                                        onChange={(e) =>
+                                                            handleProductChange(index, "product_quantity", e.target.value)
+                                                        }
+                                                        className="border-none shadow-none text-xs"
+                                                    />
+                                                </TableCell>
+
+                                                <TableCell className="align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step="any"
+                                                        value={product.product_amount ?? ""}
+                                                        onChange={(e) =>
+                                                            handleProductChange(index, "product_amount", e.target.value)
+                                                        }
+                                                        className="border-none shadow-none text-xs"
+                                                    />
+                                                </TableCell>
+
+                                                <TableCell className="align-top font-semibold text-xs">
+                                                    ₱{discountedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+
+                                                <TableCell className="align-top">
+                                                    <Button variant="destructive" size="sm" onClick={() => handleRemoveRow(index)}>
+                                                        <Trash />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         </div>
                     </div>
 
+                    <div className="flex justify-end font-semibold text-sm">
+                        Subtotal: ₱
+                        {quotationAmount.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                        })}
+                    </div>
+
                     <DialogFooter className="mt-4 flex justify-between items-center">
                         <div className="font-semibold text-sm">
-                            Total Quotation Amount: ₱
-                            {quotationAmount.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
+                            Actual Quotation Amount: ₱
+                            {item.quotation_amount}
                         </div>
 
                         <div className="flex space-x-2">
                             <Button variant="outline" onClick={onClose}>
                                 Cancel
                             </Button>
+                            <Button onClick={handleDownload}>Download</Button>
                             <Button onClick={onClickSave}>Save</Button>
                         </div>
                     </DialogFooter>
@@ -711,7 +737,6 @@ export default function TaskListEditDialog({
                         <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleDownload}>Download</Button>
                         <Button onClick={performSave}>Proceed to Save Only</Button>
                     </DialogFooter>
                 </DialogContent>
