@@ -38,7 +38,7 @@ interface Completed {
     remarks?: string;
     status?: string;
     start_date?: string;
-    end_date?: string;
+    end_date: string;
     date_created: string;
     date_updated?: string;
     account_reference_number?: string;
@@ -377,8 +377,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             <TableRow>
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Time</TableHead>
+                                <TableHead>Date Created</TableHead>
+                                <TableHead>End Date</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
@@ -413,11 +413,16 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         <TableCell>
                                             {new Date(
                                                 item.date_updated ?? item.date_created
-                                            ).toLocaleDateString()}
+                                            ).toLocaleDateString()}:{new Date(
+                                                item.date_updated ?? item.date_created
+                                            ).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
                                         </TableCell>
                                         <TableCell>
-                                            {new Date(
-                                                item.date_updated ?? item.date_created
+                                            {new Date(item.end_date).toLocaleDateString()}:{new Date(
+                                                item.end_date
                                             ).toLocaleTimeString([], {
                                                 hour: "2-digit",
                                                 minute: "2-digit",
