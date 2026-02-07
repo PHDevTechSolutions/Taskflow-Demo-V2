@@ -9,6 +9,17 @@ import { toast } from "sonner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Trash } from "lucide-react";
+// Firebase Project Dependencies
+import {
+    getFirestore,
+    collection,
+    query,
+    where,
+    getDocs
+} from "firebase/firestore";
+// Ensure 'db' is initialized in your firebase configuration file
+import { db } from "@/lib/firebase";
+import { FieldLabel } from "@/components/ui/field";
 
 interface Completed {
     id: number;
@@ -419,6 +430,9 @@ export default function TaskListEditDialog({
     // Prepare live clock display with fixed date from endDate
     const displayDateTime = liveTime;
 
+    // Routing for product retrieval
+    const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+
     return (
         <>
             <Dialog open={true} onOpenChange={onClose}>
@@ -432,44 +446,115 @@ export default function TaskListEditDialog({
                     {/* Container for left (search grid) and right (table) */}
                     <div className="flex space-x-4" style={{ height: "70vh" }}>
                         {/* Left side: Search input + product grid */}
-                        <div className="flex flex-col w-1/3">
-                            {/* Search input */}
-                            <Input
-                                type="text"
-                                className="uppercase mb-2"
-                                value={searchTerm}
-                                placeholder="Search product by Title or SKU..."
-                                onChange={async (e) => {
-                                    if (isManualEntry) return;
-                                    const value = e.target.value.toLowerCase();
-                                    setSearchTerm(value);
+                        <div className="flex flex-col w-1/3 gap-4 overflow-y-auto pr-2">
+                            <div className="flex flex-col gap-4 sticky top-0 bg-white z-10 pb-2">
+                                <div className="flex border rounded-md overflow-hidden border-gray-300">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setProductSource('shopify');
+                                            setSearchTerm("");       // Protocol: Reset input
+                                            setSearchResults([]);   // Protocol: Clear results
+                                        }}
+                                        className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'shopify' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        SHOPIFY
+                                    </button>
+                                    <button
+                                        type="button"
+                                        hidden={true}
+                                        onClick={() => {
+                                            setProductSource('firebase');
+                                            setSearchTerm("");       // Protocol: Reset input
+                                            setSearchResults([]);   // Protocol: Clear results
+                                        }}
+                                        className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'firebase' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        PRODUCT DATABASE
+                                    </button>
+                                </div>
+                                {!isManualEntry && (
+                                    <>
+                                        <FieldLabel>Product Name</FieldLabel>
+                                        <Input
+                                            type="text"
+                                            className="uppercase"
+                                            value={searchTerm}
+                                            placeholder="Search product by Title or SKU..."
+                                            onChange={async (e) => {
+                                                if (isManualEntry) return;
+                                                const rawValue = e.target.value;
+                                                setSearchTerm(rawValue);
 
-                                    if (value.length < 2) {
-                                        setSearchResults([]);
-                                        return;
-                                    }
+                                                if (rawValue.length < 2) {
+                                                    setSearchResults([]);
+                                                    return;
+                                                }
 
-                                    setIsSearching(true);
-                                    try {
-                                        const res = await fetch(`/api/shopify/products?q=${value}`);
-                                        let data = await res.json();
-                                        let products: Product[] = data.products || [];
+                                                setIsSearching(true);
+                                                try {
+                                                    if (productSource === 'shopify') {
+                                                        const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
+                                                        let data = await res.json();
+                                                        setSearchResults(data.products || []);
+                                                    } else {
+                                                        const searchUpper = rawValue.toUpperCase();
+                                                        const q = query(collection(db, "products"));
+                                                        const querySnapshot = await getDocs(q);
 
-                                        products = products.filter((product) => {
-                                            const titleMatch = product.title.toLowerCase().includes(value);
-                                            const skuMatch = product.skus?.some((sku) =>
-                                                sku.toLowerCase().includes(value)
-                                            );
-                                            return titleMatch || skuMatch;
-                                        });
+                                                        const firebaseResults = querySnapshot.docs.map(doc => {
+                                                            const data = doc.data();
 
-                                        setSearchResults(products);
-                                    } catch (err) {
-                                        console.error(err);
-                                    }
-                                    setIsSearching(false);
-                                }}
-                            />
+                                                            // 1. Build Specifications HTML and Searchable Text
+                                                            let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                                            let rawSpecsText = "";
+
+                                                            if (data.technicalSpecs?.[0]?.rows) {
+                                                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
+                                                                data.technicalSpecs[0].rows.forEach((row: any) => {
+                                                                    rawSpecsText += ` ${row.name} ${row.value}`;
+                                                                    specsHtml += `<tr>
+          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
+          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
+        </tr>`;
+                                                                });
+                                                                specsHtml += `</table>`;
+                                                            }
+
+                                                            // 2. Map to Product format and resolve ID mismatch
+                                                            return {
+                                                                // Convert string ID to a hash number if your system strictly requires numbers
+                                                                id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
+                                                                title: data.name || "No Name",
+                                                                price: data.salePrice || data.regularPrice || 0,
+                                                                description: specsHtml,
+                                                                images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                                                skus: data.sku ? [data.sku] : [],
+                                                                discount: 0,
+                                                                // We attach the search string temporarily for the filter
+                                                                tempSearchMetadata: (data.name + " " + (data.sku || "") + " " + rawSpecsText).toUpperCase()
+                                                            } as any; // Use 'as any' temporarily to bypass the strict Product definition
+                                                        })
+                                                            .filter(product => {
+                                                                // 3. Perform the deep "Contains" search
+                                                                return product.tempSearchMetadata.includes(searchUpper);
+                                                            }) as Product[]; // Cast the final filtered array back to Product[]
+
+                                                        setSearchResults(firebaseResults);
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Search Protocol Failure:", err);
+                                                } finally {
+                                                    setIsSearching(false);
+                                                }
+                                            }}
+                                        />
+                                        {isSearching && <p className="text-[10px] animate-pulse">Searching Source...</p>}
+                                    </>
+                                )}
+                            </div>
 
                             {/* Search results grid */}
                             <div className="overflow-auto border rounded p-2 bg-white flex-grow">
