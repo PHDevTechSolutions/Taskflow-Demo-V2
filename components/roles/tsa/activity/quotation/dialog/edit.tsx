@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Trash } from "lucide-react";
+import { Download, Eye, Trash } from "lucide-react";
 // Firebase Project Dependencies
 import {
     getFirestore,
@@ -36,6 +36,13 @@ interface Completed {
 }
 
 interface ProductItem {
+    description: string;
+    skus: any;
+    title: string;
+    images: any;
+    isDiscounted: boolean;
+    price: number;
+    quantity: number;
     product_quantity?: string;
     product_amount?: string;
     product_description?: string;
@@ -180,6 +187,13 @@ export default function TaskListEditDialog({
                 product_description: descriptions[i] ?? "",
                 product_photo: photos[i] ?? "",
                 product_sku: sku[i] ?? "",
+                quantity: 0,
+                description: "",
+                skus: undefined,
+                title: "",
+                images: undefined,
+                isDiscounted: false,
+                price: 0
             });
         }
 
@@ -253,6 +267,13 @@ export default function TaskListEditDialog({
                 product_description: tableDescription,
                 product_photo: product.images?.[0]?.src || "",
                 product_sku: product.skus?.[0] || "",
+                description: product.description || "",
+                skus: product.skus || [],
+                title: product.title || "",
+                images: product.images || [],
+                isDiscounted: false,
+                price: parseFloat(product.price || "0") || 0,
+                quantity: 1,
             },
         ]);
         setSearchTerm("");
@@ -432,6 +453,101 @@ export default function TaskListEditDialog({
 
     // Routing for product retrieval
     const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+
+    const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+
+    const getQuotationPayload = () => {
+        const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+        const emailUsername = email?.split("@")[0] ?? "";
+
+        let emailDomain = "";
+        if (quotation_type === "Disruptive Solutions Inc") {
+            emailDomain = "disruptivesolutionsinc.com";
+        } else if (quotation_type === "Ecoshift Corporation") {
+            emailDomain = "ecoshiftcorp.com";
+        } else {
+            emailDomain = email?.split("@")[1] ?? "";
+        }
+
+        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+
+        const items = products.map((p: ProductItem, index: number) => {
+            // Use the 'product_xxx' fields which are updated by handleProductChange
+            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+            const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
+            const isDiscounted = checkedRows[index] ?? false; // Use the row's checked state
+
+            const baseAmount = qty * unitPrice;
+            const discountedAmount = (isDiscounted && vatType === "vat_inc")
+                ? (baseAmount * discount) / 100
+                : 0;
+            const totalAmount = baseAmount - discountedAmount;
+
+            return {
+                itemNo: index + 1,
+                qty,
+                // Ensure these match the fields initialized in your useEffect
+                photo: p.product_photo ?? "",
+                title: p.product_title ?? "",
+                sku: p.product_sku ?? "",
+                description: p.product_description ?? "",
+                unitPrice,
+                totalAmount,
+            };
+        });
+
+        const handleDownloadPDF = async () => {
+            const payload = getQuotationPayload();
+
+            try {
+                let apiEndpoint = "/api/quotation/disruptive/pdf"; // Adjust based on your API structure
+                if (quotation_type === "Ecoshift Corporation") {
+                    apiEndpoint = "/api/quotation/ecoshift/pdf";
+                }
+
+                const resExport = await fetch(apiEndpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!resExport.ok) throw new Error("PDF Generation Failed");
+
+                const blob = await resExport.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `Quotation_${payload.referenceNo}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                toast.success("PDF Export Successful");
+            } catch (error) {
+                console.error("PDF Protocol Error:", error);
+                toast.error("Failed to generate PDF.");
+            }
+        };
+
+        return {
+            referenceNo: quotationNumber ?? "DRAFT-XXXX",
+            date: new Date().toLocaleDateString(),
+            companyName: company_name ?? "",
+            address: address ?? "",
+            telNo: contact_number ?? "",
+            email: email_address ?? "",
+            attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
+            subject: "For Quotation",
+            items,
+            vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+            totalPrice: Number(quotationAmount ?? 0),
+            salesRepresentative: salesRepresentativeName,
+            salesemail,
+            salescontact: contact ?? "",
+            salestsmname: tsmname ?? "",
+            salesmanagername: managername ?? "",
+        };
+    };
 
     return (
         <>
@@ -799,10 +915,18 @@ export default function TaskListEditDialog({
                         </div>
 
                         <div className="flex space-x-2">
+                            <Button
+                                className="bg-[#121212] hover:bg-black text-white px-8 flex gap-2 items-center"
+                                onClick={() => setIsPreviewOpen(true)} // Changed from handleDownloadQuotation
+                            >
+                                <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
+                                <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
+                            </Button>
+                            <Button onClick={handleDownload}>Download</Button>
                             <Button variant="outline" onClick={onClose}>
                                 Cancel
                             </Button>
-                            <Button onClick={handleDownload}>Download</Button>
+
                             <Button onClick={onClickSave}>Save</Button>
                         </div>
                     </DialogFooter>
@@ -824,6 +948,320 @@ export default function TaskListEditDialog({
                         </Button>
                         <Button onClick={performSave}>Proceed to Save Only</Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* PREVIEW PROTOCOL MODAL */}
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent
+                    className="max-w-[1000px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 border-none bg-[#F9FAFA] shadow-2xl"
+                    style={{ maxWidth: "950px", width: "100vw" }}
+                >
+                    {(() => {
+                        const payload = getQuotationPayload();
+
+                        // 1. BRAND SELECTION LOGIC
+                        const isEcoshift = quotation_type === "Ecoshift Corporation";
+
+                        // 2. ASSET PATH RESOLUTION
+                        const headerImagePath = isEcoshift
+                            ? "/ecoshift-banner.png"
+                            : "/disruptive-banner.png";
+
+                        function handleDownloadQuotation() {
+                            throw new Error("Function not implemented.");
+                        }
+
+                        return (
+                            <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
+
+                                {/* CORPORATE BRANDING HEADER */}
+                                <div className="w-full flex justify-center py-6 border-b border-gray-100 bg-white">
+                                    <div className="w-full max-w-[900px] h-[110px] relative flex items-center justify-center overflow-hidden">
+                                        <img
+                                            key={quotation_type}
+                                            src={headerImagePath}
+                                            alt={`${quotation_type} Header`}
+                                            className="w-full h-full object-contain"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                const parent = e.currentTarget.parentElement;
+                                                if (parent) {
+                                                    parent.innerHTML = `
+                      <div class="w-full h-full bg-[#121212] flex flex-col items-center justify-center text-white">
+                        <span class="font-black text-2xl tracking-[0.2em] uppercase">${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</span>
+                        <span class="text-[10px] tracking-[0.5em] font-light opacity-70">OFFICIAL QUOTATION PROTOCOL</span>
+                      </div>
+                    `;
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="px-12 py-8 space-y-1">
+                                    {/* REFERENCE & DATE SECTION */}
+                                    <div className="text-right text-[11px] font-medium uppercase space-y-1">
+                                        <p className="flex justify-end gap-2">
+                                            <span className="font-black text-[#121212]">Reference No:</span>
+                                            <span className="text-gray-600">{payload.referenceNo}</span>
+                                        </p>
+                                        <p className="flex justify-end gap-2">
+                                            <span className="font-black text-[#121212]">Date:</span>
+                                            <span className="text-gray-600">{payload.date}</span>
+                                        </p>
+                                    </div>
+
+                                    {/* CLIENT INFORMATION GRID */}
+                                    <div className="mt-8 border-l border-r border-black">
+                                        {[
+                                            { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
+                                            { label: "ADDRESS", value: payload.address },
+                                            { label: "TEL NO", value: payload.telNo },
+                                            { label: "EMAIL ADDRESS", value: payload.email, borderBottom: true },
+                                            { label: "ATTENTION", value: payload.attention },
+                                            { label: "SUBJECT", value: payload.subject, borderBottom: true },
+                                        ].map((info, i) => (
+                                            <div
+                                                key={i}
+                                                className={`grid grid-cols-6 py-2 px-4 items-center min-h-[35px]
+                    ${info.borderTop ? 'border-t border-black' : ''} 
+                    ${info.borderBottom ? 'border-b border-black' : ''}
+                  `}
+                                            >
+                                                <span className="col-span-1 font-black text-[10px] text-[#121212]">{info.label}:</span>
+                                                <span className="col-span-5 text-[11px] font-bold text-gray-700 pl-4">{info.value || "---"}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <p className="text-[10px] italic py-8 text-gray-500 font-medium">
+                                        We are pleased to offer you the following products for consideration:
+                                    </p>
+
+                                    {/* ITEM SPECIFICATION TABLE */}
+                                    <div className="border border-black overflow-hidden shadow-sm">
+                                        <table className="w-full text-[10px] border-collapse">
+                                            <thead>
+                                                <tr className="bg-[#F9FAFA] border-b border-black font-black uppercase text-[#121212]">
+                                                    <th className="p-3 border-r border-black w-16 text-center">ITEM NO</th>
+                                                    <th className="p-3 border-r border-black w-16 text-center">QTY</th>
+                                                    <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
+                                                    <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
+                                                    <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                                    <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-black">
+                                                {payload.items.map((item: { itemNo: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; qty: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; photo: string | Blob | undefined; title: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; sku: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; description: any; unitPrice: { toLocaleString: (arg0: undefined, arg1: { minimumFractionDigits: number; }) => string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }; totalAmount: { toLocaleString: (arg0: undefined, arg1: { minimumFractionDigits: number; }) => string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }; }, idx: React.Key | null | undefined) => (
+                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                                        <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
+                                                        <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
+                                                        <td className="p-3 border-r border-black align-top bg-white">
+                                                            {item.photo ? (
+                                                                <img src={item.photo} className="w-24 h-24 object-contain mx-auto mix-blend-multiply" alt="sku-ref" />
+                                                            ) : (
+                                                                <div className="w-24 h-24 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic">No Image</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 border-r border-black align-top">
+                                                            <p className="font-black text-[#121212] text-xs uppercase mb-1">{item.title}</p>
+                                                            <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
+                                                            <div
+                                                                className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
+                                                                dangerouslySetInnerHTML={{ __html: item.description }}
+                                                            />
+                                                        </td>
+                                                        <td className="p-4 text-right border-r border-black align-top font-medium">
+                                                            ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="p-4 text-right font-black align-top text-[#121212]">
+                                                            ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+
+                                                {/* SUMMARY BAR */}
+                                                <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
+                                                    <td colSpan={2} className="border-r border-white/20"></td>
+                                                    <td className="px-4 border-r border-white/20 font-black text-red-400 italic text-[9px] uppercase">Tax Type:</td>
+                                                    <td className="px-4 border-r border-white/20">
+                                                        <div className="flex gap-4 text-[9px] font-black uppercase tracking-tight">
+                                                            <span className={payload.vatTypeLabel === "VAT Inc" ? "text-white" : "text-white/30"}>
+                                                                {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                                                            </span>
+                                                            <span className={payload.vatTypeLabel === "VAT Exe" ? "text-white" : "text-white/30"}>
+                                                                {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+                                                            </span>
+                                                            <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-white" : "text-white/30"}>
+                                                                {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
+                                                    <td className="px-4 text-right font-black text-lg">
+                                                        ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* 1. PRODUCT VARIANCE FOOTNOTE */}
+                                    <div className="mt-4 text-[10px] font-black uppercase tracking-tight border-b border-black pb-1">
+                                        *PHOTO MAY VARY FROM ACTUAL UNIT
+                                    </div>
+
+                                    {/* 2. LOGISTICS & NOTES GRID */}
+                                    <div className="mt-4 border border-black text-[9.5px] leading-tight">
+                                        <div className="grid grid-cols-6 border-b border-black">
+                                            <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Included:</div>
+                                            <div className="col-span-5 p-2 bg-yellow-100">
+                                                <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+                                                <p>Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-6 border-b border-black">
+                                            <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Excluded:</div>
+                                            <div className="col-span-5 p-2 bg-yellow-100">
+                                                <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
+                                                <p>• Freight charges, arrastre, and other processing fees.</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-6 bg-yellow-50">
+                                            <div className="col-span-1 p-2 font-black border-r border-black">Note:</div>
+                                            <div className="col-span-5 p-2 italic">
+                                                Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.
+                                                <span className="font-black underline block mt-1 text-red-600">In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. EXTENDED TERMS & CONDITIONS */}
+                                    <div className="mt-6 border-t-2 border-black pt-2">
+                                        <h3 className="bg-[#121212] text-white px-3 py-1 text-[10px] font-black inline-block mb-4 uppercase">Terms and Conditions</h3>
+
+                                        <div className="grid grid-cols-12 gap-y-4 text-[9px]">
+                                            <div className="col-span-2 font-black uppercase">Availability:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                <p>*5-7 days if on stock upon receipt of approved PO.</p>
+                                                <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
+                                            </div>
+
+                                            <div className="col-span-2 font-black uppercase">Warranty:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
+                                            </div>
+
+                                            <div className="col-span-2 font-black uppercase">SO Validity:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100">
+                                                <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. Any order not confirmed/verified within this period will be <span className="text-red-600 font-black">automatically cancelled</span>.</p>
+                                            </div>
+
+                                            <div className="col-span-2 font-black uppercase">Storage:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of <span className="text-red-600 font-black">10% of the value of the orders per month (0.33% per day)</span>.</p>
+                                            </div>
+
+                                            <div className="col-span-2 font-black uppercase">Bank Details:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100 grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="font-black">METROBANK (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
+                                                    <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="font-black">BDO (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
+                                                    <p>Account Number: {isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="col-span-2 font-black uppercase">Validity:</div>
+                                            <div className="col-span-10 pl-4 border-l border-gray-100">
+                                                <p className="text-red-600 font-black underline">Thirty (30) calendar days from the date of this offer.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 4. OFFICIAL SIGNATURE HIERARCHY */}
+                                    <div className="mt-12 pt-4 border-t-4 border-blue-700 pb-20">
+                                        <p className="text-[9px] mb-8 font-medium">
+                                            Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.
+                                            Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-x-20 gap-y-12">
+                                            {/* Left Side: Internal Team */}
+                                            <div className="space-y-10">
+                                                <div>
+                                                    <p className="italic text-[10px] font-black mb-4">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                                                    <div className="border-b border-black w-64"></div>
+                                                    <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
+                                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Representative</p>
+                                                    <p className="text-[8px] italic">{payload.salescontact} | {payload.salesemail}</p>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
+                                                    <div className="border-b border-black w-64 mt-4"></div>
+                                                    <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
+                                                    <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesmanagername}</p>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase text-gray-400">Noted By:</p>
+                                                    <div className="border-b border-black w-64 mt-4"></div>
+                                                    <p className="text-[11px] font-black underline mt-1"></p>
+                                                    <p className="text-[9px] font-black uppercase tracking-tighter"></p>
+                                                </div>
+                                            </div>
+
+                                            {/* Right Side: Client Side */}
+                                            <div className="space-y-10 flex flex-col items-end">
+                                                <div className="w-64">
+                                                    <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2">
+                                                        Company Authorized Representative PLEASE SIGN OVER PRINTED NAME
+                                                    </div>
+                                                    <div className="border-b border-black w-full mt-1"></div>
+                                                </div>
+
+                                                <div className="w-64">
+                                                    <div className="border-b border-black w-full mt-10"></div>
+                                                    <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Payment Release Date</p>
+                                                </div>
+
+                                                <div className="w-64">
+                                                    <div className="border-b border-black w-full mt-10"></div>
+                                                    <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Position in the Company</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ACTION BUTTONS BAR */}
+                                <div className="p-8 bg-white border-t border-gray-100 flex justify-between items-center sticky bottom-0 z-50">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setIsPreviewOpen(false)}
+                                        className="rounded-none border-2 border-[#121212] font-black uppercase text-[10px] px-8 h-12 hover:bg-gray-50 transition-all"
+                                    >
+                                        Back to Editor
+                                    </Button>
+
+                                    <div className="flex gap-4 items-center">
+                                        <Button
+                                            onClick={() => { handleDownloadQuotation(); setIsPreviewOpen(false); }}
+                                            className="bg-[#121212] hover:bg-black rounded-full px-10 h-12 text-white font-black uppercase text-[11px] flex gap-3 items-center shadow-2xl hover:scale-[1.02] transition-all"
+                                            hidden={true}
+                                        >
+                                            <Download className="w-4 h-4 text-blue-400" />
+                                            Generate Official (.xlsx)
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </DialogContent>
             </Dialog>
         </>
