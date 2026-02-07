@@ -40,7 +40,6 @@ interface NationalRankingProps {
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<[Date | null, Date | null]>
   >;
-  userId: string;
 }
 
 export function NationalRanking({
