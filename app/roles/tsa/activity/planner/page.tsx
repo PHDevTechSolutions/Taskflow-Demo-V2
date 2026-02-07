@@ -269,6 +269,7 @@ function DashboardContent() {
                                         email={userDetails.email}
                                         contact={userDetails.contact}
                                         tsmname={userDetails.tsmname}
+                                        tsm={userDetails.tsm}
                                         managername={userDetails.managername}
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}

@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check } from "lucide-react";
+import {
+  CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle,
+  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +14,7 @@ import { toast } from "sonner";
 import { CreateActivityDialog } from "../dialog/create";
 import { CancelledDialog } from "../dialog/cancelled";
 import { DoneDialog } from "../dialog/done";
+import { TransferDialog } from "../dialog/transfer";
 
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +70,7 @@ interface ScheduledProps {
   email: string;
   contact: string;
   tsmname: string;
+  tsm: string;
   managername: string;
   dateCreatedFilterRange: DateRange | undefined;
   setDateCreatedFilterRangeAction: React.Dispatch<
@@ -75,6 +80,7 @@ interface ScheduledProps {
 
 export const Scheduled: React.FC<ScheduledProps> = ({
   referenceid,
+  tsm,
   target_quota,
   firstname,
   lastname,
@@ -97,6 +103,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
+
+  const [dialogTransferOpen, setDialogTransferOpen] = useState(false);
+
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -219,7 +228,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   }, [referenceid, fetchActivities, fetchHistory]);
 
   function isDelivered(status: string) {
-    return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress"].includes(status);
+    return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress", "Transfer"].includes(status);
   }
 
   function getOverdueDays(scheduledDate: string): number {
@@ -399,6 +408,54 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   };
 
+  const openTransferDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogTransferOpen(true);
+  };
+
+  const handleConfirmTransfer = async (selectedUserReferenceID: string | undefined) => {
+    if (!selectedActivityId) return;
+    if (!selectedUserReferenceID) {
+      toast.error("Please select a user to transfer to.");
+      return;
+    }
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogTransferOpen(false);
+
+      const res = await fetch("/api/act-transfer-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedActivityId,
+          newReferenceID: selectedUserReferenceID,
+        }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchActivities();
+
+      toast.success("Transaction marked as Transfer.");
+    } catch {
+      toast.error("An error occurred while updating status.");
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const selectedActivity = activities.find((a) => a.id === selectedActivityId);
+  const selectedTicketReferenceNumber = selectedActivity?.ticket_reference_number || null;
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -520,6 +577,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         >
                           <AlertCircle />
                         </Button>
+
+                        {item.relatedHistoryItems.some(
+                          (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
+                        ) && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={updatingId === item.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTransferDialog(item.id);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Repeat />
+                            </Button>
+                          )}
+
                       </div>
                     </div>
 
@@ -791,6 +866,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         onConfirm={handleConfirmDone}
         loading={updatingId !== null}
       />
+
+      <TransferDialog
+        open={dialogTransferOpen}
+        onOpenChange={setDialogTransferOpen}
+        onConfirm={(selectedUser) => {
+          handleConfirmTransfer(selectedUser?.ReferenceID);
+          setDialogTransferOpen(false);
+        }}
+        loading={updatingId === selectedActivityId}
+        ticketReferenceNumber={selectedTicketReferenceNumber}
+        tsm={selectedActivity?.tsm}
+      />
+
 
       <CancelledDialog
         open={dialogOpen}

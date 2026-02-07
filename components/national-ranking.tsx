@@ -13,8 +13,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 
 interface HistoryItem {
-  referenceid: string; // TSA ReferenceID
-  tsm: string;         // TSM ReferenceID
+  referenceid: string;
+  tsm: string;
   call_status?: string;
   date_created: string;
 }
