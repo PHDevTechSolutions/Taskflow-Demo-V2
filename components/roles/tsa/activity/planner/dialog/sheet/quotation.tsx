@@ -12,7 +12,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import EditableTable from "@/components/EditableTable";
-import { Trash, Download, ImagePlus, Plus, RefreshCcw } from "lucide-react";
+import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye } from "lucide-react";
+// Firebase Project Dependencies
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs
+} from "firebase/firestore";
+// Ensure 'db' is initialized in your firebase configuration file
+import { db } from "@/lib/firebase";
 
 interface Props {
   step: number;
@@ -87,6 +97,7 @@ interface Product {
   id: number;
   title: string;
   description?: string;
+  brand?: string;
   images?: Array<{
     src: string;
   }>;
@@ -97,6 +108,7 @@ interface SelectedProduct extends Product {
   uid: string;
   quantity: number;
   price: number;
+  discount: number;
   isDiscounted?: boolean;
 }
 
@@ -121,6 +133,7 @@ interface ManualProduct {
   title: string;
   skus: string[];
   description: string;
+  brand?: string;
   images: { src: string }[];
   base64Attachment?: string;
   imageFilename?: string;
@@ -630,6 +643,116 @@ export function QuotationSheet(props: Props) {
     } catch (error) {
       toast.error("Failed to download quotation. Please try again.");
     }
+  };
+
+  // Routing for product retrieval
+  const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+
+  // Ensures Firebase documents match the existing UI table keys
+  const mapFirebaseToSchema = (doc: any) => ({
+    id: doc.id,
+    title: doc.title || "Untitled Product",
+    // Ensure price is a number for the calculation logic
+    price: Number(doc.price) || 0,
+    // Map Firebase "desc" or "body" to the expected "description" key
+    description: doc.description || doc.body_html || "",
+    brand: doc.brand || "",
+    // Map images to an array format expected by the thumbnail logic
+    images: doc.image_url ? [{ src: doc.image_url }] : (doc.images || []),
+    skus: doc.sku ? [doc.sku] : [],
+    uid: `firebase-${doc.id}` // Unique identifier for key stability
+  });
+
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+
+  const getQuotationPayload = () => {
+    const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+    const emailUsername = email?.split("@")[0] ?? "";
+
+    let emailDomain = "";
+    if (quotationType === "Disruptive Solutions Inc") {
+      emailDomain = "disruptivesolutionsinc.com";
+    } else if (quotationType === "Ecoshift Corporation") {
+      emailDomain = "ecoshiftcorp.com";
+    } else {
+      emailDomain = email?.split("@")[1] ?? "";
+    }
+
+    const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+
+    const items = selectedProducts.map((p, index) => {
+      const qty = p.quantity ?? 0;
+      const unitPrice = p.price ?? 0;
+      const isDiscounted = p.isDiscounted ?? false;
+
+      // Logic mirrored from handleDownloadQuotation
+      const baseAmount = qty * unitPrice;
+      const discountedAmount = isDiscounted && discount > 0 ? (baseAmount * discount) / 100 : 0;
+      const totalAmount = baseAmount - discountedAmount;
+
+      return {
+        itemNo: index + 1,
+        qty,
+        photo: p.images?.[0]?.src ?? "",
+        title: p.title ?? "",
+        sku: p.skus?.join(", ") ?? "",
+        description: p.description ?? "",
+        unitPrice,
+        totalAmount,
+      };
+    });
+
+    const handleDownloadPDF = async () => {
+      const payload = getQuotationPayload();
+
+      try {
+        let apiEndpoint = "/api/quotation/disruptive/pdf"; // Adjust based on your API structure
+        if (quotationType === "Ecoshift Corporation") {
+          apiEndpoint = "/api/quotation/ecoshift/pdf";
+        }
+
+        const resExport = await fetch(apiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resExport.ok) throw new Error("PDF Generation Failed");
+
+        const blob = await resExport.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Quotation_${payload.referenceNo}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success("PDF Export Successful");
+      } catch (error) {
+        console.error("PDF Protocol Error:", error);
+        toast.error("Failed to generate PDF.");
+      }
+    };
+
+    return {
+      referenceNo: quotationNumber ?? "DRAFT-XXXX",
+      date: new Date().toLocaleDateString(),
+      companyName: company_name ?? "",
+      address: address ?? "",
+      telNo: contact_number ?? "",
+      email: email_address ?? "",
+      attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
+      subject: "For Quotation",
+      items,
+      vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+      totalPrice: Number(quotationAmount ?? 0),
+      salesRepresentative: salesRepresentativeName,
+      salesemail,
+      salescontact: contact ?? "",
+      salestsmname: tsmname ?? "",
+      salesmanagername: managername ?? "",
+    };
   };
 
   return (
@@ -1266,6 +1389,7 @@ export function QuotationSheet(props: Props) {
         </div>
       )}
 
+      {/* product selection dialog/modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className={`max-h-[90vh] overflow-y-auto p-6 transition-all duration-300 ${selectedProducts.length === 0
@@ -1291,53 +1415,119 @@ export function QuotationSheet(props: Props) {
 
             {/* Left side: Search + checkbox selected */}
             <div className="flex flex-col gap-4 overflow-y-auto pr-2">
-              {!noProductsAvailable && !isManualEntry && (
-                <>
-                  <FieldLabel>Product Name</FieldLabel>
-                  <Input
-                    type="text"
-                    className="uppercase"
-                    value={searchTerm}
-                    placeholder="Search product..."
-                    onChange={async (e) => {
-                      if (isManualEntry) return;
-                      const value = e.target.value.toLowerCase();
-                      setSearchTerm(value);
-
-                      if (value.length < 2) {
-                        setSearchResults([]);
-                        return;
-                      }
-
-                      setIsSearching(true);
-                      try {
-                        const res = await fetch(`/api/shopify/products?q=${value}`);
-                        let data = await res.json();
-                        let products: Product[] = data.products || [];
-
-                        products = products.filter((product) => {
-                          const titleMatch = product.title.toLowerCase().includes(value);
-                          const skuMatch = product.skus?.some((sku) =>
-                            sku.toLowerCase().includes(value)
-                          );
-                          return titleMatch || skuMatch;
-                        });
-
-                        setSearchResults(products);
-                      } catch (err) {
-                        console.error(err);
-                      }
-                      setIsSearching(false);
+              <div className="flex flex-col gap-4 sticky top-0 bg-white z-10 pb-2">
+                <div className="flex border rounded-md overflow-hidden border-gray-300">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductSource('shopify');
+                      setSearchTerm("");       // Protocol: Reset input
+                      setSearchResults([]);   // Protocol: Clear results
                     }}
-                  />
-                  {isSearching && <p className="text-sm mt-1">Searching...</p>}
-                </>
-              )}
+                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'shopify' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                  >
+                    SHOPIFY
+                  </button>
+                  <button
+                    type="button"
+                    hidden={true}
+                    onClick={() => {
+                      setProductSource('firebase');
+                      setSearchTerm("");       // Protocol: Reset input
+                      setSearchResults([]);   // Protocol: Clear results
+                    }}
+                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'firebase' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                  >
+                    PRODUCT DATABASE
+                  </button>
+                </div>
+
+                {!isManualEntry && (
+                  <>
+                    <FieldLabel>Product Name</FieldLabel>
+                    <Input
+                      type="text"
+                      className="uppercase"
+                      value={searchTerm}
+                      onChange={async (e) => {
+                        if (isManualEntry) return;
+                        const rawValue = e.target.value;
+                        setSearchTerm(rawValue);
+
+                        if (rawValue.length < 2) {
+                          setSearchResults([]);
+                          return;
+                        }
+
+                        setIsSearching(true);
+                        try {
+                          if (productSource === 'shopify') {
+                            const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
+                            let data = await res.json();
+                            setSearchResults(data.products || []);
+                          } else {
+                            const searchUpper = rawValue.toUpperCase();
+                            const q = query(collection(db, "products"));
+                            const querySnapshot = await getDocs(q);
+
+                            const firebaseResults = querySnapshot.docs.map(doc => {
+                              const data = doc.data();
+
+                              // 1. Build Specifications HTML and Searchable Text
+                              let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                              let rawSpecsText = "";
+
+                              if (data.technicalSpecs?.[0]?.rows) {
+                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
+                                data.technicalSpecs[0].rows.forEach((row: any) => {
+                                  rawSpecsText += ` ${row.name} ${row.value}`;
+                                  specsHtml += `<tr>
+          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
+          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
+        </tr>`;
+                                });
+                                specsHtml += `</table>`;
+                              }
+
+                              // 2. Map to Product format and resolve ID mismatch
+                              return {
+                                // Convert string ID to a hash number if your system strictly requires numbers
+                                id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
+                                title: data.name || "No Name",
+                                price: data.salePrice || data.regularPrice || 0,
+                                description: specsHtml,
+                                images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                skus: data.sku ? [data.sku] : [],
+                                discount: 0,
+                                // We attach the search string temporarily for the filter
+                                tempSearchMetadata: (data.name + " " + (data.sku || "") + " " + rawSpecsText).toUpperCase()
+                              } as any; // Use 'as any' temporarily to bypass the strict Product definition
+                            })
+                              .filter(product => {
+                                // 3. Perform the deep "Contains" search
+                                return product.tempSearchMetadata.includes(searchUpper);
+                              }) as Product[]; // Cast the final filtered array back to Product[]
+
+                            setSearchResults(firebaseResults);
+                          }
+                        } catch (err) {
+                          console.error("Search Protocol Failure:", err);
+                        } finally {
+                          setIsSearching(false);
+                        }
+                      }}
+                    />
+                    {isSearching && <p className="text-[10px] animate-pulse">Searching Source...</p>}
+                  </>
+                )}
+              </div>
 
               {!isManualEntry && searchResults.length > 0 && (
                 <>
                   <div className="text-xs text-green-600 mb-2">
-                    Shopify Product List | Note: you can choose the same products.
+                    Note: you can choose the same products.
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1355,6 +1545,7 @@ export function QuotationSheet(props: Props) {
                                     uid: crypto.randomUUID(),
                                     quantity: 1,
                                     price: 0,
+                                    discount: 0,
                                     description: item.description || "",
                                   },
                                 ]);
@@ -1608,6 +1799,27 @@ export function QuotationSheet(props: Props) {
                                   : "₱0.00"}
                               </td>
 
+                              {/* <td className="border border-gray-300 p-2 text-right">
+                                <div className="flex items-center gap-1 justify-end">
+                                  <span className="text-gray-400 text-xs">₱</span>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={p.discount || 0}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                      setSelectedProducts((prev) => {
+                                        const copy = [...prev];
+                                        copy[idx] = { ...copy[idx], discount: val };
+                                        return copy;
+                                      });
+                                    }}
+                                    className="border-none shadow-none w-full p-2"
+                                  />
+                                </div>
+                              </td> */}
+
                               <td className="border border-gray-300 p-2 font-semibold text-right">
                                 ₱{totalAfterDiscount.toFixed(2)}
                               </td>
@@ -1671,24 +1883,343 @@ export function QuotationSheet(props: Props) {
 
           <DialogFooter className="flex items-center justify-between">
             {/* Left side: Close button */}
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Close
-            </Button>
-
-            {/* Right side: Total + Download button */}
             {selectedProducts.length > 0 && (
               <div className="flex items-center gap-4">
                 <div className="text-sm font-semibold">
                   Overall Total: ₱{quotationAmount}
                 </div>
-                <div className="flex flex-col items-start">
+                {/* <div className="flex flex-col items-start">
                   <Button className="bg-orange-500" onClick={handleDownloadQuotation}>
                     <Download /> Preview Sample
                   </Button>
-                </div>
+                </div> */}
+                {/* Inside the main selection modal footer */}
+                <Button
+                  className="bg-[#121212] hover:bg-black text-white px-8 flex gap-2 items-center"
+                  onClick={() => setIsPreviewOpen(true)} // Changed from handleDownloadQuotation
+                >
+                  <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
+                </Button>
               </div>
             )}
+
+            {/* Right side: Total + Download button */}
+
+
+            <Button className="bg-red-600 hover:bg-red-500" variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PREVIEW PROTOCOL MODAL */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent
+          className="max-w-[1000px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 border-none bg-[#F9FAFA] shadow-2xl"
+          style={{ maxWidth: "950px", width: "100vw" }}
+        >
+          {(() => {
+            const payload = getQuotationPayload();
+
+            // 1. BRAND SELECTION LOGIC
+            const isEcoshift = quotationType === "Ecoshift Corporation";
+
+            // 2. ASSET PATH RESOLUTION
+            const headerImagePath = isEcoshift
+              ? "/ecoshift-banner.png"
+              : "/disruptive-banner.png";
+
+            return (
+              <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
+
+                {/* CORPORATE BRANDING HEADER */}
+                <div className="w-full flex justify-center py-6 border-b border-gray-100 bg-white">
+                  <div className="w-full max-w-[900px] h-[110px] relative flex items-center justify-center overflow-hidden">
+                    <img
+                      key={quotationType}
+                      src={headerImagePath}
+                      alt={`${quotationType} Header`}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `
+                      <div class="w-full h-full bg-[#121212] flex flex-col items-center justify-center text-white">
+                        <span class="font-black text-2xl tracking-[0.2em] uppercase">${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</span>
+                        <span class="text-[10px] tracking-[0.5em] font-light opacity-70">OFFICIAL QUOTATION PROTOCOL</span>
+                      </div>
+                    `;
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="px-12 py-8 space-y-1">
+                  {/* REFERENCE & DATE SECTION */}
+                  <div className="text-right text-[11px] font-medium uppercase space-y-1">
+                    <p className="flex justify-end gap-2">
+                      <span className="font-black text-[#121212]">Reference No:</span>
+                      <span className="text-gray-600">{payload.referenceNo}</span>
+                    </p>
+                    <p className="flex justify-end gap-2">
+                      <span className="font-black text-[#121212]">Date:</span>
+                      <span className="text-gray-600">{payload.date}</span>
+                    </p>
+                  </div>
+
+                  {/* CLIENT INFORMATION GRID */}
+                  <div className="mt-8 border-l border-r border-black">
+                    {[
+                      { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
+                      { label: "ADDRESS", value: payload.address },
+                      { label: "TEL NO", value: payload.telNo },
+                      { label: "EMAIL ADDRESS", value: payload.email, borderBottom: true },
+                      { label: "ATTENTION", value: payload.attention },
+                      { label: "SUBJECT", value: payload.subject, borderBottom: true },
+                    ].map((info, i) => (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-6 py-2 px-4 items-center min-h-[35px]
+                    ${info.borderTop ? 'border-t border-black' : ''} 
+                    ${info.borderBottom ? 'border-b border-black' : ''}
+                  `}
+                      >
+                        <span className="col-span-1 font-black text-[10px] text-[#121212]">{info.label}:</span>
+                        <span className="col-span-5 text-[11px] font-bold text-gray-700 pl-4">{info.value || "---"}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] italic py-8 text-gray-500 font-medium">
+                    We are pleased to offer you the following products for consideration:
+                  </p>
+
+                  {/* ITEM SPECIFICATION TABLE */}
+                  <div className="border border-black overflow-hidden shadow-sm">
+                    <table className="w-full text-[10px] border-collapse">
+                      <thead>
+                        <tr className="bg-[#F9FAFA] border-b border-black font-black uppercase text-[#121212]">
+                          <th className="p-3 border-r border-black w-16 text-center">ITEM NO</th>
+                          <th className="p-3 border-r border-black w-16 text-center">QTY</th>
+                          <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
+                          <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
+                          <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                          <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-black">
+                        {payload.items.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
+                            <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
+                            <td className="p-3 border-r border-black align-top bg-white">
+                              {item.photo ? (
+                                <img src={item.photo} className="w-24 h-24 object-contain mx-auto mix-blend-multiply" alt="sku-ref" />
+                              ) : (
+                                <div className="w-24 h-24 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic">No Image</div>
+                              )}
+                            </td>
+                            <td className="p-4 border-r border-black align-top">
+                              <p className="font-black text-[#121212] text-xs uppercase mb-1">{item.title}</p>
+                              <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
+                              <div
+                                className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: item.description }}
+                              />
+                            </td>
+                            <td className="p-4 text-right border-r border-black align-top font-medium">
+                              ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-4 text-right font-black align-top text-[#121212]">
+                              ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+
+                        {/* SUMMARY BAR */}
+                        <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
+                          <td colSpan={2} className="border-r border-white/20"></td>
+                          <td className="px-4 border-r border-white/20 font-black text-red-400 italic text-[9px] uppercase">Tax Type:</td>
+                          <td className="px-4 border-r border-white/20">
+                            <div className="flex gap-4 text-[9px] font-black uppercase tracking-tight">
+                              <span className={payload.vatTypeLabel === "VAT Inc" ? "text-white" : "text-white/30"}>
+                                {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                              </span>
+                              <span className={payload.vatTypeLabel === "VAT Exe" ? "text-white" : "text-white/30"}>
+                                {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+                              </span>
+                              <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-white" : "text-white/30"}>
+                                {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
+                          <td className="px-4 text-right font-black text-lg">
+                            ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 1. PRODUCT VARIANCE FOOTNOTE */}
+                  <div className="mt-4 text-[10px] font-black uppercase tracking-tight border-b border-black pb-1">
+                    *PHOTO MAY VARY FROM ACTUAL UNIT
+                  </div>
+
+                  {/* 2. LOGISTICS & NOTES GRID */}
+                  <div className="mt-4 border border-black text-[9.5px] leading-tight">
+                    <div className="grid grid-cols-6 border-b border-black">
+                      <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Included:</div>
+                      <div className="col-span-5 p-2 bg-yellow-100">
+                        <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+                        <p>Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-6 border-b border-black">
+                      <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Excluded:</div>
+                      <div className="col-span-5 p-2 bg-yellow-100">
+                        <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
+                        <p>• Freight charges, arrastre, and other processing fees.</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-6 bg-yellow-50">
+                      <div className="col-span-1 p-2 font-black border-r border-black">Note:</div>
+                      <div className="col-span-5 p-2 italic">
+                        Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.
+                        <span className="font-black underline block mt-1 text-red-600">In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. EXTENDED TERMS & CONDITIONS */}
+                  <div className="mt-6 border-t-2 border-black pt-2">
+                    <h3 className="bg-[#121212] text-white px-3 py-1 text-[10px] font-black inline-block mb-4 uppercase">Terms and Conditions</h3>
+
+                    <div className="grid grid-cols-12 gap-y-4 text-[9px]">
+                      <div className="col-span-2 font-black uppercase">Availability:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p>*5-7 days if on stock upon receipt of approved PO.</p>
+                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">Warranty:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">SO Validity:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100">
+                        <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. Any order not confirmed/verified within this period will be <span className="text-red-600 font-black">automatically cancelled</span>.</p>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">Storage:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of <span className="text-red-600 font-black">10% of the value of the orders per month (0.33% per day)</span>.</p>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">Bank Details:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="font-black">METROBANK (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
+                          <p>Account Number: 243-7-24354164-2</p>
+                        </div>
+                        <div>
+                          <p className="font-black">BDO (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
+                          <p>Account Number: 0021-8801-9258</p>
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">Validity:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100">
+                        <p className="text-red-600 font-black underline">Thirty (30) calendar days from the date of this offer.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. OFFICIAL SIGNATURE HIERARCHY */}
+                  <div className="mt-12 pt-4 border-t-4 border-blue-700 pb-20">
+                    <p className="text-[9px] mb-8 font-medium">
+                      Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.
+                      Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-x-20 gap-y-12">
+                      {/* Left Side: Internal Team */}
+                      <div className="space-y-10">
+                        <div>
+                          <p className="italic text-[10px] font-black mb-4">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                          <div className="border-b border-black w-64"></div>
+                          <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Representative</p>
+                          <p className="text-[8px] italic">{payload.salescontact} | {payload.salesemail}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
+                          <div className="border-b border-black w-64 mt-4"></div>
+                          <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-gray-400">Noted By:</p>
+                          <div className="border-b border-black w-64 mt-4"></div>
+                          <p className="text-[11px] font-black underline mt-1"></p>
+                          <p className="text-[9px] font-black uppercase tracking-tighter"></p>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Client Side */}
+                      <div className="space-y-10 flex flex-col items-end">
+                        <div className="w-64">
+                          <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2">
+                            Company Authorized Representative PLEASE SIGN OVER PRINTED NAME
+                          </div>
+                          <div className="border-b border-black w-full mt-1"></div>
+                        </div>
+
+                        <div className="w-64">
+                          <div className="border-b border-black w-full mt-10"></div>
+                          <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Payment Release Date</p>
+                        </div>
+
+                        <div className="w-64">
+                          <div className="border-b border-black w-full mt-10"></div>
+                          <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Position in the Company</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ACTION BUTTONS BAR */}
+                <div className="p-8 bg-white border-t border-gray-100 flex justify-between items-center sticky bottom-0 z-50">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsPreviewOpen(false)}
+                    className="rounded-none border-2 border-[#121212] font-black uppercase text-[10px] px-8 h-12 hover:bg-gray-50 transition-all"
+                  >
+                    Back to Editor
+                  </Button>
+
+                  <div className="flex gap-4 items-center">
+                    <Button
+                      onClick={() => { handleDownloadQuotation(); setIsPreviewOpen(false); }}
+                      className="bg-[#121212] hover:bg-black rounded-full px-10 h-12 text-white font-black uppercase text-[11px] flex gap-3 items-center shadow-2xl hover:scale-[1.02] transition-all"
+                    >
+                      <Download className="w-4 h-4 text-blue-400" />
+                      Generate Official (.xlsx)
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </>
