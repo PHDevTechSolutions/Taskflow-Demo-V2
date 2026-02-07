@@ -2163,7 +2163,7 @@ export function QuotationSheet(props: Props) {
                           <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
                           <div className="border-b border-black w-64 mt-4"></div>
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesmanagername}</p>
                         </div>
 
                         <div>
