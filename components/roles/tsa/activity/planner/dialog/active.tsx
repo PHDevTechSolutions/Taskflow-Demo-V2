@@ -71,7 +71,7 @@ const INDUSTRY_OPTIONS = [
   "OTHER",
 ];
 
-const TYPECLIENT_OPTIONS = ["TSA CLIENT"];
+const TYPECLIENT_OPTIONS = ["TSA CLIENT", "New Client"];
 
 // Simple email validation helper
 function isValidEmail(email: string): boolean {
@@ -928,7 +928,9 @@ export function AccountDialog({
                   </FieldContent>
                   <RadioGroup
                     value={formData.type_client}
-                    onValueChange={(val) => setFormData((prev) => ({ ...prev, type_client: val }))}
+                    onValueChange={(val) =>
+                      setFormData((prev) => ({ ...prev, type_client: val }))
+                    }
                   >
                     {TYPECLIENT_OPTIONS.map((typeClient) => (
                       <FieldLabel key={typeClient}>
@@ -936,11 +938,14 @@ export function AccountDialog({
                           <FieldContent>
                             <FieldTitle>{typeClient}</FieldTitle>
                             <FieldDescription>
-                              {typeClient === "TSA CLIENT"
-                                ? "Client was assisted and provided with the needed information or support."
-                                : ""}
+                              {typeClient === "TSA CLIENT" &&
+                                "Client was assisted and provided with the needed information or support."}
+
+                              {typeClient === "New Client" &&
+                                "Client is new and is receiving assistance or information for the first time."}
                             </FieldDescription>
                           </FieldContent>
+
                           <RadioGroupItem value={typeClient} />
                         </Field>
                       </FieldLabel>

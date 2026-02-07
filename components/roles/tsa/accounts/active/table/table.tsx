@@ -96,7 +96,7 @@ export function AccountsTable({
 
     const filteredData = useMemo(() => {
         // Allowed type_client values for display (normalize to lowercase)
-        const allowedTypes = ["Top 50", "Next 30", "Balance 20", "TSA CLIENT", "CSR CLIENT"];
+        const allowedTypes = ["Top 50", "Next 30", "Balance 20", "TSA CLIENT", "CSR CLIENT", "New Client"];
         const normalizedAllowedTypes = allowedTypes.map(t => t.toLowerCase());
 
         // Start filtering, exclude removed (case-insensitive)
@@ -247,6 +247,32 @@ export function AccountsTable({
                 enableHiding: false,
             },
             {
+                id: "actions",
+                header: "Actions",
+                cell: ({ row }) => (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="cursor-pointer">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    setEditingAccount(row.original);
+                                    setIsEditDialogOpen(true);
+                                }}
+                                className="cursor-pointer"
+                            >
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ),
+            },
+            {
                 accessorKey: "company_name",
                 header: "Company Name",
                 cell: (info) => info.getValue(),
@@ -292,32 +318,6 @@ export function AccountsTable({
                     else if (value === "Inactive") variant = "destructive";
                     return <Badge variant={variant}>{value ?? "-"}</Badge>;
                 },
-            },
-            {
-                id: "actions",
-                header: "Actions",
-                cell: ({ row }) => (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="cursor-pointer">
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    setEditingAccount(row.original);
-                                    setIsEditDialogOpen(true);
-                                }}
-                                className="cursor-pointer"
-                            >
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                ),
             },
         ],
         []
@@ -494,6 +494,12 @@ export function AccountsTable({
         ).length;
     }, [filteredData]);
 
+    const newCount = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "new client"
+        ).length;
+    }, [filteredData]);
+
     const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
 
     const scheduledTodayCount = useMemo(() => {
@@ -544,6 +550,7 @@ export function AccountsTable({
                     <CardContent className="space-y-1 text-left max-w-xs mx-auto">
                         <p>TSA Client: <span className="font-bold text-blue-700">{tsaCount}</span></p>
                         <p>CSR Client: <span className="font-bold text-blue-700">{csrCount}</span></p>
+                        <p>New Client: <span className="font-bold text-blue-700">{newCount}</span></p>
                     </CardContent>
                 </Card>
 

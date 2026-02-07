@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { supabase } from "@/utils/supabase"; // Your direct supabase client import here
-import { useUser } from "@/contexts/UserContext";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -12,384 +10,301 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { supabase } from "@/utils/supabase";
 
 interface HistoryItem {
-  referenceid: string;
-  tsm: string;
-  type_activity: string;
-  call_status: string;
+  referenceid: string; // TSA ReferenceID
+  tsm: string;         // TSM ReferenceID
+  call_status?: string;
   date_created: string;
 }
 
-interface UserTransfer {
+interface UserInfo {
+  ReferenceID: string | null | undefined;
   Firstname: string;
   Lastname: string;
-  ReferenceID: string;
-  profilePicture: string;
+  profilePicture: string | null;
 }
 
-interface Props {
-  dateCreatedFilterRange: any;
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+interface RankedItem {
+  referenceid: string;
+  count: number;
+  firstname: string;
+  lastname: string;
+  profilePicture: string | null;
+  rank: number;
 }
 
-function Top3Ranking({
-  top3,
-  userTransfers,
-}: {
-  top3: { referenceid: string; successful: number }[];
-  userTransfers: UserTransfer[];
-}) {
-  const medals = ["🥇", "🥈", "🥉"];
-
-  return (
-    <Card className="mb-6 bg-white text-black z-50">
-      <CardHeader>
-        <CardTitle className="text-2xl">🏆 Ranking Achievements</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col md:flex-row justify-around gap-6 p-6">
-        {top3.length === 0 ? (
-          <p className="text-center w-full text-gray-500">No ranking data</p>
-        ) : (
-          top3.map(({ referenceid, successful }, index) => {
-            const user = userTransfers.find((u) => u.ReferenceID === referenceid);
-            return (
-              <div
-                key={referenceid}
-                className="flex flex-col items-center bg-yellow-50 rounded-xl shadow-md p-4 w-full max-w-xs"
-              >
-                <div className="text-5xl mb-2">{medals[index] || `#${index + 1}`}</div>
-                <img
-                  src={user?.profilePicture ?? "/Taskflow.png"}
-                  alt={user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
-                  className="w-30 h-30 rounded-full object-cover mb-2 border-4 border-yellow-400"
-                />
-                <h3 className="text-lg font-semibold text-center uppercase">
-                  {user ? `${user.Firstname} ${user.Lastname}` : "Unknown User"}
-                </h3>
-                <p className="text-yellow-700 font-bold text-xl mt-1">
-                  {successful} Successful Calls
-                </p>
-              </div>
-            );
-          })
-        )}
-      </CardContent>
-    </Card>
-  );
+interface NationalRankingProps {
+  dateCreatedFilterRange: [Date | null, Date | null];
+  setDateCreatedFilterRangeAction: React.Dispatch<
+    React.SetStateAction<[Date | null, Date | null]>
+  >;
+  userId: string;
 }
 
 export function NationalRanking({
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
-}: Props) {
+}: NationalRankingProps) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [userTransfers, setUserTransfers] = useState<UserTransfer[]>([]);
-  const [loadingTransfers, setLoadingTransfers] = useState(false);
-  const [errorTransfers, setErrorTransfers] = useState<string | null>(null);
+  const [startDate, endDate] = dateCreatedFilterRange;
 
-  const { userId } = useUser();
-
-  // Set default date range = Today if not set
-  useEffect(() => {
-    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) {
-      const today = new Date();
-      const start = new Date(today.setHours(0, 0, 0, 0));
-      const end = new Date(today.setHours(23, 59, 59, 999));
-      setDateCreatedFilterRangeAction({ from: start, to: end });
-    }
-  }, [dateCreatedFilterRange, setDateCreatedFilterRangeAction]);
-
-  // Fetch user transfers
-  useEffect(() => {
-    if (!userId) return;
-
-    const fetchUserTransfers = async () => {
-      setLoadingTransfers(true);
-      setErrorTransfers(null);
-      try {
-        const res = await fetch(
-          `/api/fetch-users?referenceid=${encodeURIComponent(userId)}`
-        );
-        if (!res.ok) throw new Error("Failed to fetch user transfers");
-        setUserTransfers(await res.json());
-      } catch (err: any) {
-        setErrorTransfers(err.message);
-      } finally {
-        setLoadingTransfers(false);
-      }
-    };
-
-    fetchUserTransfers();
-  }, [userId]);
-
-  // Fetch history **directly from Supabase with server side filter on call_status = Successful**
-  useEffect(() => {
-    const fetchAllHistory = async () => {
-      setLoadingHistory(true);
-      setErrorHistory(null);
-      try {
-        const { data, error } = await supabase
-          .from("history")
-          .select("referenceid, tsm, type_activity, call_status, date_created")
-          .eq("call_status", "Successful"); // Server side filter here
-
-        if (error) throw error;
-
-        setHistory(data ?? []);
-      } catch (err: any) {
-        setErrorHistory(err.message);
-      } finally {
-        setLoadingHistory(false);
-      }
-    };
-
-    fetchAllHistory();
-  }, []);
-
-  // Helper to check if date is within filter range
-  const isDateInRange = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return false;
-
-    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return true;
-
-    const from = new Date(dateCreatedFilterRange.from);
-    from.setHours(0, 0, 0, 0);
-
-    const to = new Date(dateCreatedFilterRange.to);
-    to.setHours(23, 59, 59, 999);
-
-    return date >= from && date <= to;
+  const formatDate = (date: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )}`;
   };
 
-  // Group successful calls by referenceid (Associates)
-  const groupedByReferenceid = useMemo(() => {
+  // Normalize users map for fast lookup and safe key access
+  const usersByRef = useMemo(() => {
+    const map = new Map<string, UserInfo>();
+    users.forEach((u) => {
+      if (typeof u.ReferenceID === "string" && u.ReferenceID.trim()) {
+        map.set(u.ReferenceID.trim().toLowerCase(), u);
+      }
+    });
+    return map;
+  }, [users]);
+
+  const assignRank = (items: Omit<RankedItem, "rank">[]): RankedItem[] => {
+    let lastCount = -1;
+    let rank = 0;
+
+    return items
+      .sort((a, b) => b.count - a.count)
+      .map((item, index) => {
+        if (item.count !== lastCount) {
+          rank = index + 1;
+          lastCount = item.count;
+        }
+        return { ...item, rank };
+      });
+  };
+
+  const fetchAllHistory = async () => {
+    let all: HistoryItem[] = [];
+    let from = 0;
+    const size = 1000;
+
+    while (true) {
+      let query = supabase
+        .from("history")
+        .select("referenceid, tsm, call_status, date_created")
+        .range(from, from + size - 1);
+
+      if (startDate && endDate) {
+        const start = formatDate(startDate);
+        const end = formatDate(endDate);
+
+        query =
+          start === end
+            ? query.eq("date_created", start)
+            : query.gte("date_created", start).lte("date_created", end);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      all = all.concat(data);
+      if (data.length < size) break;
+      from += size;
+    }
+
+    return all;
+  };
+
+  const fetchUsers = async () => {
+    const res = await fetch("/api/fetch-users");
+    if (!res.ok) throw new Error("Failed to fetch users");
+    return res.json();
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        setHistory(await fetchAllHistory());
+        setUsers(await fetchUsers());
+      } catch (e: any) {
+        setError(e.message || "Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [startDate, endDate]);
+
+  const tsaRank = useMemo(() => {
     const map = new Map<string, number>();
 
-    history.forEach((item) => {
-      if (!isDateInRange(item.date_created)) return;
-      if (!item.referenceid) return;
+    history.forEach((h) => {
+      if (h.call_status?.toLowerCase() !== "successful") return;
+      if (!h.referenceid) return;
 
-      // call_status filter is redundant here since we filtered server-side but keep for safety
-      const status = item.call_status?.trim().toLowerCase();
-      if (status !== "successful") return;
-
-      map.set(item.referenceid, (map.get(item.referenceid) ?? 0) + 1);
+      const key = h.referenceid.trim().toLowerCase();
+      map.set(key, (map.get(key) ?? 0) + 1);
     });
 
-    return Array.from(map.entries()).map(([referenceid, successful]) => ({
-      referenceid,
-      successful,
-    }));
-  }, [history, dateCreatedFilterRange]);
+    const items = Array.from(map.entries()).map(([ref, count]) => {
+      const user = usersByRef.get(ref);
+      return {
+        referenceid: ref,
+        count,
+        firstname: user?.Firstname || "Unknown",
+        lastname: user?.Lastname || "",
+        profilePicture: user?.profilePicture || null,
+      };
+    });
 
-  // Group successful calls by TSM (Managers)
-  const groupedByTsm = useMemo(() => {
+    return assignRank(items);
+  }, [history, usersByRef]);
+
+  const tsmRank = useMemo(() => {
     const map = new Map<string, number>();
 
-    history.forEach((item) => {
-      if (!isDateInRange(item.date_created)) return;
-      if (!item.tsm) return;
+    history.forEach((h) => {
+      if (h.call_status?.toLowerCase() !== "successful") return;
+      if (!h.tsm) return;
 
-      const status = item.call_status?.trim().toLowerCase();
-      if (status !== "successful") return;
-
-      map.set(item.tsm, (map.get(item.tsm) ?? 0) + 1);
+      const key = h.tsm.trim().toLowerCase();
+      map.set(key, (map.get(key) ?? 0) + 1);
     });
 
-    const array = Array.from(map.entries()).map(([tsm, total]) => {
-      const user = userTransfers.find((u) => u.ReferenceID === tsm);
-      return { tsm, user, total };
+    const items = Array.from(map.entries()).map(([ref, count]) => {
+      const user = usersByRef.get(ref);
+      return {
+        referenceid: ref,
+        count,
+        firstname: user?.Firstname || "Unknown",
+        lastname: user?.Lastname || "",
+        profilePicture: user?.profilePicture || null,
+      };
     });
 
-    const grandTotal = array.reduce((acc, cur) => acc + cur.total, 0);
-    return { array, grandTotal };
-  }, [history, dateCreatedFilterRange, userTransfers]);
+    return assignRank(items);
+  }, [history, usersByRef]);
 
-  // Sorting
-  const sortedGroupedByReferenceid = useMemo(
-    () => groupedByReferenceid.slice().sort((a, b) => b.successful - a.successful),
-    [groupedByReferenceid]
-  );
-  const grandTotalReferenceid = useMemo(
-    () => sortedGroupedByReferenceid.reduce((acc, cur) => acc + cur.successful, 0),
-    [sortedGroupedByReferenceid]
+  const overallTotal = useMemo(
+    () => tsaRank.reduce((a, b) => a + b.count, 0),
+    [tsaRank]
   );
 
-  const sortedGroupedByTsm = useMemo(
-    () => groupedByTsm.array.slice().sort((a, b) => b.total - a.total),
-    [groupedByTsm]
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setDateCreatedFilterRangeAction([
+      e.target.value ? new Date(e.target.value) : null,
+      endDate,
+    ]);
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setDateCreatedFilterRangeAction([
+      startDate,
+      e.target.value ? new Date(e.target.value) : null,
+    ]);
+
+  const renderTable = (data: RankedItem[]) => (
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50 text-left">
+        <tr>
+          <th className="px-4 py-2 text-xs">Rank</th>
+          <th className="px-4 py-2 text-xs">Agent</th>
+          <th className="px-4 py-2 text-xs">Successful</th>
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((item) => (
+          <tr key={item.referenceid} className="border-b">
+            <td className="px-4 py-2 text-xs font-semibold">{item.rank}</td>
+            <td className="px-4 py-2 text-xs">
+              <div className="flex items-center gap-2">
+                {item.profilePicture ? (
+                  <img
+                    src={item.profilePicture}
+                    className="w-8 h-8 rounded-full"
+                    alt={`${item.firstname} ${item.lastname}`}
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs">
+                    N/A
+                  </div>
+                )}
+                <div>
+                  <div className="font-semibold uppercase">
+                    {item.firstname} {item.lastname}
+                  </div>
+                  <div className="text-[10px] text-gray-500 uppercase">
+                    {item.referenceid}
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td className="px-4 py-2 text-xs font-bold">{item.count}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 
-  const top3 = sortedGroupedByReferenceid.slice(0, 3);
-
-  // Render
   return (
-    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto z-50">
-      {loadingHistory ? (
-        <div className="flex justify-center items-center py-10">
+    <main className="flex flex-col gap-4 p-4">
+      <div className="flex gap-4">
+        <label className="text-sm font-semibold">
+          Start Date:{" "}
+          <input
+            type="date"
+            value={startDate ? formatDate(startDate) : ""}
+            onChange={handleStartDateChange}
+            className="border rounded px-2 py-1"
+          />
+        </label>
+        <label className="text-sm font-semibold">
+          End Date:{" "}
+          <input
+            type="date"
+            value={endDate ? formatDate(endDate) : ""}
+            onChange={handleEndDateChange}
+            className="border rounded px-2 py-1"
+          />
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
           <Spinner className="size-10" />
         </div>
-      ) : errorHistory ? (
-        <div className="text-center text-red-500 py-10">{errorHistory}</div>
+      ) : error ? (
+        <div className="text-center text-red-500 py-10">{error}</div>
       ) : (
         <>
-          <Top3Ranking top3={top3} userTransfers={userTransfers} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-            {/* CARD 1: National Ranking (Associates) */}
-            <Card className="bg-white text-black">
-              <CardHeader>
-                <CardTitle>National Ranking</CardTitle>
-              </CardHeader>
-              <CardContent className="overflow-auto p-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Rank
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        User
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Successful Calls
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedGroupedByReferenceid.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-4 py-6 text-center text-gray-500"
-                        >
-                          No data available
-                        </td>
-                      </tr>
-                    ) : (
-                      sortedGroupedByReferenceid.map(
-                        ({ referenceid, successful }, index) => {
-                          const user = userTransfers.find(
-                            (u) => u.ReferenceID === referenceid
-                          );
-                          return (
-                            <tr key={referenceid}>
-                              <td className="px-4 py-2 text-xs">{index + 1}</td>
-                              <td className="px-4 py-2 flex items-center gap-2 capitalize font-semibold text-xs">
-                                {user ? (
-                                  <>
-                                    <img
-                                      src={user.profilePicture || "/Taskflow.png"}
-                                      alt={`${user.Firstname} ${user.Lastname}`}
-                                      className="w-8 h-8 rounded-full object-cover"
-                                    />
-                                    {user.Firstname} {user.Lastname}
-                                  </>
-                                ) : (
-                                  <span className="italic text-gray-400">
-                                    Unknown User
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-2 text-xs font-bold">
-                                {successful}
-                              </td>
-                            </tr>
-                          );
-                        }
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </CardContent>
-              <CardFooter>
-                {sortedGroupedByReferenceid.length > 0 && (
-                  <div className="flex justify-end items-center bg-gray-100 px-4 py-2 text-xs font-semibold rounded-md gap-2 w-full">
-                    <span>Grand Total</span>
-                    <Badge className="font-bold">{grandTotalReferenceid}</Badge>
+          <Card className="bg-white text-black p-4">
+            <CardContent className="p-0 overflow-auto">
+              <div className="flex gap-6">
+                {/* TSA Ranking Column */}
+                <div className="flex-1 min-w-0 border-r">
+                  <h3 className="font-semibold mb-2">TSA Ranking</h3>
+                  {renderTable(tsaRank)}
+                  <div className="flex justify-end mt-2 gap-2 text-xs font-semibold">
+                    <span>Overall Total</span>
+                    <Badge>{overallTotal}</Badge>
                   </div>
-                )}
-              </CardFooter>
-            </Card>
+                </div>
 
-            {/* CARD 2: TSM Summary (Managers) */}
-            <Card className="bg-white text-black">
-              <CardHeader>
-                <CardTitle>TSM Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="overflow-auto p-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Rank
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        TSM
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Total Successful Calls
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedGroupedByTsm.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-4 py-6 text-center text-gray-500"
-                        >
-                          No data available
-                        </td>
-                      </tr>
-                    ) : (
-                      sortedGroupedByTsm.map(({ tsm, user, total }, index) => (
-                        <tr key={tsm}>
-                          <td className="px-4 py-2 text-xs">{index + 1}</td>
-                          <td className="px-4 py-2 flex items-center gap-2 text-xs font-semibold capitalize">
-                            {user ? (
-                              <>
-                                <img
-                                  src={user.profilePicture || "/Taskflow.png"}
-                                  alt={`${user.Firstname || "Sette"} ${user.Lastname || "Hosena"
-                                    }`}
-                                  className="w-8 h-8 rounded-full object-cover"
-                                />
-                                {user.Firstname || "Sette"} {user.Lastname || "Hosena"}
-                              </>
-                            ) : (
-                              <>
-                                <img
-                                  src="/Taskflow.png"
-                                  alt="Sette Hosena"
-                                  className="w-8 h-8 rounded-full object-cover"
-                                />
-                                Sette Hosena
-                              </>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-xs">{total}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </CardContent>
-              <CardFooter>
-                {sortedGroupedByTsm.length > 0 && (
-                  <div className="flex justify-end items-center bg-gray-100 px-4 py-2 text-xs font-semibold rounded-md gap-2 w-full">
-                    <span>Grand Total</span>
-                    <Badge className="font-bold">{groupedByTsm.grandTotal}</Badge>
-                  </div>
-                )}
-              </CardFooter>
-            </Card>
-          </div>
+                {/* TSM Ranking Column */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold mb-2">TSM Ranking</h3>
+                  {renderTable(tsmRank)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
         </>
       )}
     </main>

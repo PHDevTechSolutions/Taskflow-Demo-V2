@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
 import { type DateRange } from "react-day-picker";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
-import { Item, ItemContent, ItemTitle, ItemDescription } from "@/components/ui/item";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button"
+import { Info, Eye } from "lucide-react";
 
 interface Activity {
+  activity_reference_number: string;  // for grouping
+  company_name?: string;
+  source?: string;
   status?: string;
   quotation_amount?: number | string;
   type_activity?: string;
-  so_amount?: number | string;
-  actual_sales?: number | string;
+  so_amount?: string;
+  actual_sales?: string;
 }
 
 interface SourceCardProps {
@@ -23,9 +26,8 @@ interface SourceCardProps {
 }
 
 export function QuotationCard({ activities, loading, error, dateRange }: SourceCardProps) {
-  const [showTooltip, setShowTooltip] = useState(false);
+  const [showComputation, setShowComputation] = useState(false);
 
-  // Count quotations with status "Quote-Done"
   const totalQuotationsDone = useMemo(() => {
     return activities.filter((a) => a.status === "Quote-Done").length;
   }, [activities]);
@@ -68,159 +70,67 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
 
   return (
     <Card className="bg-white text-black z-10">
-      <CardHeader className="flex justify-between items-center">
-        <div>
-          <CardTitle>Quotations</CardTitle>
-          <CardDescription>
-            Counts and totals for quotations (status "Quote-Done") and Sales Order Preparation
-          </CardDescription>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle>Quotations Summary</CardTitle>
+          <div className="flex space-x-2">
+
+            <Button variant="outline"
+              onClick={() => setShowComputation(!showComputation)}
+              aria-label="Show computation details"
+              className="text-blue-600 hover:text-blue-800"
+              title="Show computation details"
+            >
+              <Info />
+            </Button>
+
+          </div>
         </div>
 
-        <div
-          className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-          onFocus={() => setShowTooltip(true)}
-          onBlur={() => setShowTooltip(false)}
-          tabIndex={0}
-          aria-label="Information about quotations and sales orders"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        <table className="min-w-full text-sm text-left">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="py-2 px-4 border-b">Total Quotations (Quote-Done)</th>
+              <th className="py-2 px-4 border-b">Total Quotation Amount</th>
+              <th className="py-2 px-4 border-b">Total Sales Order Preparation</th>
+              <th className="py-2 px-4 border-b">Total SO Amount</th>
+              <th className="py-2 px-4 border-b">Quote to SO Conversion (%)</th>
+              <th className="py-2 px-4 border-b">Total Sales Invoice</th>
+              <th className="py-2 px-4 border-b">Quotation to SI Conversion (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="py-2 px-4 border-b">{totalQuotationsDone}</td>
+              <td className="py-2 px-4 border-b">₱ {totalQuotationAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td className="py-2 px-4 border-b">{totalSOPreparation}</td>
+              <td className="py-2 px-4 border-b">₱ {totalSOAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td className="py-2 px-4 border-b">{quoteToSOConversion.toFixed(2)}%</td>
+              <td className="py-2 px-4 border-b">₱ {totalSalesInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td className="py-2 px-4 border-b">{quotationToSIConversion.toFixed(2)}%</td>
+            </tr>
+          </tbody>
+        </table>
+        {showComputation && (
+          <div
+            className="mt-2 p-3 border border-blue-400 bg-blue-50 rounded text-sm text-blue-900"
+            role="region"
+            aria-live="polite"
+            aria-label="Computation explanation"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z"
-            />
-          </svg>
-
-          {showTooltip && (
-            <div className="absolute right-0 top-full mt-1 z-50 w-150 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
-              <ul className="list-disc list-inside space-y-1">
-                <li>Counts all Quotations with status "Quote-Done".</li>
-                <li>Sums Quotation Amount from Quotations.</li>
-                <li>Counts Sales Order Preparation based on Type of Activity.</li>
-                <li>Sums SO Amount from Sales Order Preparation activities.</li>
-                <li>Quote to SO Conversion (%) = (Total SO Preparation ÷ Total Quote Count) × 100</li>
-                <li>Total Sales Invoice = sum of Sales Invoice from all activities</li>
-                <li>Quotation to SI Conversion (%) = (Total Sales Invoice ÷ Total Quotation Amount) × 100</li>
-              </ul>
-            </div>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        {loading && <p className="text-sm text-gray-500">Loading...</p>}
-        {error && <p className="text-sm text-red-500">{error}</p>}
-
-        {!loading && !error && (
-          <div className="space-y-2">
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Total Quotations (Quote-Done)</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-blue-500">
-                      {totalQuotationsDone}
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Total Quotation Amount</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-green-500">
-                      ₱ {totalQuotationAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Total Sales Order Preparation</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-1 font-mono text-white bg-purple-500">
-                      {totalSOPreparation}
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Total SO Amount</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-pink-500">
-                      ₱ {totalSOAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Quote to SO Conversion (%)</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-teal-500">
-                      {quoteToSOConversion.toFixed(2)}%
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            {/* Total Sales Invoice */}
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Total Sales Invoice</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-yellow-500">
-                      ₱ {totalSalesInvoice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
-
-            {/* Quotation to SI Conversion */}
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
-              <ItemContent>
-                <div className="flex justify-between w-full">
-                  <ItemTitle className="text-xs font-medium">Quotation to SI Conversion (%)</ItemTitle>
-                  <ItemDescription>
-                    <Badge className="h-8 min-w-[2rem] rounded-full px-3 font-mono text-white bg-indigo-500">
-                      {quotationToSIConversion.toFixed(2)}%
-                    </Badge>
-                  </ItemDescription>
-                </div>
-              </ItemContent>
-            </Item>
+            <p><strong>Computation Details:</strong></p>
+            <ul className="list-disc list-inside">
+              <li><strong>Total Quotations:</strong> Counts all Quotations with status "Quote-Done".</li>
+              <li><strong>Total Quotation Amount:</strong> Sums Quotation Amount from Quotations.</li>
+              <li><strong>Total Sales Order Preparation:</strong> Counts Sales Order Preparation based on Type of Activity.</li>
+              <li><strong>Total SO Amount:</strong> Sums SO Amount from Sales Order Preparation activities.</li>
+              <li><strong>Quote to SO Conversion:</strong> Quote to SO Conversion (%) = (Total SO Preparation ÷ Total Quote Count) × 100</li>
+              <li><strong>Total Sales Invoice:</strong> Sum of all actual sales values.</li>
+              <li><strong>Quotation to SI Conversion:</strong> (Total Sales Invoice ÷ Total Quotation Amount) × 100</li>
+            </ul>
           </div>
         )}
-      </CardContent>
-
-      <CardFooter className="text-muted-foreground text-xs">
-        Only activities with status "Quote-Done" and type_activity "Sales Order Preparation" are counted.
-      </CardFooter>
+      </CardHeader>
     </Card>
   );
 }

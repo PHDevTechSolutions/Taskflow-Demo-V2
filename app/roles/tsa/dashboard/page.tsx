@@ -52,6 +52,7 @@ interface Activity {
   so_number: string;
   so_amount: string;
   type_client: string;
+  activity_reference_number: string;
 }
 
 function DashboardContent() {
@@ -238,7 +239,9 @@ function DashboardContent() {
                 loading={loadingActivities}
                 error={errorActivities}
               />
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
               <OutboundCard
                 activities={filteredActivities}
                 loading={loadingActivities}
@@ -264,8 +267,8 @@ function DashboardContent() {
                 referenceid={userDetails.referenceid}
                 dateRange={dateCreatedFilterRange}
               />
-
             </div>
+
           </div>
         </SidebarInset>
         <SidebarRight

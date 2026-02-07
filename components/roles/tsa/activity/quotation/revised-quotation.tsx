@@ -37,7 +37,7 @@ interface Completed {
     ticket_reference_number?: string;
     remarks?: string;
     status?: string;
-    start_date?: string;
+    start_date: string;
     end_date: string;
     date_created: string;
     date_updated?: string;
@@ -378,6 +378,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
                                 <TableHead>Date Created</TableHead>
+                                <TableHead>Start Date</TableHead>
                                 <TableHead>End Date</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Contact #</TableHead>
@@ -415,6 +416,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 item.date_updated ?? item.date_created
                                             ).toLocaleDateString()}:{new Date(
                                                 item.date_updated ?? item.date_created
+                                            ).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(item.start_date).toLocaleDateString()}:{new Date(
+                                                item.start_date
                                             ).toLocaleTimeString([], {
                                                 hour: "2-digit",
                                                 minute: "2-digit",
