@@ -2126,11 +2126,11 @@ export function QuotationSheet(props: Props) {
                       <div className="col-span-10 pl-4 border-l border-gray-100 grid grid-cols-2 gap-4">
                         <div>
                           <p className="font-black">METROBANK (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
-                          <p>Account Number: 243-7-24354164-2</p>
+                          <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
                         </div>
                         <div>
                           <p className="font-black">BDO (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
-                          <p>Account Number: 0021-8801-9258</p>
+                          <p>Account Number: {isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</p>
                         </div>
                       </div>
 
