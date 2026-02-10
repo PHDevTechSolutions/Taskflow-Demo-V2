@@ -36,6 +36,7 @@ interface HistoryItem {
     date_created: string;
     company_name: string;
     remarks: string;
+    activity_reference_number: string;
 }
 
 interface Agent {
