@@ -151,7 +151,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
               className="text-blue-600 hover:text-blue-800"
               title="Show computation details"
             >
-              <Info />
+              <Info /> Details
             </Button>
 
           </div>
@@ -161,10 +161,10 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
           <thead className="bg-gray-50">
             <tr>
               <th className="py-2 px-4 border-b">OB Target</th>
-              <th className="py-2 px-4 border-b">Total OB</th>
+              <th className="py-2 px-4 border-b">Total OB <span className="text-green-600 text-[10px]">(Suc-{touchbaseCount})</span></th>
               <th className="py-2 px-4 border-b">Achievement</th>
-              <th className="py-2 px-4 border-b">Calls to Quote Conversion</th>
-              <th className="py-2 px-4 border-b">Outbound to Sales Conversion</th>
+              <th className="py-2 px-4 border-b">Calls to Quote Conversion <span className="text-green-600 text-[10px]">(Suc-{quotationPrepCount})</span></th>
+              <th className="py-2 px-4 border-b">Outbound to Sales Conversion <span className="text-green-600 text-[10px]">(Suc-{deliveredClosedCount})</span></th>
               <th className="py-2 px-4 border-b">Total Sales Invoice</th>
             </tr>
           </thead>

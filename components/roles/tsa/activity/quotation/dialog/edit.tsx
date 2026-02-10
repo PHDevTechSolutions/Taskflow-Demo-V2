@@ -8,21 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, } from "@/components/ui/item"
 import { Download, Eye, Trash } from "lucide-react";
+import { supabase } from "@/utils/supabase";
 // Firebase Project Dependencies
-import {
-    getFirestore,
-    collection,
-    query,
-    where,
-    getDocs
-} from "firebase/firestore";
+import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 // Ensure 'db' is initialized in your firebase configuration file
 import { db } from "@/lib/firebase";
 import { FieldLabel } from "@/components/ui/field";
 
 interface Completed {
     id: number;
+    start_date?: string;
     end_date?: string;
     product_quantity?: string;
     product_amount?: string;
@@ -33,6 +30,18 @@ interface Completed {
     quotation_number?: string;
     quotation_amount?: number | string;
     quotation_type: string;
+    version?: string;
+
+    // Submit to API
+    activity_reference_number?: string;
+    referenceid?: string;
+    tsm?: string;
+    manager?: string;
+    company_name?: string;
+    contact_person?: string;
+    contact_number?: string;
+    email_address?: string;
+    address?: string;
 }
 
 interface ProductItem {
@@ -60,6 +69,22 @@ interface Product {
     price?: string;
 }
 
+interface RevisedQuotation {
+    id: number;
+    quotation_number?: string;
+    product_title?: string;
+    quotation_amount?: number;
+    version: string;
+    start_date?: string | Date;
+    end_date?: string | Date;
+    products?: Product[];
+    product_description: string;
+    product_quantity: string;
+    product_amount: string;
+    product_photo: string;
+    product_sku: string;
+}
+
 interface TaskListEditDialogProps {
     item: Completed;
     onClose: () => void;
@@ -78,6 +103,17 @@ interface TaskListEditDialogProps {
     contact?: string;
     tsmname?: string;
     managername?: string;
+
+    activity_reference_number?: string;
+    referenceid?: string;
+    tsm?: string;
+    manager?: string;
+    company_name?: string;
+    contact_person?: string;
+    contact_number?: string;
+    email_address?: string;
+    address?: string;
+    quotation_number?: string;
 }
 
 function splitAndTrim(value?: string): string[] {
@@ -121,26 +157,37 @@ export default function TaskListEditDialog({
     const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
     // Confirmation dialog state
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-    const [endDate, setEndDate] = useState<string>(item.end_date ?? "");
-    // Live time for showing live clock with fixed date
-    const [liveTime, setLiveTime] = useState<Date>(() => {
-        // Initialize with end_date time or current date fallback
-        return item.end_date ? new Date(item.end_date) : new Date();
-    });
+
+    const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<RevisedQuotation | null>(null);
+    const [revisedQuotations, setRevisedQuotations] = useState<RevisedQuotation[]>([]);
+
+    const [productsToDisplay, setProductsToDisplay] = useState(products);
+    const activityReferenceNumber = item.activity_reference_number;
+
+    const [startDate, setStartDate] = useState<string>(() => new Date().toISOString());
+    const [liveTime, setLiveTime] = useState<Date>(() => new Date());
+    const [endDate, setEndDate] = useState<string>(() => new Date().toISOString());
 
     useEffect(() => {
-        let baseTime = item.end_date ? new Date(item.end_date) : new Date();
+        // Pag-open ng dialog, itakda startDate sa current time, palaging bago
+        const now = new Date();
+        setStartDate(now.toISOString());
+    }, []);
+
+    // Increment liveTime and update endDate every second
+    useEffect(() => {
+        let baseTime = liveTime;
         let secondsPassed = 0;
 
         const interval = setInterval(() => {
             secondsPassed++;
             const newLiveTime = new Date(baseTime.getTime() + secondsPassed * 1000);
             setLiveTime(newLiveTime);
-            setEndDate(newLiveTime.toISOString().slice(0, 19)); // Example format: "2026-02-05T08:12:34"
+            setEndDate(newLiveTime.toISOString());
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [item.end_date]);
+    }, [liveTime]);
 
     // These can be from props or item or company info
     const company_name = company?.company_name || "";
@@ -296,6 +343,7 @@ export default function TaskListEditDialog({
 
             const bodyData: Completed = {
                 id: item.id,
+                start_date: startDate,
                 end_date: endDate,
                 product_quantity,
                 product_amount,
@@ -305,6 +353,17 @@ export default function TaskListEditDialog({
                 product_sku,
                 quotation_amount: quotationAmount,
                 quotation_type: item.quotation_type,
+                quotation_number: item.quotation_number,
+                // New Added
+                activity_reference_number: item.activity_reference_number,
+                referenceid: item.referenceid,
+                tsm: item.tsm,
+                manager: item.manager,
+                company_name: item.company_name,
+                contact_person: item.contact_person,
+                contact_number: item.contact_number,
+                email_address: item.email_address,
+                address: item.address,
             };
 
             const res = await fetch(`/api/act-update-history?id=${item.id}`, {
@@ -448,12 +507,8 @@ export default function TaskListEditDialog({
         }));
     };
 
-    // Prepare live clock display with fixed date from endDate
-    const displayDateTime = liveTime;
-
     // Routing for product retrieval
     const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
-
     const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
     const getQuotationPayload = () => {
@@ -549,6 +604,114 @@ export default function TaskListEditDialog({
         };
     };
 
+    useEffect(() => {
+        if (!selectedRevisedQuotation) {
+            // Do nothing, keep current products from default item
+            return;
+        }
+
+        let productsArray = selectedRevisedQuotation.products;
+
+        // If products is a string, parse it to array
+        if (typeof productsArray === "string") {
+            try {
+                productsArray = JSON.parse(productsArray);
+            } catch (e) {
+                console.error("Failed to parse products JSON:", e);
+                productsArray = [];
+            }
+        }
+
+        if (Array.isArray(productsArray) && productsArray.length > 0) {
+            // Map each product to ProductItem shape
+            const mappedProducts: ProductItem[] = productsArray.map((p) => ({
+                description: p.description || "",
+                skus: p.skus || [],
+                title: p.title,
+                images: p.images || [],
+                isDiscounted: false,
+                price: p.price ? parseFloat(p.price) : 0,
+                quantity: 1,
+                product_quantity: "1",
+                product_amount: p.price ? p.price.toString() : "0",
+                product_description: p.description || "",
+                product_photo: p.images?.[0]?.src || "",
+                product_title: p.title,
+                product_sku: p.skus?.[0] || "",
+            }));
+
+            setProducts(mappedProducts);
+        } else {
+            // fallback: split concatenated strings into array to build products
+            const splitAndTrim = (value?: string, delimiter = ","): string[] => {
+                if (!value) return [];
+                return value.split(delimiter).map((v) => v.trim());
+            };
+
+            const splitDescription = (value?: string): string[] => {
+                if (!value) return [];
+                return value.split("||").map((v) => v.trim());
+            };
+
+            const quantities = splitAndTrim(selectedRevisedQuotation.product_quantity);
+            const amounts = splitAndTrim(selectedRevisedQuotation.product_amount);
+            const titles = splitAndTrim(selectedRevisedQuotation.product_title);
+            const descriptions = splitDescription(selectedRevisedQuotation.product_description);
+            const photos = splitAndTrim(selectedRevisedQuotation.product_photo);
+            const sku = splitAndTrim(selectedRevisedQuotation.product_sku);
+
+            const maxLen = Math.max(
+                quantities.length,
+                amounts.length,
+                titles.length,
+                descriptions.length,
+                photos.length,
+                sku.length
+            );
+
+            const arr: ProductItem[] = [];
+            for (let i = 0; i < maxLen; i++) {
+                arr.push({
+                    product_quantity: quantities[i] ?? "",
+                    product_amount: amounts[i] ?? "",
+                    product_title: titles[i] ?? "",
+                    product_description: descriptions[i] ?? "",
+                    product_photo: photos[i] ?? "",
+                    product_sku: sku[i] ?? "",
+                    quantity: 0,
+                    description: "",
+                    skus: [],
+                    title: "",
+                    images: [],
+                    isDiscounted: false,
+                    price: 0,
+                });
+            }
+
+            setProducts(arr);
+        }
+    }, [selectedRevisedQuotation]);
+
+    useEffect(() => {
+        if (!activityReferenceNumber) return;
+
+        async function fetchRevisedQuotations() {
+            const { data, error } = await supabase
+                .from("revised_quotations")
+                .select("*")
+                .eq("activity_reference_number", activityReferenceNumber)
+                .order("id", { ascending: false });
+
+            if (error) {
+                console.error("Failed to fetch revised quotations:", error);
+            } else {
+                setRevisedQuotations(data || []);
+            }
+        }
+
+        fetchRevisedQuotations();
+    }, [activityReferenceNumber]);
+
     return (
         <>
             <Dialog open={true} onOpenChange={onClose}>
@@ -562,19 +725,23 @@ export default function TaskListEditDialog({
                     <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-semibold">Duration</label>
-                            <p className="mt-1 text-sm text-gray-700">
-                                {displayDateTime
-                                    ? displayDateTime.toLocaleString("en-US", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                        second: "2-digit",
-                                        hour12: true,
-                                    })
-                                    : "—"}
-                            </p>
+                            <div className="date-timestamps p-2 shadow-sm rounded w-40 text-center bg-black text-white font-mono">
+                                <span>
+                                    {startDate && endDate ? (() => {
+                                        const start = new Date(startDate);
+                                        const end = new Date(endDate);
+                                        const diffMs = end.getTime() - start.getTime();
+
+                                        if (diffMs <= 0) return "0s";
+
+                                        const diffSeconds = Math.floor(diffMs / 1000) % 60;
+                                        const diffMinutes = Math.floor(diffMs / (1000 * 60)) % 60;
+                                        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+                                        return `${diffHours}h ${diffMinutes}m ${diffSeconds}s`;
+                                    })() : "N/A"}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -725,6 +892,38 @@ export default function TaskListEditDialog({
                                     ))}
                                 </div>
                             </div>
+
+                            <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
+                                <h3 className="text-sm font-semibold mb-2">Revised Quotations</h3>
+                                {revisedQuotations.length === 0 ? (
+                                    <p>No revised quotations found.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {revisedQuotations.map((q) => (
+                                            <Item
+                                                key={q.id}
+                                                className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""
+                                                    }`}
+                                                onClick={() => setSelectedRevisedQuotation(q)}
+                                            >
+                                                <ItemContent>
+                                                    <ItemTitle className="font-semibold text-sm">
+                                                        {q.version || "N/A"}
+                                                    </ItemTitle>
+                                                    <ItemDescription className="text-xs text-gray-600">
+                                                        <div><strong>Product Title:</strong> {q.product_title || "N/A"}</div>
+                                                        <div><strong>Amount:</strong> {q.quotation_amount ?? "N/A"}</div>
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            <span><strong>Start:</strong> {q.start_date ? new Date(q.start_date).toLocaleString() : "N/A"}</span><br />
+                                                            <span><strong>End:</strong> {q.end_date ? new Date(q.end_date).toLocaleString() : "N/A"}</span>
+                                                        </div>
+                                                    </ItemDescription>
+                                                </ItemContent>
+                                            </Item>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Right side: Products table */}
@@ -797,6 +996,7 @@ export default function TaskListEditDialog({
                                         <TableHead className="text-xs">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
+
 
                                 <TableBody>
                                     {products.length === 0 && (

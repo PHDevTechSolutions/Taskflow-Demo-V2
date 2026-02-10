@@ -52,6 +52,7 @@ interface EndorsedTicket {
   email_address: string;
   address: string;
   ticket_reference_number: string;
+  ticket_remarks: string;
   wrap_up: string;
   inquiry: string;
   tsm: string;
@@ -350,6 +351,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       manager: userDetails.manager,
       status: "On-Progress",
       type_client: "CSR Client",
+      ticket_remarks: ticket.ticket_remarks,
       agent: ticket.agent,
       activity_reference_number: generateActivityRef(
         ticket.company_name || "Taskflow",

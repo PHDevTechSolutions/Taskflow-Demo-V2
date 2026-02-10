@@ -24,6 +24,7 @@ interface TransferDialogProps {
     loading?: boolean;
     ticketReferenceNumber?: string | null;
     tsm?: string | null; // Territory Sales Manager filter
+    account_reference_number?: string;
 }
 
 export const TransferDialog: React.FC<TransferDialogProps> = ({
@@ -33,6 +34,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
     loading = false,
     ticketReferenceNumber = null,
     tsm = null,
+    account_reference_number = null,
 }) => {
     const [users, setUsers] = useState<User[]>([]);
     const [search, setSearch] = useState("");

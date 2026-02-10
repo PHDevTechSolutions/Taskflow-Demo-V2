@@ -4,11 +4,12 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import {
   CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle,
-  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat
+  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 import { CreateActivityDialog } from "../dialog/create";
@@ -31,6 +32,7 @@ interface Activity {
   activity_reference_number: string;
   account_reference_number: string;
   ticket_reference_number: string;
+  ticket_remarks: string;
   status: string;
   agent: string;
   date_updated: string;
@@ -552,49 +554,52 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           }}
                         />
 
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={updatingId === item.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDoneDialog(item.id);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <Check />
-                        </Button>
-
-                        <Button
-                          type="button"
-                          className="cursor-pointer"
-                          variant="destructive"
-                          disabled={updatingId === item.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openCancelledDialog(item.id);
-                          }}
-                        >
-                          <AlertCircle />
-                        </Button>
-
-                        {item.relatedHistoryItems.some(
-                          (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
-                        ) && (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={updatingId === item.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openTransferDialog(item.id);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Repeat />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="secondary" className="cursor-pointer">
+                              Actions <MoreVertical />
                             </Button>
-                          )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem
+                                disabled={updatingId === item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDoneDialog(item.id);
+                                }}
+                              >
+                                <Check className="mr-2 h-4 w-4 text-green-600" />
+                                Mark as Done
+                              </DropdownMenuItem>
 
+                              <DropdownMenuItem
+                                disabled={updatingId === item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCancelledDialog(item.id);
+                                }}
+                              >
+                                <AlertCircle className="mr-2 h-4 w-4 text-red-600" />
+                                Cancel
+                              </DropdownMenuItem>
+
+                              {item.ticket_remarks === "Reassigned" && (
+                                <DropdownMenuItem
+                                  disabled={updatingId === item.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openTransferDialog(item.id);
+                                  }}
+                                >
+                                  <Repeat className="mr-2 h-4 w-4 text-blue-600" />
+                                  Transfer
+                                </DropdownMenuItem>
+                              )}
+
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -877,8 +882,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         loading={updatingId === selectedActivityId}
         ticketReferenceNumber={selectedTicketReferenceNumber}
         tsm={selectedActivity?.tsm}
+        account_reference_number={selectedActivity?.account_reference_number}
       />
-
 
       <CancelledDialog
         open={dialogOpen}

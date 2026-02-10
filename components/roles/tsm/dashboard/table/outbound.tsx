@@ -1,31 +1,23 @@
 import React, { useMemo, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button"
+import { Info, Eye } from "lucide-react";
+
+/* ================= TYPES ================= */
 
 interface HistoryItem {
-  referenceid: string;
+  referenceid: string; // AGENT ID
   source: string;
   call_status: string;
   status: string;
   type_activity: string;
-  actual_sales?: string;
+  actual_sales?: number | string;
   start_date: string;
   end_date: string;
   date_created: string;
+  activity_reference_number: string;
 }
 
 interface Agent {
@@ -38,36 +30,15 @@ interface Agent {
 interface OutboundCardProps {
   history: HistoryItem[];
   agents: Agent[];
-  dateCreatedFilterRange: { from: string | Date; to: string | Date };
+  dateCreatedFilterRange?: { from: Date; to: Date };
   setDateCreatedFilterRangeAction?: React.Dispatch<React.SetStateAction<any>>;
 }
 
-const OB_PER_DAY = 20;
+/* ================= COMPONENT ================= */
 
-// Calculate working days excluding Sundays between two dates (inclusive)
-function calculateWorkingDaysExcludingSundays(fromDate: string | Date, toDate: string | Date): number {
-  const from = new Date(fromDate);
-  const to = new Date(toDate);
-  let count = 0;
-
-  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const day = d.getDay();
-    // Exclude Sunday (0)
-    if (day !== 0) {
-      count++;
-    }
-  }
-
-  return count;
-}
-
-export function OutboundCallsTableCard({
-  history,
-  agents,
-  dateCreatedFilterRange,
-}: OutboundCardProps) {
-  // Map agent ReferenceID to fullname and picture
-  const [showTooltip, setShowTooltip] = useState(false);
+export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange, }: OutboundCardProps) {
+  const [showComputation, setShowComputation] = useState(false);
+  /* -------- Agent Map -------- */
   const agentMap = useMemo(() => {
     const map = new Map<string, { name: string; picture: string }>();
     agents.forEach((a) => {
@@ -79,159 +50,168 @@ export function OutboundCallsTableCard({
     return map;
   }, [agents]);
 
-  // Calculate working days excluding Sundays for the selected date range
-  const workingDays = useMemo(() => {
-    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return 0;
-    return calculateWorkingDaysExcludingSundays(dateCreatedFilterRange.from, dateCreatedFilterRange.to);
+  /* -------- Filter history by date range -------- */
+  const filteredActivities = useMemo(() => {
+    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) {
+      return history;
+    }
+    return history.filter((h) => {
+      const d = new Date(h.date_created);
+      return d >= dateCreatedFilterRange.from && d <= dateCreatedFilterRange.to;
+    });
+  }, [history, dateCreatedFilterRange]);
+
+  /* -------- Calculate days & OB target -------- */
+  const daysCount = useMemo(() => {
+    if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+      const diffTime = dateCreatedFilterRange.to.getTime() - dateCreatedFilterRange.from.getTime();
+      const oneDay = 1000 * 60 * 60 * 24;
+      return Math.floor(diffTime / oneDay) + 1;
+    }
+    return 26;
   }, [dateCreatedFilterRange]);
 
-  // Calculate OB target based on working days * 20 calls/day
-  const obTarget = workingDays * OB_PER_DAY;
+  const obTarget = 20 * daysCount;
 
-  // Aggregate stats per agent
+  /* -------- Compute stats per agent -------- */
   const statsByAgent = useMemo(() => {
-    type AgentStats = {
-      agentID: string;
-      totalOutboundTouchbase: number;
-      totalQuotationPreparationDelivered: number;
-      totalDelivered: number;
-      totalQuotations: number;
-      totalSalesInvoice: number;
-    };
+    // Prepare a map to group activities per agent
+    const agentActivitiesMap: Record<string, HistoryItem[]> = {};
 
-    const map = new Map<string, AgentStats>();
+    filteredActivities.forEach((activity) => {
+      const agentId = activity.referenceid?.toLowerCase();
+      if (!agentId) return;
+      if (!agentActivitiesMap[agentId]) agentActivitiesMap[agentId] = [];
+      agentActivitiesMap[agentId].push(activity);
+    });
 
-    history.forEach((item) => {
-      const agentID = item.referenceid.toLowerCase();
-      if (!map.has(agentID)) {
-        map.set(agentID, {
-          agentID,
-          totalOutboundTouchbase: 0,
-          totalQuotationPreparationDelivered: 0,
-          totalDelivered: 0,
-          totalQuotations: 0,
-          totalSalesInvoice: 0,
-        });
-      }
-      const stat = map.get(agentID)!;
+    // For each agent, calculate the grouped stats
+    const results = [];
 
-      if (item.source === "Outbound - Touchbase") {
-        stat.totalOutboundTouchbase++;
-      }
+    for (const [agentId, activities] of Object.entries(agentActivitiesMap)) {
+      // Group activities by activity_reference_number for this agent
+      const groups: Record<string, HistoryItem[]> = {};
+      activities.forEach((act) => {
+        if (!act.activity_reference_number) return;
+        if (!groups[act.activity_reference_number]) groups[act.activity_reference_number] = [];
+        groups[act.activity_reference_number].push(act);
+      });
 
-      if (item.type_activity === "Quotation Preparation") {
-        stat.totalQuotations++;
-      }
+      const referenceNumbers = Object.keys(groups);
 
-      if (item.status === "Delivered") {
-        stat.totalDelivered++;
+      // Count successful Outbound - Touchbase activities
+      const touchbaseCount = activities.filter(
+        (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
+      ).length;
 
-        const val = parseFloat(item.actual_sales ?? "0");
-        if (!isNaN(val)) {
-          stat.totalSalesInvoice += val;
+      // Count Quotation Preparation refs with successful touchbase in same ref
+      let quotationPrepCount = 0;
+      for (const refNum of referenceNumbers) {
+        const acts = groups[refNum];
+        const hasSuccessfulOutboundTouchbase = acts.some(
+          (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
+        );
+        const hasQuotationPreparation = acts.some(
+          (a) => a.type_activity === "Quotation Preparation"
+        );
+        if (hasSuccessfulOutboundTouchbase && hasQuotationPreparation) {
+          quotationPrepCount++;
         }
       }
 
-      // Count quotations with delivered or Quote-Done status
-      if (
-        item.type_activity === "Quotation Preparation" &&
-        (item.status === "Delivered" || item.status === "Quote-Done")
-      ) {
-        stat.totalQuotationPreparationDelivered++;
+      // Count Delivered / Closed Transaction refs with successful touchbase
+      let deliveredClosedCount = 0;
+      for (const refNum of referenceNumbers) {
+        const acts = groups[refNum];
+        const hasSuccessfulOutboundTouchbase = acts.some(
+          (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
+        );
+        const hasDeliveredClosedTransaction = acts.some(
+          (a) => a.type_activity === "Delivered / Closed Transaction"
+        );
+        if (hasSuccessfulOutboundTouchbase && hasDeliveredClosedTransaction) {
+          deliveredClosedCount++;
+        }
       }
-    });
 
-    return Array.from(map.values());
-  }, [history]);
+      // Total OB count = all Outbound - Touchbase source activities
+      const totalOutboundCount = activities.filter((a) => a.source === "Outbound - Touchbase").length;
 
-  // Format percentage helper
-  const formatPercent = (val: number) => `${val.toFixed(2)}%`;
+      // Sum actual sales for this agent
+      const totalActualSales = activities.reduce((sum, a) => {
+        const value =
+          typeof a.actual_sales === "number" ? a.actual_sales : parseFloat(a.actual_sales ?? "");
+        return sum + (isNaN(value) ? 0 : value);
+      }, 0);
+
+      // Compute achievement and conversion percentages
+      const achievement = obTarget > 0 ? (touchbaseCount / obTarget) * 100 : 0;
+      const callsToQuoteConversion =
+        touchbaseCount > 0 ? ((quotationPrepCount / touchbaseCount) * 100).toFixed(2) : "0.00";
+      const outboundToSalesConversion =
+        touchbaseCount > 0 ? ((deliveredClosedCount / touchbaseCount) * 100).toFixed(2) : "0.00";
+
+      results.push({
+        agentID: agentId,
+        totalOB: totalOutboundCount,
+        successfulTouchbase: touchbaseCount,
+        quotationPrep: quotationPrepCount,
+        deliveredClosed: deliveredClosedCount,
+        totalSales: totalActualSales,
+        achievement,
+        callsToQuoteConversion,
+        outboundToSalesConversion,
+      });
+    }
+
+    return results;
+  }, [filteredActivities, obTarget]);
 
   return (
-    <Card className="flex flex-col h-full bg-white text-black">
-      <CardHeader className="flex justify-between items-center">
+    <Card className="h-full bg-white text-black">
+      <CardHeader className="flex items-center justify-between">
         <div>
-          <CardTitle>Outbound Calls (Touch-Based Only)</CardTitle>
-          <CardDescription>
-            Counts based on Source, Type of Activity, Status filters and OB Target computed from working days excluding Sundays
-          </CardDescription>
+          <CardTitle>Outbound Calls (Touch-Based)</CardTitle>
         </div>
-        <div
-          className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-          onFocus={() => setShowTooltip(true)}
-          onBlur={() => setShowTooltip(false)}
-          tabIndex={0}
-          aria-label="Information about activity filters and OB Target"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z"
-            />
-          </svg>
 
-          {showTooltip && (
-            <div className="absolute right-0 top-full mt-1 z-50 w-180 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
-              <ul className="list-disc list-inside space-y-1">
-                <li>
-                  Counts activities with Source "Outbound - Touchbase", Type of Activity "Quotation Preparation", and Status "Delivered".
-                </li>
-                <li>
-                  OB Target = Working Days (excluding Sundays) × 20 calls per day.
-                </li>
-                <li>Achievement = (Total OB ÷ OB Target) × 100</li>
-                <li>Calls to Quote Conversion = (Total Quotations ÷ Total OB) × 100</li>
-                <li>Outbound to Sales Conversion = (Total Delivered ÷ Total OB) × 100</li>
-                <li>Total Sales Invoice = sum of Sales Invoice from Delivered activities</li>
-              </ul>
-            </div>
-          )}
-        </div>
+        <Button
+          variant="outline"
+          onClick={() => setShowComputation(!showComputation)}
+          aria-label="Show computation details"
+          className="flex items-center text-blue-600 hover:text-blue-800"
+          title="Show computation details"
+        >
+          <Info className="mr-2" />
+          Details
+        </Button>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-auto">
+      <CardContent className="overflow-auto">
         {statsByAgent.length === 0 ? (
           <p className="text-center text-sm italic text-gray-500">
-            No records found. Coordinate with your TSA to create activities.
+            No outbound records found.
           </p>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="font-mono">
-                <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="text-xs text-center">Total OB (Touchbase)</TableHead>
-                <TableHead className="text-xs text-center">OB Target</TableHead>
-                <TableHead className="text-xs text-center">Achievement (%)</TableHead>
-                <TableHead className="text-xs text-center">Calls to Quote (%)</TableHead>
-                <TableHead className="text-xs text-center">Outbound to Sales (%)</TableHead>
-                <TableHead className="text-xs text-center">Total Sales Invoice</TableHead>
+              <TableRow className="bg-gray-50">
+                <TableHead>Agent</TableHead>
+                <TableHead className="font-bold">OB Target</TableHead>
+                <TableHead className="font-bold">Total OB </TableHead>
+                <TableHead className="font-bold">Achievement</TableHead>
+                <TableHead className="font-bold">Calls to Quote Conversion</TableHead>
+                <TableHead className="font-bold">Outbound to Sales Conversion</TableHead>
+                <TableHead className="font-bold">Total Sales Invoice</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
               {statsByAgent.map((stat) => {
                 const agentInfo = agentMap.get(stat.agentID);
-                const achievement = obTarget ? (stat.totalOutboundTouchbase / obTarget) * 100 : 0;
-                const callsToQuote = stat.totalOutboundTouchbase
-                  ? (stat.totalQuotationPreparationDelivered / stat.totalOutboundTouchbase) * 100
-                  : 0;
-                const outboundToSales = stat.totalOutboundTouchbase
-                  ? (stat.totalDelivered / stat.totalOutboundTouchbase) * 100
-                  : 0;
 
                 return (
                   <TableRow key={stat.agentID} className="text-xs">
-                    <TableCell className="flex items-center gap-2 font-mono capitalize">
+                    <TableCell className="flex items-center gap-2 capitalize">
                       {agentInfo?.picture ? (
                         <img
                           src={agentInfo.picture}
@@ -239,79 +219,46 @@ export function OutboundCallsTableCard({
                           className="w-6 h-6 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs">
                           ?
                         </div>
                       )}
                       {agentInfo?.name ?? stat.agentID}
                     </TableCell>
 
-                    <TableCell className="text-center">{stat.totalOutboundTouchbase}</TableCell>
-
-                    <TableCell className="text-center font-mono">{obTarget}</TableCell>
-
-                    <TableCell className="text-center font-mono">{formatPercent(achievement)}</TableCell>
-
-                    <TableCell className="text-center font-mono">{formatPercent(callsToQuote)}</TableCell>
-
-                    <TableCell className="text-center font-mono">{formatPercent(outboundToSales)}</TableCell>
-
-                    <TableCell className="text-center font-mono">
-                      {stat.totalSalesInvoice.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </TableCell>
+                    <TableCell>{obTarget}</TableCell>
+                    <TableCell>{stat.totalOB} - <span className="text-green-600 text-[10px]">(Suc-{stat.successfulTouchbase})</span></TableCell>
+                    <TableCell>{stat.achievement.toFixed(2)}%</TableCell>
+                    <TableCell>{stat.callsToQuoteConversion}% - <span className="text-green-600 text-[10px]">(Suc-{stat.quotationPrep})</span></TableCell>
+                    <TableCell>{stat.outboundToSalesConversion}% - <span className="text-green-600 text-[10px]">(Suc-{stat.deliveredClosed})</span></TableCell>
+                    <TableCell>{stat.totalSales.toLocaleString()}</TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
-
-            <tfoot>
-              <TableRow className="text-xs font-semibold border-t">
-                <TableCell className="font-mono">Total</TableCell>
-                <TableCell className="text-center font-mono">
-                  {statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)}
-                </TableCell>
-                <TableCell className="text-center font-mono">
-                  {obTarget * statsByAgent.length}
-                </TableCell>
-                <TableCell className="text-center font-mono">
-                  {formatPercent(
-                    (statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0) /
-                      (obTarget * statsByAgent.length)) *
-                      100
-                  )}
-                </TableCell>
-                <TableCell className="text-center font-mono">
-                  {formatPercent(
-                    (statsByAgent.reduce((acc, stat) => acc + stat.totalQuotationPreparationDelivered, 0) /
-                      statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)) *
-                      100
-                  )}
-                </TableCell>
-                <TableCell className="text-center font-mono">
-                  {formatPercent(
-                    (statsByAgent.reduce((acc, stat) => acc + stat.totalDelivered, 0) /
-                      statsByAgent.reduce((acc, stat) => acc + stat.totalOutboundTouchbase, 0)) *
-                      100
-                  )}
-                </TableCell>
-                <TableCell className="text-center font-mono">
-                  {statsByAgent
-                    .reduce((acc, stat) => acc + stat.totalSalesInvoice, 0)
-                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </TableCell>
-              </TableRow>
-            </tfoot>
           </Table>
         )}
-      </CardContent>
 
-      <CardFooter className="flex justify-between border-t bg-white">
-        <p className="text-xs italic">Working Days (Excluding Sundays): {workingDays}</p>
-        <p className="text-xs italic">OB Target ({workingDays} × {OB_PER_DAY}): {obTarget}</p>
-      </CardFooter>
+        {showComputation && (
+          <div
+            className="mt-2 p-3 w-full border border-blue-400 bg-blue-50 rounded text-sm text-blue-900"
+            role="region"
+            aria-live="polite"
+            aria-label="Computation explanation"
+          >
+            <p><strong>Computation Details:</strong></p>
+            <ul className="list-disc list-inside">
+              <li><strong>OB Target:</strong> 20 x number of days in selected date range (default 26 days).</li>
+              <li><strong>Total OB:</strong> Total count of all activities with source "Outbound - Touchbase".</li>
+              <li><strong>Achievement:</strong> (Successful Outbound Touchbase / OB Target) × 100.</li>
+              <li><strong>Calls to Quote Conversion:</strong> (Quotation Preparation count / Successful Outbound Touchbase) × 100.</li>
+              <li><strong>Outbound to Sales Conversion:</strong> (Delivered / Closed Transaction count / Successful Outbound Touchbase) × 100.</li>
+              <li><strong>Total Sales Invoice:</strong> Sum of all actual sales values.</li>
+            </ul>
+          </div>
+        )}
+
+      </CardContent>
     </Card>
   );
 }

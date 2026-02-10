@@ -61,6 +61,7 @@
     "framer-motion": "^12.23.26",
     "html-react-parser": "^5.2.15",
     "htmlparser2": "^10.0.0",
+    "image-size": "^2.0.2",
     "input-otp": "^1.4.2",
     "iodash": "^0.0.1-security",
     "ioredis": "^5.8.2",

@@ -491,15 +491,7 @@ export function QuotationSheet(props: Props) {
 
       // Apply VAT based on vatType
       let totalWithVat = subtotalAfterDiscount;
-      if (vatType === "vat_exe") {
-        totalWithVat = subtotalAfterDiscount * (1 + VAT_RATE);
-      } else if (vatType === "vat_inc") {
-        // price already includes VAT, do nothing
-        totalWithVat = subtotalAfterDiscount;
-      } else if (vatType === "zero_rated") {
-        // no VAT, do nothing
-        totalWithVat = subtotalAfterDiscount;
-      }
+
 
       return acc + totalWithVat;
     }, 0);
@@ -600,10 +592,10 @@ export function QuotationSheet(props: Props) {
         subject: "For Quotation",
         items,
         vatType:
-          vatType === "vat_inc"
-            ? "VAT Inc"
-            : vatType === "vat_exe"
-              ? "VAT Exe"
+          vatType === "vat_exe"
+            ? "VAT Exe"
+            : vatType === "vat_inc"
+              ? "VAT Inc"
               : "Zero-Rated",
         totalPrice: Number(quotationAmount ?? 0),
         salesRepresentative: salesRepresentativeName,
@@ -992,10 +984,19 @@ export function QuotationSheet(props: Props) {
 
               {/* Selected Products with quantity and price inputs */}
               {!noProductsAvailable && (
-                <Button onClick={() => setOpen(true)}
-                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed bg-white text-black h-40 w-full hover:bg-gray-100 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98]">
+                <Button
+                  onClick={() => setOpen(true)}
+                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed bg-white text-black h-40 w-full hover:bg-gray-100 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                >
                   <ImagePlus className="h-10 w-10 text-gray-500" />
-                  <span className="text-sm font-semibold">Select Products</span>
+                  <span className="text-sm font-semibold">
+                    Select Products
+                  </span>
+                  {selectedProducts.length > 0 && (
+                    <span className="text-xs text-green-700">
+                     ({selectedProducts.length}) product{selectedProducts.length > 1 ? 's' : ''} selected
+                    </span>
+                  )}
                   <span className="text-xs text-gray-500">
                     Browse and add items to this quotation
                   </span>
@@ -1209,6 +1210,7 @@ export function QuotationSheet(props: Props) {
                 onChange={(e) => setQuotationAmount(e.target.value)}
                 placeholder="Enter quotation amount"
               />
+              {Number(quotationAmount) === 0 && (<span className="text-red-600 text-sm block">Amount is Empty</span>)}
             </FieldSet>
           </FieldGroup>
 
@@ -1252,7 +1254,7 @@ export function QuotationSheet(props: Props) {
                 <></>
               )}
 
-              <FieldLabel className="mt-3">Remarks</FieldLabel>
+              <FieldLabel className="mt-3">Remarks <span className="text-red-500 text-[10px]">*Required</span></FieldLabel>
               <Textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
@@ -1308,7 +1310,7 @@ export function QuotationSheet(props: Props) {
           {showConfirmFollowUp && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-black">
               <div className="max-w-md rounded-lg bg-white p-6 shadow-lg">
-                <Alert variant="default" className="p-4 flex items-center gap-3">
+                <Alert variant="default" className="p-4 flex items-center gap-3 w-full min-w-[400px]">
                   <div className="flex-1">
                     <div className="mb-1">
                       <AlertTitle>Quotation Number</AlertTitle>
@@ -1320,9 +1322,9 @@ export function QuotationSheet(props: Props) {
                         <p>Generating your quotation number, please wait...</p>
                       </AlertDescription>
                     ) : hasGenerated ? (
-                      <AlertDescription className="text-sm">
+                      <AlertDescription className="text-sm text-black">
                         Your quotation number is{" "}
-                        <strong>{localQuotationNumber}</strong>
+                        <strong className="text-lg">{localQuotationNumber}</strong>
                         <br />
                         <p className="mt-1 text-xs text-gray-600">
                           It is automatically generated based on the quotation type, TSM
@@ -1331,7 +1333,7 @@ export function QuotationSheet(props: Props) {
                       </AlertDescription>
                     ) : (
                       <AlertDescription className="text-sm text-gray-500">
-                        Click <strong>Generate</strong> to create a quotation number.
+                        Click Generate to create a quotation number.
                       </AlertDescription>
                     )}
                   </div>
@@ -1638,7 +1640,7 @@ export function QuotationSheet(props: Props) {
                           setVatType(newVatType);
 
                           // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
-                          if (newVatType === "vat_inc") {
+                          if (newVatType === "vat_exe") {
                             setDiscount(12);
                           } else {
                             setDiscount(0);
