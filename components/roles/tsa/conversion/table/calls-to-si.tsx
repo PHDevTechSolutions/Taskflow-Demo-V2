@@ -32,8 +32,8 @@ export const CallSI: React.FC<CallSIProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<CallSIHistory[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Function to get "YYYY-MM" string from Date
   const getYearMonth = (dateStr?: string) => {
@@ -75,18 +75,32 @@ export const CallSI: React.FC<CallSIProps> = ({
       return;
     }
 
-    setLoadingActivities(true);
-    setErrorActivities(null);
+    setLoading(true);
+    setError(null);
 
-    fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
+
+    const url = new URL("/api/conversion-rates/tsa/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch activities");
         return res.json();
       })
       .then((data) => setActivities(data.activities || []))
-      .catch((err) => setErrorActivities(err.message))
-      .finally(() => setLoadingActivities(false));
-  }, [referenceid]);
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     void fetchActivities();
@@ -161,27 +175,7 @@ export const CallSI: React.FC<CallSIProps> = ({
   }, [activitiesFiltered, selectedMonth]);
 
   // Percentage of Calls to SI
-  const percentageCallsToSI = totalSI === 0 ? 0 : (totalCalls / totalSI) * 100;
-
-  if (loadingActivities) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <Spinner className="size-8" />
-      </div>
-    );
-  }
-
-  if (errorActivities) {
-    return (
-      <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-        <AlertCircleIcon className="h-6 w-6 text-red-600" />
-        <div>
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{errorActivities}</AlertDescription>
-        </div>
-      </Alert>
-    );
-  }
+  const percentageCallsToSI = totalSI === 0 ? 0 : (totalSI / totalCalls) * 100;
 
   return (
     <div className="space-y-6">

@@ -68,77 +68,93 @@ export const SalesTable: React.FC<SalesProps> = ({
 
   // Fetch activities from API
   const fetchActivities = useCallback(() => {
-        setLoadingActivities(true);
-        setErrorActivities(null);
+    setLoadingActivities(true);
+    setErrorActivities(null);
 
-        fetch("/api/act-fetch-admin-history")
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, []);
+    const from =
+      dateCreatedFilterRange?.from
+        ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+        : null;
+    const to =
+      dateCreatedFilterRange?.to
+        ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+        : null;
+
+    const url = new URL("/api/sales-performance/admin/fetch", window.location.origin);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setErrorActivities(err.message))
+      .finally(() => setLoadingActivities(false));
+  }, [dateCreatedFilterRange]);
+
 
   useEffect(() => {
-        fetchActivities();
+    fetchActivities();
 
-        // Subscribe to realtime updates from Supabase (ALL history)
-        const channel = supabase
-            .channel("public:history")
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "history",
-                },
-                (payload) => {
-                    const newRecord = payload.new as Sales;
-                    const oldRecord = payload.old as Sales;
+    // Subscribe to realtime updates from Supabase (ALL history)
+    const channel = supabase
+      .channel("public:history")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "history",
+        },
+        (payload) => {
+          const newRecord = payload.new as Sales;
+          const oldRecord = payload.old as Sales;
 
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
-                            case "UPDATE":
-                                return curr.map((a) =>
-                                    a.id === newRecord.id ? newRecord : a
-                                );
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
-                    });
+          setActivities((curr) => {
+            switch (payload.eventType) {
+              case "INSERT":
+                if (!curr.some((a) => a.id === newRecord.id)) {
+                  return [...curr, newRecord];
                 }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchActivities]);
-
-    useEffect(() => {
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch("/api/fetch-admin-all-user");
-                if (!response.ok) throw new Error("Failed to fetch agents");
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
-                setErrorActivities("Failed to load agents.");
+                return curr;
+              case "UPDATE":
+                return curr.map((a) =>
+                  a.id === newRecord.id ? newRecord : a
+                );
+              case "DELETE":
+                return curr.filter((a) => a.id !== oldRecord.id);
+              default:
+                return curr;
             }
-        };
+          });
+        }
+      )
+      .subscribe();
 
-        fetchAgents();
-    }, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchActivities]);
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const response = await fetch("/api/fetch-admin-all-user");
+        if (!response.ok) throw new Error("Failed to fetch agents");
+        const data = await response.json();
+        setAgents(data);
+      } catch (err) {
+        console.error("Error fetching agents:", err);
+        setErrorActivities("Failed to load agents.");
+      }
+    };
+
+    fetchAgents();
+  }, []);
 
   // Filter activities by date range only (agent filtering is handled later)
   const filteredActivitiesByDate = useMemo(() => {

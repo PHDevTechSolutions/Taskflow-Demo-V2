@@ -130,15 +130,35 @@ function DashboardContent() {
   }, [userId]);
 
   const fetchActivities = useCallback(() => {
-    const referenceid = userDetails.referenceid;
+    const referenceid = userDetails.referenceid; // <- add this line
+
     if (!referenceid) {
       setActivities([]);
       return;
     }
+
     setLoadingActivities(true);
     setErrorActivities(null);
 
-    fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+    // Prepare date params (convert to YYYY-MM-DD)
+    const from =
+      dateCreatedFilterRange?.from
+        ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+        : null;
+    const to =
+      dateCreatedFilterRange?.to
+        ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+        : null;
+
+    // Build URL with query params
+    const url = new URL("/api/activity/tsa/dashboard/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch activities");
         return res.json();
@@ -146,7 +166,7 @@ function DashboardContent() {
       .then((data) => setActivities(data.activities || []))
       .catch((err) => setErrorActivities(err.message))
       .finally(() => setLoadingActivities(false));
-  }, [userDetails.referenceid]);
+  }, [userDetails.referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     fetchActivities();

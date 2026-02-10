@@ -77,8 +77,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     setDateCreatedFilterRangeAction,
 }) => {
     const [activities, setActivities] = useState<Completed[]>([]);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Filters state
     const [searchTerm, setSearchTerm] = useState("");
@@ -100,18 +100,33 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             setActivities([]);
             return;
         }
-        setLoadingActivities(true);
-        setErrorActivities(null);
 
-        fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+        setLoading(true);
+        setError(null);
+
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
+
+        const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
+        }
+
+        fetch(url.toString())
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
             })
             .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, [referenceid]);
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
     // Subscribe to real-time changes with Supabase
     useEffect(() => {
@@ -220,9 +235,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             })
             .filter(hasMeaningfulData);
     }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
-
-    const isLoading = loadingActivities;
-    const error = errorActivities;
 
     // Extract unique status for filter dropdowns
     const statusOptions = useMemo(() => {
@@ -378,8 +390,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
                                 <TableHead>Date Created</TableHead>
-                                <TableHead>Start Date</TableHead>
-                                <TableHead>End Date</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
@@ -407,7 +417,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 size="sm"
                                                 onClick={() => openEditDialog(item)}
                                             >
-                                               <PenIcon /> Edit
+                                                <PenIcon /> Edit
                                             </Button>
                                         </TableCell>
 
@@ -416,22 +426,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 item.date_updated ?? item.date_created
                                             ).toLocaleDateString()}:{new Date(
                                                 item.date_updated ?? item.date_created
-                                            ).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(item.start_date).toLocaleDateString()}:{new Date(
-                                                item.start_date
-                                            ).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(item.end_date).toLocaleDateString()}:{new Date(
-                                                item.end_date
                                             ).toLocaleTimeString([], {
                                                 hour: "2-digit",
                                                 minute: "2-digit",

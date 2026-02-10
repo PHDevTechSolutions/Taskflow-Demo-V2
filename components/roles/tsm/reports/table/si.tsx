@@ -75,8 +75,8 @@ export const SITable: React.FC<SIProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<SI[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -93,18 +93,33 @@ export const SITable: React.FC<SIProps> = ({
       setActivities([]);
       return;
     }
-    setLoadingActivities(true);
-    setErrorActivities(null);
 
-    fetch(`/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(referenceid)}`)
+    setLoading(true);
+    setError(null);
+
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
+
+    const url = new URL("/api/reports/tsm/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch activities");
         return res.json();
       })
       .then((data) => setActivities(data.activities || []))
-      .catch((err) => setErrorActivities(err.message))
-      .finally(() => setLoadingActivities(false));
-  }, [referenceid]);
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
   // Real-time subscription using Supabase
   useEffect(() => {
@@ -244,9 +259,6 @@ export const SITable: React.FC<SIProps> = ({
     setPage(1);
   }, [searchTerm, filterStatus, dateCreatedFilterRange]);
 
-  const isLoading = loadingActivities;
-  const error = errorActivities;
-
   const agentMap = useMemo(() => {
     const map: Record<string, { name: string; profilePicture: string }> = {};
     agents.forEach((agent) => {
@@ -274,7 +286,7 @@ export const SITable: React.FC<SIProps> = ({
         setAgents(data);
       } catch (err) {
         console.error("Error fetching agents:", err);
-        setErrorActivities("Failed to load agents.");
+        setError("Failed to load agents.");
       }
     };
 
@@ -331,13 +343,6 @@ export const SITable: React.FC<SIProps> = ({
         </Select>
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex justify-center items-center h-40">
-          <Spinner className="size-8" />
-        </div>
-      )}
-
       {/* Error */}
       {error && (
         <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
@@ -364,7 +369,7 @@ export const SITable: React.FC<SIProps> = ({
       )}
 
       {/* No Data Alert */}
-      {!isLoading && !error && filteredActivities.length === 0 && (
+      {!loading && !error && filteredActivities.length === 0 && (
         <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
           <AlertCircleIcon className="h-6 w-6 text-red-600" />
           <div>
@@ -421,9 +426,9 @@ export const SITable: React.FC<SIProps> = ({
                   <TableCell className="text-right">
                     {item.actual_sales !== undefined && item.actual_sales !== null
                       ? item.actual_sales.toLocaleString(undefined, {
-                          style: "currency",
-                          currency: "PHP",
-                        })
+                        style: "currency",
+                        currency: "PHP",
+                      })
                       : "-"}
                   </TableCell>
                   <TableCell className="uppercase">{item.dr_number || "-"}</TableCell>

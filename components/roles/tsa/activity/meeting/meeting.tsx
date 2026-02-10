@@ -46,11 +46,9 @@ interface MeetingProps {
 
 // Helper to format date string to "November 23 2025 / 8:00 AM"
 function formatDateTime(dateStr: string) {
-  // Convert string to Date object
   const dateObj = new Date(dateStr);
-  if (isNaN(dateObj.getTime())) return dateStr; // fallback if invalid
+  if (isNaN(dateObj.getTime())) return dateStr;
 
-  // Options for date part
   const options: Intl.DateTimeFormatOptions = {
     year: "numeric",
     month: "long",
@@ -59,7 +57,6 @@ function formatDateTime(dateStr: string) {
 
   const datePart = dateObj.toLocaleDateString("en-US", options);
 
-  // Format time with AM/PM
   let hours = dateObj.getHours();
   const minutes = dateObj.getMinutes().toString().padStart(2, "0");
   const ampm = hours >= 12 ? "PM" : "AM";
@@ -95,14 +92,8 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           } as MeetingItem;
         });
 
-        // FILTER — only upcoming or ongoing
-        const today = new Date().toISOString().split("T")[0];
-
-        const upcomingMeetings = fetchedMeetings.filter(
-          (m) => m.end_date >= today
-        );
-
-        setMeetings(upcomingMeetings);
+        // No filtering - show all meetings including past ones
+        setMeetings(fetchedMeetings);
       } catch (error) {
         console.error("Error loading meetings:", error);
         toast.error("Failed to load meetings.");
@@ -127,14 +118,10 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
   };
 
   const handleMeetingCreated = (newMeeting: MeetingItem) => {
-    const today = new Date().toISOString().split("T")[0];
-
-    // add only if upcoming
-    if (newMeeting.end_date >= today) {
-      setMeetings((prev) => [newMeeting, ...prev]);
-    }
+    setMeetings((prev) => [newMeeting, ...prev]);
   };
 
+  // Show up to 3 meetings (all included now)
   const displayedMeetings = meetings.slice(0, 3);
 
   return (
@@ -161,7 +148,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           <p className="text-sm text-muted-foreground">Loading meetings...</p>
         ) : displayedMeetings.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No upcoming meetings.
+            No meetings found.
           </p>
         ) : (
           displayedMeetings.map(

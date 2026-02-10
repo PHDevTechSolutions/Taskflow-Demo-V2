@@ -12,7 +12,7 @@ import { AreaChart, Area, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } f
 
 import { supabase } from "@/utils/supabase";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig, } from "@/components/ui/chart";
 
 interface Quotation {
@@ -22,7 +22,6 @@ interface Quotation {
     remarks?: string;
     date_created: string;
     date_updated?: string;
-    account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
     type_activity: string;
@@ -45,8 +44,8 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     setDateCreatedFilterRangeAction,
 }) => {
     const [activities, setActivities] = useState<Quotation[]>([]);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -60,18 +59,33 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             setActivities([]);
             return;
         }
-        setLoadingActivities(true);
-        setErrorActivities(null);
 
-        fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+        setLoading(true);
+        setError(null);
+
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
+
+        const url = new URL("/api/reports/tsa/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
+        }
+
+        fetch(url.toString())
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
             })
             .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, [referenceid]);
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
     useEffect(() => {
         fetchActivities();
@@ -218,19 +232,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         return filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0);
     }, [filteredActivities]);
 
-    const isLoading = loadingActivities;
-    const error = errorActivities;
-
     return (
         <>
-            {isLoading && (
-                <div className="flex justify-center items-center h-40">
-                    <Spinner className="size-8" />
-                </div>
-            )}
-
-
-            {!isLoading && !error && filteredActivities.length === 0 && (
+            {!loading && !error && filteredActivities.length === 0 && (
                 <div className="flex justify-center items-center h-40">
                     <Alert
                         variant="destructive"
@@ -242,7 +246,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 </div>
             )}
 
-            {!isLoading && !error && filteredActivities.length !== 0 && (
+            {!loading && !error && filteredActivities.length !== 0 && (
                 <div className={`flex flex-col md:flex-row gap-2`}>
                     {/* Left: Area Chart */}
                     {chartData.length > 0 && (
@@ -252,7 +256,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                                 <CardDescription>{`Showing ${filteredActivities.length} records`}</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {isLoading ? (
+                                {loading ? (
                                     <div className="flex justify-center items-center h-40">
                                         <Spinner />
                                     </div>

@@ -72,14 +72,29 @@ export const SalesTable: React.FC<SalesProps> = ({
       setActivities([]);
       return;
     }
+
     setLoadingActivities(true);
     setErrorActivities(null);
 
-    fetch(
-      `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(
-        referenceid
-      )}`
-    )
+    // Prepare date params (YYYY-MM-DD)
+    const from =
+      dateCreatedFilterRange?.from
+        ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+        : null;
+    const to =
+      dateCreatedFilterRange?.to
+        ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+        : null;
+
+    // Build URL with referenceid and date range
+    const url = new URL("/api/sales-performance/tsm/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch activities");
         return res.json();
@@ -87,7 +102,7 @@ export const SalesTable: React.FC<SalesProps> = ({
       .then((data) => setActivities(data.activities || []))
       .catch((err) => setErrorActivities(err.message))
       .finally(() => setLoadingActivities(false));
-  }, [referenceid]);
+  }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     fetchActivities();

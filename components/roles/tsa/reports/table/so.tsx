@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert } from "@/components/ui/alert";
-import { AlertDescription } from "@/components/ui/alert";
-import { AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,7 +20,6 @@ interface SO {
     remarks?: string;
     date_created: string;
     date_updated?: string;
-    account_reference_number?: string;
     company_name?: string;
     contact_number?: string;
     contact_person: string;
@@ -46,10 +43,8 @@ export const SOTable: React.FC<SOProps> = ({
     setDateCreatedFilterRangeAction,
 }) => {
     const [activities, setActivities] = useState<SO[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -63,18 +58,33 @@ export const SOTable: React.FC<SOProps> = ({
             setActivities([]);
             return;
         }
-        setLoadingActivities(true);
-        setErrorActivities(null);
 
-        fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+        setLoading(true);
+        setError(null);
+
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
+
+        const url = new URL("/api/reports/tsa/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
+        }
+
+        fetch(url.toString())
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
             })
             .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, [referenceid]);
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
     // Real-time subscription using Supabase
     useEffect(() => {
@@ -226,19 +236,16 @@ export const SOTable: React.FC<SOProps> = ({
         amount: { label: "SO Amount", color: "var(--chart-2)" },
     } satisfies ChartConfig;
 
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
-
     return (
         <>
-            {isLoading && (
+            {loading && (
                 <div className="flex justify-center items-center h-40">
                     <Spinner className="size-8" />
                 </div>
             )}
 
 
-            {!isLoading && !error && filteredActivities.length === 0 && (
+            {!loading && !error && filteredActivities.length === 0 && (
                 <div className="flex justify-center items-center h-40">
                     <Alert
                         variant="destructive"
@@ -250,7 +257,7 @@ export const SOTable: React.FC<SOProps> = ({
                 </div>
             )}
 
-            {!isLoading && !error && filteredActivities.length !== 0 && (
+            {!loading && !error && filteredActivities.length !== 0 && (
                 <div className={`flex flex-col md:flex-row gap-2`}>
                     {/* Left: Area Chart */}
                     {chartData.length > 0 && (
@@ -260,7 +267,7 @@ export const SOTable: React.FC<SOProps> = ({
                                 <CardDescription>{`Showing ${filteredActivities.length} records`}</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {isLoading ? (
+                                {loading ? (
                                     <div className="flex justify-center items-center h-40">
                                         <Spinner />
                                     </div>

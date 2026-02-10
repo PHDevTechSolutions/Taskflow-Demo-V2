@@ -59,7 +59,7 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
     <Card className="bg-white text-black z-10">
       <CardHeader>
         <div className="flex justify-between items-center">
-          <CardTitle>Quotations Summary</CardTitle>
+          <CardTitle>Sales Order Summary</CardTitle>
           <div className="flex space-x-2">
 
             <Button variant="outline"

@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
-
 import { TaskListDialog } from "./dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { AccountsActiveDeleteDialog } from "../../activity/planner/dialog/delete";
@@ -75,10 +74,8 @@ export const TaskList: React.FC<CompletedProps> = ({
 }) => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<Completed[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Filters state - default to "all" (means no filter)
     const [searchTerm, setSearchTerm] = useState("");
@@ -99,24 +96,42 @@ export const TaskList: React.FC<CompletedProps> = ({
     const [editSoAmount, setEditSoAmount] = useState<number | "">("");
     const [isEditingSo, setIsEditingSo] = useState(false);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20); // default 10 per page
+
     // Fetch activities
     const fetchActivities = useCallback(() => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
-        setLoadingActivities(true);
-        setErrorActivities(null);
-
-        fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
-            .then(async (res) => {
+            if (!referenceid) {
+              setActivities([]);
+              return;
+            }
+        
+            setLoading(true);
+            setError(null);
+        
+            const from = dateCreatedFilterRange?.from
+              ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+              : null;
+            const to = dateCreatedFilterRange?.to
+              ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+              : null;
+        
+            const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            if (from && to) {
+              url.searchParams.append("from", from);
+              url.searchParams.append("to", to);
+            }
+        
+            fetch(url.toString())
+              .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, [referenceid]);
+              })
+              .then((data) => setActivities(data.activities || []))
+              .catch((err) => setError(err.message))
+              .finally(() => setLoading(false));
+          }, [referenceid, dateCreatedFilterRange]);
 
     // Real-time subscription using Supabase
     useEffect(() => {
@@ -263,9 +278,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         dateCreatedFilterRange,
     ]);
 
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
-
     // Extract unique status and type_activity values for filter dropdowns
     const statusOptions = useMemo(() => {
         const setStatus = new Set<string>();
@@ -361,6 +373,18 @@ export const TaskList: React.FC<CompletedProps> = ({
             default: return "default";
         }
     }
+
+    const totalPages = Math.ceil(filteredActivities.length / itemsPerPage);
+
+    const paginatedActivities = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        return filteredActivities.slice(start, end);
+    }, [filteredActivities, currentPage, itemsPerPage]);
+
+    const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1));
+    const handleNextPage = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
+    const handlePageSelect = (page: number) => setCurrentPage(page);
 
     return (
         <>
@@ -468,7 +492,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </TableHeader>
 
                         <TableBody>
-                            {filteredActivities.map((item) => {
+                            {paginatedActivities.map((item) => {
                                 let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
                                 if (item.status === "Assisted" || item.status === "SO-Done") badgeColor = "secondary";
                                 else if (item.status === "Quote-Done") badgeColor = "outline";
@@ -567,7 +591,43 @@ export const TaskList: React.FC<CompletedProps> = ({
                             })}
                         </TableBody>
                     </Table>
+                    <div className="flex items-center justify-between mt-4 text-xs">
+                        <div>
+                            Showing{" "}
+                            {Math.min((currentPage - 1) * itemsPerPage + 1, filteredActivities.length)}{" "}
+                            to{" "}
+                            {Math.min(currentPage * itemsPerPage, filteredActivities.length)}{" "}
+                            of {filteredActivities.length} entries
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Button size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
+                                Prev
+                            </Button>
+
+                            {/* Optional: show page numbers */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <Button
+                                    key={page}
+                                    size="sm"
+                                    variant={page === currentPage ? "default" : "outline"}
+                                    onClick={() => handlePageSelect(page)}
+                                >
+                                    {page}
+                                </Button>
+                            ))}
+
+                            <Button
+                                size="sm"
+                                onClick={handleNextPage}
+                                disabled={currentPage === totalPages}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
                 </div>
+                
             )}
 
             <Dialog open={reSoOpen} onOpenChange={setReSoOpen}>

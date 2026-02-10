@@ -32,8 +32,8 @@ export const SOSI: React.FC<SOSIProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<SOSIHistory[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Parse date string into "YYYY-MM"
   const getYearMonth = (dateStr?: string) => {
@@ -52,16 +52,6 @@ export const SOSI: React.FC<SOSIProps> = ({
     return `${dateCreatedFilterRange.from.getFullYear()}-${String(dateCreatedFilterRange.from.getMonth() + 1).padStart(2, "0")}`;
   }, [dateCreatedFilterRange]);
 
-  // Update external dateCreatedFilterRange when month is changed in dropdown
-  const onMonthChange = (monthValue: string) => {
-    // monthValue is "YYYY-MM"
-    const [yearStr, monthStr] = monthValue.split("-");
-    const year = Number(yearStr);
-    const month = Number(monthStr) - 1;
-    const newDate = new Date(year, month, 1);
-    setDateCreatedFilterRangeAction({ from: newDate });
-  };
-
   // Fetch activities from API
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
@@ -69,18 +59,32 @@ export const SOSI: React.FC<SOSIProps> = ({
       return;
     }
 
-    setLoadingActivities(true);
-    setErrorActivities(null);
+    setLoading(true);
+    setError(null);
 
-    fetch(`/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`)
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
+
+    const url = new URL("/api/conversion-rates/tsa/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
+    }
+
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch activities");
         return res.json();
       })
       .then((data) => setActivities(data.activities || []))
-      .catch((err) => setErrorActivities(err.message))
-      .finally(() => setLoadingActivities(false));
-  }, [referenceid]);
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
   // Setup Supabase realtime channel for updates
   useEffect(() => {
@@ -157,7 +161,7 @@ export const SOSI: React.FC<SOSIProps> = ({
     return uniqueDates.size;
   }, [activitiesFiltered, selectedMonth]);
 
-  const percentageSOToSI = totalSI === 0 ? 0 : (totalSO / totalSI) * 100;
+  const percentageSOToSI = totalSI === 0 ? 0 : (totalSI / totalSO) * 100;
 
   // Last 12 months for dropdown options
   const monthOptions = useMemo(() => {
@@ -172,26 +176,6 @@ export const SOSI: React.FC<SOSIProps> = ({
     }
     return options;
   }, []);
-
-  if (loadingActivities) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <Spinner className="size-8" />
-      </div>
-    );
-  }
-
-  if (errorActivities) {
-    return (
-      <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-        <AlertCircleIcon className="h-6 w-6 text-red-600" />
-        <div>
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{errorActivities}</AlertDescription>
-        </div>
-      </Alert>
-    );
-  }
 
   return (
     <div className="space-y-6">
