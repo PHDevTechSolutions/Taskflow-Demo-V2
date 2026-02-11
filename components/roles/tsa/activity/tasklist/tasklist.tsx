@@ -440,7 +440,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
                                 <TableHead>Date</TableHead>
-                                <TableHead>Time</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Contact #</TableHead>
@@ -519,12 +518,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>{new Date(item.date_updated ?? item.date_created).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            {new Date(item.date_updated ?? item.date_created).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </TableCell>
                                         <TableCell className="font-semibold">{displayValue(item.company_name)}</TableCell>
                                         <TableCell>
                                             <Badge variant="default" className={`text-xs whitespace-nowrap ${getBadgeClass(item.status)}`}>
