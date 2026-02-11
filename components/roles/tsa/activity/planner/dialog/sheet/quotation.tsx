@@ -56,8 +56,6 @@ interface Props {
   setQuotationType: (v: string) => void;
   quotationStatus: string;
   setQuotationStatus: (v: string) => void;
-  spfStatus: string;
-  setSpfStatus: (v: string) => void;
   callType: string;
   setCallType: (v: string) => void;
   followUpDate: string;
@@ -163,7 +161,6 @@ export function QuotationSheet(props: Props) {
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
     quotationStatus, setQuotationStatus,
-    spfStatus, setSpfStatus,
     callType, setCallType,
     followUpDate, setFollowUpDate,
     remarks, setRemarks,
@@ -1280,24 +1277,10 @@ export function QuotationSheet(props: Props) {
                   <SelectGroup>
                     <SelectItem value="Convert to SO">Convert to SO</SelectItem>
                     <SelectItem value="Declined / Dissaproved">Declined / Dissaproved</SelectItem>
-                    <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-                    <SelectItem value="Wait Bid Results">Wait Bid Results</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <FieldLabel className="mt-3">SPF Status</FieldLabel>
-              <Select value={spfStatus} onValueChange={setSpfStatus}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-                    <SelectItem value="Declined / Dissaproved">Declined / Dissaproved</SelectItem>
                     <SelectItem value="Pending PD">Pending PD</SelectItem>
                     <SelectItem value="Pending Procurement">Pending Procurement</SelectItem>
                     <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
+                    <SelectItem value="Wait Bid Results">Wait Bid Results</SelectItem>
                     <SelectItem value="Lost Bid">Lost Bid</SelectItem>
                   </SelectGroup>
                 </SelectContent>

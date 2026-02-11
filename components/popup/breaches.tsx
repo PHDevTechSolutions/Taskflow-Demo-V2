@@ -24,6 +24,7 @@ export function BreachesDialog() {
   const [userDetails, setUserDetails] = useState<{ referenceid: string }>({
     referenceid: "",
   });
+
   const [activities, setActivities] = useState<any[]>([]);
   const [timeConsumedMs, setTimeConsumedMs] = useState<number>(0);
 
@@ -65,7 +66,7 @@ export function BreachesDialog() {
     fetchUserData();
   }, [userId]);
 
-  // Fetch today's activities (for total sales and time)
+  // Fetch today's activities
   useEffect(() => {
     if (!userDetails.referenceid) return;
 
@@ -74,8 +75,10 @@ export function BreachesDialog() {
       try {
         const today = new Date().toISOString().slice(0, 10);
         const url = `/api/activity/tsa/breaches/fetch?referenceid=${userDetails.referenceid}&date=${today}`;
+
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch activities");
+
         const data = await res.json();
         setActivities(data.activities || []);
       } catch (err) {
@@ -89,36 +92,53 @@ export function BreachesDialog() {
     fetchActivities();
   }, [userDetails.referenceid]);
 
-  // Calculate total sales
+  // ================= METRICS LOGIC =================
+
+  // Total sales today
   const totalSalesToday = activities.reduce(
     (sum, act) => sum + (act.actual_sales || 0),
-    0,
+    0
   );
 
+  // 1. Pending Client Approval Count
   const pendingClientApprovalCount = activities.filter(
     (act) =>
       act.status === "Quote-Done" &&
-      act.quotation_status === "Pending Client Approval",
+      act.quotation_status === "Pending Client Approval"
   ).length;
+
+  // 2. SPF Related Call Types Count
+  const spfCallTypeCount = activities.filter(
+    (act) =>
+      act.call_type === "Quotation with SPF Preparation" ||
+      act.call_type === "Quotation with SPF Preparation Pending Client Approval"
+  ).length;
+
+  // =================================================
 
   // Helper: Compute total time consumed in milliseconds
   const computeTimeConsumed = (activities: any[]) => {
     return activities.reduce((total, act) => {
       if (!act.start_date || !act.end_date) return total;
+
       const start = new Date(act.start_date).getTime();
       const end = new Date(act.end_date).getTime();
+
       if (isNaN(start) || isNaN(end) || end < start) return total;
+
       return total + (end - start);
     }, 0);
   };
 
-  // Calculate total time consumed when activities change
+  // Calculate total time consumed
   useEffect(() => {
     if (!activities || activities.length === 0) {
       setTimeConsumedMs(0);
       return;
     }
+
     setLoadingTime(true);
+
     try {
       const totalMs = computeTimeConsumed(activities);
       setTimeConsumedMs(totalMs);
@@ -130,21 +150,23 @@ export function BreachesDialog() {
   // Helper: Format milliseconds to hh:mm:ss
   const formatDuration = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
+
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
+
     return `${hours}h ${minutes}m ${seconds}s`;
   };
 
   return (
     <>
-      {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="fixed bottom-6 right-4 w-200 bg-white rounded-lg shadow-xl z-50">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               End of Day Report
             </DialogTitle>
+
             <DialogDescription className="text-xs text-muted-foreground">
               {loadingUser
                 ? "Loading Reference ID..."
@@ -161,9 +183,7 @@ export function BreachesDialog() {
 
               <li>
                 Time Consumed:{" "}
-                {loadingTime
-                  ? "Calculating..."
-                  : formatDuration(timeConsumedMs)}
+                {loadingTime ? "Calculating..." : formatDuration(timeConsumedMs)}
               </li>
 
               <li>
@@ -174,8 +194,13 @@ export function BreachesDialog() {
               <li>CSR Metrics Tickets</li>
 
               <li>
-                Quote-Done with Pending Client Approval:{" "}
+                Quotation Pending Client Approval:{" "}
                 {loadingActivities ? "Loading..." : pendingClientApprovalCount}
+              </li>
+
+              <li>
+                SPF Related Quotations Count:{" "}
+                {loadingActivities ? "Loading..." : spfCallTypeCount}
               </li>
             </ul>
 
@@ -200,7 +225,6 @@ export function BreachesDialog() {
         </DialogContent>
       </Dialog>
 
-      {/* Small icon button when closed */}
       {!open && (
         <Button
           variant="destructive"
