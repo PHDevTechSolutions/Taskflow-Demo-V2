@@ -137,7 +137,7 @@ interface ManualProduct {
   id: number;
   title: string;
   skus: string[];
-  description: string;
+  description: string;z
   brand?: string;
   images: { src: string }[];
   base64Attachment?: string;
