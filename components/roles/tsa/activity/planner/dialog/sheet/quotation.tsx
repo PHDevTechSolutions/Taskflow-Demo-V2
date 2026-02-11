@@ -491,15 +491,7 @@ export function QuotationSheet(props: Props) {
 
       // Apply VAT based on vatType
       let totalWithVat = subtotalAfterDiscount;
-      if (vatType === "vat_exe") {
-        totalWithVat = subtotalAfterDiscount * (1 + VAT_RATE);
-      } else if (vatType === "vat_inc") {
-        // price already includes VAT, do nothing
-        totalWithVat = subtotalAfterDiscount;
-      } else if (vatType === "zero_rated") {
-        // no VAT, do nothing
-        totalWithVat = subtotalAfterDiscount;
-      }
+
 
       return acc + totalWithVat;
     }, 0);
@@ -600,10 +592,10 @@ export function QuotationSheet(props: Props) {
         subject: "For Quotation",
         items,
         vatType:
-          vatType === "vat_inc"
-            ? "VAT Inc"
-            : vatType === "vat_exe"
-              ? "VAT Exe"
+          vatType === "vat_exe"
+            ? "VAT Exe"
+            : vatType === "vat_inc"
+              ? "VAT Inc"
               : "Zero-Rated",
         totalPrice: Number(quotationAmount ?? 0),
         salesRepresentative: salesRepresentativeName,
@@ -1638,7 +1630,7 @@ export function QuotationSheet(props: Props) {
                           setVatType(newVatType);
 
                           // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
-                          if (newVatType === "vat_inc") {
+                          if (newVatType === "vat_exe") {
                             setDiscount(12);
                           } else {
                             setDiscount(0);
