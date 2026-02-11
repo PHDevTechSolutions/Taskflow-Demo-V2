@@ -48,6 +48,7 @@ export function BreachesDialog() {
       try {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error("Failed to fetch user data");
+
         const data = await res.json();
 
         setUserDetails({
@@ -100,18 +101,31 @@ export function BreachesDialog() {
     0
   );
 
-  // 1. Pending Client Approval Count
+  // 1. All quotations pending client approval
   const pendingClientApprovalCount = activities.filter(
     (act) =>
       act.status === "Quote-Done" &&
       act.quotation_status === "Pending Client Approval"
   ).length;
 
-  // 2. SPF Related Call Types Count
-  const spfCallTypeCount = activities.filter(
+  // 2. SPF SPECIFIC COUNTS (HIWA-HIWALAY)
+
+  const spfPendingClientApproval = activities.filter(
     (act) =>
-      act.call_type === "Quotation with SPF Preparation" ||
-      act.call_type === "Quotation with SPF Preparation Pending Client Approval"
+      act.call_type === "Quotation with SPF Preparation" &&
+      act.quotation_status === "Pending Client Approval"
+  ).length;
+
+  const spfPendingProcurement = activities.filter(
+    (act) =>
+      act.call_type === "Quotation with SPF Preparation" &&
+      act.quotation_status === "Pending Procurement"
+  ).length;
+
+  const spfPendingPD = activities.filter(
+    (act) =>
+      act.call_type === "Quotation with SPF Preparation" &&
+      act.quotation_status === "Pending PD"
   ).length;
 
   // =================================================
@@ -199,8 +213,18 @@ export function BreachesDialog() {
               </li>
 
               <li>
-                SPF Related Quotations Count:{" "}
-                {loadingActivities ? "Loading..." : spfCallTypeCount}
+                SPF - Pending Client Approval:{" "}
+                {loadingActivities ? "Loading..." : spfPendingClientApproval}
+              </li>
+
+              <li>
+                SPF - Pending Procurement:{" "}
+                {loadingActivities ? "Loading..." : spfPendingProcurement}
+              </li>
+
+              <li>
+                SPF - Pending PD:{" "}
+                {loadingActivities ? "Loading..." : spfPendingPD}
               </li>
             </ul>
 
