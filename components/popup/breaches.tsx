@@ -21,7 +21,9 @@ export function BreachesDialog() {
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingTime, setLoadingTime] = useState(false);
 
-  const [userDetails, setUserDetails] = useState<{ referenceid: string }>({ referenceid: "" });
+  const [userDetails, setUserDetails] = useState<{ referenceid: string }>({
+    referenceid: "",
+  });
   const [activities, setActivities] = useState<any[]>([]);
   const [timeConsumedMs, setTimeConsumedMs] = useState<number>(0);
 
@@ -88,7 +90,16 @@ export function BreachesDialog() {
   }, [userDetails.referenceid]);
 
   // Calculate total sales
-  const totalSalesToday = activities.reduce((sum, act) => sum + (act.actual_sales || 0), 0);
+  const totalSalesToday = activities.reduce(
+    (sum, act) => sum + (act.actual_sales || 0),
+    0,
+  );
+
+  const pendingClientApprovalCount = activities.filter(
+    (act) =>
+      act.status === "Quote-Done" &&
+      act.quotation_status === "Pending Client Approval",
+  ).length;
 
   // Helper: Compute total time consumed in milliseconds
   const computeTimeConsumed = (activities: any[]) => {
@@ -131,9 +142,13 @@ export function BreachesDialog() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="fixed bottom-6 right-4 w-200 bg-white rounded-lg shadow-xl z-50">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">End of Day Report</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">
+              End of Day Report
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {loadingUser ? "Loading Reference ID..." : `Reference ID: ${userDetails.referenceid}`}
+              {loadingUser
+                ? "Loading Reference ID..."
+                : `Reference ID: ${userDetails.referenceid}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -143,20 +158,37 @@ export function BreachesDialog() {
               <li>500 Clients</li>
               <li>Overdue of Scheduled Activity</li>
               <li>Count of New Account Dev Reach Outbound</li>
+
               <li>
-                Time Consumed: {loadingTime ? "Calculating..." : formatDuration(timeConsumedMs)}
+                Time Consumed:{" "}
+                {loadingTime
+                  ? "Calculating..."
+                  : formatDuration(timeConsumedMs)}
               </li>
-              <li>Total Sales Today: {loadingActivities ? "Loading..." : totalSalesToday}</li>
+
+              <li>
+                Total Sales Today:{" "}
+                {loadingActivities ? "Loading..." : totalSalesToday}
+              </li>
+
               <li>CSR Metrics Tickets</li>
-              <li>Closing of Quotation</li>
+
+              <li>
+                Quote-Done with Pending Client Approval:{" "}
+                {loadingActivities ? "Loading..." : pendingClientApprovalCount}
+              </li>
             </ul>
 
             {loadingActivities ? (
               <p className="text-xs text-gray-500">Loading activities...</p>
             ) : activities.length > 0 ? (
-              <p className="text-xs text-gray-600">{activities.length} activity records today.</p>
+              <p className="text-xs text-gray-600">
+                {activities.length} activity records today.
+              </p>
             ) : (
-              <p className="text-xs text-gray-500">No activities recorded today.</p>
+              <p className="text-xs text-gray-500">
+                No activities recorded today.
+              </p>
             )}
           </div>
 
