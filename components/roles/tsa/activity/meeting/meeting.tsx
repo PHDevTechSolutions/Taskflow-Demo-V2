@@ -145,9 +145,9 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
       {/* Loading / Empty State */}
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading meetings...</p>
+        <p></p>
       ) : displayedMeetings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No meetings found.</p>
+        <p></p>
       ) : (
         <div className="flex flex-col gap-3">
           {displayedMeetings.map((meeting) => (

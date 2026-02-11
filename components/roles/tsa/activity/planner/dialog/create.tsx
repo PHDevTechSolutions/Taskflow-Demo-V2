@@ -62,6 +62,7 @@ interface Activity {
     quotation_number?: string;
     quotation_amount?: string;
     quotation_type?: string;
+    quotation_status?: string;
 
     // sales order fields
     so_number?: string;
@@ -178,6 +179,7 @@ export function CreateActivityDialog({
     const [quotationNumber, setQuotationNumber] = useState("");
     const [quotationAmount, setQuotationAmount] = useState("");
     const [quotationType, setQuotationType] = useState("");
+    const [quotationStatus, setQuotationStatus] = useState("");
 
     const [soNumber, setSoNumber] = useState("");
     const [soAmount, setSoAmount] = useState("");
@@ -224,6 +226,7 @@ export function CreateActivityDialog({
         quotationNumber: "",
         quotationAmount: "",
         quotationType: "",
+        quotationStatus: "",
         soNumber: "",
         soAmount: "",
         siDate: "",
@@ -253,6 +256,7 @@ export function CreateActivityDialog({
         setQuotationNumber(initialState.quotationNumber);
         setQuotationAmount(initialState.quotationAmount);
         setQuotationType(initialState.quotationType);
+        setQuotationStatus(initialState.quotationStatus);
         setSoNumber(initialState.soNumber);
         setSoAmount(initialState.soAmount);
         setSiDate(initialState.siDate);
@@ -391,6 +395,7 @@ export function CreateActivityDialog({
             quotation_number: quotationNumber || undefined,
             quotation_amount: quotationAmount || undefined,
             quotation_type: quotationType || undefined,
+            quotation_status: quotationStatus || undefined,
 
             so_number: soNumber || undefined,
             so_amount: soAmount || undefined,
@@ -760,6 +765,8 @@ export function CreateActivityDialog({
                                     setQuotationAmount={setQuotationAmount}
                                     quotationType={quotationType}
                                     setQuotationType={setQuotationType}
+                                    quotationStatus={quotationStatus}
+                                    setQuotationStatus={setQuotationStatus}
                                     callType={callType}
                                     setCallType={setCallType}
                                     followUpDate={followUpDate}

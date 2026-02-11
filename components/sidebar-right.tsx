@@ -9,6 +9,7 @@ import { useFormat } from "@/contexts/FormatContext";
 import { type DateRange } from "react-day-picker";
 
 import { Meeting } from "@/components/roles/tsa/activity/meeting/meeting";
+import { BreachesDialog } from "@/components/popup/breaches";
 import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
@@ -198,7 +199,7 @@ export function SidebarRight({
           </Card>
         )}
       </SidebarContent>
-
+      <BreachesDialog />
       <SidebarFooter>
         <div className="border-t border-sidebar-border mt-2 pt-2 text-center text-xs">
           <div>{time}</div>

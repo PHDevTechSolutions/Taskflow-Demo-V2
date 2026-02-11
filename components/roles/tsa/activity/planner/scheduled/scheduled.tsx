@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import {
   CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle,
-  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical
+  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
@@ -62,6 +62,7 @@ interface HistoryItem {
   call_status?: string;
   tsm_approved_status: string;
   type_activity: string;
+  quotation_status: string;
 }
 
 interface ScheduledProps {
@@ -608,10 +609,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       {!["assisted", "not assisted"].includes(item.status.toLowerCase()) && (
                         <Badge
                           variant={badgeProps.variant}
-                          className={`font-mono ${badgeProps.className || ""}`}
+                          className={`font-mono text-[10px] ${badgeProps.className || ""}`}
                         >
                           <CheckCircle2 />
-                          {item.status.replace("-", " ")}
+                          {item.status.replace("-", " ")} / {item.relatedHistoryItems.some(
+                            (h) => h.quotation_status && h.quotation_status !== "-"
+                          ) && (
+                              <p>
+                                <span className="uppercase">
+                                  {Array.from(
+                                    new Set(
+                                      item.relatedHistoryItems
+                                        .map((h) => h.quotation_status ?? "-")
+                                        .filter((v) => v !== "-")
+                                    )
+                                  ).join(", ")}
+                                </span>
+                              </p>
+                            )}
                         </Badge>
                       )}
 
@@ -643,7 +658,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <Badge
                               key={activity}
                               variant="outline"
-                              className="flex items-center justify-center w-8 h-8 p-0"
+                              className="flex items-center justify-center w-8 h-8 p-0 text-[10px]"
                               title={activity.toUpperCase()}
                             >
                               {getIcon(activity)}
@@ -653,7 +668,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       }
 
                       {item.overdueDays > 0 && (
-                        <Badge className="font-mono">
+                        <Badge className="font-mono text-[10px]">
                           <Clock /> {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago.
                         </Badge>
                       )}
@@ -663,21 +678,31 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           h.tsm_approved_status &&
                           h.tsm_approved_status !== "-" &&
                           h.tsm_approved_status.trim() !== ""
-                      ) && (
-                          <Badge className="font-mono bg-blue-900">
-                            <strong>TSM:</strong>{" "}
-                            <ThumbsUp /> {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.tsm_approved_status?.trim() ?? "")
-                                  .filter((v) => v && v !== "-")
-                              )
-                            )
-                              .join(", ")
-                              .toUpperCase()}
-                          </Badge>
-                        )}
+                      ) && (() => {
+                        const statuses = Array.from(
+                          new Set(
+                            item.relatedHistoryItems
+                              .map((h) => h.tsm_approved_status?.trim() ?? "")
+                              .filter((v) => v && v !== "-")
+                          )
+                        );
 
+                        const isDeclined = statuses.some(
+                          (status) => status.toLowerCase() === "decline"
+                        );
+
+                        return (
+                          <Badge
+                            className={`font-mono text-[10px] flex items-center gap-1 ${isDeclined
+                                ? "bg-red-600 text-white"
+                                : "bg-blue-900 text-white"
+                              }`}
+                          >
+                            {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
+                           
+                          </Badge>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -688,7 +713,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     <p><strong>Address:</strong> {item.address || "-"}</p>
 
                     <Separator className="mb-2 mt-2" />
-
                     {item.relatedHistoryItems.length === 0 ? (
                       <p>No quotation or SO history available.</p>
                     ) : (
