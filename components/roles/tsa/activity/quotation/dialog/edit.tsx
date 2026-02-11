@@ -894,7 +894,7 @@ export default function TaskListEditDialog({
                             </div>
 
                             <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
-                                <h3 className="text-sm font-semibold mb-2">Revised Quotations</h3>
+                                <h3 className="text-sm font-semibold mb-2">Revised Quotations History</h3>
                                 {revisedQuotations.length === 0 ? (
                                     <p>No revised quotations found.</p>
                                 ) : (

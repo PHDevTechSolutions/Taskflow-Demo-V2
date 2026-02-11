@@ -183,7 +183,7 @@ export function SidebarRight({
 
         {userDetails.Role !== "Territory Sales Manager" && (
           <Card className="rounded-xs shadow-none border-0">
-            <CardContent>
+            <CardContent className="space-y-2">
               <Meeting
                 referenceid={userDetails.ReferenceID}
                 tsm={userDetails.TSM}

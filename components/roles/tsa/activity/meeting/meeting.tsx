@@ -6,12 +6,8 @@ import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -32,7 +28,7 @@ interface MeetingItem {
   manager: string;
   type_activity: string;
   remarks: string;
-  start_date: string; // stored as ISO string or similar
+  start_date: string;
   end_date: string;
   date_created: Timestamp;
   date_updated: Timestamp;
@@ -44,14 +40,14 @@ interface MeetingProps {
   manager: string;
 }
 
-// Helper to format date string to "November 23 2025 / 8:00 AM"
+// Helper to format date string
 function formatDateTime(dateStr: string) {
   const dateObj = new Date(dateStr);
   if (isNaN(dateObj.getTime())) return dateStr;
 
   const options: Intl.DateTimeFormatOptions = {
     year: "numeric",
-    month: "long",
+    month: "short",
     day: "numeric",
   };
 
@@ -92,7 +88,6 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           } as MeetingItem;
         });
 
-        // No filtering - show all meetings including past ones
         setMeetings(fetchedMeetings);
       } catch (error) {
         console.error("Error loading meetings:", error);
@@ -121,69 +116,70 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
     setMeetings((prev) => [newMeeting, ...prev]);
   };
 
-  // Show up to 3 meetings (all included now)
+  // Show up to 3 meetings
   const displayedMeetings = meetings.slice(0, 3);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold">Meeting</h2>
+      {/* Header with Create Button */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold">Meetings</h2>
         <MeetingDialog
           referenceid={referenceid}
           tsm={tsm}
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" className="inline-flex items-center cursor-pointer">
+          <Button
+            variant="outline"
+            size="sm"
+            className="inline-flex items-center"
+          >
             <Plus className="mr-1 h-4 w-4" />
             Create
           </Button>
         </MeetingDialog>
       </div>
 
-      <Separator className="my-4" />
+      <Separator className="my-3" />
 
-      <Accordion type="single" collapsible className="w-full">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading meetings...</p>
-        ) : displayedMeetings.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No meetings found.
-          </p>
-        ) : (
-          displayedMeetings.map(
-            ({ id, type_activity, remarks, start_date, end_date }) => (
-              <AccordionItem key={id} value={id}>
-                <AccordionTrigger className="text-[10px]">
-                  {type_activity} — {formatDateTime(start_date)} to{" "}
-                  {formatDateTime(end_date)}
-                </AccordionTrigger>
-                <AccordionContent className="flex flex-col gap-2">
-                  <p className="text-[10px]">
-                    <strong>Remarks:</strong> {remarks}
-                  </p>
-                  <p className="text-[10px]">
-                    <strong>Start Date:</strong> {formatDateTime(start_date)}
-                  </p>
-                  <p className="text-[10px]">
-                    <strong>End Date:</strong> {formatDateTime(end_date)}
-                  </p>
-                  <div className="mt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteMeeting(id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            )
-          )
-        )}
-      </Accordion>
+      {/* Loading / Empty State */}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading meetings...</p>
+      ) : displayedMeetings.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No meetings found.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {displayedMeetings.map((meeting) => (
+            <Card key={meeting.id} className="border">
+              <CardHeader className="flex justify-between items-center">
+                <CardTitle className="text-sm font-medium">
+                  {meeting.type_activity}
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 bg-red-100 rounded-full hover:text-red-800"
+                  onClick={() => handleDeleteMeeting(meeting.id)}
+                >
+                  <Trash2 size={16} />
+                </Button>
+              </CardHeader>
+              <CardContent className="text-[10px] space-y-1">
+                <p>
+                  <strong>Start:</strong> {formatDateTime(meeting.start_date)}
+                </p>
+                <p>
+                  <strong>End:</strong> {formatDateTime(meeting.end_date)}
+                </p>
+                <p>
+                  <strong>Remarks:</strong> {meeting.remarks || "-"}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
