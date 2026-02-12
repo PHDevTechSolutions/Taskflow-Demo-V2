@@ -19,6 +19,7 @@ import { Progress } from "@/components/roles/tsa/activity/planner/progress/progr
 import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
 import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
 import { Done } from "@/components/roles/tsa/activity/planner/done/done";
+import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue";
 
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
@@ -303,6 +304,29 @@ function DashboardContent() {
 
                                 <CardContent>
                                     <Done
+                                        referenceid={userDetails.referenceid}
+                                        firstname={userDetails.firstname}
+                                        lastname={userDetails.lastname}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        tsmname={userDetails.tsmname}
+                                        managername={userDetails.managername}
+                                        target_quota={userDetails.target_quota}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Overdue</CardTitle>
+                                    <CardDescription>
+                                        Activity Lapsed on Scheduled
+                                    </CardDescription>
+                                </CardHeader>
+
+                                <CardContent>
+                                    <Overdue
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
                                         lastname={userDetails.lastname}

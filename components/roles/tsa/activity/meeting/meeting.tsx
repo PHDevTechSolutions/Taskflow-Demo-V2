@@ -119,7 +119,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" size="sm">
+          <Button variant="outline" className="text-xs">
             <Plus className="mr-1 h-4 w-4" />
             Create
           </Button>
@@ -135,6 +135,17 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
         <p className="text-xs text-muted-foreground">No meetings found.</p>
       ) : (
         <div className="flex flex-col gap-3">
+          {/* View All Button */}
+          <div className="flex justify-end">
+            {meetings.length > 1 && (
+              <Button className="text-xs"
+                onClick={() => setViewAllOpen(true)}
+              >
+                <List />
+                All
+              </Button>
+            )}
+          </div>
           {displayedMeetings.map((meeting) => (
             <Card key={meeting.id} className="border">
               <CardHeader className="flex flex-row items-center justify-between py-3">
@@ -191,17 +202,6 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
               </CardContent>
             </Card>
           ))}
-
-          {/* View All Button */}
-          {meetings.length > 1 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewAllOpen(true)}
-            >
-             <List /> View All
-            </Button>
-          )}
         </div>
       )}
 
