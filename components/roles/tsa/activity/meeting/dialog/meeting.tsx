@@ -23,16 +23,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { db } from "@/lib/firebase";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { supabase } from "@/utils/supabase";
 import { toast } from "sonner";
 
 interface MeetingDialogProps {
   referenceid: string;
   tsm: string;
   manager: string;
-  onMeetingCreated?: (meeting: any) => void; // callback to parent
-  children: React.ReactNode; // button trigger passed from parent
+  onMeetingCreated?: (meeting: any) => void;
+  children: React.ReactNode;
 }
 
 export function MeetingDialog({
@@ -44,13 +43,11 @@ export function MeetingDialog({
 }: MeetingDialogProps) {
   const [open, setOpen] = useState(false);
 
-  // Form state
   const [typeActivity, setTypeActivity] = useState("Client Meeting");
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Reset form on dialog open
   useEffect(() => {
     if (open) {
       setTypeActivity("Client Meeting");
@@ -69,29 +66,30 @@ export function MeetingDialog({
     }
 
     try {
-      const now = Timestamp.fromDate(new Date());
+      const { data, error } = await supabase
+        .from("meetings")
+        .insert([
+          {
+            referenceid,
+            tsm,
+            manager,
+            type_activity: typeActivity,
+            remarks: remarks || "No remarks",
+            start_date: startDate,
+            end_date: endDate,
+            date_updated: new Date(),
+          },
+        ])
+        .select()
+        .single();
 
-      const newMeeting = {
-        referenceid,
-        tsm,
-        manager,
-        type_activity: typeActivity,
-        remarks: remarks || "No remarks",
-        start_date: startDate,
-        end_date: endDate,
-        date_created: now,
-        date_updated: now,
-      };
-
-      const docRef = await addDoc(collection(db, "meetings"), newMeeting);
-
-      const createdMeeting = { id: docRef.id, ...newMeeting };
+      if (error) throw error;
 
       toast.success("Meeting created successfully!");
-      onMeetingCreated?.(createdMeeting);
+      onMeetingCreated?.(data);
       setOpen(false);
-    } catch (error) {
-      console.error("Error adding meeting:", error);
+    } catch (err) {
+      console.error("Supabase insert error:", err);
       toast.error("Failed to save meeting, try again.");
     }
   };
@@ -99,6 +97,7 @@ export function MeetingDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
+
       <DialogContent className="sm:max-w-lg sm:p-8">
         <DialogHeader>
           <DialogTitle>Create Meeting</DialogTitle>
@@ -109,11 +108,11 @@ export function MeetingDialog({
 
         <form onSubmit={handleSubmit} className="grid gap-4">
           {/* Type of Activity */}
-          <div className="grid gap-2 w-full">
-            <Label htmlFor="typeActivity">Type of Activity</Label>
-            <Select onValueChange={setTypeActivity} value={typeActivity}>
-              <SelectTrigger id="typeActivity" className="w-full">
-                <SelectValue placeholder="Select an activity type" />
+          <div className="grid gap-2">
+            <Label>Type of Activity</Label>
+            <Select value={typeActivity} onValueChange={setTypeActivity}>
+              <SelectTrigger>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Client Meeting">Client Meeting</SelectItem>
@@ -124,36 +123,30 @@ export function MeetingDialog({
 
           {/* Remarks */}
           <div className="grid gap-2">
-            <Label htmlFor="remarks">Remarks</Label>
+            <Label>Remarks</Label>
             <Textarea
-              id="remarks"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add remarks..."
               rows={3}
             />
           </div>
 
-          {/* Date inputs */}
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="startDate">Start Date</Label>
+              <Label>Start Date</Label>
               <Input
-                id="startDate"
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="endDate">End Date</Label>
+              <Label>End Date</Label>
               <Input
-                id="endDate"
                 type="datetime-local"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                required
               />
             </div>
           </div>
