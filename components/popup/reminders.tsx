@@ -217,6 +217,7 @@ export function Reminders() {
     const THIRTY_MINUTES = 30 * 60 * 1000;
     const FIVE_MINUTES = 5 * 60 * 1000;
 
+    // Check current meeting
     const meeting = meetings.find((m) => {
       if (dismissedMeetings.includes(m.id)) return false;
       const d = toDate(m.start_date);
@@ -228,7 +229,8 @@ export function Reminders() {
     setCurrentMeeting(meeting || null);
     setShowMeeting(!!meeting);
 
-    if (now.getHours() === 16 && now.getMinutes() === 30 && !dismissedLogout) {
+    // Logout reminder ONLY at 6:30 PM
+    if (now.getHours() === 18 && now.getMinutes() === 30 && !dismissedLogout) {
       setShowLogout(true);
     }
   }, [now, meetings, dismissedMeetings, dismissedLogout]);

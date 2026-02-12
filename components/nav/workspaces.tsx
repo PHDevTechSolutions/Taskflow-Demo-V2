@@ -55,11 +55,12 @@ export function NavWorkspaces({
                   {/* This button toggles collapse */}
                   <SidebarMenuButton
                     onClick={() => onToggleSection(workspace.name)}
-                    className="flex items-center space-x-2 cursor-pointer flex-grow"
+                    className="flex items-center space-x-2 cursor-pointer flex-grow break-words"
                   >
-                    <WorkspaceIcon className="w-5 h-5" />
-                    <span>{workspace.name}</span>
+                    <WorkspaceIcon className="w-5 h-5 flex-shrink-0" />
+                    <span className="truncate">{workspace.name}</span>
                   </SidebarMenuButton>
+
 
                   {/* Optional navigation link as separate button */}
                   {workspace.url && (
@@ -90,10 +91,11 @@ export function NavWorkspaces({
                       return (
                         <SidebarMenuSubItem key={`${workspace.name}-${page.name}-${page.url}`}>
                           <SidebarMenuSubButton asChild>
-                            <a href={page.url} className="flex items-center space-x-2">
-                              <PageIcon className="w-4 h-4" />
-                              <span>{page.name}</span>
+                            <a href={page.url} className="flex items-center space-x-2 break-words">
+                              <PageIcon className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{page.name}</span>
                             </a>
+
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       );

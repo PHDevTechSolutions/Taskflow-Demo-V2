@@ -252,7 +252,7 @@ export const Completed: React.FC<CompletedProps> = ({
       />
 
       <div className="mb-2 text-xs font-bold">
-        Total Completed Activities: {deliveredData.length}
+        Total Completed Activities: ({deliveredData.length})
       </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
@@ -460,7 +460,7 @@ export const Completed: React.FC<CompletedProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-1 uppercase">
-                    <Badge className="bg-green-500 font-mono flex items-center gap-2 p-2 whitespace-nowrap">
+                    <Badge className="bg-green-500 font-mono flex items-center gap-2 p-2 whitespace-nowrap text-[10px]">
                       <Truck /> {item.status}
                     </Badge>
                   </div>

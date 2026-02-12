@@ -1,21 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ChartArea } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Spinner } from "@/components/ui/spinner";
 
 /* -------------------- Helpers -------------------- */
 const formatDuration = (ms: number) => {
@@ -72,7 +63,6 @@ export function BreachesDialog() {
   const [spfPendingClientApproval, setSpfPendingClientApproval] = useState(0);
   const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
   const [spfPendingPD, setSpfPendingPD] = useState(0);
-
   const [overdueCount, setOverdueCount] = useState(0);
 
   const searchParams = useSearchParams();
@@ -220,14 +210,14 @@ export function BreachesDialog() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="fixed bottom-6 right-4 bg-white rounded-lg shadow-xl z-50 overflow-auto"
-          style={{ width: "90vh", height: "70vh" }}
+          style={{ width: "90vh", height: "60vh" }}
         >
           <DialogHeader>
             <DialogTitle>End of Day Report</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {loadingUser ? "Loading Reference ID..." : `Reference ID: ${userDetails.referenceid}`}
             </DialogDescription>
-
+            {/*
             <div className="mt-2 flex space-x-2 flex-wrap">
               <Input type="date" className="flex-1 min-w-[120px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
               <Input type="date" className="flex-1 min-w-[120px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
@@ -242,6 +232,7 @@ export function BreachesDialog() {
                 {loadingActivities || loadingOverdue ? <Spinner /> : "Fetch"}
               </Button>
             </div>
+            */}
           </DialogHeader>
 
           <div className="space-y-2 text-sm">

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import {
   CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle,
-  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot
+  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
@@ -96,12 +96,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [loadingCompanies, setLoadingCompanies] = useState(false);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
-  const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -111,78 +110,54 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
-  // Fetch activities
-  const fetchActivities = useCallback(async () => {
+  const fetchAllData = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
-      return;
-    }
-    setLoadingActivities(true);
-    setErrorActivities(null);
-
-    try {
-      const res = await fetch(
-        `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate, proxy-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        }
-      );
-
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error || "Failed to fetch activities");
-      }
-
-      const json = await res.json();
-      setActivities(json.data || []);
-    } catch (error: any) {
-      setErrorActivities(error.message || "Error fetching activities");
-    } finally {
-      setLoadingActivities(false);
-    }
-  }, [referenceid]);
-
-  // Fetch history data
-  const fetchHistory = useCallback(async () => {
-    if (!referenceid) {
       setHistory([]);
       return;
     }
-    setLoadingHistory(true);
-    setErrorHistory(null);
 
-    try {
-      const res = await fetch(
-        `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
-      );
+    setActivitiesLoading(true);
+    setHistoryLoading(true);
+    setError(null);
 
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error || "Failed to fetch history");
-      }
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
 
-      const json = await res.json();
-      setHistory(json.activities || []);
-    } catch (error: any) {
-      setErrorHistory(error.message || "Error fetching history");
-    } finally {
-      setLoadingHistory(false);
+    const url = new URL("/api/activity/tsa/planner/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
     }
-  }, [referenceid]);
+
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities and history");
+        return res.json();
+      })
+      .then((data) => {
+        setActivities(data.activities || []);
+        setHistory(data.history || []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => {
+        setActivitiesLoading(false);
+        setHistoryLoading(false);
+      });
+  }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     if (!referenceid) return;
 
-    // Initial fetches
-    fetchActivities();
-    fetchHistory();
+    // Initial fetch
+    fetchAllData();
 
     // Subscribe realtime for activities
     const activityChannel = supabase
@@ -197,7 +172,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         },
         (payload) => {
           console.log("Activity realtime update:", payload);
-          fetchActivities();
+          fetchAllData();
         }
       )
       .subscribe();
@@ -215,12 +190,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         },
         (payload) => {
           console.log("History realtime update:", payload);
-          fetchHistory();
+          fetchAllData();
         }
       )
       .subscribe();
 
-    // Cleanup subscriptions properly
     return () => {
       activityChannel.unsubscribe();
       supabase.removeChannel(activityChannel);
@@ -228,7 +202,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchActivities, fetchHistory]);
+  }, [referenceid, fetchAllData]);
 
   function isDelivered(status: string) {
     return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress", "Transfer"].includes(status);
@@ -280,41 +254,39 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const term = searchTerm.toLowerCase();
 
   const filteredActivities = mergedActivities
-    // ❌ REMOVE scheduled_date filter dito, kaya wala na ito
-
-    // 🔍 search filter
     .filter((item) => {
-      const lowerTerm = term.toLowerCase();
+      // ✅ Status filter
+      if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
-      if (item.company_name?.toLowerCase().includes(lowerTerm)) return true;
-      if (item.ticket_reference_number?.toLowerCase().includes(lowerTerm)) return true;
+      const termLower = searchTerm.toLowerCase();
 
-      if (
-        item.relatedHistoryItems.some((h) =>
-          h.quotation_number?.toLowerCase().includes(lowerTerm)
+      // Flatten all values of Activity
+      const activityValues = Object.values(item)
+        .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
+        .join(" ")
+        .toLowerCase();
+
+      if (activityValues.includes(termLower)) return true;
+
+      // Flatten all relatedHistoryItems values
+      const historyValues = item.relatedHistoryItems
+        .map((h) =>
+          Object.values(h)
+            .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
+            .join(" ")
+            .toLowerCase()
         )
-      )
-        return true;
+        .join(" ");
 
-      if (
-        item.relatedHistoryItems.some((h) =>
-          h.so_number?.toLowerCase().includes(lowerTerm)
-        )
-      )
-        return true;
+      if (historyValues.includes(termLower)) return true;
 
       return false;
     })
-
-    // 🔽 sort newest first
     .sort(
       (a, b) =>
         new Date(b.date_updated).getTime() -
         new Date(a.date_updated).getTime()
     );
-
-  const isLoading = loadingCompanies || loadingActivities || loadingHistory;
-  const error = errorCompanies || errorActivities || errorHistory;
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -351,7 +323,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
-      await fetchActivities();
+      await fetchAllData();
       window.location.reload();
 
       toast.success("Transaction marked as Cancelled.");
@@ -408,7 +380,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
-      await fetchActivities();
+      await fetchAllData();
 
       toast.success("Transaction marked as Done.");
     } catch {
@@ -453,7 +425,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
-      await fetchActivities();
+      await fetchAllData();
 
       toast.success("Transaction marked as Transfer.");
     } catch {
@@ -467,7 +439,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
   const selectedTicketReferenceNumber = selectedActivity?.ticket_reference_number || null;
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
         <Spinner className="size-8" />
@@ -504,19 +476,38 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   return (
     <>
       <div className="flex items-center gap-2 mb-4">
-        <Input
-          type="search"
-          placeholder="Search company, ticket ref, quotation no, so no..."
-          className="text-xs flex-grow"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Search accounts"
-        />
+        <div className="flex items-center gap-2 mb-4 w-full">
+          {/* Search Bar - humahaba */}
+          <Input
+            type="search"
+            placeholder="Search company, ticket ref, quotation no, so no..."
+            className="text-xs flex-grow"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search accounts"
+          />
 
+          {/* Status Dropdown - nasa right */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="whitespace-nowrap">
+                {statusFilter === "All" ? <Filter /> : statusFilter}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => setStatusFilter("All")}>All</DropdownMenuItem>
+              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => (
+                <DropdownMenuItem key={status} onClick={() => setStatusFilter(status)}>
+                  {status}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="mb-4 text-xs font-bold">
-        Total Follow Up: {filteredActivities.length}
+        Total Follow Up: ({filteredActivities.length})
       </div>
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
@@ -559,7 +550,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           address={item.address}
                           accountReferenceNumber={item.account_reference_number}
                           onCreated={() => {
-                            fetchActivities();
+                            fetchAllData();
                           }}
                         />
 

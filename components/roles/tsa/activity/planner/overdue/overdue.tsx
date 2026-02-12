@@ -304,7 +304,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
             />
 
             <div className="mb-2 text-xs font-bold">
-                Total Overdue Activities: {mergedData.length}
+                Total Overdue Activities: ({mergedData.length})
             </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">

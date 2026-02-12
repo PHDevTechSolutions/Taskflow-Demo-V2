@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { SidebarGroup, SidebarGroupContent } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-
+import { MapPin } from "lucide-react";
 type DatePickerProps = {
   selectedDateRange: DateRange | undefined;
   onDateSelectAction: (range: DateRange | undefined) => void;
@@ -76,7 +76,7 @@ export function DatePicker({
             w-full rounded-md border bg-background p-2
             [&_.rdp-cell]:w-9
             [&_.rdp-cell]:h-9
-            [&_.rdp-day]:rounded-md
+            [&_.rdp-day]:
             [&_.rdp-day_range_start]:rounded-l-md
             [&_.rdp-day_range_end]:rounded-r-md
             [&_.rdp-day_range_middle]:rounded-none

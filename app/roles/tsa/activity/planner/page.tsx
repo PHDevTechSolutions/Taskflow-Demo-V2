@@ -24,6 +24,8 @@ import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
+import { PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck, AlertCircle } from "lucide-react"
+
 interface Account {
     id: string;
     referenceid: string;
@@ -215,7 +217,10 @@ function DashboardContent() {
                         <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>New Task</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <PlusCircle className="w-5 h-5" />
+                                        <span>New Task</span>
+                                    </CardTitle>
                                     <CardDescription>
                                         Manage your latest Endorsed Tickets and Outbound Calls efficiently.
                                         Stay updated with pending tasks and streamline your workflow.
@@ -233,7 +238,10 @@ function DashboardContent() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>In Progress</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <Loader2 className="w-5 h-5" />
+                                        <span>In Progress</span>
+                                    </CardTitle>
                                     <CardDescription>
                                         View and track all ongoing tasks to ensure timely completion and effective follow-up.
                                     </CardDescription>
@@ -256,7 +264,10 @@ function DashboardContent() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Scheduled</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <Calendar className="w-5 h-5" />
+                                        <span>Scheduled</span>
+                                    </CardTitle>
                                     <CardDescription>
                                         View all upcoming scheduled tasks and track their progress for timely completion.
                                     </CardDescription>
@@ -280,7 +291,10 @@ function DashboardContent() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Completed</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <CheckCircle className="w-5 h-5" />
+                                        <span>Completed</span>
+                                    </CardTitle>
                                     <CardDescription>
                                         Review all delivered transactions and successfully completed tasks for your records.
                                     </CardDescription>
@@ -296,9 +310,12 @@ function DashboardContent() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Done</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <ClipboardCheck className="w-5 h-5" />
+                                        <span>Done</span>
+                                    </CardTitle>
                                     <CardDescription>
-                                        Done Task.
+                                        This task has been completed.
                                     </CardDescription>
                                 </CardHeader>
 
@@ -317,11 +334,14 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="border border-red-400">
                                 <CardHeader>
-                                    <CardTitle>Overdue</CardTitle>
+                                    <CardTitle className="flex items-center space-x-2">
+                                        <AlertCircle className="w-5 h-5 text-red-500" />
+                                        <span>Overdue</span>
+                                    </CardTitle>
                                     <CardDescription>
-                                        Activity Lapsed on Scheduled
+                                        This activity has passed its scheduled date and requires attention.
                                     </CardDescription>
                                 </CardHeader>
 
