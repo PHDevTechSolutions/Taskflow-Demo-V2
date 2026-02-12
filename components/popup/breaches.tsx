@@ -50,16 +50,23 @@ export function BreachesDialog() {
     referenceid: "",
     role: "",
   });
-
-  const [activities, setActivities] = useState<any[]>([]);
-  const [timeByActivity, setTimeByActivity] = useState<TimeByActivity>({});
-  const [timeConsumedMs, setTimeConsumedMs] = useState(0);
-
+  // Filtering Dates
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
-
+  // Activities
+  const [activities, setActivities] = useState<any[]>([]);
+  // Count Time Consumed
+  const [timeByActivity, setTimeByActivity] = useState<TimeByActivity>({});
+  const [timeConsumedMs, setTimeConsumedMs] = useState(0);
+  // Count Total Sales
   const [totalSales, setTotalSales] = useState(0);
+  // Count New Client Devt OB Touchbase Successful
   const [newClientCount, setNewClientCount] = useState(0);
+  // Count Pending of Quotations
+  const [pendingClientApprovalCount, setPendingClientApprovalCount] = useState(0);
+  const [spfPendingClientApproval, setSpfPendingClientApproval] = useState(0);
+  const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
+  const [spfPendingPD, setSpfPendingPD] = useState(0);
 
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
@@ -146,6 +153,7 @@ export function BreachesDialog() {
     }
   }, [activities]);
 
+  /* -------------------- Metrics -------------------- */
   useEffect(() => {
     if (!activities.length) {
       setTotalSales(0);
@@ -153,10 +161,9 @@ export function BreachesDialog() {
       return;
     }
 
-    // Filter activities with call_status "Successful" or "Required"
+    // Filter activities with call_status "Successful"
     const filteredActivities = activities.filter(
-      (act) =>
-        act.call_status === "Successful"
+      (act) => act.call_status === "Successful"
     );
 
     // Sum actual_sales for filtered activities
@@ -170,6 +177,41 @@ export function BreachesDialog() {
       (act) => act.type_client === "New Client"
     ).length;
     setNewClientCount(newClients);
+
+    // -------------------- Quotation & SPF Counts --------------------
+
+    // 1. All quotations pending client approval
+    const pendingClientApprovalCount = activities.filter(
+      (act) =>
+        act.status === "Quote-Done" &&
+        act.quotation_status === "Pending Client Approval"
+    ).length;
+
+    // 2. SPF SPECIFIC COUNTS
+    const spfPendingClientApproval = activities.filter(
+      (act) =>
+        act.call_type === "Quotation with SPF Preparation" &&
+        act.quotation_status === "Pending Client Approval"
+    ).length;
+
+    const spfPendingProcurement = activities.filter(
+      (act) =>
+        act.call_type === "Quotation with SPF Preparation" &&
+        act.quotation_status === "Pending Procurement"
+    ).length;
+
+    const spfPendingPD = activities.filter(
+      (act) =>
+        act.call_type === "Quotation with SPF Preparation" &&
+        act.quotation_status === "Pending PD"
+    ).length;
+
+    // If you’re using state to display these in the UI, don’t forget to set them:
+    setPendingClientApprovalCount(pendingClientApprovalCount);
+    setSpfPendingClientApproval(spfPendingClientApproval);
+    setSpfPendingProcurement(spfPendingProcurement);
+    setSpfPendingPD(spfPendingPD);
+
   }, [activities]);
 
   /* -------------------- UI -------------------- */
@@ -228,7 +270,14 @@ export function BreachesDialog() {
               </li>
               <li><strong>Total Sales Today:</strong> ₱{totalSales.toLocaleString()}</li>
               <li>CSR Metrics Tickets</li>
-              <li>Closing of Quotation</li>
+              <li><strong>Closing of Quotation</strong>
+                <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
+                  <li>Quotation Pending Client Approval: {pendingClientApprovalCount}</li>
+                  <li>SPF - Pending Client Approval: {spfPendingClientApproval}</li>
+                  <li>SPF - Pending Procurement: {spfPendingProcurement}</li>
+                  <li>SPF - Pending PD: {spfPendingPD}</li>
+                </ul>
+              </li>
             </ul>
           </div>
 
