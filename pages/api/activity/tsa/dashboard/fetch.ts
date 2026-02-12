@@ -1,7 +1,44 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const BATCH_SIZE = 5000; // safe batch size
+
+async function fetchAllRows(
+  table: string,
+  referenceid: string,
+  fromDate?: string,
+  toDate?: string
+) {
+  let allData: any[] = [];
+  let offset = 0;
+
+  while (true) {
+    let query = supabase
+      .from(table)
+      .select("*")
+      .eq("referenceid", referenceid)
+      .range(offset, offset + BATCH_SIZE - 1);
+
+    if (fromDate && toDate) {
+      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    allData.push(...(data || []));
+
+    if (!data || data.length < BATCH_SIZE) break; // tapos na
+    offset += BATCH_SIZE;
+  }
+
+  return allData;
+}
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   const { referenceid, from, to } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
@@ -12,37 +49,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const toDate = typeof to === "string" ? to : undefined;
 
   try {
-    // 1️⃣ Fetch history
-    let historyQuery = supabase
-      .from("history")
-      .select("*")
-      .eq("referenceid", referenceid);
+    /* -------------------- 1️⃣ HISTORY -------------------- */
+    const historyData = await fetchAllRows("history", referenceid, fromDate, toDate);
 
-    if (fromDate && toDate) {
-      historyQuery = historyQuery.gte("date_created", fromDate).lte("date_created", toDate);
-    }
+    /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
+    const revisedData = await fetchAllRows("revised_quotations", referenceid, fromDate, toDate);
 
-    const { data: historyData, error: historyError } = await historyQuery;
-    if (historyError) throw historyError;
+    /* -------------------- 3️⃣ MEETINGS -------------------- */
+    const meetingsData = await fetchAllRows("meetings", referenceid, fromDate, toDate);
 
-    // 2️⃣ Fetch revised_quotations
-    let revisedQuery = supabase
-      .from("revised_quotations")
-      .select("referenceid, start_date, end_date, type_activity, date_created")
-      .eq("referenceid", referenceid);
-
-    if (fromDate && toDate) {
-      revisedQuery = revisedQuery.gte("date_created", fromDate).lte("date_created", toDate);
-    }
-
-    const { data: revisedData, error: revisedError } = await revisedQuery;
-    if (revisedError) throw revisedError;
-
-    // 3️⃣ Merge both
+    /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
-      ...(historyData || []),
-      ...(revisedData || []),
-    ];
+      ...(historyData || []).map((item) => ({ source: "history", ...item })),
+      ...(revisedData || []).map((item) => ({ source: "revised_quotation", ...item })),
+      ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
+    ].sort(
+      (a, b) =>
+        new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
+    );
 
     return res.status(200).json({ activities });
   } catch (err: any) {

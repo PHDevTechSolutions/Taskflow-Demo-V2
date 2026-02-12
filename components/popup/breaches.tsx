@@ -1,57 +1,92 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChartArea } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { Spinner } from "@/components/ui/spinner"
 
+/* -------------------- Helpers -------------------- */
+const formatDuration = (ms: number) => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${minutes}m ${seconds}s`;
+};
+
+type TimeByActivity = Record<string, number>;
+
+const computeTimeByActivity = (activities: any[]): TimeByActivity => {
+  return activities.reduce((acc, act) => {
+    if (!act.start_date || !act.end_date || !act.type_activity) return acc;
+
+    const start = new Date(act.start_date).getTime();
+    const end = new Date(act.end_date).getTime();
+
+    if (isNaN(start) || isNaN(end) || end < start) return acc;
+
+    const duration = end - start;
+    const key = act.type_activity;
+
+    acc[key] = (acc[key] || 0) + duration;
+    return acc;
+  }, {} as TimeByActivity);
+};
+
+/* -------------------- Component -------------------- */
 export function BreachesDialog() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+
   const [loadingUser, setLoadingUser] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingTime, setLoadingTime] = useState(false);
 
-  const [userDetails, setUserDetails] = useState<{ referenceid: string }>({ referenceid: "" });
+  const [userDetails, setUserDetails] = useState<{ referenceid: string; role: string }>({
+    referenceid: "",
+    role: "",
+  });
+
   const [activities, setActivities] = useState<any[]>([]);
-  const [timeConsumedMs, setTimeConsumedMs] = useState<number>(0);
+  const [timeByActivity, setTimeByActivity] = useState<TimeByActivity>({});
+  const [timeConsumedMs, setTimeConsumedMs] = useState(0);
+
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+
+  const [totalSales, setTotalSales] = useState(0);
+  const [newClientCount, setNewClientCount] = useState(0);
 
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
   const queryUserId = searchParams?.get("id") ?? "";
 
-  // Sync URL query param with userId context
+  /* -------------------- Sync URL userId -------------------- */
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) {
       setUserId(queryUserId);
     }
   }, [queryUserId, userId, setUserId]);
 
-  // Fetch user details
+  /* -------------------- Fetch User -------------------- */
   useEffect(() => {
     if (!userId) return;
 
-    const fetchUserData = async () => {
+    const fetchUser = async () => {
       setLoadingUser(true);
       try {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error("Failed to fetch user data");
-        const data = await res.json();
+        if (!res.ok) throw new Error("Failed to fetch user");
 
+        const data = await res.json();
         setUserDetails({
           referenceid: data.ReferenceID || "",
+          role: data.Role || "", // fixed typo
         });
-
-        toast.success("User data loaded successfully!");
       } catch (err) {
         console.error(err);
         toast.error("Failed to load user data.");
@@ -60,104 +95,141 @@ export function BreachesDialog() {
       }
     };
 
-    fetchUserData();
+    fetchUser();
   }, [userId]);
 
-  // Fetch today's activities (for total sales and time)
-  useEffect(() => {
-    if (!userDetails.referenceid) return;
+  const userRole = userDetails.role || "";
 
-    const fetchActivities = async () => {
-      setLoadingActivities(true);
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const url = `/api/activity/tsa/breaches/fetch?referenceid=${userDetails.referenceid}&date=${today}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch activities");
-        const data = await res.json();
-        setActivities(data.activities || []);
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to fetch today's activities.");
-      } finally {
-        setLoadingActivities(false);
-      }
-    };
+  /* -------------------- Fetch Activities -------------------- */
+  const fetchActivities = async () => {
+    if (!userDetails.referenceid || !fromDate || !toDate) return;
 
-    fetchActivities();
-  }, [userDetails.referenceid]);
+    setLoadingActivities(true);
+    try {
+      const url =
+        `/api/activity/tsa/breaches/fetch` +
+        `?referenceid=${encodeURIComponent(userDetails.referenceid)}` +
+        `&from=${encodeURIComponent(fromDate)}` +
+        `&to=${encodeURIComponent(toDate)}`;
 
-  // Calculate total sales
-  const totalSalesToday = activities.reduce((sum, act) => sum + (act.actual_sales || 0), 0);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch activities");
 
-  // Helper: Compute total time consumed in milliseconds
-  const computeTimeConsumed = (activities: any[]) => {
-    return activities.reduce((total, act) => {
-      if (!act.start_date || !act.end_date) return total;
-      const start = new Date(act.start_date).getTime();
-      const end = new Date(act.end_date).getTime();
-      if (isNaN(start) || isNaN(end) || end < start) return total;
-      return total + (end - start);
-    }, 0);
+      const data = await res.json();
+      setActivities(data.activities || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch activities.");
+    } finally {
+      setLoadingActivities(false);
+    }
   };
 
-  // Calculate total time consumed when activities change
+  /* -------------------- Compute Time Consumed -------------------- */
   useEffect(() => {
-    if (!activities || activities.length === 0) {
+    if (!activities.length) {
+      setTimeByActivity({});
       setTimeConsumedMs(0);
       return;
     }
+
     setLoadingTime(true);
+
     try {
-      const totalMs = computeTimeConsumed(activities);
-      setTimeConsumedMs(totalMs);
+      const grouped = computeTimeByActivity(activities);
+      setTimeByActivity(grouped);
+
+      const total = Object.values(grouped).reduce((sum, ms) => sum + ms, 0);
+      setTimeConsumedMs(total);
     } finally {
       setLoadingTime(false);
     }
   }, [activities]);
 
-  // Helper: Format milliseconds to hh:mm:ss
-  const formatDuration = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours}h ${minutes}m ${seconds}s`;
-  };
+  useEffect(() => {
+    if (!activities.length) {
+      setTotalSales(0);
+      setNewClientCount(0);
+      return;
+    }
 
+    // Filter activities with call_status "Successful" or "Required"
+    const filteredActivities = activities.filter(
+      (act) =>
+        act.call_status === "Successful"
+    );
+
+    // Sum actual_sales for filtered activities
+    const total = filteredActivities.reduce((sum, act) => {
+      return sum + (act.actual_sales || 0);
+    }, 0);
+    setTotalSales(total);
+
+    // Count of New Client activities among filtered ones
+    const newClients = filteredActivities.filter(
+      (act) => act.type_client === "New Client"
+    ).length;
+    setNewClientCount(newClients);
+  }, [activities]);
+
+  /* -------------------- UI -------------------- */
   return (
     <>
-      {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="fixed bottom-6 right-4 w-200 bg-white rounded-lg shadow-xl z-50">
+        <DialogContent className="fixed bottom-6 right-4 w-[500px] max-h-[80vh] bg-white rounded-lg shadow-xl z-50 overflow-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">End of Day Report</DialogTitle>
+            <DialogTitle>End of Day Report</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {loadingUser ? "Loading Reference ID..." : `Reference ID: ${userDetails.referenceid}`}
+              {loadingUser
+                ? "Loading Reference ID..."
+                : `Reference ID: ${userDetails.referenceid}`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 space-y-2 text-sm">
-            <ul className="list-disc pl-5">
+          <div className="mt-2 flex space-x-2 flex-wrap">
+            <Input
+              type="date"
+              className="flex-1 min-w-[120px]"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
+            <Input
+              type="date"
+              className="flex-1 min-w-[120px]"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+            />
+            <Button
+              onClick={fetchActivities}
+              disabled={loadingActivities}
+              className="flex-shrink-0"
+            >
+              {loadingActivities ? <Spinner /> : "Fetch"}
+            </Button>
+          </div>
+
+          <div className="mt-4 space-y-2 text-xs">
+            <ul className="list-disc pl-5 space-y-1">
               <li>Outbound per Day</li>
               <li>500 Clients</li>
               <li>Overdue of Scheduled Activity</li>
-              <li>Count of New Account Dev Reach Outbound</li>
+              <li><strong>Count of New Account Devt (OB-Touchbase):</strong> {newClientCount}</li>
               <li>
-                Time Consumed: {loadingTime ? "Calculating..." : formatDuration(timeConsumedMs)}
+                <strong>Time Consumed:</strong> {formatDuration(timeConsumedMs)}
+                <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
+                  {loadingTime && <li>Computing...</li>}
+                  {!loadingTime &&
+                    Object.entries(timeByActivity).map(([type, ms]) => (
+                      <li key={type}>
+                        {type}: {formatDuration(ms)}
+                      </li>
+                    ))}
+                </ul>
               </li>
-              <li>Total Sales Today: {loadingActivities ? "Loading..." : totalSalesToday}</li>
+              <li><strong>Total Sales Today:</strong> ₱{totalSales.toLocaleString()}</li>
               <li>CSR Metrics Tickets</li>
               <li>Closing of Quotation</li>
             </ul>
-
-            {loadingActivities ? (
-              <p className="text-xs text-gray-500">Loading activities...</p>
-            ) : activities.length > 0 ? (
-              <p className="text-xs text-gray-600">{activities.length} activity records today.</p>
-            ) : (
-              <p className="text-xs text-gray-500">No activities recorded today.</p>
-            )}
           </div>
 
           <DialogFooter className="mt-4">
@@ -166,19 +238,27 @@ export function BreachesDialog() {
             </Button>
           </DialogFooter>
         </DialogContent>
+
       </Dialog>
 
-      {/* Small icon button when closed */}
-      {!open && (
-        <Button
-          variant="destructive"
-          size="sm"
-          className="fixed bottom-15 right-5 z-50 rounded-lg p-6"
+      {!open && userRole === "Territory Sales Associate" && (
+        <button
+          className="
+      fixed bottom-15 right-5 z-50 
+      w-16 h-16 
+      bg-blue-900 text-white 
+      rounded-full 
+      flex items-center justify-center 
+      shadow-xl 
+      hover:scale-110 
+      transition-transform duration-200
+    "
           onClick={() => setOpen(true)}
         >
-          <AlertCircle size={20} /> Breaches of the Day
-        </Button>
+          <ChartArea size={28} />
+        </button>
       )}
+
     </>
   );
 }
