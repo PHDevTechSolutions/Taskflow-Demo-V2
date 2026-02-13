@@ -582,8 +582,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
                       <p>
                         <strong>Wrap Up:</strong> {ticket.wrap_up}
                       </p>
-                      <p>
-                        <strong>Inquiry:</strong> {ticket.inquiry}
+                      <p className="border border-dashed rounded-sm p-4 bg-gray-100">
+                        <strong>Inquiry / Notes:</strong> {ticket.inquiry}
                       </p>
                     </AccordionContent>
                   </AccordionItem>

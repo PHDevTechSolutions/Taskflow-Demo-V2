@@ -487,7 +487,6 @@ export default function ProfileClient() {
                               </div>
                             </div>
 
-
                             {/* Password strength message */}
                             {passwordStrength && (
                               <p
