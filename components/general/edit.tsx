@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { UserProvider } from "@/contexts/UserContext";
@@ -8,6 +8,7 @@ import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 import Image from "next/image";
+import SignatureCanvas from "react-signature-canvas";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-import { Eye, WandSparkles, ImagePlus, Save } from "lucide-react";
+import { Eye, WandSparkles, ImagePlus, Save, PenTool, Eraser, UploadCloud, X } from "lucide-react";
 
 interface UserDetails {
   id: string;
@@ -31,6 +32,7 @@ interface UserDetails {
   Status: string;
   ContactNumber: string;
   profilePicture: string;
+  signatureImage?: string; 
   Password?: string;
   ContactPassword?: string;
 
@@ -45,12 +47,20 @@ interface UserDetails {
 export default function ProfileClient() {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("id") ?? "";
+  const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
+  
+  // Signature States
+  const [sigMethod, setSigMethod] = useState<"pad" | "upload">("pad");
+  const [sigFilePreview, setSigFilePreview] = useState<string | null>(null);
+  const [selectedSigFile, setSelectedSigFile] = useState<File | null>(null);
+
   const [passwordStrength, setPasswordStrength] = useState<
     "weak" | "medium" | "strong" | ""
   >("");
@@ -83,6 +93,7 @@ export default function ProfileClient() {
           Status: data.Status || "",
           ContactNumber: data.ContactNumber || "",
           profilePicture: data.profilePicture || "",
+          signatureImage: data.signatureImage || "", 
           Password: "",
           ContactPassword: "",
           OtherEmail: data.OtherEmail || "",
@@ -147,8 +158,10 @@ export default function ProfileClient() {
     setPasswordStrength(calculatePasswordStrength(newPass));
   };
 
-  const handleImageUpload = async (file: File) => {
-    setUploading(true);
+  const handleImageUpload = async (file: File | string, isSignature = false) => {
+    if (isSignature) setUploadingSignature(true);
+    else setUploading(true);
+    
     const data = new FormData();
     data.append("file", file);
     data.append("upload_preset", "Xchire");
@@ -164,17 +177,22 @@ export default function ProfileClient() {
       const json = await res.json();
       if (json.secure_url) {
         setUserDetails((prev) =>
-          prev ? { ...prev, profilePicture: json.secure_url } : prev
+          prev ? { ...prev, [isSignature ? "signatureImage" : "profilePicture"]: json.secure_url } : prev
         );
-        toast.success("Image uploaded successfully");
+        toast.success(`${isSignature ? "Signature" : "Image"} uploaded successfully`);
+        if (isSignature) {
+            setSigFilePreview(null);
+            setSelectedSigFile(null);
+        }
       } else {
-        toast.error("Failed to upload image");
+        toast.error("Failed to upload asset");
       }
     } catch (error) {
-      toast.error("Error uploading image");
+      toast.error("Error uploading asset");
       console.error(error);
     } finally {
-      setUploading(false);
+      if (isSignature) setUploadingSignature(false);
+      else setUploading(false);
     }
   };
 
@@ -182,6 +200,32 @@ export default function ProfileClient() {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     handleImageUpload(file);
+  };
+
+  const onSignatureFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setSelectedSigFile(file);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSigFilePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadSelectedSignature = () => {
+    if (!selectedSigFile) return;
+    handleImageUpload(selectedSigFile, true);
+  };
+
+  const saveSignatureFromPad = () => {
+    if (sigCanvas.current?.isEmpty()) {
+      toast.error("Please provide a signature first");
+      return;
+    }
+    const dataUrl = sigCanvas.current?.getTrimmedCanvas().toDataURL("image/png");
+    if (dataUrl) handleImageUpload(dataUrl, true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -206,6 +250,7 @@ export default function ProfileClient() {
         id,
         ...(Password ? { Password } : {}),
         profilePicture: userDetails.profilePicture,
+        signatureImage: userDetails.signatureImage,
       };
 
       const res = await fetch("/api/profile-update", {
@@ -440,15 +485,105 @@ export default function ProfileClient() {
                           </div>
                         </fieldset>
 
+                        {/* SIGNATURE SECTION - ENHANCED WITH CHOICE AND PREVIEW */}
+                        <fieldset className="border border-gray-300 rounded-md p-4 bg-[#F9FAFA]">
+                          <legend className="text-sm font-semibold px-2 mb-4">Digital Signature Authorization</legend>
+                          <div className="flex flex-col space-y-4">
+                            
+                            <div className="flex border-b border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => setSigMethod("pad")}
+                                className={`px-4 py-2 text-xs font-medium transition-colors ${sigMethod === "pad" ? "border-b-2 border-[#121212] text-[#121212]" : "text-gray-400"}`}
+                              >
+                                SIGNATURE PAD
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSigMethod("upload")}
+                                className={`px-4 py-2 text-xs font-medium transition-colors ${sigMethod === "upload" ? "border-b-2 border-[#121212] text-[#121212]" : "text-gray-400"}`}
+                              >
+                                UPLOAD IMAGE
+                              </button>
+                            </div>
+
+                            {sigMethod === "pad" ? (
+                              <div className="space-y-4">
+                                <div className="border border-dashed border-gray-400 rounded-md bg-white">
+                                  <SignatureCanvas 
+                                    ref={sigCanvas}
+                                    penColor="black"
+                                    canvasProps={{ className: "w-full h-32 rounded-md cursor-crosshair" }}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => sigCanvas.current?.clear()}>
+                                    <Eraser className="w-4 h-4 mr-2" /> Clear Pad
+                                  </Button>
+                                  <Button type="button" size="sm" onClick={saveSignatureFromPad} disabled={uploadingSignature} className="bg-[#121212] text-white">
+                                    <PenTool className="w-4 h-4 mr-2" /> {uploadingSignature ? "Syncing..." : "Confirm Signature"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                <div className="flex flex-col space-y-2">
+                                  <Label htmlFor="sigUpload" className="text-xs text-muted-foreground">Select Signature File (PNG/JPG)</Label>
+                                  <Input 
+                                    id="sigUpload"
+                                    type="file" 
+                                    accept="image/*" 
+                                    onChange={onSignatureFileSelect}
+                                    disabled={uploadingSignature}
+                                    className="bg-white"
+                                  />
+                                </div>
+                                
+                                {sigFilePreview && (
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] text-blue-600 font-bold uppercase">Selection Preview</Label>
+                                        <div className="relative w-48 h-24 border-2 border-blue-200 rounded-md bg-white flex items-center justify-center overflow-hidden">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => { setSigFilePreview(null); setSelectedSigFile(null); }}
+                                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full z-10"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                            <Image src={sigFilePreview} alt="Preview" fill className="object-contain p-2" />
+                                        </div>
+                                        <Button type="button" size="sm" onClick={handleUploadSelectedSignature} disabled={uploadingSignature} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                            <UploadCloud className="w-4 h-4 mr-2" /> {uploadingSignature ? "Uploading..." : "Confirm & Upload Preview"}
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {!sigFilePreview && (
+                                    <p className="text-[10px] italic text-gray-500 flex items-center gap-1">
+                                      <UploadCloud className="w-3 h-3" /> Recommended: Transparent PNG for professional protocol alignment.
+                                    </p>
+                                )}
+                              </div>
+                            )}
+
+                            {userDetails.signatureImage && (
+                              <div className="mt-2 pt-4 border-t border-gray-100">
+                                <Label className="text-xs text-muted-foreground">Active Signature Asset:</Label>
+                                <div className="relative w-40 h-20 border rounded mt-1 bg-white shadow-sm">
+                                  <Image src={userDetails.signatureImage} alt="Signature" fill className="object-contain" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </fieldset>
+
                         <fieldset className="flex flex-col md:flex-row border border-gray-300 rounded-md p-4">
                           <legend className="text-sm font-semibold px-2 mb-4 md:mb-0 md:mr-8 self-start">
                             Password Credentials
                           </legend>
 
                           <div className="flex flex-col flex-1 space-y-4">
-                            {/* Password row */}
                             <div className="flex items-center space-x-4">
-                              {/* Label */}
                               <Label
                                 htmlFor="Password"
                                 className="flex-shrink-0 w-24"
@@ -456,7 +591,6 @@ export default function ProfileClient() {
                                 Password
                               </Label>
 
-                              {/* Input */}
                               <Input
                                 type={showPassword ? "text" : "password"}
                                 id="Password"
@@ -468,7 +602,6 @@ export default function ProfileClient() {
                                 className="flex-1"
                               />
 
-                              {/* Buttons */}
                               <div className="flex space-x-2">
                                 <Button
                                   type="button"
@@ -487,8 +620,6 @@ export default function ProfileClient() {
                               </div>
                             </div>
 
-
-                            {/* Password strength message */}
                             {passwordStrength && (
                               <p
                                 className={`text-sm ${passwordStrength === "strong"
@@ -502,9 +633,7 @@ export default function ProfileClient() {
                               </p>
                             )}
 
-                            {/* Confirm Password row */}
                             <div className="flex items-center space-x-4">
-                              {/* Label */}
                               <Label
                                 htmlFor="ContactPassword"
                                 className="flex-shrink-0 w-24"
@@ -512,7 +641,6 @@ export default function ProfileClient() {
                                 Confirm Password
                               </Label>
 
-                              {/* Input */}
                               <Input
                                 type={showConfirmPassword ? "text" : "password"}
                                 id="ContactPassword"
@@ -524,7 +652,6 @@ export default function ProfileClient() {
                                 className="flex-1"
                               />
 
-                              {/* Button */}
                               <div>
                                 <Button
                                   type="button"
@@ -542,7 +669,7 @@ export default function ProfileClient() {
                         <Button
                           type="submit"
                           disabled={saving || uploading}
-                          className="w-full md:w-auto"
+                          className="w-full md:w-auto bg-[#121212] text-white"
                         >
                           <Save /> {saving
                             ? "Saving..."
