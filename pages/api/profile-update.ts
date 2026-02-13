@@ -20,6 +20,7 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     ContactNumber,
     Password,
     profilePicture,
+    signatureImage,
     OtherEmail,
     AnotherNumber,
     Address,
@@ -52,7 +53,11 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     };
 
     if (profilePicture) {
-      updatedUser.profilePicture = profilePicture; // i-save ang url dito
+      updatedUser.profilePicture = profilePicture;
+    }
+
+    if (signatureImage) {
+      updatedUser.signatureImage = signatureImage;
     }
 
     if (Password && Password.trim() !== "") {
@@ -65,10 +70,10 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
       { $set: updatedUser }
     );
 
-    if (result.modifiedCount === 1) {
+    if (result.matchedCount === 1) {
       return res.status(200).json({ message: "Profile updated successfully" });
     } else {
-      return res.status(404).json({ error: "User not found or no changes made" });
+      return res.status(404).json({ error: "User not found" });
     }
   } catch (error) {
     console.error("Error updating profile:", error);
