@@ -1,13 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import redis from "../../lib/redis";
 
 const safe = (v: any) => (v === undefined || v === "" ? null : v);
-
-// Converts a delimited string to array or returns null
-const toArray = (val?: string, delimiter: string = ",") => {
-  if (!val) return null;
-  return val.split(delimiter).map((v) => v.trim());
-};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -62,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       end_date,
     } = req.body;
 
-    // Required field validation
+    // Basic required field validation
     if (!activity_reference_number)
       return res.status(400).json({ error: "Missing activity_reference_number" });
     if (!account_reference_number)
@@ -71,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!type_activity)
       return res.status(400).json({ error: "Missing type_activity" });
 
-    // Validate that product fields are strings (from form)
+    // Validate product fields if provided, all should be strings (likely CSV or JSON string)
     const productFields = {
       product_category,
       product_quantity,
@@ -81,13 +76,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       product_sku,
       product_title,
     };
+
     for (const [key, value] of Object.entries(productFields)) {
       if (value !== undefined && typeof value !== "string") {
         return res.status(400).json({ error: `Invalid ${key} format, must be string` });
       }
     }
 
-    // Check that all product arrays have same length
+    // Validate lengths of product-related arrays if all present
     if (
       product_category &&
       product_quantity &&
@@ -97,22 +93,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       product_sku &&
       product_title
     ) {
-      const lengths = [
-        toArray(product_category)?.length,
-        toArray(product_quantity)?.length,
-        toArray(product_amount)?.length,
-        toArray(product_description, "||")?.length,
-        toArray(product_photo)?.length,
-        toArray(product_sku)?.length,
-        toArray(product_title)?.length,
-      ];
-      const uniqueLengths = new Set(lengths);
-      if (uniqueLengths.size !== 1) {
+      const categories = product_category.split(",");
+      const quantities = product_quantity.split(",");
+      const amounts = product_amount.split(",");
+      const descriptions = product_description.split("||"); // assuming you joined descriptions with "||"
+      const photos = product_photo.split(",");
+      const skus = product_sku.split(",");
+      const titles = product_title.split(",");
+
+      const lengthSet = new Set([
+        categories.length,
+        quantities.length,
+        amounts.length,
+        descriptions.length,
+        photos.length,
+        skus.length,
+        titles.length,
+      ]);
+
+      if (lengthSet.size !== 1) {
         return res.status(400).json({ error: "Product arrays length mismatch" });
       }
     }
 
-    // Insert into Supabase
+    // Check cache for existing entry
+    const cacheKey = `history:${activity_reference_number}`;
+    const cached = await redis.get(cacheKey);
+
+    if (cached && typeof cached === "string") {
+      return res.status(200).json({ success: true, data: JSON.parse(cached), cached: true });
+    }
+
+    // Insert into Supabase "history" table
     const { data, error } = await supabase
       .from("history")
       .insert({
@@ -136,13 +148,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         call_status: safe(call_status),
         call_type: safe(call_type),
 
-        product_category: toArray(product_category),
-        product_quantity: toArray(product_quantity),
-        product_amount: toArray(product_amount),
-        product_description: toArray(product_description, "||"),
-        product_photo: toArray(product_photo),
-        product_sku: toArray(product_sku),
-        product_title: toArray(product_title),
+        product_category: safe(product_category),
+        product_quantity: safe(product_quantity),
+        product_amount: safe(product_amount),
+        product_description: safe(product_description),
+        product_photo: safe(product_photo),
+        product_sku: safe(product_sku),
+        product_title: safe(product_title),
 
         project_type: safe(project_type),
         project_name: safe(project_name),
@@ -162,6 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         start_date: safe(start_date),
         end_date: safe(end_date),
         agent: safe(agent),
+
       })
       .select();
 
@@ -170,7 +183,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: error.message });
     }
 
-    return res.status(200).json({ success: true, data });
+    // Cache inserted data for 5 minutes
+    await redis.set(cacheKey, JSON.stringify(data), { ex: 300 });
+
+    return res.status(200).json({ success: true, data, cached: false });
   } catch (err: any) {
     console.error("Server Error:", err);
     return res.status(500).json({ error: "Server Error" });
