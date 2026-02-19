@@ -1,311 +1,362 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { TrendingUp, Info } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-} from "recharts";
+import React, { useMemo, useState, useEffect } from "react";
 
 import { Spinner } from "@/components/ui/spinner";
+
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
+
+import { Input } from "@/components/ui/input";
+
 import { Button } from "@/components/ui/button";
 
-interface Activity {
-  source?: string;
-  status?: string;
-  date_created?: string;
-  start_date?: string;
-  end_date?: string;
-  activity_reference_number?: string;
-  type_client: string;
+import { RefreshCcw } from "lucide-react";
+
+/* ================= FORMAT HOURS ================= */
+
+function formatHoursToHMS(hours: number) {
+  const totalSeconds = Math.round(hours * 3600);
+
+  const h = Math.floor(totalSeconds / 3600);
+
+  const m = Math.floor((totalSeconds % 3600) / 60);
+
+  const s = totalSeconds % 60;
+
+  return `${h}:${m.toString().padStart(2, "0")}:${s
+    .toString()
+    .padStart(2, "0")}`;
 }
 
-interface CSRMetricsCardProps {
-  activities: Activity[];
-  loading?: boolean;
-  error?: string | null;
-}
+/* ================= SPEEDOMETER COMPONENT START ================= */
 
-interface CSRMetricRow {
-  date: string;
-  response: number;
-  rfq: number;
-  nonRfq: number;
-}
+function Speedometer({
+  label,
+  value,
+  maxHours = 2, // adjust depending on KPI target
+}: {
+  label: string;
+  value: number;
+  maxHours?: number;
+}) {
+  const percentage = Math.min((value / maxHours) * 100, 100);
 
-function diffHours(start?: string, end?: string) {
-  if (!start || !end) return 0;
-  const diff = new Date(end).getTime() - new Date(start).getTime();
-  return diff > 0 ? diff / (1000 * 60 * 60) : 0;
-}
-
-function formatDuration(hours: number) {
-  const totalMinutes = Math.floor(hours * 60);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${h}h ${m}m`;
-}
-
-const chartConfig = {
-  response: { label: "Response Time", color: "var(--chart-1)" },
-  rfq: { label: "RFQ Handling", color: "var(--chart-2)" },
-  nonRfq: { label: "Non-RFQ Handling", color: "var(--chart-3)" },
-} as const;
-
-const METRICS = ["response", "rfq", "nonRfq"] as const;
-type MetricKey = (typeof METRICS)[number];
-
-const explanations: Record<MetricKey, React.ReactNode> = {
-  response: (
-    <>
-      <p>
-        <b>Response Time:</b> Calculated as the total hours elapsed between the
-        first start date and the last end date of all activities under the same
-        reference number.
-      </p>
-    </>
-  ),
-  rfq: (
-    <>
-      <p>
-        <b>RFQ Handling:</b> Sum of durations (in hours) of activities with status{" "}
-        <code>Quote-Done</code>, calculated from their start and end dates.
-      </p>
-    </>
-  ),
-  nonRfq: (
-    <>
-      <p>
-        <b>Non-RFQ Handling:</b> Sum of durations (in hours) of activities with
-        status <code>Assisted</code>, calculated from their start and end dates.
-      </p>
-    </>
-  ),
-};
-
-export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardProps) {
-  const [visibleMetrics, setVisibleMetrics] = useState<Record<MetricKey, boolean>>({
-    response: true,
-    rfq: true,
-    nonRfq: true,
-  });
-  const [showTooltipFor, setShowTooltipFor] = useState<MetricKey | null>(null);
-
-  // Filter only CSR Client activities
-  const csrActivities = useMemo(
-    () =>
-      activities.filter(
-        (a) => a.type_client?.trim().toLowerCase() === "csr client"
-      ),
-    [activities]
-  );
-
-  // Prepare chart data grouped by activity_reference_number
-  const chartData: CSRMetricRow[] = useMemo(() => {
-    const grouped: Record<string, Activity[]> = {};
-
-    for (const act of csrActivities) {
-      const ref = act.activity_reference_number || "unknown";
-      if (!grouped[ref]) grouped[ref] = [];
-      grouped[ref].push(act);
-    }
-
-    const rows: CSRMetricRow[] = [];
-
-    for (const acts of Object.values(grouped)) {
-      const sorted = acts
-        .filter((a) => a.start_date)
-        .sort(
-          (a, b) =>
-            new Date(a.start_date!).getTime() -
-            new Date(b.start_date!).getTime()
-        );
-
-      if (!sorted.length) continue;
-
-      const firstStart = sorted[0].start_date!;
-      const lastEnd = new Date(
-        Math.max(
-          ...acts
-            .map((a) => a.end_date)
-            .filter(Boolean)
-            .map((d) => new Date(d!).getTime())
-        )
-      ).toISOString();
-
-      let rfq = 0;
-      let nonRfq = 0;
-
-      for (const a of acts) {
-        if (a.status === "Quote-Done") rfq += diffHours(a.start_date, a.end_date);
-        if (a.status === "Assisted") nonRfq += diffHours(a.start_date, a.end_date);
-      }
-
-      rows.push({
-        date: new Date(acts[0].date_created || firstStart).toLocaleDateString(),
-        response: diffHours(firstStart, lastEnd),
-        rfq,
-        nonRfq,
-      });
-    }
-
-    return rows.sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-  }, [csrActivities]);
-
-  // Totals for each metric
-  const totals = useMemo(() => {
-    return {
-      response: chartData.reduce((s, r) => s + r.response, 0),
-      rfq: chartData.reduce((s, r) => s + r.rfq, 0),
-      nonRfq: chartData.reduce((s, r) => s + r.nonRfq, 0),
-    };
-  }, [chartData]);
-
-  // Toggle metric visibility
-  const toggleMetric = (key: MetricKey) => {
-    setVisibleMetrics((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const angle = (percentage / 100) * 180;
 
   return (
-    <Card className="bg-white text-black z-10 rounded-none">
+    <div className="flex flex-col items-center">
+
+      <div className="relative w-40 h-20">
+
+        {/* Background arc */}
+        <div className="absolute w-full h-full border-t-[10px] border-gray-200 rounded-t-full"></div>
+
+        {/* Active arc */}
+        <div
+          className="absolute w-full h-full border-t-[10px] border-blue-500 rounded-t-full transition-all duration-500"
+          style={{
+            clipPath: `inset(0 ${100 - percentage}% 0 0)`,
+          }}
+        ></div>
+
+        {/* Needle */}
+<div
+  className="absolute bottom-0 left-1/2 origin-bottom transition-transform duration-700 ease-out"
+  style={{
+    transform: `rotate(${angle - 90}deg)`,
+  }}
+>
+          <div className="w-1 h-16 bg-red-500"></div>
+        </div>
+
+        {/* Center dot */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full"></div>
+
+      </div>
+
+      {/* Value */}
+      <div className="text-sm font-bold mt-2">
+        {formatHoursToHMS(value)}
+      </div>
+
+      {/* Label */}
+      <div className="text-xs text-gray-500 text-center">
+        {label}
+      </div>
+
+    </div>
+  );
+}
+
+
+/* ================= COMPONENT ================= */
+
+export function CSRMetricsCard() {
+  /* ================= DEBUG STATE START ================= */
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const [referenceId, setReferenceId] = useState("AE-NCR-555756");
+
+  const [targetDate, setTargetDate] = useState(today);
+
+  /* ================= FETCH STATE ================= */
+
+  const [activities, setActivities] = useState<any[]>([]);
+
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+
+  /* ================= FETCH FUNCTION ================= */
+
+  async function fetchCSRMetrics() {
+    if (!referenceId) return;
+
+    setLoading(true);
+
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/act-fetch-activity-v2?referenceid=${encodeURIComponent(
+          referenceId,
+        )}`,
+      );
+
+      const result = await res.json();
+
+      setActivities(result.data || []);
+
+      console.log("CSR DEBUG DATA:", result.data);
+    } catch (err) {
+      console.error(err);
+
+      setError("Failed to fetch CSR metrics");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ================= INITIAL LOAD ================= */
+
+  useEffect(() => {
+    fetchCSRMetrics();
+  }, []);
+
+  /* ================= SAME LOGIC AS BREACHES ================= */
+
+  const { avgResponseTime, avgNonQuotationHT, avgQuotationHT, avgSpfHT } =
+    useMemo(() => {
+      let responseTotal = 0;
+
+      let responseCount = 0;
+
+      let nonQuotationTotal = 0;
+
+      let nonQuotationCount = 0;
+
+      let quotationTotal = 0;
+
+      let quotationCount = 0;
+
+      let spfTotal = 0;
+
+      let spfCount = 0;
+
+      const excludedWrapUps = [
+        "CustomerFeedback/Recommendation",
+        "Job Inquiry",
+        "Job Applicants",
+        "Supplier/Vendor Product Offer",
+        "Internal Whistle Blower",
+        "Threats/Extortion/Intimidation",
+        "Prank Call",
+      ];
+
+      activities.forEach((row: any) => {
+        /* STATUS FILTER */
+
+        if (row.status !== "Closed" && row.status !== "Converted into Sales")
+          return;
+
+        /* DATE FILTER */
+
+        const created = new Date(row.date_created).getTime();
+
+        const from = new Date(targetDate).getTime();
+
+        const toDateEnd = new Date(targetDate);
+
+        toDateEnd.setHours(23, 59, 59, 999);
+
+        const to = toDateEnd.getTime();
+
+        if (isNaN(created) || created < from || created > to) return;
+
+        /* WRAP UP FILTER */
+
+        if (excludedWrapUps.includes(row.wrap_up)) return;
+
+        /* RESPONSE TIME */
+
+        const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
+
+        const endorsed = new Date(row.ticket_endorsed).getTime();
+
+        if (!isNaN(tsaAck) && !isNaN(endorsed) && tsaAck >= endorsed) {
+          responseTotal += (tsaAck - endorsed) / 3600000;
+
+          responseCount++;
+        }
+
+        /* BASE HT */
+
+        let baseHT = 0;
+
+        const tsaHandle = new Date(row.tsa_handling_time).getTime();
+
+        const tsmHandle = new Date(row.tsm_handling_time).getTime();
+
+        const received = new Date(row.ticket_received).getTime();
+
+        if (!isNaN(tsaHandle) && !isNaN(received) && tsaHandle >= received)
+          baseHT = (tsaHandle - received) / 3600000;
+        else if (!isNaN(tsmHandle) && !isNaN(received) && tsmHandle >= received)
+          baseHT = (tsmHandle - received) / 3600000;
+
+        if (!baseHT) return;
+
+        /* CLASSIFY */
+
+        const remarks = (row.remarks || "").toUpperCase();
+
+        if (remarks === "QUOTATION FOR APPROVAL" || remarks === "SOLD") {
+          quotationTotal += baseHT;
+
+          quotationCount++;
+        } else if (remarks.includes("SPF")) {
+          spfTotal += baseHT;
+
+          spfCount++;
+        } else {
+          nonQuotationTotal += baseHT;
+
+          nonQuotationCount++;
+        }
+      });
+
+      return {
+        avgResponseTime: responseCount ? responseTotal / responseCount : 0,
+
+        avgNonQuotationHT: nonQuotationCount
+          ? nonQuotationTotal / nonQuotationCount
+          : 0,
+
+        avgQuotationHT: quotationCount ? quotationTotal / quotationCount : 0,
+
+        avgSpfHT: spfCount ? spfTotal / spfCount : 0,
+      };
+    }, [activities, targetDate]);
+
+  /* ================= UI ================= */
+
+  return (
+    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
       <CardHeader>
-        <CardTitle>CSR Metrics Overview</CardTitle>
-        <CardDescription>
-          Toggle metrics and view total handling durations
-        </CardDescription>
+        <CardTitle>CSR Metrics Tickets</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Toggle Buttons */}
-        <div className="flex flex-wrap gap-2">
-          {METRICS.map((key) => (
-            <Button
-              key={key}
-              size="sm"
-              variant={visibleMetrics[key] ? "default" : "outline"}
-              onClick={() => toggleMetric(key)}
-            >
-              {chartConfig[key].label}
-            </Button>
-          ))}
-        </div>
+      <CardContent>
+        {/* DEBUG PANEL remain this as a comment */}
 
-        {/* Legend Totals with Info Icon and Tooltip */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-          {METRICS.map((key) => (
-            <div
-              key={key}
-              className={`relative rounded-lg border p-3 ${visibleMetrics[key] ? "bg-blue-200" : "opacity-50"
-                }`}
-            >
-              <div className="flex justify-between items-start relative">
-                <div className="font-medium">{chartConfig[key].label}</div>
+        <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
+          <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
+            Debugging Calibration
+          </h4>
 
-                {/* Info Icon container */}
-                <div
-                  className="relative cursor-pointer p-1 rounded hover:bg-gray-100"
-                  onMouseEnter={() => setShowTooltipFor(key)}
-                  onMouseLeave={() => setShowTooltipFor(null)}
-                  onFocus={() => setShowTooltipFor(key)}
-                  onBlur={() => setShowTooltipFor(null)}
-                  tabIndex={0}
-                  aria-label={`Info about ${chartConfig[key].label}`}
-                >
-                  <Info className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[9px] uppercase font-semibold text-gray-400">
+                Target Reference ID
+              </label>
 
-                  {showTooltipFor === key && (
-                    <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
-                      {explanations[key]}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-muted-foreground mt-1">
-                Total: {formatDuration(totals[key])}
-              </div>
+              <Input
+                className="h-8 text-xs font-mono"
+                value={referenceId}
+                onChange={(e) => setReferenceId(e.target.value)}
+              />
             </div>
-          ))}
+
+            <div>
+              <label className="text-[9px] uppercase font-semibold text-gray-400">
+                Target Date
+              </label>
+
+              <Input
+                type="date"
+                className="h-8 text-xs"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <Button
+            className="w-full mt-3 h-8 bg-[#121212] text-[10px] uppercase gap-2 rounded-md"
+            onClick={fetchCSRMetrics}
+          >
+            <RefreshCcw size={12} />
+            Sync Debug Parameters
+          </Button>
         </div>
 
-        {/* Chart */}
+        {/* RESULTS */}
+
         {loading ? (
-          <div className="py-12 text-center font-medium">
-            <Spinner />
-          </div>
+          <Spinner />
         ) : error ? (
-          <div className="py-12 text-center text-red-500">{error}</div>
-        ) : chartData.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground">
-            No CSR data available
-          </div>
+          <div className="text-red-500">{error}</div>
         ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={chartData} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 12, fill: '#000' }}
-              />
-              <RechartsTooltip
-                formatter={(value: number) => formatDuration(value)}
-                cursor={{ fill: "rgba(0,0,0,0.1)" }}
-                contentStyle={{ fontSize: 12 }}
-                labelStyle={{ fontSize: 12 }}
-              />
+<div className="grid grid-cols-2 gap-6 justify-items-center">
 
+  <Speedometer
+    label="TSA Response Time"
+    value={avgResponseTime}
+    maxHours={2}
+  />
 
-              {visibleMetrics.response && (
-                <Bar
-                  dataKey="response"
-                  fill={chartConfig.response.color}
-                  stackId="stack"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )}
-              {visibleMetrics.rfq && (
-                <Bar
-                  dataKey="rfq"
-                  fill={chartConfig.rfq.color}
-                  stackId="stack"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )}
-              {visibleMetrics.nonRfq && (
-                <Bar
-                  dataKey="nonRfq"
-                  fill={chartConfig.nonRfq.color}
-                  stackId="stack"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )}
-            </BarChart>
-          </ResponsiveContainer>
+  <Speedometer
+    label="Non-Quotation HT"
+    value={avgNonQuotationHT}
+    maxHours={2}
+  />
+
+  <Speedometer
+    label="Quotation HT"
+    value={avgQuotationHT}
+    maxHours={2}
+  />
+
+  <Speedometer
+    label="SPF Handling Duration"
+    value={avgSpfHT}
+    maxHours={2}
+  />
+
+</div>
+
         )}
       </CardContent>
 
-      <CardFooter className="flex items-center gap-2 text-sm text-muted-foreground">
-        <TrendingUp className="h-4 w-4" />
-        Interactive CSR performance summary
+      <CardFooter className="text-xs text-muted-foreground">
+        CSR performance summary
       </CardFooter>
     </Card>
   );
