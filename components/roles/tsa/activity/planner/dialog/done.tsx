@@ -28,10 +28,10 @@ export const DoneDialog: React.FC<DoneDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex justify-end gap-2 mt-4">
-          <Button className="rounded-none" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+          <Button className="rounded-none p-6" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={loading} className="rounded-none">
+          <Button onClick={onConfirm} disabled={loading} className="rounded-none p-6">
             {loading ? "Updating..." : "Confirm"}
           </Button>
         </DialogFooter>

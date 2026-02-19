@@ -82,7 +82,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
   /* ===================== RENDER ===================== */
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3 mt-20">
@@ -100,7 +100,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
         <div className="flex flex-col gap-2 p-2">
           {/* Total Deliveries */}
           {totalDeliveries > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
@@ -118,7 +118,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
 
           {/* Total Sales */}
           {totalSales > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200">
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
@@ -139,7 +139,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
             {quotationCount > 0 && (
               <Item
                 variant="outline"
-                className={`rounded-md border border-gray-200 ${soCount === 0 ? "col-span-2" : ""
+                className={`rounded-none border border-gray-200 ${soCount === 0 ? "col-span-2" : ""
                   }`}
               >
                 <ItemContent>
@@ -160,7 +160,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
             {soCount > 0 && (
               <Item
                 variant="outline"
-                className={`rounded-md border border-gray-200 ${quotationCount === 0 ? "col-span-2" : ""
+                className={`rounded-none border border-gray-200 ${quotationCount === 0 ? "col-span-2" : ""
                   }`}
               >
                 <ItemContent>
@@ -181,7 +181,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
 
           {/* Cancelled */}
           {(cancelledSOCount > 0 || totalCancelledSOAmount > 0) && (
-            <Item variant="outline" className="rounded-md border border-gray-200">
+            <Item variant="outline" className="rounded-none border border-gray-200">
               <ItemContent className="space-y-1">
                 {cancelledSOCount > 0 && (
                   <div className="flex justify-between w-full">
@@ -214,7 +214,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
         </div>
       )}
       <CardFooter className="flex justify-end border-t">
-        <Button asChild>
+        <Button asChild className="rounded-none p-6">
           <Link
             href={
               userId

@@ -93,7 +93,7 @@ export function DatePicker({
           <div className="flex justify-end">
             <Button
               variant="outline"
-              className="text-xs"
+              className="text-xs rounded-none"
               onClick={() => onDateSelectAction(undefined)}
             >
               <X className="w-3 h-3 mr-1" />

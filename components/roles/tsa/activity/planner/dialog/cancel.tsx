@@ -35,7 +35,7 @@ export function CancelDialog({ onConfirm, onCancel }: CancelDialogProps) {
         <DialogFooter className="flex justify-end gap-2 mt-4">
           <Button
             variant="outline"
-            className="rounded-none hover:text-black"
+            className="rounded-none p-6 hover:text-black"
             onClick={() => {
               setIsOpen(false);
               onCancel();
@@ -45,7 +45,7 @@ export function CancelDialog({ onConfirm, onCancel }: CancelDialogProps) {
           </Button>
           <Button
             variant="destructive"
-            className="rounded-none"
+            className="rounded-none p-6"
             onClick={() => {
               setIsOpen(false);
               onConfirm();

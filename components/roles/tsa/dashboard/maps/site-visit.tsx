@@ -80,7 +80,7 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
 
 
     return (
-        <Card className="bg-white text-black z-10">
+        <Card className="bg-white text-black z-10 rounded-none">
             <CardHeader>
                 <CardTitle>Site Visits</CardTitle>
                 <CardDescription>Showing site visits on the map from TaskLog collection</CardDescription>

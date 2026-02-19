@@ -119,7 +119,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" className="text-xs">
+          <Button variant="outline" className="text-xs rounded-none">
             <Plus className="mr-1 h-4 w-4" />
             Create
           </Button>
@@ -138,7 +138,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           {/* View All Button */}
           <div className="flex justify-end">
             {meetings.length > 1 && (
-              <Button className="text-xs"
+              <Button className="text-xs rounded-none"
                 onClick={() => setViewAllOpen(true)}
               >
                 <List />
@@ -147,8 +147,8 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
             )}
           </div>
           {displayedMeetings.map((meeting) => (
-            <Card key={meeting.id} className="border">
-              <CardHeader className="flex flex-row items-center justify-between py-3">
+            <Card key={meeting.id} className="border rounded-none">
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium">
                   {meeting.type_activity}
                 </CardTitle>
@@ -156,7 +156,6 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
-                      size="sm"
                       variant="ghost"
                       className="text-red-600 bg-red-100 rounded-full hover:text-red-800"
                     >
@@ -164,7 +163,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                     </Button>
                   </AlertDialogTrigger>
 
-                  <AlertDialogContent>
+                  <AlertDialogContent >
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
                       <AlertDialogDescription>
@@ -207,7 +206,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
       {/* -------------------- View All Dialog -------------------- */}
       <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-        <DialogContent className="w-[500px] max-h-[80vh] bg-white rounded-lg shadow-xl overflow-auto">
+        <DialogContent className="w-[500px] max-h-[80vh] bg-white rounded-none shadow-xl overflow-auto">
           <DialogHeader>
             <DialogTitle>All Meetings</DialogTitle>
             <DialogDescription>
@@ -275,7 +274,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setViewAllOpen(false)}>
+            <Button variant="outline" className="rounded-none p-6" onClick={() => setViewAllOpen(false)}>
               Close
             </Button>
           </DialogFooter>

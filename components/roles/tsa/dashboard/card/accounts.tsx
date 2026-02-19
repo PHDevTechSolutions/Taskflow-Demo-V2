@@ -156,8 +156,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   );
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col">
-
+    <Card className="bg-white z-10 text-black flex flex-col rounded-none">
       <CardContent className="flex-1 flex items-center justify-center p-6">
         {loading ? (
           <Spinner />
@@ -183,7 +182,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
 
       <CardFooter className="flex justify-end gap-2 border-t">
         {totalAccounts !== null && totalAccounts > 0 && (
-          <Button onClick={() => setOpen(true)} disabled={loading || !!error}>
+          <Button className="rounded-none p-6" onClick={() => setOpen(true)} disabled={loading || !!error}>
             <ListTree /> Show Breakdown
           </Button>
         )}

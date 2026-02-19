@@ -60,7 +60,7 @@ export function TimemotionCard({ activities, loading, error }: Props) {
   }, {} as Record<string, number>);
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
       <CardHeader>
         <CardTitle>Total Work Time</CardTitle>
         <CardDescription>Working Hours</CardDescription>
@@ -109,7 +109,7 @@ export function TimemotionCard({ activities, loading, error }: Props) {
       </Sheet>
 
       <CardFooter className="flex justify-end border-t">
-        <Button aria-label="Show Breakdown" className="cursor-pointer" onClick={() => setOpen(true)}>
+        <Button aria-label="Show Breakdown" className="cursor-pointer rounded-none p-6" onClick={() => setOpen(true)}>
           <ListTree /> Show Breakdown
         </Button>
       </CardFooter>

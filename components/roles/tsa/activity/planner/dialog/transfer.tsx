@@ -1,15 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ArrowLeftRight } from "lucide-react";
 
 interface User {
     ReferenceID?: string;
@@ -95,7 +89,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="rounded-none">
                 <DialogHeader>
                     <DialogTitle>Transfer Ticket to Another User</DialogTitle>
                     <DialogDescription>
@@ -106,14 +100,14 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
                 {/* Ticket Reference Number display */}
                 {ticketReferenceNumber && (
-                    <div className="mb-2 bg-red-100 text-red-700 text-center border border-red-400 rounded shadow px-4 py-2">
+                    <div className="bg-red-100 text-red-700 text-center border border-red-400 rounded shadow px-4 py-4">
                         <strong>TRN: </strong>
                         <span className="uppercase">{ticketReferenceNumber}</span>
                     </div>
                 )}
 
                 {/* Search input */}
-                <div className="my-4">
+                <div>
                     <input
                         type="text"
                         placeholder="Search users by name or ReferenceID"
@@ -135,7 +129,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                                 <li
                                     key={user.ReferenceID ?? `user-${idx}`}
                                     onClick={() => user.ReferenceID && handleSelectUser(user.ReferenceID)}
-                                    className={`cursor-pointer px-3 py-2 hover:bg-gray-100 ${selectedUser?.ReferenceID === user.ReferenceID
+                                    className={`cursor-pointer px-3 py-2 hover:bg-gray-100 text-sm ${selectedUser?.ReferenceID === user.ReferenceID
                                             ? "bg-blue-100 font-semibold"
                                             : ""
                                         }`}
@@ -148,11 +142,11 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                 </div>
 
                 <DialogFooter className="flex justify-end gap-2 mt-4">
-                    <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
+                    <Button variant="outline" className="rounded-none p-6" onClick={() => onOpenChange(false)} disabled={loading}>
                         Cancel
                     </Button>
-                    <Button onClick={handleConfirm} disabled={loading || !selectedUser}>
-                        {loading ? "Transferring..." : "Transfer Ticket"}
+                    <Button onClick={handleConfirm} disabled={loading || !selectedUser} className="rounded-none p-6">
+                        <ArrowLeftRight /> {loading ? "Transferring..." : "Transfer Ticket"} 
                     </Button>
                 </DialogFooter>
             </DialogContent>

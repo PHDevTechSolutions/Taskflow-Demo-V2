@@ -181,7 +181,7 @@ export function CSRMetricsCard({ activities, loading, error }: CSRMetricsCardPro
   };
 
   return (
-    <Card className="bg-white text-black z-10">
+    <Card className="bg-white text-black z-10 rounded-none">
       <CardHeader>
         <CardTitle>CSR Metrics Overview</CardTitle>
         <CardDescription>

@@ -418,6 +418,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
     });
 
     // Cleanup
+    window.location.reload();
     setConfirmOpen(false);
     setSelectedTicket(null);
   } catch (err) {
@@ -603,7 +604,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               <DialogFooter className="flex gap-4 mt-4 justify-end">
                 <Button
                   variant="outline"
-                  className="rounded-none"
+                  className="rounded-none p-6"
                   onClick={() => setConfirmOpen(false)}
                   disabled={confirmLoading}
                 >
@@ -611,7 +612,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 </Button>
                 <Button
                   variant="default"
-                  className="rounded-none"
+                  className="rounded-none p-6"
                   onClick={handleConfirmUseEndorsed}
                   disabled={confirmLoading}
                 >
