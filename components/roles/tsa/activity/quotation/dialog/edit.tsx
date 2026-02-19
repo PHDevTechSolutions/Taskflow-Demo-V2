@@ -11,14 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, } from "@/components/ui/item"
 import { Download, Eye, Trash } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-// Firebase Project Dependencies
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
-// Ensure 'db' is initialized in your firebase configuration file
 import { db } from "@/lib/firebase";
 import { FieldLabel } from "@/components/ui/field";
 
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+// import jsPDF from "jspdf";
+// import html2canvas from "html2canvas";
 
 interface Completed {
     id: number;
@@ -825,46 +823,62 @@ export default function TaskListEditDialog({
                                                             const data = doc.data();
 
                                                             // 1. Build Specifications HTML and Searchable Text
-                                                            let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                                            let specsHtml = `<p style="margin-bottom: 8px;"><strong>${data.shortDescription || ""}</strong></p>`;
                                                             let rawSpecsText = "";
 
-                                                            if (data.technicalSpecs?.[0]?.rows) {
-                                                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
-                                                                data.technicalSpecs[0].rows.forEach((row: any) => {
-                                                                    rawSpecsText += ` ${row.name} ${row.value}`;
-                                                                    specsHtml += `<tr>
-          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
-          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
-        </tr>`;
+                                                            // NEW NESTED MAPPING: Iterate through specGroup -> specs
+                                                            if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
+                                                                specsHtml += `<div style="font-family: sans-serif; font-size: 11px;">`;
+
+                                                                data.technicalSpecs.forEach((group: any) => {
+                                                                    // Add Group Header to HTML and Searchable Text
+                                                                    rawSpecsText += ` ${group.specGroup}`;
+                                                                    specsHtml += `<div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">${group.specGroup}</div>`;
+
+                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; margin-bottom: 4px;">`;
+
+                                                                    group.specs?.forEach((spec: any) => {
+                                                                        // Add individual spec details to searchable text
+                                                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
+
+                                                                        specsHtml += `
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 4px; color: #6b7280; width: 40%;"><b>${spec.name}</b></td>
+                        <td style="padding: 4px; text-align: right;">${spec.value}</td>
+                    </tr>`;
+                                                                    });
+
+                                                                    specsHtml += `</table>`;
                                                                 });
-                                                                specsHtml += `</table>`;
+
+                                                                specsHtml += `</div>`;
                                                             }
 
                                                             // 2. Map to Product format and resolve ID mismatch
                                                             return {
-                                                                // Convert string ID to a hash number if your system strictly requires numbers
+                                                                // ID hashing remains consistent for your system
                                                                 id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
                                                                 title: data.name || "No Name",
+                                                                // Prioritize salePrice for the Sales Project
                                                                 price: data.salePrice || data.regularPrice || 0,
                                                                 description: specsHtml,
                                                                 images: data.mainImage ? [{ src: data.mainImage }] : [],
                                                                 skus: data.itemCode ? [data.itemCode] : [],
                                                                 discount: 0,
-                                                                // We attach the search string temporarily for the filter
-                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + rawSpecsText).toUpperCase()
-                                                            } as any; // Use 'as any' temporarily to bypass the strict Product definition
+                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + (data.productFamily || "") + " " + rawSpecsText).toUpperCase()
+                                                            } as any;
                                                         })
                                                             .filter(product => {
                                                                 // 3. Perform the deep "Contains" search
                                                                 return product.tempSearchMetadata.includes(searchUpper);
                                                             }) as Product[]; // Cast the final filtered array back to Product[]
 
-                                                        setSearchResults(firebaseResults);
+                                        setSearchResults(firebaseResults);
                                                     }
                                                 } catch (err) {
-                                                    console.error("Search Protocol Failure:", err);
+                                            console.error("Search Protocol Failure:", err);
                                                 } finally {
-                                                    setIsSearching(false);
+                                            setIsSearching(false);
                                                 }
                                             }}
                                         />
@@ -1064,7 +1078,7 @@ export default function TaskListEditDialog({
                                                         className="border-none p-0 shadow-none"
                                                     />
                                                     <div className="text-xs text-gray-500">
-                                                        SKU: {product.product_sku || <i>None</i>}
+                                                        ITEM CODE: {product.product_sku || <i>None</i>}
                                                     </div>
                                                 </TableCell>
 
@@ -1184,7 +1198,6 @@ export default function TaskListEditDialog({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
 
             {/* PREVIEW PROTOCOL MODAL */}
             <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
@@ -1392,10 +1405,10 @@ export default function TaskListEditDialog({
                                 const initiateNewPage = async () => {
                                     const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
                                     pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
-                                    
+
                                     // Draw number for the CURRENT page
-                                    drawPageNumber(pageCount); 
-                                    
+                                    drawPageNumber(pageCount);
+
                                     return banner.h;
                                 };
 
@@ -1956,12 +1969,12 @@ export default function TaskListEditDialog({
 
                                 <div className="p-8 bg-gray-50 border-t flex justify-between items-center sticky bottom-0">
                                     <Button variant="ghost" onClick={() => setIsPreviewOpen(false)} className="font-black uppercase">Close Preview</Button>
-                                    <Button
+                                    {/* <Button
                                         onClick={handleDownloadQuotation}
                                         className="bg-[#121212] text-white px-10 h-12 rounded-full font-black uppercase shadow-xl hover:scale-105 transition-transform"
                                     >
                                         Confirm & Generate PDF
-                                    </Button>
+                                    </Button> */}
                                 </div>
                             </div>
                         );
