@@ -34,6 +34,8 @@ type Payload = {
     items: Item[];
     totalPrice: number;
     vatTypeLabel: string;
+    salesManagerContact?: string;
+    salesManagerEmail?: string;
 };
 
 type PreviewProps = {
@@ -58,7 +60,7 @@ export const Preview: React.FC<PreviewProps> = ({
         <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
 
             {/* CORPORATE BRANDING HEADER */}
-            <div className="w-full flex justify-center py-6 border-b border-gray-100 bg-white">
+            <div className="w-full flex justify-center py-5 border-b border-gray-100 bg-white">
                 <div className="w-full max-w-[900px] h-[110px] relative flex items-center justify-center overflow-hidden">
                     <img
                         key={quotationType}
@@ -95,7 +97,7 @@ export const Preview: React.FC<PreviewProps> = ({
                 </div>
 
                 {/* CLIENT INFORMATION GRID */}
-                <div className="mt-8 border-l border-r border-black">
+                <div className="mt-5 border-l border-r border-black">
                     {[
                         { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
                         { label: "ADDRESS", value: payload.address },
@@ -106,7 +108,7 @@ export const Preview: React.FC<PreviewProps> = ({
                     ].map((info, i) => (
                         <div
                             key={i}
-                            className={`grid grid-cols-6 py-2 px-4 items-center min-h-[35px]
+                            className={`grid grid-cols-6 py-1 px-4 items-center min-h-[30px]
                     ${info.borderTop ? 'border-t border-black' : ''} 
                     ${info.borderBottom ? 'border-b border-black' : ''}
                   `}
@@ -117,7 +119,7 @@ export const Preview: React.FC<PreviewProps> = ({
                     ))}
                 </div>
 
-                <p className="text-[10px] italic py-8 text-gray-500 font-medium">
+                <p className="text-[10px] italic mt-5 text-gray-500 font-medium">
                     We are pleased to offer you the following products for consideration:
                 </p>
 
@@ -317,45 +319,49 @@ export const Preview: React.FC<PreviewProps> = ({
                         {/* Left Side: Internal Team */}
                         <div className="space-y-10">
                             <div>
-                                <p className="italic text-[10px] font-black mb-4">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                <div className="border-b border-black w-64"></div>
+                                <p className="italic text-[10px] font-black mb-10">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
                                 <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Representative</p>
-                                <p className="text-[8px] italic">{payload.salescontact} | {payload.salesemail}</p>
+                                <div className="border-b border-black w-64"></div>
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales Representative</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salescontact || "N/A"}</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesemail || "N/A"}</p>
                             </div>
 
                             <div>
-                                <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
-                                <div className="border-b border-black w-64 mt-4"></div>
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesmanagername}</p>
+                                <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Approved By:</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
+                                <div className="border-b border-black w-64"></div>
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact || "N/A"}</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesManagerEmail || "N/A"}</p>
                             </div>
 
                             <div>
-                                <p className="text-[9px] font-black uppercase text-gray-400">Noted By:</p>
-                                <div className="border-b border-black w-64 mt-4"></div>
-                                <p className="text-[11px] font-black underline mt-1"></p>
-                                <p className="text-[9px] font-black uppercase tracking-tighter"></p>
+                                <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Noted By:</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.salesmanagername}</p>
+                                <div className="border-b border-black w-64"></div>
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales-B2B</p>
+                                {/* <p className="text-[9px] font-black uppercase tracking-tighter">SALES HEAD</p> */}
                             </div>
                         </div>
 
                         {/* Right Side: Client Side */}
                         <div className="space-y-10 flex flex-col items-end">
                             <div className="w-64">
-                                <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2">
-                                    Company Authorized Representative PLEASE SIGN OVER PRINTED NAME
-                                </div>
-                                <div className="border-b border-black w-full mt-1"></div>
+
+                                <div className="border-b border-black w-64 mt-19"></div>
+                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Company Authorized Representative</p>
+                                <p className="text-[9px] text-center font-bold text-gray-500 uppercase tracking-widest">(PLEASE SIGN OVER PRINTED NAME)</p>
                             </div>
 
                             <div className="w-64">
-                                <div className="border-b border-black w-full mt-10"></div>
-                                <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Payment Release Date</p>
+                                <div className="border-b border-black w-64 mt-20"></div>
+                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Payment Release Date</p>
                             </div>
 
                             <div className="w-64">
-                                <div className="border-b border-black w-full mt-10"></div>
-                                <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Position in the Company</p>
+                                <div className="border-b border-black w-64 mt-25"></div>
+                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Position in the Company</p>
                             </div>
                         </div>
                     </div>

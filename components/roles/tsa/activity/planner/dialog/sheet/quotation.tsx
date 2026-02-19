@@ -81,6 +81,8 @@ interface Props {
   contact_number: string;
   email_address: string;
   contact_person: string;
+  salesManagerContact?: string;
+  salesManagerEmail?: string;
 }
 
 const Quotation_SOURCES = [
@@ -180,6 +182,8 @@ export function QuotationSheet(props: Props) {
     contact_number,
     email_address,
     contact_person,
+    salesManagerContact,
+    salesManagerEmail
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -746,6 +750,8 @@ export function QuotationSheet(props: Props) {
       salescontact: contact ?? "",
       salestsmname: tsmname ?? "",
       salesmanagername: managername ?? "",
+      salesManagerContact: salesManagerContact ?? "",
+      salesManagerEmail: salesManagerEmail ?? "",
     };
   };
 
@@ -890,9 +896,9 @@ export function QuotationSheet(props: Props) {
 
                                             /* 4. OFFICIAL SIGNATURE HIERARCHY */
                                             .sig-hierarchy { margin-top: 48px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 80px; }
-                                            .sig-message { font-size: 9px; margin-bottom: 32px; font-weight: 500; line-height: 1.4; }
-                                            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
-                                            .sig-side-internal { display: flex; flex-direction: column; gap: 40px; }
+                                            .sig-message { font-size: 9px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; }
+                                            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+                                            .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
                                             .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
                                             .sig-line { border-bottom: 1px solid black; width: 256px; }
                                             .sig-rep-box { 
@@ -1065,128 +1071,187 @@ export function QuotationSheet(props: Props) {
       pdf.addImage(footerBlock.img, 'JPEG', 0, currentY, pdfWidth, footerBlock.h);
       currentY += footerBlock.h;
 
-      // E. TERMS & SIGNATURES
-      const finalBlock = await renderBlock(`
-                                                                        <div class="content-area" style="padding-top:0;">
-                                                                            <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
+      // --- SECTION E.1: LOGISTICS & EXCLUSIONS ---
+      const logisticsBlock = await renderBlock(`
+                                                <div class="content-area" style="padding-top:0;">
+                                                    <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
+                                                    <div class="logistics-container">
+                                                        <div class="logistics-row">
+                                                            <div class="logistics-label bg-yellow-header">Included:</div>
+                                                            <div class="logistics-value bg-yellow-content">
+                                                                <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+                                                                <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="logistics-row">
+                                                            <div class="logistics-label bg-yellow-header">Excluded:</div>
+                                                            <div class="logistics-value bg-yellow-content">
+                                                                <p>All lamp poles are subject to a delivery charge.</p>
+                                                                <p>Installation and all hardware/accessories not indicated above.</p>
+                                                                <p>Freight charges, arrastre, and other processing fees.</p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="logistics-row">
+                                                            <div class="logistics-label">Notes:</div>
+                                                            <div class="logistics-value bg-yellow-note" style="font-style: italic;">
+                                                                <p>Deliveries are up to the vehicle unloading point only.</p>
+                                                                <p>Additional shipping fee applies for other areas not mentioned above.</p>
+                                                                <p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p>
+                                                                <span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-                                                                            <div class="logistics-container">
-                                                                                <div class="logistics-row">
-                                                                                    <div class="logistics-label bg-yellow-header">Included:</div>
-                                                                                    <div class="logistics-value bg-yellow-content">
-                                                                                        <p>• Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
-                                                                                        <p>• Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div class="logistics-row">
-                                                                                    <div class="logistics-label bg-yellow-header">Exclude:</div>
-                                                                                    <div class="logistics-value bg-yellow-content">
-                                                                                        <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
-                                                                                        <p>• Freight charges, arrastre, and other processing fees.</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div class="logistics-row">
-                                                                                    <div class="logistics-label">Note:</div>
-                                                                                    <div class="logistics-value bg-yellow-note" style="font-style: italic;">
-                                                                                        <p>Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.</p>
-                                                                                        <span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
+                                                    <div class="terms-section">
+                                                      <div class="terms-header">Terms and Conditions</div>
+                                                      <div class="terms-grid">
+                                                        <div class="terms-label">Availability:</div>
+                                                        <div class="terms-val terms-highlight">
+                                                            <p>*5-7 days if on stock upon receipt of approved PO.</p>
+                                                            <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+                                                            <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
+                                                        </div>
 
-                                                                            <div class="terms-section">
-                                                                                <div class="terms-header">Terms and Conditions</div>
-                                                                                <div class="terms-grid">
-                                                                                    <div class="terms-label">Availability:</div>
-                                                                                    <div class="terms-val terms-highlight">
-                                                                                        <p>5-7 days if on stock upon receipt of approved PO.</p>
-                                                                                        <p>For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
-                                                                                    </div>
-                                                                                    
-                                                                                    <div class="terms-label">Warranty:</div>
-                                                                                    <div class="terms-val terms-highlight">
-                                                                                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
-                                                                                    </div>
+                                                        <div class="terms-label">Warranty:</div>
+                                                        <div class="terms-val terms-highlight">
+                                                            <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                                            <p>The warranty will be VOID under the following circumstances:</p>
+                                                            <p>*If the unit is being tampered with.</p>
+                                                            <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                                                            <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                                                            <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                                                            <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+                                                            <p>*Shipping costs for warranty claims are for customers' account.</p>
+                                                            <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
+                                                        </div>
 
-                                                                                    <div class="terms-label">SO Validity:</div>
-                                                                                    <div class="terms-val terms-highlight">
-                                                                                        <p>Sales order has validity period of 14 working days. Any order not confirmed/verified within this period will be automatically cancelled.</p>
-                                                                                    </div>
+                                                        <div class="terms-label">SO Validity:</div>
+                                                        <div class="terms-val">
+                                                            <p>Sales order has <b style="color:red;">validity period of 14 working days.</b> (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <b style="color:red;">14-day period will be automatically cancelled.</b></p>
+                                                        </div>
 
-                                                                                    <div class="terms-label">Storage</div>
-                                                                                    <div class="terms-val terms-highlight">
-                                                                                        <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of 10% of the value of the orders per month (0.33% per day).</p>
-                                                                                    </div>
+                                                        <div class="terms-label">Storage:</div>
+                                                        <div class="terms-val terms-highlight">
+                                                            <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <b style="color:red;">(10% / 30 days = 0.33% per day).</b></p>
+                                                        </div>
 
-                                                                                    <div class="terms-label">Bank Details:</div>
-                                                                                    <div class="terms-val">
-                                                                                        <div class="bank-grid">
-                                                                                            <div><strong>METROBANK</strong><br/>Payee: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Acc: ${isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</div>
-                                                                                            <div><strong>BDO</strong><br/>Payee: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Acc: ${isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</div>
-                                                                                        </div>
-                                                                                    </div>
+                                                        <div class="terms-label">Return:</div>
+                                                        <div class="terms-val terms-highlight">
+                                                            <p><b style="color:red;"><u>7 days return policy -</u></b>  if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                </div>
 
-                                                                                    <div class="terms-label">Validity:</div>
-                                                                                    <div class="terms-val terms-highlight">
-                                                                                        <p><u>Thirty (30) calendar days from the date of this offer.</u></p>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
 
-                                                                            <div class="sig-hierarchy">
-                                                                                <p class="sig-message">
-                                                                                    Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.
-                                                                                    Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
-                                                                                </p>
-
-                                                                                <div class="sig-grid">
-                                                                                    <div class="sig-side-internal">
-                                                                                        <div>
-                                                                                            <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 4px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                                                                            <div class="sig-line"></div>
-                                                                                            <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
-                                                                                            <p class="sig-sub-label">Sales Representative</p>
-                                                                                            <p style="font-size: 8px; font-style: italic;">${payload.salescontact} | ${payload.salesemail}</p>
-                                                                                        </div>
-
-                                                                                        <div>
-                                                                                            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af;">Approved By:</p>
-                                                                                            <div class="sig-line" style="margin-top: 16px;"></div>
-                                                                                            <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname || "SALES MANAGER"}</p>
-                                                                                            <p style="font-size: 9px; color: #6b7280; font-weight: bold; font-style: italic;">Mobile: ${payload.salesmanagername}</p>
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div class="sig-side-client">
-                                                                                        <div>
-                                                                                            <div class="sig-rep-box">Company Authorized Representative PLEASE SIGN OVER PRINTED NAME</div>
-                                                                                            <div class="sig-line" style="margin-top: 4px;"></div>
-                                                                                        </div>
-                                                                                        <div style="width: 256px;">
-                                                                                            <div class="sig-line" style="margin-top: 40px;"></div>
-                                                                                            <p style="font-size: 9px; text-align: right; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Payment Release Date</p>
-                                                                                        </div>
-                                                                                        <div style="width: 256px;">
-                                                                                            <div class="sig-line" style="margin-top: 40px;"></div>
-                                                                                            <p style="font-size: 9px; text-align: right; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Position in the Company</p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    `);
-      if (currentY + finalBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
+                                            `);
+      if (currentY + logisticsBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
-        pageCount++;
       }
-      pdf.addImage(finalBlock.img, 'JPEG', 0, currentY, pdfWidth, finalBlock.h);
+      pdf.addImage(logisticsBlock.img, 'JPEG', 0, currentY, pdfWidth, logisticsBlock.h);
+      currentY += logisticsBlock.h;
+
+      // --- SECTION E.2: FULL TERMS & SIGNATURE HIERARCHY ---
+      const termsAndSigBlock = await renderBlock(`
+                                                    <div class="content-area" style="padding-top:0;">
+                                                            <div class="terms-grid">
+                                                                <div class="terms-label">Payment:</div>
+                                                                <div class="terms-val">
+                                                                    <p><strong style="color:red;">Cash on Delivery (COD)</strong></p>
+                                                                    <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
+                                                                    <p>For special items, Seventy Percent (70%) down payment, 30% upon delivery.</p>
+                                                                    <br>
+                                                                    <p><strong>BANK DETAILS</strong></p>
+                                                                    <p><b>Payee to: </b><strong>${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</strong></p>
+                                                                    <br>
+                                                                    <div class="bank-grid" style="display: flex; gap: 20px;">
+                                                                        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</div>
+                                                                        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="terms-label">DELIVERY:</div>
+                                                                <div class="terms-val terms-highlight">
+                                                                    <p>Delivery/Pick up is subject to confirmation.</p>
+                                                                </div>
+
+                                                                <div class="terms-label">Validity:</div>
+                                                                <div class="terms-val">
+                                                                    <p><b style="color:red;"><u>Thirty (30) calendar days from the date of this offer.</u></b></p>
+                                                                    <p>In the event of changes in prevailing market conditions, duties, taxes, and all other importation charges, quoted prices are subject to change.</p>
+                                                                </div>
+
+                                                                <div class="terms-label">CANCELLATION:</div>
+                                                                <div class="terms-val terms-highlight">
+                                                                    <p>1. Above quoted items are non-cancellable.</p>
+                                                                    <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
+                                                                    <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+                                                                    <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+                                                                    <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
+                                                                </div>
+                                                            </div>
+                                                      
+
+                                                            <div class="sig-hierarchy">
+                                                              <p class="sig-message">
+                                                                Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+                                                              </p>
+
+                                                              <div class="sig-grid">
+                                                                <div class="sig-side-internal">
+                                                                  <div>
+                                                                    <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
+                                                                    <div class="sig-line"></div>
+                                                                    <p class="sig-sub-label">Sales Representative</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
+                                                                  </div>
+
+                                                                  <div>
+                                                                    <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
+                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
+                                                                    <div class="sig-line"></div>
+                                                                    <p class="sig-sub-label">SALES MANAGER</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salesManagerContact || 'N/A'}</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesManagerEmail || 'N/A'}</p>
+                                                                  </div>
+
+                                                                  <div>
+                                                                    <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
+                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
+                                                                    <div class="sig-line"></div>
+                                                                    <p class="sig-sub-label">Sales-B2B</p>
+                                                                  </div>
+                                                                </div>
+
+                                                                <div class="sig-side-client">
+                                                                  <div>
+                                                                    <div class="sig-line" style="margin-top: 73px;"></div>
+                                                                    <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Company Authorized Representative</p>
+                                                                  </div>
+                                                                  <div style="width: 256px;">
+                                                                    <div class="sig-line" style="margin-top: 68px;"></div>
+                                                                    <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Payment Release Date</p>
+                                                                  </div>
+                                                                  <div style="width: 256px;">
+                                                                    <div class="sig-line" style="margin-top: 68px;"></div>
+                                                                      <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Position in the Company</p>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+                                                                            </div>
+                                                                          </div>
+                                                                      `);
+
+      if (currentY + termsAndSigBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
+        pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
+      }
+      pdf.addImage(termsAndSigBlock.img, 'JPEG', 0, currentY, pdfWidth, termsAndSigBlock.h);
 
       // 3. FINALIZATION
       pdf.save(`QUOTATION_${payload.referenceNo}.pdf`);
       document.body.removeChild(iframe);
-
-
-
     } catch (error) {
       console.error("Critical Export Error:", error);
     }
@@ -1620,7 +1685,7 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
@@ -1750,9 +1815,9 @@ export function QuotationSheet(props: Props) {
                                   // 1. Add the Group Header (e.g., FIXTURE DETAILS)
                                   rawSpecsText += ` ${group.specGroup}`;
                                   specsHtml += `
-            <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
-                ${group.specGroup}
-            </div>`;
+                                                <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                                                    ${group.specGroup}
+                                                </div>`;
 
                                   // 2. Start the table for this specific group
                                   specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
@@ -2130,7 +2195,7 @@ export function QuotationSheet(props: Props) {
                               </td>
                             </tr>
                             {/* need to fix */}
-                            <tr className="even:bg-gray-50">
+                            {/* <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
                                 <div
@@ -2150,7 +2215,7 @@ export function QuotationSheet(props: Props) {
                                   }}
                                 />
                               </td>
-                            </tr>
+                            </tr> */}
                             {/* SECTION: Product Technical Specifications (Read-Only) */}
                             <tr key={`desc-${idx}`} className="even:bg-[#F9FAFA]">
                               <td colSpan={7} className="border border-gray-300 p-4 align-top">
@@ -2207,7 +2272,7 @@ export function QuotationSheet(props: Props) {
 
 
             <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
-             <XCircle /> Close
+              <XCircle /> Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2224,7 +2289,7 @@ export function QuotationSheet(props: Props) {
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
 
                 {/* CORPORATE BRANDING HEADER */}
-                <div className="w-full flex justify-center py-6 border-b border-gray-100 bg-white">
+                <div className="w-full flex justify-center py-5 border-b border-gray-100 bg-white">
                   <div className="w-full max-w-[900px] h-[110px] relative flex items-center justify-center overflow-hidden">
                     <img
                       key={quotationType}
@@ -2247,7 +2312,7 @@ export function QuotationSheet(props: Props) {
                   </div>
                 </div>
 
-                <div className="px-12 py-8 space-y-1">
+                <div className="px-6 py-5 space-y-1">
                   {/* REFERENCE & DATE SECTION */}
                   <div className="text-right text-[11px] font-medium uppercase space-y-1">
                     <p className="flex justify-end gap-2">
@@ -2261,7 +2326,7 @@ export function QuotationSheet(props: Props) {
                   </div>
 
                   {/* CLIENT INFORMATION GRID */}
-                  <div className="mt-8 border-l border-r border-black">
+                  <div className="mt-5 border-l border-r border-black">
                     {[
                       { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
                       { label: "ADDRESS", value: payload.address },
@@ -2272,7 +2337,7 @@ export function QuotationSheet(props: Props) {
                     ].map((info, i) => (
                       <div
                         key={i}
-                        className={`grid grid-cols-6 py-2 px-4 items-center min-h-[35px]
+                        className={`grid grid-cols-6 py-1 px-4 items-center min-h-[30px]
                     ${info.borderTop ? 'border-t border-black' : ''} 
                     ${info.borderBottom ? 'border-b border-black' : ''}
                   `}
@@ -2283,7 +2348,7 @@ export function QuotationSheet(props: Props) {
                     ))}
                   </div>
 
-                  <p className="text-[10px] italic py-8 text-gray-500 font-medium">
+                  <p className="text-[10px] italic mt-5 text-gray-500 font-medium">
                     We are pleased to offer you the following products for consideration:
                   </p>
 
@@ -2437,7 +2502,7 @@ export function QuotationSheet(props: Props) {
                         <p className="mt-5"><b>BANK DETAILS</b></p>
                         <p className="mb-5"><strong>Payee to: <b>{isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</b></strong></p>
                         <div className="grid grid-cols-2 gap-4">
-                           <div>
+                          <div>
                             <p className="font-black">BANK: METROBANK</p>
                             <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
                             <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
@@ -2483,45 +2548,49 @@ export function QuotationSheet(props: Props) {
                       {/* Left Side: Internal Team */}
                       <div className="space-y-10">
                         <div>
-                          <p className="italic text-[10px] font-black mb-4">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                          <div className="border-b border-black w-64"></div>
+                          <p className="italic text-[10px] font-black mb-10">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Representative</p>
-                          <p className="text-[8px] italic">{payload.salescontact} | {payload.salesemail}</p>
+                          <div className="border-b border-black w-64"></div>
+                          <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales Representative</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salescontact || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesemail || "N/A"}</p>
                         </div>
 
                         <div>
-                          <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
-                          <div className="border-b border-black w-64 mt-4"></div>
-                          <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesmanagername}</p>
+                          <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Approved By:</p>
+                          <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
+                          <div className="border-b border-black w-64"></div>
+                          <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesManagerEmail || "N/A"}</p>
                         </div>
 
                         <div>
-                          <p className="text-[9px] font-black uppercase text-gray-400">Noted By:</p>
-                          <div className="border-b border-black w-64 mt-4"></div>
-                          <p className="text-[11px] font-black underline mt-1"></p>
-                          <p className="text-[9px] font-black uppercase tracking-tighter"></p>
+                          <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Noted By:</p>
+                          <p className="text-[11px] font-black uppercase mt-1">{payload.salesmanagername}</p>
+                          <div className="border-b border-black w-64"></div>
+                          <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales-B2B</p>
+                          {/* <p className="text-[9px] font-black uppercase tracking-tighter">SALES HEAD</p> */}
                         </div>
                       </div>
 
                       {/* Right Side: Client Side */}
                       <div className="space-y-10 flex flex-col items-end">
                         <div className="w-64">
-                          <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2">
-                            Company Authorized Representative PLEASE SIGN OVER PRINTED NAME
-                          </div>
-                          <div className="border-b border-black w-full mt-1"></div>
+
+                          <div className="border-b border-black w-64 mt-19"></div>
+                          <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Company Authorized Representative</p>
+                          <p className="text-[9px] text-center font-bold text-gray-500 uppercase tracking-widest">(PLEASE SIGN OVER PRINTED NAME)</p>
                         </div>
 
                         <div className="w-64">
-                          <div className="border-b border-black w-full mt-10"></div>
-                          <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Payment Release Date</p>
+                          <div className="border-b border-black w-64 mt-20"></div>
+                          <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Payment Release Date</p>
                         </div>
 
                         <div className="w-64">
-                          <div className="border-b border-black w-full mt-10"></div>
-                          <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Position in the Company</p>
+                          <div className="border-b border-black w-64 mt-25"></div>
+                          <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Position in the Company</p>
                         </div>
                       </div>
                     </div>

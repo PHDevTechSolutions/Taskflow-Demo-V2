@@ -630,7 +630,7 @@ export function BreachesDialog() {
             </Button>
           </div> */}
 
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 text-sm font-sans">
             <ul className="list-none space-y-4">
               {/* LI 1: Outbound Performance */}
               <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-md shadow-sm">
@@ -650,15 +650,11 @@ export function BreachesDialog() {
                     <p className="font-bold text-sm">{outboundDaily} / 20</p>
                   </div>
                   <div className="border-r border-gray-200">
-                    <p className="text-[10px] text-gray-500 uppercase">
-                      Weekly
-                    </p>
+                    <p className="text-[10px] text-gray-500 uppercase">Weekly</p>
                     <p className="font-bold text-sm">{outboundWeekly} / 120</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase">
-                      Monthly
-                    </p>
+                    <p className="text-[10px] text-gray-500 uppercase">Monthly</p>
                     <p className="font-bold text-sm">{outboundMonthly} / 480</p>
                   </div>
                 </div>
@@ -687,55 +683,39 @@ export function BreachesDialog() {
 
                 <div className="grid grid-cols-3 gap-1 mt-3">
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">
-                      Top 50
-                    </p>
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Top 50</p>
                     <p className="text-xs font-bold">
                       {clientSegments.top50}{" "}
-                      <span className="text-[10px] text-gray-400">
-                        / {denominators.top50}
-                      </span>
+                      <span className="text-[10px] text-gray-400">/ {denominators.top50}</span>
                     </p>
                   </div>
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">
-                      Next 30
-                    </p>
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Next 30</p>
                     <p className="text-xs font-bold">
                       {clientSegments.next30}{" "}
-                      <span className="text-[10px] text-gray-400">
-                        / {denominators.next30}
-                      </span>
+                      <span className="text-[10px] text-gray-400">/ {denominators.next30}</span>
                     </p>
                   </div>
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">
-                      Bal 20
-                    </p>
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Bal 20</p>
                     <p className="text-xs font-bold">
                       {clientSegments.bal20}{" "}
-                      <span className="text-[10px] text-gray-400">
-                        / {denominators.bal20}
-                      </span>
+                      <span className="text-[10px] text-gray-400">/ {denominators.bal20}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
-                  <span>
-                    CSR Base: <strong>{clientSegments.csrClient}</strong>
-                  </span>
-                  <span>
-                    New Leads: <strong>{clientSegments.newClient}</strong>
-                  </span>
+                  <span>CSR Base: <strong>{clientSegments.csrClient}</strong></span>
+                  <span>New Leads: <strong>{clientSegments.newClient}</strong></span>
                   <span className="italic text-blue-600">
-                    IN: {clientSegments.inbound} | OUT:{" "}
-                    {clientSegments.outbound}
+                    IN: {clientSegments.inbound} | OUT: {clientSegments.outbound}
                   </span>
                 </div>
               </li>
 
-              <li className="pl-5 list-disc">
+              {/* OVERDUE ACTIVITIES */}
+              {/* <li className="pl-5 list-disc">
                 <strong className="text-red-500">
                   Overdue Activities: {overdueCount}
                 </strong>
@@ -750,9 +730,30 @@ export function BreachesDialog() {
                     ))}
                   </ul>
                 )}
+              </li> */}
+
+              <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <strong className="text-red-500 uppercase text-[11px] tracking-tight">
+                    Overdue Activities: {overdueCount}
+                  </strong>
+                </div>
+                {loadingOverdue ? (
+                  <div className="text-xs text-gray-400">Loading...</div>
+                ) : (
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(overdueByCompany).map(([company, count]) => (
+                      <div key={company} className="flex justify-between items-center px-2 py-1.5 bg-[#F9FAFA] border border-gray-100 rounded shadow-sm">
+                        <span className="text-xs text-gray-600 truncate mr-2">{company}</span>
+                        <strong className="text-xs text-[#121212]">{count}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </li>
 
-              <li className="pl-5 list-disc">
+              {/* NEW ACCOUNT DEVT */}
+              {/* <li className="pl-5 list-disc">
                 <strong>New Account Devt: {newClientCount}</strong>
                 {Object.keys(newClientByCompany).length > 0 && (
                   <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
@@ -763,9 +764,28 @@ export function BreachesDialog() {
                     ))}
                   </ul>
                 )}
+              </li> */}
+
+              <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <strong className="text-[#121212] uppercase text-[11px] tracking-tight">
+                    New Account Devt: {newClientCount}
+                  </strong>
+                </div>
+                {Object.keys(newClientByCompany).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(newClientByCompany).map(([company, count]) => (
+                      <div key={company} className="flex justify-between items-center px-2 py-1.5 bg-[#F9FAFA] border border-gray-100 rounded shadow-sm">
+                        <span className="text-xs text-gray-600 truncate mr-2">{company}</span>
+                        <strong className="text-xs text-blue-600">{count}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </li>
 
-              <li className="pl-5 list-disc">
+              {/* TIME CONSUMED */}
+              {/* <li className="pl-5 list-disc">
                 <strong>Time Consumed:</strong> {formatDuration(timeConsumedMs)}
                 <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
                   {!loadingTime &&
@@ -775,51 +795,115 @@ export function BreachesDialog() {
                       </li>
                     ))}
                 </ul>
+              </li> */}
+
+              <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+                <div className="flex justify-between items-center mb-2 border-b border-gray-50 pb-1">
+                  <strong className="text-[#121212] uppercase text-[11px] tracking-tight">Time Consumed</strong>
+                  <span className="text-xs font-bold text-gray-700">{formatDuration(timeConsumedMs)}</span>
+                </div>
+                {!loadingTime && (
+                  <div className="grid grid-cols-1 gap-1">
+                    {Object.entries(timeByActivity).map(([type, ms]) => (
+                      <div key={type} className="flex justify-between items-center px-2 py-1 bg-[#F9FAFA] border border-gray-100 rounded">
+                        <span className="text-[10px] text-gray-500 uppercase font-medium">{type}</span>
+                        <span className="text-[11px] font-semibold text-[#121212]">{formatDuration(ms)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </li>
 
-              <li className="pl-5 list-disc">
+              {/* TOTAL SALES */}
+              {/* <li className="pl-5 list-disc">
                 <strong>Total Sales Today:</strong> ₱
                 {totalSales.toLocaleString()}
+              </li> */}
+
+              <li className="p-3 bg-[#121212] border border-[#121212] rounded-md shadow-md">
+                <div className="flex flex-col">
+                  <strong className="text-gray-400 uppercase text-[10px] tracking-widest mb-1">Total Sales Today</strong>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-white text-sm font-medium">₱</span>
+                    <span className="text-white text-xl font-black tracking-tight">{totalSales.toLocaleString()}</span>
+                  </div>
+                </div>
               </li>
 
-              <li className="pl-5 list-disc">
+              {/* CSR METRICS */}
+              {/* <li className="pl-5 list-disc">
                 <strong>CSR Metrics Tickets</strong>
-
                 {loadingCsrMetrics ? (
                   <div className="text-xs text-gray-400">Loading...</div>
                 ) : (
                   <ul className="pl-4 text-xs">
-                    <li>
-                      TSA Response Time: {formatHoursToHMS(avgResponseTime)}
-                    </li>
-
-                    <li>
-                      Non-Quotation HT: {formatHoursToHMS(avgNonQuotationHT)}
-                    </li>
-
+                    <li>TSA Response Time: {formatHoursToHMS(avgResponseTime)}</li>
+                    <li>Non-Quotation HT: {formatHoursToHMS(avgNonQuotationHT)}</li>
                     <li>Quotation HT: {formatHoursToHMS(avgQuotationHT)}</li>
-
                     <li>SPF Handling Duration: {formatHoursToHMS(avgSpfHT)}</li>
                   </ul>
                 )}
+              </li> */}
+
+              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-md shadow-sm">
+                <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2 border-b border-gray-100 pb-1">
+                  CSR Metrics Tickets
+                </strong>
+                {loadingCsrMetrics ? (
+                  <div className="text-xs text-gray-400 italic">Loading...</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-y-2 mt-2">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] text-gray-500 uppercase font-medium">TSA Response Time</span>
+                      <span className="text-xs font-bold text-[#121212]">{formatHoursToHMS(avgResponseTime)}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] text-gray-500 uppercase font-medium">Non-Quotation HT</span>
+                      <span className="text-xs font-bold text-[#121212]">{formatHoursToHMS(avgNonQuotationHT)}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] text-gray-500 uppercase font-medium">Quotation HT</span>
+                      <span className="text-xs font-bold text-[#121212]">{formatHoursToHMS(avgQuotationHT)}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] text-gray-500 uppercase font-medium">SPF Handling Duration</span>
+                      <span className="text-xs font-bold text-[#121212]">{formatHoursToHMS(avgSpfHT)}</span>
+                    </div>
+                  </div>
+                )}
               </li>
 
-              <li className="pl-5 list-disc font-bold">
+              {/* CLOSING OF QUOTATION */}
+              {/* <li className="pl-5 list-disc font-bold">
                 Closing of Quotation
                 <ul className="pl-4 list-none font-normal text-xs mt-1 space-y-1">
-                  <li className="text-red-500">
-                    • Pending Client Approval: {pendingClientApprovalCount}
-                  </li>
-                  <li className="text-red-500">
-                    • SPF - Pending Client: {spfPendingClientApproval}
-                  </li>
-                  <li className="text-red-500">
-                    • SPF - Pending Procurement: {spfPendingProcurement}
-                  </li>
-                  <li className="text-red-500">
-                    • SPF - Pending PD: {spfPendingPD}
-                  </li>
+                  <li className="text-red-500">• Pending Client Approval: {pendingClientApprovalCount}</li>
+                  <li className="text-red-500">• SPF - Pending Client: {spfPendingClientApproval}</li>
+                  <li className="text-red-500">• SPF - Pending Procurement: {spfPendingProcurement}</li>
+                  <li className="text-red-500">• SPF - Pending PD: {spfPendingPD}</li>
                 </ul>
+              </li> */}
+
+              <li className="p-3 bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-md shadow-sm">
+                <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2">Closing of Quotation</strong>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-[11px] text-red-500 font-medium">Pending Client Approval</span>
+                    <span className="text-xs font-bold text-red-600">{pendingClientApprovalCount}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-[11px] text-red-500">SPF - Pending Client</span>
+                    <span className="text-xs font-bold text-red-600">{spfPendingClientApproval}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-[11px] text-red-500">SPF - Pending Procurement</span>
+                    <span className="text-xs font-bold text-red-600">{spfPendingProcurement}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-[11px] text-red-500">SPF - Pending PD</span>
+                    <span className="text-xs font-bold text-red-600">{spfPendingPD}</span>
+                  </div>
+                </div>
               </li>
             </ul>
           </div>
