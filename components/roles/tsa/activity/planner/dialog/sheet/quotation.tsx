@@ -1684,7 +1684,7 @@ export function QuotationSheet(props: Props) {
                               </td>
                             </tr>
                             {/* need to fix */}
-                            {/* <tr className="even:bg-gray-50">
+                            <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
                                 <div
@@ -1704,7 +1704,7 @@ export function QuotationSheet(props: Props) {
                                   }}
                                 />
                               </td>
-                            </tr> */}
+                            </tr>
                             {/* SECTION: Product Technical Specifications (Read-Only) */}
                             <tr key={`desc-${idx}`} className="even:bg-[#F9FAFA]">
                               <td colSpan={7} className="border border-gray-300 p-4 align-top">
@@ -1767,7 +1767,7 @@ export function QuotationSheet(props: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* PREVIEW PROTOCOL MODAL */}
+      {/* PREVIEW QUOTATION MODAL */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent
           className="max-w-[1000px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 border-none bg-[#F9FAFA] shadow-2xl"
@@ -1930,20 +1930,23 @@ export function QuotationSheet(props: Props) {
                       <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Included:</div>
                       <div className="col-span-5 p-2 bg-yellow-100">
                         <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
-                        <p>Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
+                        <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-6 border-b border-black">
                       <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Excluded:</div>
                       <div className="col-span-5 p-2 bg-yellow-100">
-                        <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
-                        <p>• Freight charges, arrastre, and other processing fees.</p>
+                        <p>All lamp poles are subject to a delivery charge.</p>
+                        <p>Installation and all hardware/accessories not indicated above.</p>
+                        <p>Freight charges, arrastre, and other processing fees.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-6 bg-yellow-50">
-                      <div className="col-span-1 p-2 font-black border-r border-black">Note:</div>
+                      <div className="col-span-1 p-2 font-black border-r border-black">Notes:</div>
                       <div className="col-span-5 p-2 italic">
-                        Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.
+                        <p>Deliveries are up to the vehicle unloading point only.</p>
+                        <p>Additional shipping fee applies for other areas not mentioned above.</p>
+                        <p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p>
                         <span className="font-black underline block mt-1 text-red-600">In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</span>
                       </div>
                     </div>
@@ -1957,39 +1960,78 @@ export function QuotationSheet(props: Props) {
                       <div className="col-span-2 font-black uppercase">Availability:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
                         <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
+                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+                        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
                       </div>
 
                       <div className="col-span-2 font-black uppercase">Warranty:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
+                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                        <p>The warranty will be VOID under the following circumstances:</p>
+                        <p>*If the unit is being tampered with.</p>
+                        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+                        <p>*Shipping costs for warranty claims are for customers' account.</p>
+                        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
                       </div>
 
                       <div className="col-span-2 font-black uppercase">SO Validity:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100">
-                        <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. Any order not confirmed/verified within this period will be <span className="text-red-600 font-black">automatically cancelled</span>.</p>
+                        <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <span className="text-red-600 font-black">14-day period will be automatically cancelled</span>.</p>
                       </div>
 
                       <div className="col-span-2 font-black uppercase">Storage:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                        <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of <span className="text-red-600 font-black">10% of the value of the orders per month (0.33% per day)</span>.</p>
+                        <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <span className="text-red-600 font-black"> (10% / 30 days =  0.33% per day)</span>.</p>
                       </div>
 
-                      <div className="col-span-2 font-black uppercase">Bank Details:</div>
-                      <div className="col-span-10 pl-4 border-l border-gray-100 grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="font-black">METROBANK (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
-                          <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
+                      <div className="col-span-2 font-black uppercase">Return:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p><span className="text-red-600 font-black"><u>7 days return policy - </u></span>if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
+                      </div>
+
+                      {/* <div className="col-span-2 font-black uppercase">Bank Details:</div> */}
+                      <div className="col-span-2 font-black uppercase">Payment:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 ">
+                        <p><span className="text-red-600 font-black">Cash on Delivery (COD)</span></p>
+                        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
+                        <p>For special items,  Seventy Percent (70%) down payment, 30% upon delivery.</p>
+                        <p className="mt-5"><b>BANK DETAILS</b></p>
+                        <p className="mb-5"><strong>Payee to: <b>{isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</b></strong></p>
+                        <div className="grid grid-cols-2 gap-4">
+                           <div>
+                            <p className="font-black">BANK: METROBANK</p>
+                            <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
+                            <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
+                          </div>
+                          <div>
+                            <p className="font-black">BANK: BDO</p>
+                            <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
+                            <p>Account Number: {isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-black">BDO (Payee: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'})</p>
-                          <p>Account Number: {isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</p>
-                        </div>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">DELIVERY:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p>Delivery/Pick up is subject to confirmation.</p>
                       </div>
 
                       <div className="col-span-2 font-black uppercase">Validity:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100">
                         <p className="text-red-600 font-black underline">Thirty (30) calendar days from the date of this offer.</p>
+                        <p>In the event of changes in prevailing market conditions, duties, taxes, and all other importation charges, quoted prices are subject to change.</p>
+                      </div>
+
+                      <div className="col-span-2 font-black uppercase">CANCELLATION:</div>
+                      <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                        <p>1. Above quoted items are non-cancellable.</p>
+                        <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
+                        <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+                        <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+                        <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
                       </div>
                     </div>
                   </div>
