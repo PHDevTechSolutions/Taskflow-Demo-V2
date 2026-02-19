@@ -2207,7 +2207,7 @@ export function QuotationSheet(props: Props) {
 
 
             <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
-             <XCircle /> Close
+              <XCircle /> Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2437,7 +2437,7 @@ export function QuotationSheet(props: Props) {
                         <p className="mt-5"><b>BANK DETAILS</b></p>
                         <p className="mb-5"><strong>Payee to: <b>{isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</b></strong></p>
                         <div className="grid grid-cols-2 gap-4">
-                           <div>
+                          <div>
                             <p className="font-black">BANK: METROBANK</p>
                             <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
                             <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
