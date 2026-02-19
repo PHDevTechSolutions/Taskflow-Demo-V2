@@ -23,6 +23,7 @@ interface Completed {
   call_status?: string;
   quotation_number?: string;
   quotation_amount?: number;
+  quotation_status?: string;
   so_number?: string;
   so_amount?: number;
   actual_sales?: number;
@@ -63,6 +64,7 @@ const editableFields: (keyof Completed)[] = [
   "call_status",
   "quotation_number",
   "quotation_amount",
+  "quotation_status",
   "so_number",
   "so_amount",
   "actual_sales",
@@ -143,6 +145,16 @@ const paymentTermsOptions = [
   },
 ];
 
+const quotationStatusOptions = [
+  "Convert to SO",
+  "Declined / Dissaproved",
+  "Pending PD",
+  "Pending Procurement",
+  "Pending Client Approval",
+  "Wait Bid Results",
+  "Lost Bid",
+];
+
 export default function TaskListEditDialog({
   item,
   onClose,
@@ -186,7 +198,7 @@ export default function TaskListEditDialog({
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`/api/act-update-history?id=${item.id}`, {
+      const res = await fetch(`/api/activity/tsa/historical/update?id=${item.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -211,22 +223,14 @@ export default function TaskListEditDialog({
         <div className="space-y-4 max-h-[60vh] overflow-auto">
           {Object.entries(formData).map(([key, value]) => {
             if (key === "type_activity") {
-              // Disabled input, read-only text left aligned
-              return (
-                <div key={key} className="flex flex-col">
-                  <Input type="hidden" value={value as any} disabled readOnly />
-                </div>
-              );
+              return <Input key={key} type="hidden" value={value as any} disabled readOnly />;
             }
 
             if (key === "call_status") {
               return (
                 <div key={key} className="flex flex-col">
                   <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Select
-                    value={String(value ?? "")}
-                    onValueChange={(val) => handleChange(key as keyof Completed, val)}
-                  >
+                  <Select value={String(value ?? "")} onValueChange={(val) => handleChange(key as keyof Completed, val)}>
                     <SelectTrigger className="w-full text-left">
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
@@ -239,102 +243,45 @@ export default function TaskListEditDialog({
                   </Select>
                 </div>
               );
-            } else if (key === "source") {
-              const allowedTypes = [
-                "quotation preparation",
-                "sales order preparation",
-                "delivered / closed transaction",
-              ];
+            }
 
-              const typeActivity = (formData.type_activity ?? "").toLowerCase();
-
-              if (!allowedTypes.includes(typeActivity)) {
-                return null; // hide source field
-              }
-
+            if (key === "quotation_status") {
               return (
                 <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Select
-                    value={String(value ?? "")}
-                    onValueChange={(val) => handleChange(key as keyof Completed, val)}
-                  >
+                  <Label className="capitalize mb-2">Quotation Status</Label>
+                  <Select value={String(value ?? "")} onValueChange={(val) => handleChange("quotation_status", val)}>
                     <SelectTrigger className="w-full text-left">
-                      <SelectValue placeholder="Select source" />
+                      <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {sourceOptions.map(({ label, description }) => (
-                          <SelectItem
-                            key={label}
-                            value={label}
-                            className="flex flex-col"
-                          >
-                            <span>{label}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {description}
-                            </span>
+                        {quotationStatusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
                           </SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                </div>
-              );
-            } else if (key === "payment_terms") {
-              return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Select
-                    value={String(value ?? "")}
-                    onValueChange={(val) => handleChange(key as keyof Completed, val)}
-                  >
-                    <SelectTrigger className="w-full text-left">
-                      <SelectValue placeholder="Select payment terms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {paymentTermsOptions.map(({ label, description }) => (
-                          <SelectItem
-                            key={label}
-                            value={label}
-                            className="flex flex-col"
-                          >
-                            <span>{label}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {description}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-              );
-            } else if (key === "remarks") {
-              return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Textarea
-                    className="w-full"
-                    value={value as any}
-                    onChange={(e) => handleChange(key as keyof Completed, e.target.value)}
-                  />
-                </div>
-              );
-            } else {
-              return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Input
-                    className="w-full"
-                    type={getInputType(key)}
-                    value={value as any}
-                    onChange={(e) => handleChange(key as keyof Completed, e.target.value)}
-                  />
                 </div>
               );
             }
+
+            if (key === "remarks") {
+              return (
+                <div key={key} className="flex flex-col">
+                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
+                  <Textarea className="w-full" value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+                </div>
+              );
+            }
+
+            return (
+              <div key={key} className="flex flex-col">
+                <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
+                <Input className="w-full" type={getInputType(key)} value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+              </div>
+            );
           })}
         </div>
         <DialogFooter className="mt-4 flex justify-end space-x-2">

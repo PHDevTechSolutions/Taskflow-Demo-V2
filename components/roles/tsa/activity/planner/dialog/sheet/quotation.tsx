@@ -10,10 +10,9 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
-import EditableTable from "@/components/EditableTable";
-import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye } from "lucide-react";
+import { Separator } from "@/components/ui/separator"
+import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
 // Firebase Project Dependencies
 import {
   getFirestore,
@@ -758,7 +757,7 @@ export function QuotationSheet(props: Props) {
         <div>
           <FieldGroup>
             <FieldSet>
-              <FieldLabel>Source</FieldLabel>
+              <FieldLabel className="font-bold">Source</FieldLabel>
               <RadioGroup value={source} onValueChange={setSource}>
                 {filteredSources.map(({ label, description }) => (
                   <FieldLabel key={label}>
@@ -771,14 +770,11 @@ export function QuotationSheet(props: Props) {
                         {/* Buttons only visible if selected */}
                         {source === label && (
                           <div className="mt-4 flex gap-2">
-                            <Button type="button" variant="outline" onClick={handleBack}>
-                              Back
+                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                              <ArrowLeft /> Back
                             </Button>
-                            <Button
-                              type="button"
-                              onClick={handleNext}
-                            >
-                              Next
+                            <Button type="button" className="rounded-none" onClick={handleNext}>
+                              Next <ArrowRight />
                             </Button>
                           </div>
                         )}
@@ -799,7 +795,7 @@ export function QuotationSheet(props: Props) {
         <div>
           <FieldGroup>
             <FieldSet>
-              <FieldLabel className="mt-3">Type</FieldLabel>
+              <FieldLabel className="font-bold">Type</FieldLabel>
               <RadioGroup value={callType} onValueChange={setCallType}>
                 {[
                   {
@@ -827,7 +823,7 @@ export function QuotationSheet(props: Props) {
                 ))}
               </RadioGroup>
 
-              <FieldLabel className="mt-3">Quotation For</FieldLabel>
+              <FieldLabel className="font-bold">Quotation For</FieldLabel>
               <RadioGroup
                 value={quotationType}
                 onValueChange={setQuotationType}
@@ -856,11 +852,11 @@ export function QuotationSheet(props: Props) {
                         {/* Buttons only visible if selected */}
                         {quotationType === label && (
                           <div className="mt-4 flex gap-2">
-                            <Button type="button" onClick={handleBack} variant="outline">
-                              Back
+                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                              <ArrowLeft /> Back
                             </Button>
-                            <Button type="button" onClick={handleNext} disabled={!quotationType}>
-                              Next
+                            <Button type="button" className="rounded-none" onClick={handleNext}>
+                              Next <ArrowRight />
                             </Button>
                           </div>
                         )}
@@ -882,15 +878,15 @@ export function QuotationSheet(props: Props) {
         <div>
           <FieldGroup>
             <FieldSet>
-              <FieldLabel className="mt-3">Project Name (Optional)</FieldLabel>
+              <FieldLabel className="font-bold">Project Name (Optional)</FieldLabel>
               <Input
                 type="text"
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                className="capitalize"
+                className="capitalize rounded-none"
               />
 
-              <FieldLabel className="mt-3">Project Type</FieldLabel>
+              <FieldLabel className="font-bold">Project Type</FieldLabel>
               <RadioGroup
                 value={projectType}
                 onValueChange={setProjectType}
@@ -927,11 +923,11 @@ export function QuotationSheet(props: Props) {
                         {/* Buttons only show if selected */}
                         {projectType === label && (
                           <div className="mt-4 flex gap-2">
-                            <Button type="button" onClick={handleBack} variant="outline">
-                              Back
+                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                              <ArrowLeft /> Back
                             </Button>
-                            <Button type="button" onClick={handleNext}>
-                              Next
+                            <Button type="button" className="rounded-none" onClick={handleNext}>
+                              Next <ArrowRight />
                             </Button>
                           </div>
                         )}
@@ -981,9 +977,9 @@ export function QuotationSheet(props: Props) {
                       setSearchResults([]);
                     }
                   }}
-                  className="h-4 w-6"
+                  className="h-6 w-6"
                 />
-                <span className="text-xs font-medium">No products available</span>
+                <span className="text-sm font-medium">No products available</span>
               </label>
 
               {/* Selected Products with quantity and price inputs */}
@@ -993,7 +989,7 @@ export function QuotationSheet(props: Props) {
                   className="flex flex-col items-center justify-center gap-3 border-2 border-dashed bg-white text-black h-40 w-full hover:bg-gray-100 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <ImagePlus className="h-10 w-10 text-gray-500" />
-                  <span className="text-sm font-semibold">
+                  <span className="text-sm font-bold">
                     Select Products
                   </span>
                   {selectedProducts.length > 0 && (
@@ -1007,205 +1003,7 @@ export function QuotationSheet(props: Props) {
                 </Button>
               )}
 
-              {isManualEntry && (
-                <p className="text-sm text-gray-600">
-                  You chose to manually enter quotation details. Please proceed to the next step.
-                </p>
-              )}
-
-              <Dialog open={isManualEntry} onOpenChange={setIsManualEntry}>
-                <DialogContent
-                  style={{ maxWidth: "60vw", width: "90vw" }}
-                  className="mx-auto rounded-lg p-6"
-                >
-                  <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold">
-                      Manual Product Entry
-                    </DialogTitle>
-                  </DialogHeader>
-
-                  {/* BODY */}
-                  <div className="max-h-[75vh] overflow-auto">
-
-                    {/* ================= EMPTY STATE ================= */}
-                    {manualProducts.length === 0 && (
-                      <div className="flex items-center justify-center min-h-[40vh]">
-                        <div className="text-center space-y-4">
-                          <h3 className="text-base font-semibold">
-                            No products added yet
-                          </h3>
-
-                          <p className="text-sm text-muted-foreground">
-                            You selected manual entry.
-                            Click below to add a new product and provide its details
-                            before submitting to Shopify.
-                          </p>
-
-                          <div className="flex justify-center gap-3 pt-2">
-                            <Button
-                              onClick={() =>
-                                setManualProducts([
-                                  {
-                                    id: Date.now(),
-                                    title: "",
-                                    skus: [""],
-                                    description: "",
-                                    images: [{ src: "" }],
-                                    quantity: 1,
-                                    price: 0,
-                                  },
-                                ])
-                              }
-                            >
-                              Add New Product
-                            </Button>
-
-                            <Button
-                              variant="destructive"
-                              onClick={() => {
-                                setManualProducts([]);
-                                setIsManualEntry(false);
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ================= PRODUCT FORMS ================= */}
-                    {manualProducts.map((p, idx) => (
-                      <div
-                        key={p.id}
-                        className="border rounded-md p-4 flex gap-8 mb-6"
-                        style={{ minHeight: "400px" }}
-                      >
-                        {/* LEFT SIDE */}
-                        <div className="flex flex-col gap-6 w-[40%]">
-                          {/* Product Title */}
-                          <div>
-                            <label className="block font-medium mb-1 text-sm">
-                              Product Title
-                            </label>
-                            <p className="text-xs text-gray-500 mb-1">
-                              Enter the name of the product.
-                            </p>
-                            <Input
-                              value={p.title}
-                              placeholder="Product Title"
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setManualProducts((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], title: val };
-                                  return copy;
-                                });
-                              }}
-                            />
-                          </div>
-
-                          {/* SKU */}
-                          <div>
-                            <label className="block font-medium mb-1 text-sm">SKU</label>
-                            <p className="text-xs text-gray-500 mb-1">
-                              Unique identifier for the product variant.
-                            </p>
-                            <Input
-                              className="uppercase"
-                              value={p.skus[0] || ""}
-                              placeholder="SKU"
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setManualProducts((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], skus: [val] };
-                                  return copy;
-                                });
-                              }}
-                            />
-                          </div>
-
-                          {/* Photo */}
-                          <div>
-                            <label className="block font-medium mb-1 text-sm">
-                              Photo (max 3MB)
-                            </label>
-                            <Input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleFileChange(e, idx)}
-                            />
-                            {p.images?.[0]?.src && (
-                              <img
-                                src={p.images[0].src}
-                                className="mt-2 max-h-40 object-contain border rounded"
-                              />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* RIGHT SIDE */}
-                        <div className="w-[60%] flex flex-col">
-                          <label className="block font-medium mb-1 text-sm">
-                            Product Description
-                          </label>
-                          <p className="text-xs text-gray-500 mb-2">
-                            Provide a detailed description of the product.
-                          </p>
-
-                          <div className="flex-grow border rounded p-2 overflow-auto">
-                            <EditableTable
-                              description={p.description}
-                              setDescription={(val) => setDescriptionAtIndex(idx, val)}
-                            />
-                          </div>
-
-                          <div className="flex gap-2 mt-4">
-                            <Button onClick={() => submitProductToShopify(p)} className="ml-auto">Submit to Shopify</Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() =>
-                                setManualProducts((prev) => prev.filter((_, i) => i !== idx))
-                              }
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* FOOTER (only show when may products na) */}
-                  {manualProducts.length > 0 && (
-                    <DialogFooter className="flex justify-between">
-                      <Button
-                        onClick={() =>
-                          setManualProducts((prev) => [
-                            ...prev,
-                            {
-                              id: Date.now(),
-                              title: "",
-                              skus: [""],
-                              description: "",
-                              images: [{ src: "" }],
-                              quantity: 1,
-                              price: 0,
-                            },
-                          ])
-                        }
-                      >
-                        Add More
-                      </Button>
-
-                      <Button variant="outline" onClick={() => setIsManualEntry(false)}>Close</Button>
-                    </DialogFooter>
-                  )}
-                </DialogContent>
-              </Dialog>
-
-              <FieldLabel>Quotation Amount</FieldLabel>
+              <FieldLabel className="font-bold">Quotation Amount</FieldLabel>
               <Input
                 type="number"
                 min={0}
@@ -1213,17 +1011,18 @@ export function QuotationSheet(props: Props) {
                 value={quotationAmount}
                 onChange={(e) => setQuotationAmount(e.target.value)}
                 placeholder="Enter quotation amount"
+                className="rounded-none"
               />
               {Number(quotationAmount) === 0 && (<span className="text-red-600 text-sm block">Amount is Empty</span>)}
             </FieldSet>
           </FieldGroup>
 
           <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={handleBack}>
-              Back
+            <Button variant="outline" className="rounded-none" onClick={handleBack}>
+              <ArrowLeft /> Back
             </Button>
-            <Button onClick={handleNext}>
-              Next
+            <Button className="rounded-none" onClick={handleNext}>
+              Next <ArrowRight />
             </Button>
           </div>
         </div>
@@ -1235,9 +1034,9 @@ export function QuotationSheet(props: Props) {
           <FieldGroup>
             <FieldSet>
               {followUpDate ? (
-                <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-4 bg-cyan-100">
+                <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
                   <div>
-                    <AlertTitle>Follow Up Date:</AlertTitle>
+                    <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
                     <AlertDescription>
                       {followUpDate} — This is the scheduled date to reconnect with the client.
                     </AlertDescription>
@@ -1258,19 +1057,19 @@ export function QuotationSheet(props: Props) {
                 <></>
               )}
 
-              <FieldLabel className="mt-3">Remarks <span className="text-red-500 text-[10px]">*Required</span></FieldLabel>
+              <FieldLabel className="font-bold">Remarks <span className="text-red-500 text-[10px]">*Required</span></FieldLabel>
               <Textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Enter any remarks here..."
                 rows={3}
                 required
-                className="capitalize"
+                className="capitalize rounded-none"
               />
 
-              <FieldLabel className="mt-3">Status </FieldLabel>
+              <FieldLabel className="font-bold">Status </FieldLabel>
               <Select value={quotationStatus} onValueChange={setQuotationStatus}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full rounded-none">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1305,15 +1104,13 @@ export function QuotationSheet(props: Props) {
                         {/* Buttons only visible if selected */}
                         {status === item.value && (
                           <div className="mt-4 flex gap-2">
-                            <Button type="button" variant="outline" onClick={handleBack}>
-                              Back
+                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                              <ArrowLeft /> Back
                             </Button>
 
                             {/* Changed Save button handler */}
-                            <Button
-                              onClick={handleSaveClick}
-                            >
-                              Save
+                            <Button className="rounded-none" onClick={handleSaveClick}>
+                              Save <CheckCircle2Icon />
                             </Button>
                           </div>
                         )}
@@ -1331,16 +1128,15 @@ export function QuotationSheet(props: Props) {
           {/* Confirmation alert modal/dialog */}
           {showConfirmFollowUp && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-black">
-              <div className="max-w-md rounded-lg bg-white p-6 shadow-lg">
-                <Alert variant="default" className="p-4 flex items-center gap-3 w-full min-w-[400px]">
+              <div className="max-w-md rounded-none bg-white p-6 shadow-lg">
+                <Alert variant="default" className="p-4 flex items-center gap-3 w-full min-w-[400px] rounded-none">
                   <div className="flex-1">
                     <div className="mb-1">
-                      <AlertTitle>Quotation Number</AlertTitle>
+                      <AlertTitle className="font-bold">Quotation Number</AlertTitle>
                     </div>
 
                     {isGenerating ? (
                       <AlertDescription className="text-sm text-gray-700 flex items-center gap-2">
-                        <Spinner className="w-5 h-5" />
                         <p>Generating your quotation number, please wait...</p>
                       </AlertDescription>
                     ) : hasGenerated ? (
@@ -1363,7 +1159,7 @@ export function QuotationSheet(props: Props) {
 
                 {/* Action buttons */}
                 <div className="mt-4 flex flex-col gap-3">
-                  <Button onClick={handleGenerateQuotation} variant="outline" className="w-full flex items-center justify-center gap-2">
+                  <Button onClick={handleGenerateQuotation} variant="outline" className="w-full flex items-center justify-center gap-2 border border-dashed rounded-none p-10">
                     {isGenerating ? (
                       <>
                         <RefreshCcw className="h-4 w-4 animate-spin" />
@@ -1382,27 +1178,26 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation
                   </Button>
 
                   {!hasDownloaded && hasGenerated && (
-                    <p className="text-sm text-yellow-700 mt-2">
+                    <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100">
                       ⚠️ Please download the quotation before saving.
-                      <br />
-                      <span className="text-xs text-red-600 italic">
+                      <span className="text-sm text-red-600 italic ml-1">
                         Note: If there are no products or the quotation is empty, please do not download.
                       </span>
                     </p>
                   )}
 
-                  <div className="flex justify-end gap-4 pt-2">
-                    <Button variant="outline" onClick={handleCancelFollowUp} disabled={isGenerating}>
+                  <div className="flex justify-end gap-4 pt-10">
+                    <Button variant="outline" className="rounded-none" onClick={handleCancelFollowUp} disabled={isGenerating}>
                       Cancel
                     </Button>
 
-                    <Button onClick={handleConfirmFollowUp} disabled={!hasGenerated}>
-                      OK
+                    <Button onClick={handleConfirmFollowUp} className="rounded-none" disabled={!hasGenerated}>
+                      Submit
                     </Button>
                   </div>
                 </div>
@@ -1427,7 +1222,7 @@ export function QuotationSheet(props: Props) {
         >
 
           <DialogHeader>
-            <DialogTitle>Select Products</DialogTitle>
+            <DialogTitle className="font-bold">Select Products</DialogTitle>
           </DialogHeader>
 
           <div
@@ -1448,14 +1243,14 @@ export function QuotationSheet(props: Props) {
                       setSearchTerm("");       // Protocol: Reset input
                       setSearchResults([]);   // Protocol: Clear results
                     }}
-                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'shopify' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === 'shopify' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
                       }`}
                   >
                     SHOPIFY
                   </button>
                   <button
                     type="button"
-                    hidden={true}
+                    hidden={false}
                     onClick={() => {
                       setProductSource('firebase');
                       setSearchTerm("");       // Protocol: Reset input
@@ -1470,10 +1265,11 @@ export function QuotationSheet(props: Props) {
 
                 {!isManualEntry && (
                   <>
-                    <FieldLabel>Product Name</FieldLabel>
+                    <FieldLabel>Products:</FieldLabel>
                     <Input
                       type="text"
-                      className="uppercase"
+                      className="uppercase rounded-none"
+                      placeholder="Search Product Name or Item Code.."
                       value={searchTerm}
                       onChange={async (e) => {
                         if (isManualEntry) return;
@@ -1503,16 +1299,34 @@ export function QuotationSheet(props: Props) {
                               let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
                               let rawSpecsText = "";
 
-                              if (data.technicalSpecs?.[0]?.rows) {
-                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
-                                data.technicalSpecs[0].rows.forEach((row: any) => {
-                                  rawSpecsText += ` ${row.name} ${row.value}`;
-                                  specsHtml += `<tr>
-          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
-          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
-        </tr>`;
+                              if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
+                                data.technicalSpecs.forEach((group: any) => {
+                                  // 1. Add the Group Header (e.g., FIXTURE DETAILS)
+                                  rawSpecsText += ` ${group.specGroup}`;
+                                  specsHtml += `
+            <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                ${group.specGroup}
+            </div>`;
+
+                                  // 2. Start the table for this specific group
+                                  specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
+
+                                  group.specs?.forEach((spec: any) => {
+                                    // 3. Add data to searchable text and HTML rows
+                                    rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                    specsHtml += `
+                                                  <tr>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb; width: 40%;">
+                                                          <b>${spec.name}</b>
+                                                      </td>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px;">
+                                                          ${spec.value}
+                                                      </td>
+                                                  </tr>`;
+                                  });
+
+                                  specsHtml += `</table>`;
                                 });
-                                specsHtml += `</table>`;
                               }
 
                               // 2. Map to Product format and resolve ID mismatch
@@ -1523,10 +1337,10 @@ export function QuotationSheet(props: Props) {
                                 price: data.salePrice || data.regularPrice || 0,
                                 description: specsHtml,
                                 images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                skus: data.sku ? [data.sku] : [],
+                                skus: data.itemCode ? [data.itemCode] : [],
                                 discount: 0,
                                 // We attach the search string temporarily for the filter
-                                tempSearchMetadata: (data.name + " " + (data.sku || "") + " " + rawSpecsText).toUpperCase()
+                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + rawSpecsText).toUpperCase()
                               } as any; // Use 'as any' temporarily to bypass the strict Product definition
                             })
                               .filter(product => {
@@ -1543,7 +1357,7 @@ export function QuotationSheet(props: Props) {
                         }
                       }}
                     />
-                    {isSearching && <p className="text-[10px] animate-pulse">Searching Source...</p>}
+                    {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
                   </>
                 )}
               </div>
@@ -1557,7 +1371,7 @@ export function QuotationSheet(props: Props) {
                   <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
 
                     {searchResults.map((item) => (
-                      <Card key={item.id} className="cursor-pointer hover:bg-gray-50">
+                      <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
                         <CardHeader className="flex items-center justify-between gap-3">
                           <label className="flex items-center gap-2 cursor-pointer flex-1">
                             <Button
@@ -1600,8 +1414,8 @@ export function QuotationSheet(props: Props) {
 
                         <CardFooter className="text-xs text-gray-600">
                           {item.skus && item.skus.length > 0
-                            ? `SKU${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
-                            : "No SKU available"}
+                            ? `ITEM CODE${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
+                            : "No item code available"}
                         </CardFooter>
                       </Card>
                     ))}
@@ -1609,35 +1423,38 @@ export function QuotationSheet(props: Props) {
                 </>
               )}
 
-
               {/* Selected Products checkboxes */}
-              <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh] border border-dashed p-2 rounded-sm">
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh] border border-dashed p-4 rounded-sm">
                 {selectedProducts.length === 0 && (
                   <p className="text-xs text-gray-500">No products selected.</p>
                 )}
 
-                {selectedProducts.map((item) => (
-                  <label
-                    key={item.uid}
-                    className="flex items-center gap-2 text-xs cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked
-                      onChange={() => {
-                        setSelectedProducts((prev) =>
-                          prev.filter((p) => p.uid !== item.uid)
-                        );
-                        setVisibleDescriptions((prev) => {
-                          const copy = { ...prev };
-                          delete copy[item.uid];
-                          return copy;
-                        });
-                      }}
-                    />
-                    {item.title}
-                  </label>
+                {selectedProducts.map((item, index) => (
+                  <div key={item.uid} className="flex flex-col">
+                    {/* Optional separator except for the first item */}
+                    {index !== 0 && <Separator className="my-1" />}
+
+                    <label className="flex items-center gap-2 text-xs cursor-pointer font-bold">
+                      <input
+                        type="checkbox"
+                        checked
+                        className="accent-blue-500"
+                        onChange={() => {
+                          setSelectedProducts((prev) =>
+                            prev.filter((p) => p.uid !== item.uid)
+                          );
+                          setVisibleDescriptions((prev) => {
+                            const copy = { ...prev };
+                            delete copy[item.uid];
+                            return copy;
+                          });
+                        }}
+                      />
+                      <span>{item.title}</span>
+                    </label>
+                  </div>
                 ))}
+
               </div>
             </div>
 
@@ -1647,13 +1464,13 @@ export function QuotationSheet(props: Props) {
                 <>
                   <div className="flex items-center justify-between mb-3">
                     {/* LEFT */}
-                    <h4 className="font-semibold text-xs">
+                    <h4 className="font-bold text-xs">
                       Selected Products: ({selectedProducts.length})
                     </h4>
 
                     {/* RIGHT */}
                     <div className="flex items-center gap-4">
-                      <span className="text-xs font-medium">VAT Type:</span>
+                      <span className="text-xs font-bold">VAT Type:</span>
 
                       <RadioGroup
                         value={vatType}
@@ -1703,7 +1520,7 @@ export function QuotationSheet(props: Props) {
                           onChange={(e) =>
                             setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
                           }
-                          className="w-24 text-xs h-8"
+                          className="w-24 text-xs h-8 rounded-none"
                           placeholder="0.00"
                         />
                       </div>
@@ -1866,8 +1683,8 @@ export function QuotationSheet(props: Props) {
                                 </Button>
                               </td>
                             </tr>
-
-                            <tr className="even:bg-gray-50">
+                            {/* need to fix */}
+                            {/* <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
                                 <div
@@ -1884,6 +1701,19 @@ export function QuotationSheet(props: Props) {
                                       copy[idx] = { ...copy[idx], description: html };
                                       return copy;
                                     });
+                                  }}
+                                />
+                              </td>
+                            </tr> */}
+                            {/* SECTION: Product Technical Specifications (Read-Only) */}
+                            <tr key={`desc-${idx}`} className="even:bg-[#F9FAFA]">
+                              <td colSpan={7} className="border border-gray-300 p-4 align-top">
+                                <label className="block text-xs font-medium mb-1">Description:</label>
+                                {/* Description Container: Content is now Locked/Non-Editable */}
+                                <div
+                                  className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                  dangerouslySetInnerHTML={{
+                                    __html: p.description || '<span class="text-gray-400 italic">No specifications provided.</span>'
                                   }}
                                 />
                               </td>
@@ -1918,7 +1748,7 @@ export function QuotationSheet(props: Props) {
                 </div> */}
                 {/* Inside the main selection modal footer */}
                 <Button
-                  className="bg-[#121212] hover:bg-black text-white px-8 flex gap-2 items-center"
+                  className="bg-[#121212] hover:bg-black text-white px-8 flex gap-2 items-center rounded-none"
                   onClick={() => setIsPreviewOpen(true)} // Changed from handleDownloadQuotation
                 >
                   <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
@@ -1930,8 +1760,8 @@ export function QuotationSheet(props: Props) {
             {/* Right side: Total + Download button */}
 
 
-            <Button className="bg-red-600 hover:bg-red-500" variant="outline" onClick={() => setOpen(false)}>
-              Close
+            <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
+             <XCircle /> Close
             </Button>
           </DialogFooter>
         </DialogContent>

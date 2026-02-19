@@ -238,9 +238,6 @@ export function NationalRanking({
                   <div className="font-semibold uppercase">
                     {item.firstname} {item.lastname}
                   </div>
-                  <div className="text-[10px] text-gray-500 uppercase">
-                    {item.referenceid}
-                  </div>
                 </div>
               </div>
             </td>

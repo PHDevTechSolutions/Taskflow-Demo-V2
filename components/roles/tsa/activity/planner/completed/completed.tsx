@@ -246,12 +246,12 @@ export const Completed: React.FC<CompletedProps> = ({
       <Input
         type="search"
         placeholder="Search company, quotation no, SO no..."
-        className="text-xs mb-3"
+        className="text-xs mb-3 rounded-none"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
 
-      <div className="mb-2 text-xs font-bold">
+      <div className="mb-2 text-xs font-bold mt-2 mb-4">
         Total Completed Activities: ({deliveredData.length})
       </div>
 
@@ -270,11 +270,7 @@ export const Completed: React.FC<CompletedProps> = ({
             });
 
             return (
-              <AccordionItem
-                key={item.id}
-                value={item.id}
-                className="border rounded-sm shadow-sm mb-2"
-              >
+              <AccordionItem key={item.id} value={item.id} className="border rounded-none shadow-sm mb-2">
                 <div className="p-2">
                   <div className="flex justify-between items-center">
                     <AccordionTrigger className="text-xs font-semibold font-mono uppercase cursor-pointer">
@@ -285,7 +281,7 @@ export const Completed: React.FC<CompletedProps> = ({
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button
-                          variant="outline"
+                          variant="outline" className="rounded-none"
                         >
                           <FileText /> View Records
                         </Button>
@@ -460,7 +456,7 @@ export const Completed: React.FC<CompletedProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-1 uppercase">
-                    <Badge className="bg-green-500 font-mono flex items-center gap-2 p-2 whitespace-nowrap text-[10px]">
+                    <Badge className="bg-green-500 font-mono flex items-center gap-2 rounded-sm shadow-md p-2 whitespace-nowrap text-[10px]">
                       <Truck /> {item.status}
                     </Badge>
                   </div>

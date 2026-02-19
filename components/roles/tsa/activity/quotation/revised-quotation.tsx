@@ -7,14 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 
 import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
@@ -311,6 +304,32 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const displayValue = (v: any) =>
         v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
 
+    function formatDuration(start?: string, end?: string) {
+        if (!start || !end) return "-";
+
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
+
+        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000); // seconds
+        if (diff < 0) diff = 0;
+
+        const hours = Math.floor(diff / 3600);
+        diff %= 3600;
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+
+        const parts: string[] = [];
+
+        if (hours > 0) parts.push(`${hours} hr${hours !== 1 ? "s" : ""}`);
+        if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+        if (seconds > 0 || parts.length === 0)
+            parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+
+        return parts.join(" ");
+    }
+
     return (
         <>
             {/* Search + Filter */}
@@ -389,7 +408,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             <TableRow>
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
-                                <TableHead>Date Created</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
@@ -422,14 +442,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>
-                                            {new Date(
-                                                item.date_updated ?? item.date_created
-                                            ).toLocaleDateString()}:{new Date(
-                                                item.date_updated ?? item.date_created
-                                            ).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
+                                            {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
+                                                timeZone: "Asia/Manila",
                                             })}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap font-mono">
+                                            {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
                                         <TableCell className="font-semibold">
                                             {item.company_name}

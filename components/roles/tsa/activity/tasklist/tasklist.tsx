@@ -39,6 +39,7 @@ interface Completed {
     call_type?: string;
     quotation_number?: string;
     quotation_amount?: number;
+    quotation_status?: string;
     so_number?: string;
     so_amount?: number;
     actual_sales?: number;
@@ -72,7 +73,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -101,37 +101,37 @@ export const TaskList: React.FC<CompletedProps> = ({
 
     // Fetch activities
     const fetchActivities = useCallback(() => {
-            if (!referenceid) {
-              setActivities([]);
-              return;
-            }
-        
-            setLoading(true);
-            setError(null);
-        
-            const from = dateCreatedFilterRange?.from
-              ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-              : null;
-            const to = dateCreatedFilterRange?.to
-              ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-              : null;
-        
-            const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
-            url.searchParams.append("referenceid", referenceid);
-            if (from && to) {
-              url.searchParams.append("from", from);
-              url.searchParams.append("to", to);
-            }
-        
-            fetch(url.toString())
-              .then(async (res) => {
+        if (!referenceid) {
+            setActivities([]);
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
+
+        const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
+        }
+
+        fetch(url.toString())
+            .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
-              })
-              .then((data) => setActivities(data.activities || []))
-              .catch((err) => setError(err.message))
-              .finally(() => setLoading(false));
-          }, [referenceid, dateCreatedFilterRange]);
+            })
+            .then((data) => setActivities(data.activities || []))
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
     // Real-time subscription using Supabase
     useEffect(() => {
@@ -183,6 +183,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             "call_type",
             "quotation_number",
             "quotation_amount",
+            "quotation_status",
             "so_number",
             "so_amount",
             "actual_sales",
@@ -386,6 +387,32 @@ export const TaskList: React.FC<CompletedProps> = ({
     const handleNextPage = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
     const handlePageSelect = (page: number) => setCurrentPage(page);
 
+    function formatDuration(start?: string, end?: string) {
+        if (!start || !end) return "-";
+
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
+
+        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000); // seconds
+        if (diff < 0) diff = 0;
+
+        const hours = Math.floor(diff / 3600);
+        diff %= 3600;
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+
+        const parts: string[] = [];
+
+        if (hours > 0) parts.push(`${hours} hr${hours !== 1 ? "s" : ""}`);
+        if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+        if (seconds > 0 || parts.length === 0)
+            parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+
+        return parts.join(" ");
+    }
+
     return (
         <>
             {/* Search + Filter always visible */}
@@ -464,9 +491,10 @@ export const TaskList: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
                                 <TableHead>Date</TableHead>
-                                <TableHead>Time</TableHead>
+                                <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Quotation Status</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Type Client</TableHead>
                                 <TableHead>Project Name</TableHead>
@@ -543,18 +571,17 @@ export const TaskList: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>{new Date(item.date_updated ?? item.date_created).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            {new Date(item.date_updated ?? item.date_created).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
+                                        <TableCell className="whitespace-nowrap font-mono">
+                                            {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
+
                                         <TableCell className="font-semibold">{displayValue(item.company_name)}</TableCell>
                                         <TableCell>
                                             <Badge variant="default" className={`text-xs whitespace-nowrap ${getBadgeClass(item.status)}`}>
                                                 {item.status?.replace("-", " ")}
                                             </Badge>
                                         </TableCell>
+                                        <TableCell>{displayValue(item.quotation_status)}</TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell>{displayValue(item.type_client)}</TableCell>
                                         <TableCell>{displayValue(item.project_name)}</TableCell>
@@ -627,7 +654,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </div>
                     </div>
                 </div>
-                
+
             )}
 
             <Dialog open={reSoOpen} onOpenChange={setReSoOpen}>

@@ -80,83 +80,60 @@ export const Overdue: React.FC<NewTaskProps> = ({
     setDateCreatedFilterRangeAction,
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
-    const [errorHistory, setErrorHistory] = useState<string | null>(null);
-    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [activitiesLoading, setActivitiesLoading] = useState(false);
+    const [historyLoading, setHistoryLoading] = useState(false);
     const [history, setHistory] = useState<HistoryItem[]>([]);
 
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Fetch activities with no cache via API route
-    const fetchActivities = useCallback(async () => {
+    const fetchAllData = useCallback(() => {
         if (!referenceid) {
             setActivities([]);
-            return;
-        }
-        setLoadingActivities(true);
-        setErrorActivities(null);
-
-        try {
-            const res = await fetch(`/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`, {
-                cache: "no-store",
-                headers: {
-                    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    Pragma: "no-cache",
-                    Expires: "0",
-                },
-            });
-
-            if (!res.ok) {
-                const json = await res.json();
-                throw new Error(json.error || "Failed to fetch activities");
-            }
-
-            const json = await res.json();
-            setActivities(json.data || []);
-        } catch (error: any) {
-            setErrorActivities(error.message || "Error fetching activities");
-        } finally {
-            setLoadingActivities(false);
-        }
-    }, [referenceid]);
-
-    const fetchHistory = useCallback(async () => {
-        if (!referenceid) {
             setHistory([]);
             return;
         }
-        setLoadingHistory(true);
-        setErrorHistory(null);
 
-        try {
-            const res = await fetch(
-                `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
-            );
+        setActivitiesLoading(true);
+        setHistoryLoading(true);
+        setError(null);
 
-            if (!res.ok) {
-                const json = await res.json();
-                throw new Error(json.error || "Failed to fetch history");
-            }
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
 
-            const json = await res.json();
-            setHistory(json.activities || []);
-        } catch (error: any) {
-            setErrorHistory(error.message || "Error fetching history");
-        } finally {
-            setLoadingHistory(false);
+        const url = new URL("/api/activity/tsa/breaches/fetch-activity", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
         }
-    }, [referenceid]);
 
-    // Initial fetch + realtime subscription to keep UI fresh
+        fetch(url.toString())
+            .then(async (res) => {
+                if (!res.ok) throw new Error("Failed to fetch activities and history");
+                return res.json();
+            })
+            .then((data) => {
+                setActivities(data.activities || []);
+                setHistory(data.history || []);
+            })
+            .catch((err) => setError(err.message))
+            .finally(() => {
+                setActivitiesLoading(false);
+                setHistoryLoading(false);
+            });
+    }, [referenceid, dateCreatedFilterRange]);
+
     useEffect(() => {
         if (!referenceid) return;
 
-        // Initial fetches
-        fetchActivities();
-        fetchHistory();
+        // Initial fetch
+        fetchAllData();
 
         // Subscribe realtime for activities
         const activityChannel = supabase
@@ -171,7 +148,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
                 },
                 (payload) => {
                     console.log("Activity realtime update:", payload);
-                    fetchActivities();
+                    fetchAllData();
                 }
             )
             .subscribe();
@@ -189,12 +166,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
                 },
                 (payload) => {
                     console.log("History realtime update:", payload);
-                    fetchHistory();
+                    fetchAllData();
                 }
             )
             .subscribe();
 
-        // Cleanup subscriptions properly
         return () => {
             activityChannel.unsubscribe();
             supabase.removeChannel(activityChannel);
@@ -202,7 +178,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
             historyChannel.unsubscribe();
             supabase.removeChannel(historyChannel);
         };
-    }, [referenceid, fetchActivities, fetchHistory]);
+    }, [referenceid, fetchAllData]);
 
     const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
         if (!range) return true;
@@ -255,17 +231,6 @@ export const Overdue: React.FC<NewTaskProps> = ({
         );
     });
 
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
-
-    if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-40">
-                <Spinner className="size-8" />
-            </div>
-        );
-    }
-
     if (error) {
         return (
             <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
@@ -297,13 +262,13 @@ export const Overdue: React.FC<NewTaskProps> = ({
             <Input
                 type="search"
                 placeholder="Search..."
-                className="text-xs flex-grow mb-3"
+                className="text-xs flex-grow mb-3 rounded-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Search accounts"
             />
 
-            <div className="mb-2 text-xs font-bold">
+            <div className="mb-2 text-xs font-bold mt-2 mb-2">
                 Total Overdue Activities: ({mergedData.length})
             </div>
 
@@ -319,7 +284,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
                         }
 
                         return (
-                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2">
+                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
                                 <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
                                         <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
@@ -349,7 +314,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
                                                 address={item.address}
                                                 accountReferenceNumber={item.account_reference_number}
                                                 onCreated={() => {
-                                                    fetchActivities();
+                                                    fetchAllData();
                                                 }}
                                             />
                                         </div>

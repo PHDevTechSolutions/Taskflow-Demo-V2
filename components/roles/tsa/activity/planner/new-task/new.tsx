@@ -543,7 +543,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 Endorsed Tickets ({endorsedTickets.length})
               </h2>
 
-              <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-red-500">
+              <Accordion type="single" collapsible className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500">
                 {endorsedTickets.map((ticket) => (
                   <AccordionItem key={ticket.id} value={ticket.id}>
                     <div className="flex justify-between items-center p-2 select-none">
@@ -552,7 +552,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                       </AccordionTrigger>
                       <Button
                         type="button"
-                        className="cursor-pointer"
+                        className="cursor-pointer rounded-none"
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -582,8 +582,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
                       <p>
                         <strong>Wrap Up:</strong> {ticket.wrap_up}
                       </p>
-                      <p>
-                        <strong>Inquiry:</strong> {ticket.inquiry}
+                      <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
+                        <strong>Inquiry / Notes:</strong> {ticket.inquiry}
                       </p>
                     </AccordionContent>
                   </AccordionItem>
@@ -593,7 +593,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
           ) : null}
 
           <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <DialogContent className="text-xs">
+            <DialogContent className="text-xs rounded-none">
               <DialogHeader>
                 <DialogTitle>Use Endorsed Ticket</DialogTitle>
               </DialogHeader>
@@ -603,6 +603,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               <DialogFooter className="flex gap-4 mt-4 justify-end">
                 <Button
                   variant="outline"
+                  className="rounded-none"
                   onClick={() => setConfirmOpen(false)}
                   disabled={confirmLoading}
                 >
@@ -610,6 +611,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 </Button>
                 <Button
                   variant="default"
+                  className="rounded-none"
                   onClick={handleConfirmUseEndorsed}
                   disabled={confirmLoading}
                 >
@@ -623,17 +625,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
             {/* Search input */}
             <Input
               type="search"
-              placeholder="Search Company Name"
+              placeholder="Search Company Name..."
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              className="flex-1 rounded-md p-2 border border-gray-300 text-xs"
+              className="flex-1 rounded-none p-2 border border-gray-300 text-xs"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
 
             <Button
-              className="shrink-0 cursor-pointer"
+              className="shrink-0 cursor-pointer rounded-none"
               onClick={() => setIsCreateDialogOpen(true)}
             >
               <Plus /> Add
@@ -649,7 +651,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
-                <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200 uppercase">
+                <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase">
                   {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
@@ -781,17 +783,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
                     Available OB Calls ({groupedNull[firstAvailableCluster].length})
                   </h2>
 
-                  <Alert className="font-mono">
+                  <Alert className="font-mono rounded-xl shadow-lg">
                     <CheckCircle2Icon />
-                    <AlertTitle className="text-xs">
-                      Cluster Series: {firstAvailableCluster.toUpperCase()}
+                    <AlertTitle className="text-xs font-bold">
+                      CLUSTER SERIES: {firstAvailableCluster.toUpperCase()}
                     </AlertTitle>
-                    <AlertDescription className="text-xs">
+                    <AlertDescription className="text-xs italic">
                       This alert provides important information about the selected cluster.
                     </AlertDescription>
                   </Alert>
 
-                  <Accordion type="single" collapsible className="w-full border rounded-sm shadow-sm mt-2 border-blue-200 uppercase">
+                  <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase">
                     {groupedNull[firstAvailableCluster].map((account) => (
                       <AccordionItem key={account.id} value={account.id}>
                         <div className="flex justify-between items-center p-2 select-none">
@@ -802,7 +804,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           <div className="flex gap-2 ml-4">
                             <Button
                               type="button"
-                              className="cursor-pointer"
+                              className="cursor-pointer rounded-none"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleAdd(account);
