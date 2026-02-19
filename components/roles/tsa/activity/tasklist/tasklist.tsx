@@ -421,7 +421,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                 <Input
                     type="text"
                     placeholder="Search company, reference ID, status, or activity..."
-                    className="input input-bordered input-sm flex-grow max-w-md"
+                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     aria-label="Search activities"
@@ -544,8 +544,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                 {/* Edit Button */}
                                                 <Button
                                                     variant="outline"
-                                                    size="sm"
-                                                    className="cursor-pointer"
+                                                    className="cursor-pointer rounded-none"
                                                     onClick={() => openEditDialog(item)}
                                                 >
                                                     <PenIcon /> Edit
@@ -554,8 +553,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                 {/* RE-SO Info Button (only for Sales Order Preparation) */}
                                                 {item.type_activity === "Sales Order Preparation" && (
                                                     <Button
-                                                        size="sm"
-                                                        className="cursor-pointer text-[10px] bg-red-600"
+                                                        className="cursor-pointer text-[10px] bg-red-600 rounded-none"
                                                         onClick={() => {
                                                             setReSoItem(item);
                                                             setEditSoNumber(item.so_number || "");
