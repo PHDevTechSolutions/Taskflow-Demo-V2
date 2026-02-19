@@ -434,7 +434,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         <TableCell className="text-center flex space-x-2 justify-center">
                                             <Button
                                                 variant="outline"
-                                                size="sm"
+                                                className="rounded-none"
                                                 onClick={() => openEditDialog(item)}
                                             >
                                                 <PenIcon /> Edit
