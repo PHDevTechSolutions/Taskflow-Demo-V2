@@ -822,50 +822,52 @@ export default function TaskListEditDialog({
                                                             const data = doc.data();
 
                                                             // 1. Build Specifications HTML and Searchable Text
-                                                            let specsHtml = `<p style="margin-bottom: 8px;"><strong>${data.shortDescription || ""}</strong></p>`;
+                                                            let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
                                                             let rawSpecsText = "";
 
-                                                            // NEW NESTED MAPPING: Iterate through specGroup -> specs
                                                             if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
-                                                                specsHtml += `<div style="font-family: sans-serif; font-size: 11px;">`;
-
                                                                 data.technicalSpecs.forEach((group: any) => {
-                                                                    // Add Group Header to HTML and Searchable Text
+                                                                    // 1. Add the Group Header (e.g., FIXTURE DETAILS)
                                                                     rawSpecsText += ` ${group.specGroup}`;
-                                                                    specsHtml += `<div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">${group.specGroup}</div>`;
+                                                                    specsHtml += `
+            <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                ${group.specGroup}
+            </div>`;
 
-                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; margin-bottom: 4px;">`;
+                                                                    // 2. Start the table for this specific group
+                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
 
                                                                     group.specs?.forEach((spec: any) => {
-                                                                        // Add individual spec details to searchable text
+                                                                        // 3. Add data to searchable text and HTML rows
                                                                         rawSpecsText += ` ${spec.name} ${spec.value}`;
-
                                                                         specsHtml += `
-                    <tr style="border-bottom: 1px solid #e5e7eb;">
-                        <td style="padding: 4px; color: #6b7280; width: 40%;"><b>${spec.name}</b></td>
-                        <td style="padding: 4px; text-align: right;">${spec.value}</td>
-                    </tr>`;
+                                                  <tr>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb; width: 40%;">
+                                                          <b>${spec.name}</b>
+                                                      </td>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px;">
+                                                          ${spec.value}
+                                                      </td>
+                                                  </tr>`;
                                                                     });
 
                                                                     specsHtml += `</table>`;
                                                                 });
-
-                                                                specsHtml += `</div>`;
                                                             }
 
                                                             // 2. Map to Product format and resolve ID mismatch
                                                             return {
-                                                                // ID hashing remains consistent for your system
+                                                                // Convert string ID to a hash number if your system strictly requires numbers
                                                                 id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
                                                                 title: data.name || "No Name",
-                                                                // Prioritize salePrice for the Sales Project
                                                                 price: data.salePrice || data.regularPrice || 0,
                                                                 description: specsHtml,
                                                                 images: data.mainImage ? [{ src: data.mainImage }] : [],
                                                                 skus: data.itemCode ? [data.itemCode] : [],
                                                                 discount: 0,
-                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + (data.productFamily || "") + " " + rawSpecsText).toUpperCase()
-                                                            } as any;
+                                                                // We attach the search string temporarily for the filter
+                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + rawSpecsText).toUpperCase()
+                                                            } as any; // Use 'as any' temporarily to bypass the strict Product definition
                                                         })
                                                             .filter(product => {
                                                                 // 3. Perform the deep "Contains" search
@@ -1085,9 +1087,9 @@ export default function TaskListEditDialog({
                                                     <div className="flex flex-col">
                                                         {previewStates[index] ? (
                                                             <div
-                                                                className="border p-2 rounded max-h-40 overflow-auto custom-scrollbar bg-white text-black text-xs"
+                                                                className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
                                                                 dangerouslySetInnerHTML={{
-                                                                    __html: product.product_description || "<i>No description</i>",
+                                                                    __html: product.description || '<span class="text-gray-400 italic">No specifications provided.</span>'
                                                                 }}
                                                             />
                                                         ) : (
@@ -1644,11 +1646,6 @@ export default function TaskListEditDialog({
                                     setIsPreviewOpen={setIsPreviewOpen}
                                     DownloadPDF={DownloadPDF}
                                 />
-                                <div className="flex gap-3">
-                                    <Button type="button" onClick={DownloadPDF} className="rounded-xs p-6 bg-red-700">
-                                        <FileText /> PDF
-                                    </Button>
-                                </div>
                             </>
                         );
 
