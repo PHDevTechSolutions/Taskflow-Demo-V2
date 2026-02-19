@@ -11,14 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, } from "@/components/ui/item"
 import { Download, Eye, Trash } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-// Firebase Project Dependencies
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
-// Ensure 'db' is initialized in your firebase configuration file
 import { db } from "@/lib/firebase";
 import { FieldLabel } from "@/components/ui/field";
 
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+// import jsPDF from "jspdf";
+// import html2canvas from "html2canvas";
 
 interface Completed {
     id: number;
@@ -45,6 +43,7 @@ interface Completed {
     contact_number?: string;
     email_address?: string;
     address?: string;
+    region?: string;
 }
 
 interface ProductItem {
@@ -105,6 +104,8 @@ interface TaskListEditDialogProps {
     email?: string;
     contact?: string;
     tsmname?: string;
+    tsmemail?: string;
+    tsmcontact?: string;
     managername?: string;
 
     activity_reference_number?: string;
@@ -143,6 +144,8 @@ export default function TaskListEditDialog({
     email,
     contact,
     tsmname,
+    tsmemail,
+    tsmcontact,
     managername,
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -412,6 +415,8 @@ export default function TaskListEditDialog({
         const salesemail = `${emailUsername}@${emailDomain}`;
         const salescontact = contact || "";
         const salestsmname = tsmname || "";
+        const salestsmemail = tsmemail || "";
+        const salestsmcontact = tsmcontact || "";
         const salesmanagername = managername || "";
 
         // Construct items
@@ -424,10 +429,10 @@ export default function TaskListEditDialog({
             const description = descriptions[index] || "";
 
             const descriptionTable = `<table>
-      <tr><td>${title}</td></tr>
-      <tr><td>${sku}</td></tr>
-      <tr><td>${description}</td></tr>
-    </table>`;
+                                        <tr><td>${title}</td></tr>
+                                        <tr><td>${sku}</td></tr>
+                                        <tr><td>${description}</td></tr>
+                                     </table>`;
 
             return {
                 itemNo: index + 1,
@@ -603,6 +608,9 @@ export default function TaskListEditDialog({
             salesemail,
             salescontact: contact ?? "",
             salestsmname: tsmname ?? "",
+            salestsmemail: tsmemail ?? "",
+            salestsmcontact: tsmcontact ?? "",
+
             salesmanagername: managername ?? "",
         };
     };
@@ -815,46 +823,62 @@ export default function TaskListEditDialog({
                                                             const data = doc.data();
 
                                                             // 1. Build Specifications HTML and Searchable Text
-                                                            let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                                            let specsHtml = `<p style="margin-bottom: 8px;"><strong>${data.shortDescription || ""}</strong></p>`;
                                                             let rawSpecsText = "";
 
-                                                            if (data.technicalSpecs?.[0]?.rows) {
-                                                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
-                                                                data.technicalSpecs[0].rows.forEach((row: any) => {
-                                                                    rawSpecsText += ` ${row.name} ${row.value}`;
-                                                                    specsHtml += `<tr>
-          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
-          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
-        </tr>`;
+                                                            // NEW NESTED MAPPING: Iterate through specGroup -> specs
+                                                            if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
+                                                                specsHtml += `<div style="font-family: sans-serif; font-size: 11px;">`;
+
+                                                                data.technicalSpecs.forEach((group: any) => {
+                                                                    // Add Group Header to HTML and Searchable Text
+                                                                    rawSpecsText += ` ${group.specGroup}`;
+                                                                    specsHtml += `<div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">${group.specGroup}</div>`;
+
+                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; margin-bottom: 4px;">`;
+
+                                                                    group.specs?.forEach((spec: any) => {
+                                                                        // Add individual spec details to searchable text
+                                                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
+
+                                                                        specsHtml += `
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 4px; color: #6b7280; width: 40%;"><b>${spec.name}</b></td>
+                        <td style="padding: 4px; text-align: right;">${spec.value}</td>
+                    </tr>`;
+                                                                    });
+
+                                                                    specsHtml += `</table>`;
                                                                 });
-                                                                specsHtml += `</table>`;
+
+                                                                specsHtml += `</div>`;
                                                             }
 
                                                             // 2. Map to Product format and resolve ID mismatch
                                                             return {
-                                                                // Convert string ID to a hash number if your system strictly requires numbers
+                                                                // ID hashing remains consistent for your system
                                                                 id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
                                                                 title: data.name || "No Name",
+                                                                // Prioritize salePrice for the Sales Project
                                                                 price: data.salePrice || data.regularPrice || 0,
                                                                 description: specsHtml,
                                                                 images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                                                skus: data.sku ? [data.sku] : [],
+                                                                skus: data.itemCode ? [data.itemCode] : [],
                                                                 discount: 0,
-                                                                // We attach the search string temporarily for the filter
-                                                                tempSearchMetadata: (data.name + " " + (data.sku || "") + " " + rawSpecsText).toUpperCase()
-                                                            } as any; // Use 'as any' temporarily to bypass the strict Product definition
+                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + (data.productFamily || "") + " " + rawSpecsText).toUpperCase()
+                                                            } as any;
                                                         })
                                                             .filter(product => {
                                                                 // 3. Perform the deep "Contains" search
                                                                 return product.tempSearchMetadata.includes(searchUpper);
                                                             }) as Product[]; // Cast the final filtered array back to Product[]
 
-                                                        setSearchResults(firebaseResults);
+                                        setSearchResults(firebaseResults);
                                                     }
                                                 } catch (err) {
-                                                    console.error("Search Protocol Failure:", err);
+                                            console.error("Search Protocol Failure:", err);
                                                 } finally {
-                                                    setIsSearching(false);
+                                            setIsSearching(false);
                                                 }
                                             }}
                                         />
@@ -890,7 +914,7 @@ export default function TaskListEditDialog({
                                             <div className="flex flex-col justify-center">
                                                 <span className="font-semibold text-xs">{product.title}</span>
                                                 <span className="text-xs text-gray-500">
-                                                    SKU: {product.skus?.join(", ") || "None"}
+                                                    ITEM CODE: {product.skus?.join(", ") || "None"}
                                                 </span>
                                             </div>
                                         </div>
@@ -1054,7 +1078,7 @@ export default function TaskListEditDialog({
                                                         className="border-none p-0 shadow-none"
                                                     />
                                                     <div className="text-xs text-gray-500">
-                                                        SKU: {product.product_sku || <i>None</i>}
+                                                        ITEM CODE: {product.product_sku || <i>None</i>}
                                                     </div>
                                                 </TableCell>
 
@@ -1174,7 +1198,6 @@ export default function TaskListEditDialog({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
 
             {/* PREVIEW PROTOCOL MODAL */}
             <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
@@ -1382,10 +1405,10 @@ export default function TaskListEditDialog({
                                 const initiateNewPage = async () => {
                                     const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
                                     pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
-                                    
+
                                     // Draw number for the CURRENT page
-                                    drawPageNumber(pageCount); 
-                                    
+                                    drawPageNumber(pageCount);
+
                                     return banner.h;
                                 };
 
@@ -1667,6 +1690,10 @@ export default function TaskListEditDialog({
                                                 <span className="font-black text-[#121212]">Date:</span>
                                                 <span className="text-gray-600">{payload.date}</span>
                                             </p>
+                                            <p className="flex justify-end gap-2">
+                                                <span className="font-black text-[#121212]">Region:</span>
+                                                <span className="text-gray-600">{payload.date}</span>
+                                            </p>
                                         </div>
 
                                         {/* CLIENT INFORMATION GRID */}
@@ -1774,50 +1801,41 @@ export default function TaskListEditDialog({
                                             <div className="grid grid-cols-6 border-b border-black">
                                                 <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Included:</div>
                                                 <div className="col-span-5 p-2 bg-yellow-100">
-                                                    <p>• Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
-                                                    <p>• Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
-                                                </div>
+                                                    <p>• Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>{/* ECO NCR */}
+                                                    <p>• Orders outside Metro Manila: Freed delivery for a minum sales transaction of P10,000.00 in Rizal, P15,000.00 in Bulacan and Cavite, and P25,000.00 in Laguna, Pampanga, and Batangas.</p>{/* ECO NCR */}                                                </div>
                                             </div>
                                             <div className="grid grid-cols-6 border-b border-black">
                                                 <div className="col-span-1 p-2 bg-yellow-400 font-black border-r border-black">Excluded:</div>
                                                 <div className="col-span-5 p-2 bg-yellow-100">
-                                                    <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
-                                                    <p>• Freight charges, arrastre, and other processing fees.</p>
+                                                    <p>• All lamp poles are subject to a delivery charge, freight charges, arrastre and other processing fees.</p>{/* ECO NCR */}
+                                                    <p>• Installation and all hardware/accessories not indicated above.</p>{/* ECO NCR */}
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-6 bg-yellow-50">
                                                 <div className="col-span-1 p-2 font-black border-r border-black">Note:</div>
                                                 <div className="col-span-5 p-2 italic">
-                                                    Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.
-                                                    <span className="font-black underline block mt-1 text-red-600">In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</span>
+                                                    <p>Deliveries are up to the vehicle unloading point only.</p>{/* ECO NCR */}
+                                                    <p>Additional shipping fee applies for other areas.</p>{/* ECO NCR */}
+                                                    <p>Shipping fee is subject to confirmation upon getting the actual weight and dimensions of the items.</p>{/* ECO NCR */}
+                                                    <span className="font-black underline block mt-1 text-red-600">In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</span>{/* ECO NCR */}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* 3. EXTENDED TERMS & CONDITIONS */}
+                                        {/* 3. TERMS & CONDITIONS */}
                                         <div className="mt-6 border-t-2 border-black pt-2">
                                             <h3 className="bg-[#121212] text-white px-3 py-1 text-[10px] font-black inline-block mb-4 uppercase">Terms and Conditions</h3>
-
                                             <div className="grid grid-cols-12 gap-y-4 text-[9px]">
-                                                <div className="col-span-2 font-black uppercase">Availability:</div>
+                                                <div className="col-span-2 font-black uppercase">Terms of Payment:</div>
                                                 <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                                                    <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                                                    <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
-                                                </div>
-
-                                                <div className="col-span-2 font-black uppercase">Warranty:</div>
-                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                                                    <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
-                                                </div>
-
-                                                <div className="col-span-2 font-black uppercase">SO Validity:</div>
-                                                <div className="col-span-10 pl-4 border-l border-gray-100">
-                                                    <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. Any order not confirmed/verified within this period will be <span className="text-red-600 font-black">automatically cancelled</span>.</p>
-                                                </div>
-
-                                                <div className="col-span-2 font-black uppercase">Storage:</div>
-                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                                                    <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of <span className="text-red-600 font-black">10% of the value of the orders per month (0.33% per day)</span>.</p>
+                                                    <p>Cash on Delivery (COD)</p>
+                                                    <p>For 10,000 & below, can be paid in cash at the time of delivery</p>
+                                                    <p>Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</p>
+                                                    <p>If Dated Check payment, 1-3 days bank clearing needed before item/s will be released.</p>
+                                                    <p>Check must be payable to: Ecoshift Corporation.</p>
+                                                    <p>For special items,  Seventy Percent (70%) down payment, 30% upon delivery.</p>
+                                                    <p>Prices are subject to change without prior notice and may vary depending on the final quantity and product mix.</p>
+                                                    <p>Subject for pick-up or delivery cost.</p>
                                                 </div>
 
                                                 <div className="col-span-2 font-black uppercase">Bank Details:</div>
@@ -1832,9 +1850,66 @@ export default function TaskListEditDialog({
                                                     </div>
                                                 </div>
 
-                                                <div className="col-span-2 font-black uppercase">Validity:</div>
+                                                <div className="col-span-2 font-black uppercase">Availability:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>*Availability of item/merchandise, subject to confirmation.</p>
+                                                    <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.*For Available orders, 5-7days  upon confirmed order and payment.</p>
+                                                    <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Ecoshift's control.</p>
+                                                    <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
+                                                    <p>*Add on charge depending on final destination.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">Warranty:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                                    <p>The warranty will be VOID under the following circumstances:</p>
+                                                    <p>*If the unit is being tampered with.</p>
+                                                    <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                                                    <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                                                    <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                                                    <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+                                                    <p>*Shipping costs for warranty claims are for customers' account.</p>
+                                                    <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">SO Validity:</div>
                                                 <div className="col-span-10 pl-4 border-l border-gray-100">
-                                                    <p className="text-red-600 font-black underline">Thirty (30) calendar days from the date of this offer.</p>
+                                                    <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. days (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <span className="text-red-600 font-black">automatically cancelled14-day period will be automatically cancelled</span>.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">Storage:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <span className="text-red-600 font-black">(10% / 30 days =  0.33% per day)</span>.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">Return:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>Ecoshift corporation shall accept returns and exchanges of purchased products only if the items are regular in-stock items or are proven to be defective or damaged.</p>
+                                                    <p>Ecoshift Corporation will not entertain return and exhanges of products that do not come with its original packaging or in unsalable form.</p>
+                                                    <p><span className="text-red-600 font-black italic"><u>7 days return policy -</u></span> if the product received is defective, damaged, or incomplete. This must be communicated to Ecoshift, and Ecoshift has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">Delivery:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>Delivery/Pick up is subject to confirmation.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">CANCELLATION:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>1. Above quoted items are non-cancellable.</p>
+                                                    <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Ecoshift, including freight and delivery charges.</p>
+                                                    <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+                                                    <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+                                                    <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
+                                                </div>
+
+                                                <div className="col-span-2 font-black uppercase">MISCELLANEOUS:</div>
+                                                <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
+                                                    <p>1. Ecoshift Corporation's maximum liability for any damages, loss, or claim  arising from any delay, negligence, or breach shall not exceed the aggregate amount actually paid under the relevant PO.</p>
+                                                    <p>2. Each Party will comply with all applicable Laws and the operating regulations, governmental requirements, and industry standards.</p>
+                                                    <p>3. Should any part of this Agreement be declared unconstitutional, illegal, void or the like, the parts not affected shall remain valid and binding.</p>
+                                                    <p>4. Any modification or alteration on the terms and conditions of this Agreement shall be confirmed in writing duly signed by both parties</p>
+                                                    <p>5. No waiver of any party with respect to a breach or default of right or remedy is presumed under this Agreement. Any waiver of a party’s rights, powers, privileges or remedies must be in writing and signed by that party.</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1842,26 +1917,27 @@ export default function TaskListEditDialog({
                                         {/* 4. OFFICIAL SIGNATURE HIERARCHY */}
                                         <div className="mt-12 pt-4 border-t-4 border-blue-700 pb-20">
                                             <p className="text-[9px] mb-8 font-medium">
-                                                Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.
-                                                Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+                                                Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.                                                 Unless otherwise indicated in your Approved Purchase Order, you are deemed to have accepted the Terms and Conditions of this Quotation.
                                             </p>
-
                                             <div className="grid grid-cols-2 gap-x-20 gap-y-12">
                                                 {/* Left Side: Internal Team */}
                                                 <div className="space-y-10">
                                                     <div>
-                                                        <p className="italic text-[10px] font-black mb-4">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                                        <div className="border-b border-black w-64"></div>
+                                                        <p className="italic text-[10px] font-black mb-12">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
                                                         <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
+                                                        <div className="border-b border-black w-64"></div>
                                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Representative</p>
-                                                        <p className="text-[8px] italic">{payload.salescontact} | {payload.salesemail}</p>
+                                                        <p className="text-[9px] text-gray-500 font-bold italic">Mobile No.: {payload.salescontact}</p>
+                                                        <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesemail}</p>
                                                     </div>
 
                                                     <div>
-                                                        <p className="text-[9px] font-black uppercase text-gray-400">Approved By:</p>
-                                                        <div className="border-b border-black w-64 mt-4"></div>
-                                                        <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "SALES MANAGER"}</p>
-                                                        <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesmanagername}</p>
+                                                        <p className="text-[9px] font-black uppercase text-gray-400 mb-12">Approved By:</p>
+                                                        <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
+                                                        <div className="border-b border-black w-64"></div>
+                                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Sales Manager</p>
+                                                        <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salestsmcontact}</p>
+                                                        <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salestsmemail}</p>
                                                     </div>
 
                                                     <div>
@@ -1874,21 +1950,16 @@ export default function TaskListEditDialog({
 
                                                 {/* Right Side: Client Side */}
                                                 <div className="space-y-10 flex flex-col items-end">
-                                                    <div className="w-64">
-                                                        <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2">
+                                                    <div className="w-64 mt-20">
+                                                        <div className="border-b border-black w-full mt-1"></div>
+                                                        <div className="h-10 w-full bg-red-400/10 border border-red-400 flex items-center justify-center text-[8px] font-black text-red-600 uppercase text-center px-2 mt-1">
                                                             Company Authorized Representative PLEASE SIGN OVER PRINTED NAME
                                                         </div>
-                                                        <div className="border-b border-black w-full mt-1"></div>
                                                     </div>
 
                                                     <div className="w-64">
                                                         <div className="border-b border-black w-full mt-10"></div>
                                                         <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Payment Release Date</p>
-                                                    </div>
-
-                                                    <div className="w-64">
-                                                        <div className="border-b border-black w-full mt-10"></div>
-                                                        <p className="text-[9px] text-right font-black mt-1 uppercase tracking-widest">Position in the Company</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1898,12 +1969,12 @@ export default function TaskListEditDialog({
 
                                 <div className="p-8 bg-gray-50 border-t flex justify-between items-center sticky bottom-0">
                                     <Button variant="ghost" onClick={() => setIsPreviewOpen(false)} className="font-black uppercase">Close Preview</Button>
-                                    <Button
+                                    {/* <Button
                                         onClick={handleDownloadQuotation}
                                         className="bg-[#121212] text-white px-10 h-12 rounded-full font-black uppercase shadow-xl hover:scale-105 transition-transform"
                                     >
                                         Confirm & Generate PDF
-                                    </Button>
+                                    </Button> */}
                                 </div>
                             </div>
                         );
