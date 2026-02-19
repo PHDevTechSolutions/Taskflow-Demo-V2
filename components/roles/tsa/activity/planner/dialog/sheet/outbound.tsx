@@ -307,37 +307,26 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                 value={callType}
                                 onValueChange={props.setCallType}
                             >
-                                {(callStatus === "Successful"
-                                    ? [
-                                        {
-                                            value: "No Requirements",
-                                            title: "No Requirements",
-                                            desc: "Client states no requirements at the moment.",
-                                        },
-                                        {
-                                            value: "Waiting for Future Projects",
-                                            title: "Waiting for Future Projects",
-                                            desc:
-                                                "Client may have upcoming projects but no current requirements.",
-                                        },
-                                        {
-                                            value: "With RFQ",
-                                            title: "With RFQ",
-                                            desc: "Client has a Request for Quotation.",
-                                        },
-                                    ]
-                                    : callStatus === "Unsuccessful"
+                                {(
+                                    callStatus === "Successful"
                                         ? [
                                             {
-                                                value: "Ringing Only",
-                                                title: "Ringing Only",
-                                                desc: "Phone rang but no one answered the call.",
+                                                value: "No Requirements",
+                                                title: "No Requirements",
+                                                desc: "Client states no requirements at the moment.",
                                             },
                                             {
-                                                value: "Cannot Be Reached",
-                                                title: "Cannot Be Reached",
-                                                desc: "Client is unreachable or phone is unattended.",
+                                                value: "Waiting for Future Projects",
+                                                title: "Waiting for Future Projects",
+                                                desc:
+                                                    "Client may have upcoming projects but no current requirements.",
                                             },
+                                            {
+                                                value: "With RFQ",
+                                                title: "With RFQ",
+                                                desc: "Client has a Request for Quotation.",
+                                            },
+                                            // ✅ ADD HERE
                                             {
                                                 value: "Not Connected With The Company",
                                                 title: "Not Connected With The Company",
@@ -345,7 +334,26 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                                     "Client confirmed they are no longer associated with the company.",
                                             },
                                         ]
-                                        : []
+                                        : callStatus === "Unsuccessful"
+                                            ? [
+                                                {
+                                                    value: "Ringing Only",
+                                                    title: "Ringing Only",
+                                                    desc: "Phone rang but no one answered the call.",
+                                                },
+                                                {
+                                                    value: "Cannot Be Reached",
+                                                    title: "Cannot Be Reached",
+                                                    desc: "Client is unreachable or phone is unattended.",
+                                                },
+                                                {
+                                                    value: "Not Connected With The Company",
+                                                    title: "Not Connected With The Company",
+                                                    desc:
+                                                        "Client confirmed they are no longer associated with the company.",
+                                                },
+                                            ]
+                                            : []
                                 ).map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
@@ -373,6 +381,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                     </FieldLabel>
                                 ))}
                             </RadioGroup>
+
                         </FieldSet>
                     </FieldGroup>
                 </div>
