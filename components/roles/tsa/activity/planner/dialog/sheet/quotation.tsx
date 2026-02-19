@@ -640,6 +640,25 @@ export function QuotationSheet(props: Props) {
     }
   };
 
+
+
+  // const handleDownloadQuotationPDF = async () => {
+  //   console.log("Download PDF clicked");
+  //   if (typeof window === 'undefined') return;
+  //   const PRIMARY_CHARCOAL = '#121212';
+  //   const OFF_WHITE = '#F9FAFA';
+
+  //   try {
+  //     const { default: jsPDF } = await import('jspdf');
+  //     const { default: html2canvas } = await import('html2canvas');
+  //     const payload = getQuotationPayload();
+  //     const isEcoshift = quotation_type === "Ecoshift Corporation";
+
+  //   } catch (error) {
+  //   }
+
+  // }
+
   // Routing for product retrieval
   const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
 
@@ -1761,7 +1780,7 @@ export function QuotationSheet(props: Props) {
 
 
             <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
-             <XCircle /> Close
+              <XCircle /> Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1783,6 +1802,439 @@ export function QuotationSheet(props: Props) {
             const headerImagePath = isEcoshift
               ? "/ecoshift-banner.png"
               : "/disruptive-banner.png";
+
+            async function handleDownloadQuotationPDF() {
+              console.log('pdf dl');
+              if (typeof window === 'undefined') return;
+              const PRIMARY_CHARCOAL = '#121212';
+              const OFF_WHITE = '#F9FAFA';
+              try {
+                const { default: jsPDF } = await import('jspdf');
+                const { default: html2canvas } = await import('html2canvas');
+                const payload = getQuotationPayload();
+                const isEcoshift = quotationType === "Ecoshift Corporation";
+
+                const pdf = new jsPDF({
+                  orientation: 'portrait',
+                  unit: 'pt',
+                  format: [612, 936] // Legal Format
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const BOTTOM_MARGIN = 0;
+
+                // 1. CREATE VIRTUAL CANVAS
+                const iframe = document.createElement('iframe');
+                Object.assign(iframe.style, {
+                  position: 'fixed',
+                  right: '1000%',
+                  width: '816px',
+                  visibility: 'hidden'
+                });
+                document.body.appendChild(iframe);
+                const iframeDoc = iframe.contentWindow?.document;
+                if (!iframeDoc) throw new Error("Initialization Failed");
+
+                iframeDoc.open();
+                iframeDoc.write(`
+                                    <html>
+                                    <head>
+                                        <style>
+                                            * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+                                            body { 
+                                                font-family: 'Arial', sans-serif; 
+                                                margin: 0; 
+                                                padding: 0; 
+                                                background: white; /* Changed from OFF_WHITE to white for seamless capture */
+                                                width: 816px; 
+                                                color: ${PRIMARY_CHARCOAL};
+                                                overflow: hidden; /* Prevents scrollbar padding */
+                                            }
+                                            .header-img { width: 100%; display: block; }
+                                            .content-area { 
+                                                padding: 0px 60px; 
+                                                margin: 0 !important; /* Ensure no external margins */
+                                            }
+                                            
+                                            /* 1. CLIENT INFORMATION GRID */
+                                            .client-grid { border-left: 1.5px solid black; border-right: 1.5px solid black; background: white; }
+                                            .grid-row { display: flex; align-items: center; min-height: 30px; padding: 2px 15px; }
+                                            .border-t { border-top: 1.5px solid black; }
+                                            .border-b { border-bottom: 1.5px solid black; }
+                                            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 0; }
+                                            .value { flex-grow: 1; font-size: 11px; font-weight: bold; color: #374151; padding-left: 15px; }
+
+                                            .intro-text { font-size: 10px; font-style: italic; color: #6b7280; font-weight: 500; padding: 5px 0; }
+
+                                            /* 2. SPECIFICATION TABLE */
+                                            .table-container { 
+                                                border: 1.5px solid black; 
+                                                border-bottom: none; /* Let the row blocks handle the bottom border */
+                                                background: white; 
+                                                margin: 0;
+                                            }
+                                            .main-table { 
+                                                width: 100%; 
+                                                border-collapse: collapse; 
+                                                table-layout: fixed; 
+                                                margin: 0;
+                                            }
+                                            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black; }
+                                            .main-table th { 
+                                                padding: 12px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
+                                                text-transform: uppercase; border-right: 1px solid black;
+                                            }
+                                            .main-table td { 
+                                                padding: 15px 10px; vertical-align: top; border-right: 1px solid black; 
+                                                border-bottom: 1px solid black; font-size: 10px; 
+                                            }
+                                            .main-table td:last-child, .main-table th:last-child { border-right: none; }
+
+                                            .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
+                                            .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
+                                            .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
+                                            .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
+                                            .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
+                                            .desc-text { width: 100%; font-size: 9px; color: #6b7280; line-height: 1.4; }
+
+                                            .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
+
+                                            /* LOGISTICS GRID */
+                                            .logistics-container { margin-top: 15px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
+                                            .logistics-row { display: flex; border-bottom: 1px solid black; }
+                                            .logistics-row:last-child { border-bottom: none; }
+                                            .logistics-label { width: 100px; padding: 8px; font-weight: 900; border-right: 1px solid black; flex-shrink: 0; }
+                                            .logistics-value { padding: 8px; flex-grow: 1; }
+                                            .bg-yellow-header { background-color: #facc15; }
+                                            .bg-yellow-content { background-color: #fef9c3; }
+                                            .bg-yellow-note { background-color: #fefce8; }
+                                            .text-red-strong { color: #dc2626; font-weight: 900; display: block; margin-top: 4px; }
+
+                                            /* 3. EXTENDED TERMS & CONDITIONS */
+                                            .terms-section { margin-top: 25px; border-top: 2.5px solid black; padding-top: 10px; }
+                                            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
+                                            .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
+                                            .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
+                                            .terms-val { padding: 4px 12px; border-left: 1px solid #e5e7eb; }
+                                            .terms-highlight { background-color: #fef9c3; }
+                                            .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+                                            /* SUMMARY BAR */
+                                            .summary-bar { background: ${PRIMARY_CHARCOAL}; color: white; height: 45px; }
+                                            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
+                                            .tax-label { color: #f87171; font-style: italic; font-weight: 900; font-size: 9px; text-transform: uppercase; }
+                                            .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+                                            .tax-active { color: white; }
+                                            .tax-inactive { color: rgba(255,255,255,0.3); }
+                                            .grand-total-label { text-align: right; font-weight: 900; font-size: 10px; text-transform: uppercase; }
+                                            .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
+
+                                            /* 4. OFFICIAL SIGNATURE HIERARCHY */
+                                            .sig-hierarchy { margin-top: 48px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 80px; }
+                                            .sig-message { font-size: 9px; margin-bottom: 32px; font-weight: 500; line-height: 1.4; }
+                                            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
+                                            .sig-side-internal { display: flex; flex-direction: column; gap: 40px; }
+                                            .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
+                                            .sig-line { border-bottom: 1px solid black; width: 256px; }
+                                            .sig-rep-box { 
+                                                width: 256px; height: 40px; background: rgba(248, 113, 113, 0.1); 
+                                                border: 1px solid #f87171; display: flex; align-items: center; 
+                                                justify-content: center; text-align: center; font-size: 8px; 
+                                                font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
+                                            }
+                                            .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+                                        </style>
+                                    </head>
+                                    <body></body>
+                                    </html>
+                                `);
+                iframeDoc.close();
+
+                // 2. HELPER: ATOMIC SECTION CAPTURE
+                const renderBlock = async (html: string) => {
+                  iframeDoc.body.innerHTML = html;
+                  // Allow time for images to resolve
+                  const images = iframeDoc.querySelectorAll('img');
+                  await Promise.all(Array.from(images).map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+                  }));
+
+                  const canvas = await html2canvas(iframeDoc.body, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false
+                  });
+                  return {
+                    img: canvas.toDataURL('image/jpeg', 1.0),
+                    h: (canvas.height * pdfWidth) / canvas.width
+                  };
+                };
+
+                let currentY = 0;
+                let pageCount = 1;
+
+                const drawPageNumber = (currentCount: number) => {
+                  pdf.setFont("helvetica", "normal");
+                  pdf.setFontSize(8);
+                  pdf.setTextColor(150);
+                  pdf.text(`Page ${currentCount}`, pdfWidth - 60, pdfHeight - 20);
+                };
+
+                const initiateNewPage = async () => {
+                  const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
+                  pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
+
+                  // Draw number for the CURRENT page
+                  drawPageNumber(pageCount);
+
+                  return banner.h;
+                };
+
+                // --- START GENERATION ---
+                currentY = await initiateNewPage();
+
+                // A. CLIENT INFO BLOCK
+                const clientBlock = await renderBlock(`
+                                    <div class="content-area">
+                                        <div style="text-align:right; font-weight:900; font-size:10px; margin-bottom:10px;">
+                                            REFERENCE NO: ${payload.referenceNo}<br>DATE: ${payload.date}
+                                        </div>
+                                        <div class="client-grid">
+                                            <div class="grid-row border-t"><div class="label">COMPANY NAME:</div><div class="value">${payload.companyName}</div></div>
+                                            <div class="grid-row"><div class="label">ADDRESS:</div><div class="value">${payload.address}</div></div>
+                                            <div class="grid-row"><div class="label">TEL NO:</div><div class="value">${payload.telNo}</div></div>
+                                            <div class="grid-row border-b"><div class="label">EMAIL ADDRESS:</div><div class="value">${payload.email}</div></div>
+                                            <div class="grid-row"><div class="label">ATTENTION:</div><div class="value">${payload.attention}</div></div>
+                                            <div class="grid-row border-b"><div class="label">SUBJECT:</div><div class="value">${payload.subject}</div></div>
+                                        </div>
+                                        <p class="intro-text">We are pleased to offer you the following products for consideration:</p>
+                                    </div>
+                                `);
+                pdf.addImage(clientBlock.img, 'JPEG', 0, currentY, pdfWidth, clientBlock.h);
+                currentY += clientBlock.h;
+
+                // B. TABLE HEADER BLOCK
+                const headerBlock = await renderBlock(`
+                                    <div class="content-area">
+                                        <div class="table-container" style="border-bottom: 1.5px solid black;">
+                                            <table class="main-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 40px;">ITEM NO</th>
+                                                        <th style="width: 40px;">QTY</th>
+                                                        <th style="width: 120px;">REFERENCE PHOTO</th>
+                                                        <th style="width: 200px;">PRODUCT DESCRIPTION</th>
+                                                        <th style="width: 80px; text-align:right;">UNIT PRICE</th>
+                                                        <th style="width: 80px; text-align:right;">TOTAL AMOUNT</th>
+                                                    </tr>
+                                                </thead>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `);
+                pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
+                currentY += 40;
+
+                // C. ITEM ROWS
+                for (const [index, item] of payload.items.entries()) {
+                  const rowBlock = await renderBlock(`
+                                        <div class="content-area">
+                                            <table class="main-table" style="border: 1.5px solid black; border-top: none;">
+                                                <tr>
+                                                    <td style="width: 40px;" class="item-no">${index + 1}</td>
+                                                    <td style="width: 40px;" class="qty-col">${item.qty}</td>
+                                                    <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
+                                                    <td style="width: 200px;">
+                                                        <div class="product-title">${item.title}</div>
+                                                        <div class="sku-text">${item.sku}</div>
+                                                        <div class="desc-text">${item.description}</div>
+                                                    </td>
+                                                    <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
+                                                    <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    `);
+
+                  // Handle Page Breaks (Same logic)
+                  if (currentY + rowBlock.h > (pdfHeight - 50)) {
+                    pdf.addPage([612, 936]);
+                    pageCount++;
+                    currentY = await initiateNewPage();
+                    pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
+                    currentY += 40; // Re-apply stitch on new page
+                  }
+
+                  pdf.addImage(rowBlock.img, 'JPEG', 0, currentY, pdfWidth, rowBlock.h);
+
+                  // UPDATE: Maintain the stitch for the next row
+                  currentY += rowBlock.h;
+                }
+
+                // D. GRAND TOTAL & LOGISTICS
+                const footerBlock = await renderBlock(`
+                                                                        <div class="content-area" style="padding-top:0; padding-bottom:0;">
+                                                                            <div class="table-container">
+                                                                                <table class="main-table">
+                                                                                    <tr class="summary-bar">
+                                                                                        <td colspan="2"></td>
+                                                                                        <td class="tax-label">Tax Type:</td>
+                                                                                        <td style="width: 200px;">
+                                                                                            <div class="tax-options">
+                                                                                                <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
+                                                                                                    ${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                                                                                                </span>
+                                                                                                <span class="${payload.vatTypeLabel === "VAT Exe" ? 'tax-active' : 'tax-inactive'}">
+                                                                                                    ${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td style="width: 80px; text-align:right;" class="grand-total-label">Grand Total:</td>
+                                                                                        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                                                    </tr>
+                                                                                </table>
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                    `);
+                if (currentY + footerBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
+                  pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
+                  pageCount++;
+                }
+                pdf.addImage(footerBlock.img, 'JPEG', 0, currentY, pdfWidth, footerBlock.h);
+                currentY += footerBlock.h;
+
+                // E. TERMS & SIGNATURES
+                const finalBlock = await renderBlock(`
+                                                                        <div class="content-area" style="padding-top:0;">
+                                                                            <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
+
+                                                                            <div class="logistics-container">
+                                                                                <div class="logistics-row">
+                                                                                    <div class="logistics-label bg-yellow-header">Included:</div>
+                                                                                    <div class="logistics-value bg-yellow-content">
+                                                                                        <p>• Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+                                                                                        <p>• Orders outside Metro Manila: Free delivery thresholds apply (₱10k Rizal, ₱15k Bulacan/Cavite, ₱25k Laguna/Pampanga/Batangas).</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div class="logistics-row">
+                                                                                    <div class="logistics-label bg-yellow-header">Exclude:</div>
+                                                                                    <div class="logistics-value bg-yellow-content">
+                                                                                        <p>• All lamp poles are subject to delivery charge. Installation and all hardware/accessories not indicated above.</p>
+                                                                                        <p>• Freight charges, arrastre, and other processing fees.</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div class="logistics-row">
+                                                                                    <div class="logistics-label">Note:</div>
+                                                                                    <div class="logistics-value bg-yellow-note" style="font-style: italic;">
+                                                                                        <p>Deliveries are up to the vehicle unloading point only. Additional shipping fee applies for other areas.</p>
+                                                                                        <span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="terms-section">
+                                                                                <div class="terms-header">Terms and Conditions</div>
+                                                                                <div class="terms-grid">
+                                                                                    <div class="terms-label">Availability:</div>
+                                                                                    <div class="terms-val terms-highlight">
+                                                                                        <p>5-7 days if on stock upon receipt of approved PO.</p>
+                                                                                        <p>For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
+                                                                                    </div>
+                                                                                    
+                                                                                    <div class="terms-label">Warranty:</div>
+                                                                                    <div class="terms-val terms-highlight">
+                                                                                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture. Warranty is VOID if unit is tampered, altered, or subjected to misuse.</p>
+                                                                                    </div>
+
+                                                                                    <div class="terms-label">SO Validity:</div>
+                                                                                    <div class="terms-val terms-highlight">
+                                                                                        <p>Sales order has validity period of 14 working days. Any order not confirmed/verified within this period will be automatically cancelled.</p>
+                                                                                    </div>
+
+                                                                                    <div class="terms-label">Storage</div>
+                                                                                    <div class="terms-val terms-highlight">
+                                                                                        <p>Orders undelivered after 14 days due to client shortcomings will be charged a storage fee of 10% of the value of the orders per month (0.33% per day).</p>
+                                                                                    </div>
+
+                                                                                    <div class="terms-label">Bank Details:</div>
+                                                                                    <div class="terms-val">
+                                                                                        <div class="bank-grid">
+                                                                                            <div><strong>METROBANK</strong><br/>Payee: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Acc: ${isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</div>
+                                                                                            <div><strong>BDO</strong><br/>Payee: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Acc: ${isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</div>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div class="terms-label">Validity:</div>
+                                                                                    <div class="terms-val terms-highlight">
+                                                                                        <p><u>Thirty (30) calendar days from the date of this offer.</u></p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="sig-hierarchy">
+                                                                                <p class="sig-message">
+                                                                                    Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance.
+                                                                                    Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+                                                                                </p>
+
+                                                                                <div class="sig-grid">
+                                                                                    <div class="sig-side-internal">
+                                                                                        <div>
+                                                                                            <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 4px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                                                                                            <div class="sig-line"></div>
+                                                                                            <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
+                                                                                            <p class="sig-sub-label">Sales Representative</p>
+                                                                                            <p style="font-size: 8px; font-style: italic;">${payload.salescontact} | ${payload.salesemail}</p>
+                                                                                        </div>
+
+                                                                                        <div>
+                                                                                            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af;">Approved By:</p>
+                                                                                            <div class="sig-line" style="margin-top: 16px;"></div>
+                                                                                            <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname || "SALES MANAGER"}</p>
+                                                                                            <p style="font-size: 9px; color: #6b7280; font-weight: bold; font-style: italic;">Mobile: ${payload.salesmanagername}</p>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div class="sig-side-client">
+                                                                                        <div>
+                                                                                            <div class="sig-rep-box">Company Authorized Representative PLEASE SIGN OVER PRINTED NAME</div>
+                                                                                            <div class="sig-line" style="margin-top: 4px;"></div>
+                                                                                        </div>
+                                                                                        <div style="width: 256px;">
+                                                                                            <div class="sig-line" style="margin-top: 40px;"></div>
+                                                                                            <p style="font-size: 9px; text-align: right; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Payment Release Date</p>
+                                                                                        </div>
+                                                                                        <div style="width: 256px;">
+                                                                                            <div class="sig-line" style="margin-top: 40px;"></div>
+                                                                                            <p style="font-size: 9px; text-align: right; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Position in the Company</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    `);
+                if (currentY + finalBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
+                  pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
+                  pageCount++;
+                }
+                pdf.addImage(finalBlock.img, 'JPEG', 0, currentY, pdfWidth, finalBlock.h);
+
+                // 3. FINALIZATION
+                pdf.save(`QUOTATION_${payload.referenceNo}.pdf`);
+                document.body.removeChild(iframe);
+
+
+
+              } catch (error) {
+                console.error("Critical Export Error:", error);
+              }
+            }
+
+
 
             return (
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
@@ -2001,7 +2453,7 @@ export function QuotationSheet(props: Props) {
                         <p className="mt-5"><b>BANK DETAILS</b></p>
                         <p className="mb-5"><strong>Payee to: <b>{isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</b></strong></p>
                         <div className="grid grid-cols-2 gap-4">
-                           <div>
+                          <div>
                             <p className="font-black">BANK: METROBANK</p>
                             <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
                             <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
@@ -2110,6 +2562,12 @@ export function QuotationSheet(props: Props) {
                     >
                       <Download className="w-4 h-4 text-blue-400" />
                       Generate Official (.xlsx)
+                    </Button>
+                    <Button
+                      onClick={handleDownloadQuotationPDF}
+                      className="bg-[#121212] text-white px-10 h-12 rounded-full font-black uppercase shadow-xl hover:scale-105 transition-transform"
+                    >
+                      Confirm & Generate PDF
                     </Button>
                   </div>
                 </div>
