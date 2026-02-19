@@ -967,7 +967,7 @@ export default function TaskListEditDialog({
                                         setVatType(newVatType);
 
                                         // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
-                                        if (newVatType === "vat_inc") {
+                                        if (newVatType === "vat_exe") {
                                             setDiscount(12);
                                         } else {
                                             setDiscount(0);
@@ -1045,7 +1045,7 @@ export default function TaskListEditDialog({
 
                                         // Calculate discounted total for this row if applicable
                                         const discountedTotal =
-                                            isChecked && vatType === "vat_inc"
+                                            isChecked && vatType === "vat_exe"
                                                 ? lineTotal * ((100 - discount) / 100)
                                                 : lineTotal;
 
@@ -1056,7 +1056,7 @@ export default function TaskListEditDialog({
                                                         type="checkbox"
                                                         checked={isChecked}
                                                         onChange={() => toggleCheckbox(index)}
-                                                        disabled={vatType !== "vat_inc"}
+                                                        disabled={vatType !== "vat_exe"}
                                                         className="h-5 w-5 rounded-full"
                                                     />
                                                 </TableCell>
