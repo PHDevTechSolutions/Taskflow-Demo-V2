@@ -583,7 +583,7 @@ export function BreachesDialog() {
           </DialogHeader>
 
           {/* DEBUGGING PANEL */}
-          <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
+          {/* <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
             <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
               Debugging Calibration
             </h4>
@@ -628,7 +628,7 @@ export function BreachesDialog() {
               />
               Sync Debug Parameters
             </Button>
-          </div>
+          </div> */}
 
           <div className="space-y-4 text-sm">
             <ul className="list-none space-y-4">
