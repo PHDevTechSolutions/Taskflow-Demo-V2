@@ -196,13 +196,11 @@ export function BreachesDialog() {
     fetchUserAndCluster();
   }, [userId]);
 
-useEffect(() => {
+  useEffect(() => {
+    if (!userDetails.referenceid) return;
 
-  if (!userDetails.referenceid) return;
-
-  fetchCsrMetrics(userDetails.referenceid);
-
-}, [userDetails.referenceid, fromDate, toDate]);
+    fetchCsrMetrics(userDetails.referenceid);
+  }, [userDetails.referenceid, fromDate, toDate]);
 
   const fetchCsrMetrics = async (referenceid: string) => {
     setLoadingCsrMetrics(true);
@@ -238,134 +236,81 @@ useEffect(() => {
         "Prank Call",
       ];
 
-data.forEach((row: any) => {
+      data.forEach((row: any) => {
+        /* ================= DASHBOARD STATUS FILTER ================= */
 
-  /* ================= DASHBOARD STATUS FILTER ================= */
+        if (row.status !== "Closed" && row.status !== "Converted into Sales")
+          return;
 
-  if (
-    row.status !== "Closed" &&
-    row.status !== "Converted into Sales"
-  ) return;
+        /* ================= DASHBOARD DATE FILTER ================= */
 
+        const created = new Date(row.date_created).getTime();
 
+        const from = new Date(fromDate).getTime();
 
-  /* ================= DASHBOARD DATE FILTER ================= */
+        const toDateEnd = new Date(toDate);
+        toDateEnd.setHours(23, 59, 59, 999);
 
-  const created = new Date(row.date_created).getTime();
+        const to = toDateEnd.getTime();
 
-  const from = new Date(fromDate).getTime();
+        if (isNaN(created) || created < from || created > to) return;
 
-  const toDateEnd = new Date(toDate);
-  toDateEnd.setHours(23, 59, 59, 999);
+        /* ================= WRAP UP FILTER ================= */
 
-  const to = toDateEnd.getTime();
+        if (excludedWrapUps.includes(row.wrap_up)) return;
 
-  if (
-    isNaN(created) ||
-    created < from ||
-    created > to
-  ) return;
+        /* ================= TSA RESPONSE TIME ================= */
 
+        const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
 
+        const endorsed = new Date(row.ticket_endorsed).getTime();
 
-  /* ================= WRAP UP FILTER ================= */
+        if (!isNaN(tsaAck) && !isNaN(endorsed) && tsaAck >= endorsed) {
+          responseTotal += (tsaAck - endorsed) / 3600000;
 
-  if (excludedWrapUps.includes(row.wrap_up)) return;
+          responseCount++;
+        }
 
+        /* ================= BASE HANDLING TIME ================= */
 
+        let baseHT = 0;
 
-  /* ================= TSA RESPONSE TIME ================= */
+        const tsaHandle = new Date(row.tsa_handling_time).getTime();
 
-  const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
+        const tsmHandle = new Date(row.tsm_handling_time).getTime();
 
-  const endorsed = new Date(row.ticket_endorsed).getTime();
+        const received = new Date(row.ticket_received).getTime();
 
-  if (
-    !isNaN(tsaAck) &&
-    !isNaN(endorsed) &&
-    tsaAck >= endorsed
-  ) {
+        if (!isNaN(tsaHandle) && !isNaN(received) && tsaHandle >= received) {
+          baseHT = (tsaHandle - received) / 3600000;
+        } else if (
+          !isNaN(tsmHandle) &&
+          !isNaN(received) &&
+          tsmHandle >= received
+        ) {
+          baseHT = (tsmHandle - received) / 3600000;
+        }
 
-    responseTotal += (tsaAck - endorsed) / 3600000;
+        if (!baseHT) return;
 
-    responseCount++;
+        /* ================= REMARKS CLASSIFICATION ================= */
 
-  }
+        const remarks = (row.remarks || "").toUpperCase();
 
+        if (remarks === "QUOTATION FOR APPROVAL" || remarks === "SOLD") {
+          quotationTotal += baseHT;
 
+          quotationCount++;
+        } else if (remarks.includes("SPF")) {
+          spfTotal += baseHT;
 
-  /* ================= BASE HANDLING TIME ================= */
+          spfCount++;
+        } else {
+          nonQuotationTotal += baseHT;
 
-  let baseHT = 0;
-
-  const tsaHandle = new Date(row.tsa_handling_time).getTime();
-
-  const tsmHandle = new Date(row.tsm_handling_time).getTime();
-
-  const received = new Date(row.ticket_received).getTime();
-
-
-
-  if (
-    !isNaN(tsaHandle) &&
-    !isNaN(received) &&
-    tsaHandle >= received
-  ) {
-
-    baseHT = (tsaHandle - received) / 3600000;
-
-  }
-
-  else if (
-    !isNaN(tsmHandle) &&
-    !isNaN(received) &&
-    tsmHandle >= received
-  ) {
-
-    baseHT = (tsmHandle - received) / 3600000;
-
-  }
-
-
-
-  if (!baseHT) return;
-
-
-
-  /* ================= REMARKS CLASSIFICATION ================= */
-
-  const remarks = (row.remarks || "").toUpperCase();
-
-
-
-  if (
-    remarks === "QUOTATION FOR APPROVAL" ||
-    remarks === "SOLD"
-  ) {
-
-    quotationTotal += baseHT;
-
-    quotationCount++;
-
-  }
-
-  else if (remarks.includes("SPF")) {
-
-    spfTotal += baseHT;
-
-    spfCount++;
-
-  }
-
-  else {
-
-    nonQuotationTotal += baseHT;
-
-    nonQuotationCount++;
-
-  }
-
-});
+          nonQuotationCount++;
+        }
+      });
 
       /* ================= FINAL AVERAGES ================= */
 
