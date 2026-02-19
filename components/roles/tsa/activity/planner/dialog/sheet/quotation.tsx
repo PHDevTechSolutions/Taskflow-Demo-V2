@@ -430,7 +430,7 @@ export function QuotationSheet(props: Props) {
   // Save handler with validation
   const saveWithSelectedProducts = () => {
     setShowQuotationAlert(true);  // Show the Shadcn alert
-
+    handleDownloadQuotationPDF(); // Generate PDF before saving
     handleSave();
   };
 
@@ -1620,16 +1620,16 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
-                  <Button onClick={handleDownloadQuotationPDF} disabled={!hasGenerated} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotationPDF} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation PDF
                   </Button>
 
                   {!hasDownloaded && hasGenerated && (
-                    <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100">
+                    <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100" hidden={true}>
                       ⚠️ Please download the quotation before saving.
                       <span className="text-sm text-red-600 italic ml-1">
                         Note: If there are no products or the quotation is empty, please do not download.
@@ -2220,9 +2220,6 @@ export function QuotationSheet(props: Props) {
           style={{ maxWidth: "950px", width: "100vw" }}
         >
           {(() => {
-            
-
-
             return (
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
 
@@ -2545,7 +2542,7 @@ export function QuotationSheet(props: Props) {
                     <Button
                       onClick={() => { handleDownloadQuotation(); setIsPreviewOpen(false); }}
                       className="bg-[#121212] hover:bg-black rounded-full px-10 h-12 text-white font-black uppercase text-[11px] flex gap-3 items-center shadow-2xl hover:scale-[1.02] transition-all"
-                      
+                      hidden={true}
                     >
                       <Download className="w-4 h-4 text-blue-400" />
                       Generate Official (.xlsx)
