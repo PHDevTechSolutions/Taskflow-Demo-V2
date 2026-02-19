@@ -251,13 +251,13 @@ export const Done: React.FC<NewTaskProps> = ({
             <Input
                 type="search"
                 placeholder="Search..."
-                className="text-xs flex-grow mb-3"
+                className="text-xs flex-grow mb-3 rounded-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Search accounts"
             />
 
-            <div className="mb-2 text-xs font-bold">
+            <div className="mb-2 text-xs font-bold mt-2 mb-2">
                 Total Done Activities: ({mergedData.length})
             </div>
 
@@ -273,7 +273,7 @@ export const Done: React.FC<NewTaskProps> = ({
                         }
 
                         return (
-                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2">
+                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
                                 <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
                                         <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
@@ -311,7 +311,7 @@ export const Done: React.FC<NewTaskProps> = ({
 
                                     <div className="ml-1 flex flex-wrap gap-1 uppercase">
                                         {/* MAIN STATUS BADGE */}
-                                        <Badge className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap text-[10px]`}>
+                                        <Badge className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap rounded-sm shadow-md p-2 text-[10px]`}>
                                             <LoaderPinwheel size={14} className="animate-spin" />
                                             {item.status.replace("-", " ")}
                                         </Badge>

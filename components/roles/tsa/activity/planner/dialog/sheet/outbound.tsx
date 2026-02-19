@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2Icon } from "lucide-react";
+import { CheckCircle2Icon, ArrowLeft, ArrowRight } from "lucide-react";
 
 import { FieldGroup, FieldSet, FieldLabel, Field, FieldContent, FieldDescription, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -178,7 +178,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                     <h2 className="text-sm font-semibold mb-3">Step 2 — Source</h2>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Source</FieldLabel>
+                            <FieldLabel className="font-bold">Source</FieldLabel>
                             <FieldDescription>
                                 Select the source of the outbound call. This helps categorize the call type for reporting and analytics.
                             </FieldDescription>
@@ -209,10 +209,12 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
                                                 {source === item.value && (
                                                     <div className="mt-4 flex gap-2 flex">
-                                                        <Button variant="outline" onClick={props.handleBack}>
-                                                            Back
+                                                        <Button variant="outline" className="rounded-none" onClick={props.handleBack}>
+                                                            <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button onClick={onNextClick}>Next</Button>
+                                                        <Button className="rounded-none" onClick={onNextClick}>
+                                                            Next <ArrowRight />
+                                                        </Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
@@ -241,7 +243,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
                     <FieldGroup className="mt-4">
                         <FieldSet>
-                            <FieldLabel>Call Status</FieldLabel>
+                            <FieldLabel className="font-bold">Call Status</FieldLabel>
                             <FieldDescription>
                                 Select the status of the call to indicate if the client was reached or not.
                             </FieldDescription>
@@ -270,15 +272,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
                                                 {callStatus === item.value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            onClick={props.handleBack}
-                                                        >
-                                                            Back
+                                                        <Button variant="outline" className="rounded-none" onClick={props.handleBack}>
+                                                            <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={onNextClick}>
-                                                            Next
+                                                        <Button className="rounded-none" onClick={onNextClick}>
+                                                            Next <ArrowRight />
                                                         </Button>
                                                     </div>
                                                 )}
@@ -299,7 +297,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                     <h2 className="text-sm font-semibold mb-3">Step 4 — Call Details</h2>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Call Type</FieldLabel>
+                            <FieldLabel className="font-bold">Call Type</FieldLabel>
                             <FieldDescription>
                                 Choose the type of call outcome based on the client's response and situation.
                             </FieldDescription>
@@ -363,15 +361,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
                                                 {callType === item.value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            onClick={props.handleBack}
-                                                        >
-                                                            Back
+                                                        <Button variant="outline" className="rounded-none" onClick={props.handleBack}>
+                                                            <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={onNextClick}>
-                                                            Next
+                                                        <Button className="rounded-none" onClick={onNextClick}>
+                                                            Next <ArrowRight />
                                                         </Button>
                                                     </div>
                                                 )}
@@ -392,9 +386,9 @@ export function OutboundSheet(props: OutboundSheetProps) {
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
                     {followUpDate ? (
-                        <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-4 bg-cyan-100">
+                        <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
                             <div>
-                                <AlertTitle>Follow Up Date:</AlertTitle>
+                                <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
                                 <AlertDescription>
                                     {followUpDate} — This is the scheduled date to reconnect with the client.
                                 </AlertDescription>
@@ -415,7 +409,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                     )}
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Remarks</FieldLabel>
+                            <FieldLabel className="font-bold">Remarks</FieldLabel>
                             <FieldDescription>
                                 Add any additional notes or important details about the call or client interaction.
                             </FieldDescription>
@@ -424,7 +418,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                 onChange={(e) => props.setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
                                 required
-                                className="capitalize"
+                                className="capitalize rounded-none"
                             />
                         </FieldSet>
                     </FieldGroup>
@@ -456,11 +450,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={props.handleBack}>
-                                                            Back
+                                                        <Button type="button" variant="outline" className="rounded-none" onClick={props.handleBack}>
+                                                          <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={onSaveClick}>
-                                                            Save
+                                                        <Button type="button" className="rounded-none" onClick={onSaveClick}>
+                                                           <CheckCircle2Icon /> Save
                                                         </Button>
 
                                                     </div>
@@ -475,13 +469,13 @@ export function OutboundSheet(props: OutboundSheetProps) {
                     </FieldGroup>
 
                     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                        <DialogContent>
+                        <DialogContent className="rounded-none">
                             <DialogHeader>
-                                <DialogTitle>Validation Error</DialogTitle>
+                                <DialogTitle className="text-red-600">Validation Error</DialogTitle>
                                 <DialogDescription>{dialogMessage}</DialogDescription>
                             </DialogHeader>
                             <DialogFooter>
-                                <Button onClick={() => setDialogOpen(false)}>OK</Button>
+                                <Button className="rounded-none" onClick={() => setDialogOpen(false)}>OK</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>

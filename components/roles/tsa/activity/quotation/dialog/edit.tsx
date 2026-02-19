@@ -1969,12 +1969,12 @@ export default function TaskListEditDialog({
 
                                 <div className="p-8 bg-gray-50 border-t flex justify-between items-center sticky bottom-0">
                                     <Button variant="ghost" onClick={() => setIsPreviewOpen(false)} className="font-black uppercase">Close Preview</Button>
-                                    {/* <Button
+                                    <Button
                                         onClick={handleDownloadQuotation}
                                         className="bg-[#121212] text-white px-10 h-12 rounded-full font-black uppercase shadow-xl hover:scale-105 transition-transform"
                                     >
                                         Confirm & Generate PDF
-                                    </Button> */}
+                                    </Button>
                                 </div>
                             </div>
                         );

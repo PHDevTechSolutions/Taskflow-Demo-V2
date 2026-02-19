@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircleIcon, PlusIcon, MinusIcon, CheckCircle2Icon, } from "lucide-react";
+import { AlertCircleIcon, PlusIcon, MinusIcon, CheckCircle2Icon, ArrowLeft, ArrowRight } from "lucide-react";
 
 // --- Clean & normalize company name for checks ---
 function cleanCompanyName(name: string) {
@@ -460,7 +460,7 @@ export function AccountDialog({
             {/* Company Name */}
             <div>
               <FieldContent>
-                <FieldLabel>Company Name</FieldLabel>
+                <FieldLabel className="font-bold">Company Name</FieldLabel>
                 <FieldDescription>
                   Enter the official registered name of the company.
                 </FieldDescription>
@@ -477,7 +477,7 @@ export function AccountDialog({
                   }))
                 }
                 placeholder="Company Name"
-                className="uppercase"
+                className="uppercase rounded-none"
               />
 
               {isCheckingDuplicate && (
@@ -499,7 +499,7 @@ export function AccountDialog({
                         className={`mr-2 h-5 w-5 ${companyError ? "text-red-500" : "text-yellow-500"}`}
                       />
                       <div>
-                        <AlertTitle>
+                        <AlertTitle className="font-bold">
                           {companyError ? companyError : "Already Taken By"}
                         </AlertTitle>
                         <AlertDescription className="flex items-center gap-2">
@@ -530,7 +530,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Contact Person(s)</FieldLabel>
+                    <FieldLabel className="font-bold">Contact Person(s)</FieldLabel>
                     <FieldDescription>
                       Enter the full name(s) of the primary contact person(s) for this company.
                     </FieldDescription>
@@ -547,7 +547,7 @@ export function AccountDialog({
                           setFormData((prev) => ({ ...prev, contact_person: newCP }));
                         }}
                         placeholder="Contact Person"
-                        className="uppercase flex-grow"
+                        className="uppercase flex-grow rounded-none"
                       />
                       <Button
                         type="button"
@@ -560,6 +560,7 @@ export function AccountDialog({
                         }}
                         disabled={formData.contact_person.length === 1}
                         variant="destructive"
+                        className="rounded-none"
 
                       >
                         <MinusIcon className="h-4 w-4" />
@@ -572,7 +573,7 @@ export function AccountDialog({
                             contact_person: [...prev.contact_person, ""],
                           }))
                         }
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1 rounded-none"
                       >
                         <PlusIcon className="h-4 w-4" />
                       </Button>
@@ -588,7 +589,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Contact Number(s)</FieldLabel>
+                    <FieldLabel className="font-bold">Contact Number(s)</FieldLabel>
                     <FieldDescription>
                       Enter the phone number(s) of the primary contact person(s) for this company.
                     </FieldDescription>
@@ -664,12 +665,12 @@ export function AccountDialog({
                               });
                             }}
                           >
-                            <SelectTrigger className="w-[140px]">
-                              {isIntl ? "International" : "Philippines"}
+                            <SelectTrigger className="w-[140px] rounded-none">
+                              {isIntl ? "Intl" : "Phil"}
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="local">Philippines</SelectItem>
-                              <SelectItem value="intl">International</SelectItem>
+                              <SelectItem value="local">Phil</SelectItem>
+                              <SelectItem value="intl">Intl</SelectItem>
                             </SelectContent>
                           </Select>
 
@@ -690,7 +691,7 @@ export function AccountDialog({
                               });
                             }}
                             placeholder={isIntl ? "+63 917 123 4567" : "0917-123-4567"}
-                            className="uppercase"
+                            className="uppercase rounded-none"
                           />
 
                           {/* Remove */}
@@ -707,6 +708,7 @@ export function AccountDialog({
                               }
                             }}
                             disabled={formData.contact_number.length === 1}
+                            className="rounded-none"
                           >
                             <MinusIcon />
                           </Button>
@@ -742,7 +744,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Email Address(es)</FieldLabel>
+                    <FieldLabel className="font-bold">Email Address(es)</FieldLabel>
                     <FieldDescription>
                       Enter the email address(es) of the primary contact person(s) for this company.
                     </FieldDescription>
@@ -767,8 +769,9 @@ export function AccountDialog({
                               return { ...prev, email_address: copy };
                             });
                           }}
+
                           placeholder="Email Address"
-                          className={emailError ? "border-red-500" : ""}
+                          className={emailError ? "border-red-500" : "rounded-none"}
                         />
 
                         {!isNA && emailError && (
@@ -788,6 +791,7 @@ export function AccountDialog({
                             }
                           }}
                           disabled={formData.email_address.length === 1 || isNA}
+                          className="rounded-none"
                         >
                           <MinusIcon />
                         </Button>
@@ -800,6 +804,7 @@ export function AccountDialog({
                               email_address: [...prev.email_address, ""],
                             }))
                           }
+                          className="rounded-none"
                         >
                           <PlusIcon />
                         </Button>
@@ -838,7 +843,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Region</FieldLabel>
+                    <FieldLabel className="font-bold">Region</FieldLabel>
                     <FieldDescription>
                       Select the region for the company address.
                     </FieldDescription>
@@ -854,7 +859,7 @@ export function AccountDialog({
                       }));
                     }}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full rounded-none">
                       <span>{formData.region || "Select Region"}</span>
                     </SelectTrigger>
                     <SelectContent>
@@ -874,7 +879,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Address</FieldLabel>
+                    <FieldLabel className="font-bold">Address</FieldLabel>
                     <FieldDescription>
                       Enter the complete physical address of the company.
                     </FieldDescription>
@@ -886,6 +891,7 @@ export function AccountDialog({
                       setFormData((prev) => ({ ...prev, address: e.target.value }))
                     }
                     placeholder="Address"
+                    className="rounded-none"
                   />
                 </FieldSet>
               </FieldGroup>
@@ -895,7 +901,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Delivery Address</FieldLabel>
+                    <FieldLabel className="font-bold">Delivery Address</FieldLabel>
                     <FieldDescription>
                       Provide the full address where goods or services should be delivered.
                     </FieldDescription>
@@ -907,6 +913,7 @@ export function AccountDialog({
                       setFormData((prev) => ({ ...prev, delivery_address: e.target.value }))
                     }
                     placeholder="Delivery Address"
+                    className="rounded-none"
                   />
                 </FieldSet>
               </FieldGroup>
@@ -921,7 +928,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Type Client</FieldLabel>
+                    <FieldLabel className="font-bold">Type Client</FieldLabel>
                     <FieldDescription>
                       Select the type of client for this company.
                     </FieldDescription>
@@ -959,7 +966,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Industry</FieldLabel>
+                    <FieldLabel className="font-bold">Industry</FieldLabel>
                     <FieldDescription>
                       Select the industry sector related to this company.
                     </FieldDescription>
@@ -970,7 +977,7 @@ export function AccountDialog({
                       setFormData((prev) => ({ ...prev, industry: val }))
                     }
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full rounded-none">
                       <span>{formData.industry || "Select Industry"}</span>
                     </SelectTrigger>
                     <SelectContent>
@@ -989,7 +996,7 @@ export function AccountDialog({
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel>Status</FieldLabel>
+                    <FieldLabel className="font-bold">Action</FieldLabel>
                     <FieldDescription>
                       Select the current status of the company.
                     </FieldDescription>
@@ -1036,14 +1043,15 @@ export function AccountDialog({
         <div className="flex-1 mt-4 p-4">{renderStepContent()}</div>
 
         {/* Stepper Buttons */}
-        <div className="p-4 grid gap-6">
+        <div className="p-4 grid gap-4">
           <Button
             variant="outline"
             onClick={handleBack}
             disabled={step === 0}
             type="button"
+            className="rounded-none p-6 font-bold"
           >
-            Back
+             <ArrowLeft /> Back
           </Button>
 
           {step === totalSteps - 1 ? (
@@ -1051,12 +1059,17 @@ export function AccountDialog({
               onClick={handleSubmit}
               type="button"
               disabled={!canProceedToNext()}
+              className="rounded-none p-10 font-bold"
             >
-              {mode === "edit" ? "Save Changes" : "Create Account"}
+              <CheckCircle2Icon /> {mode === "edit" ? "Save Changes" : "Create Account"}
             </Button>
           ) : (
-            <Button onClick={handleNext} disabled={!canProceedToNext()}>
-              Next
+            <Button
+              onClick={handleNext}
+              disabled={!canProceedToNext()}
+              className="rounded-none p-6 font-bold"
+              >
+              Next <ArrowRight />
             </Button>
 
           )}

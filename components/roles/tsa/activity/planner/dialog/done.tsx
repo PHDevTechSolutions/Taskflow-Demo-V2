@@ -19,7 +19,7 @@ export const DoneDialog: React.FC<DoneDialogProps> = ({
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="rounded-none">
         <DialogHeader>
           <DialogTitle>Mark Transaction as Done</DialogTitle>
           <DialogDescription>
@@ -28,10 +28,10 @@ export const DoneDialog: React.FC<DoneDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex justify-end gap-2 mt-4">
-          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
+          <Button className="rounded-none" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={loading}>
+          <Button onClick={onConfirm} disabled={loading} className="rounded-none">
             {loading ? "Updating..." : "Confirm"}
           </Button>
         </DialogFooter>

@@ -481,7 +481,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           <Input
             type="search"
             placeholder="Search company, ticket ref, quotation no, so no..."
-            className="text-xs flex-grow"
+            className="text-xs flex-grow rounded-none"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search accounts"
@@ -490,8 +490,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           {/* Status Dropdown - nasa right */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="whitespace-nowrap">
-                {statusFilter === "All" ? <Filter /> : statusFilter}
+              <Button variant="outline" className="whitespace-nowrap rounded-none">
+                {statusFilter === "All" ? <Filter /> : statusFilter} Filter
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
@@ -520,7 +520,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
               const badgeProps = getBadgeProps(item.status);
 
               return (
-                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-sm shadow-sm mt-2">
+                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
                       <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
@@ -556,7 +556,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="secondary" className="cursor-pointer">
+                            <Button className="cursor-pointer rounded-none">
                               Actions <MoreVertical />
                             </Button>
                           </DropdownMenuTrigger>
@@ -608,7 +608,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       {!["assisted", "not assisted"].includes(item.status.toLowerCase()) && (
                         <Badge
                           variant={badgeProps.variant}
-                          className={`font-mono text-[10px] ${badgeProps.className || ""}`}
+                          className={`font-mono rounded-sm shadow-md p-2 border-none text-[10px] ${badgeProps.className || ""}`}
                         >
                           <CheckCircle2 />
                           {item.status.replace("-", " ")} / {item.relatedHistoryItems.some(
@@ -666,12 +666,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         })
                       }
 
-                      {item.overdueDays > 0 && (
-                        <Badge className="font-mono text-[10px]">
-                          <Clock /> {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago.
-                        </Badge>
-                      )}
-
                       {item.relatedHistoryItems.some(
                         (h) =>
                           h.tsm_approved_status &&
@@ -702,6 +696,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           </Badge>
                         );
                       })()}
+
+                      {item.overdueDays > 0 && (
+                        <h1 className="justify-center flex items-center font-mono text-[10px]">
+                         {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago..
+                        </h1>
+                      )}
                     </div>
                   </div>
 
