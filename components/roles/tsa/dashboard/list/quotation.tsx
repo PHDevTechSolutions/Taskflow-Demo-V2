@@ -69,7 +69,7 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
   }, [totalSalesInvoice, totalQuotationAmount]);
 
   return (
-    <Card className="bg-white text-black z-10">
+    <Card className="bg-white text-black z-10 rounded-none">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>Quotations Summary</CardTitle>

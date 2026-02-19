@@ -45,7 +45,7 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="rounded-none">
         <DialogHeader>
           <DialogTitle>Mark Transaction as Cancelled</DialogTitle>
           <DialogDescription>
@@ -66,14 +66,17 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
             onChange={(e) => setCancellationRemarks(e.target.value)}
             rows={4}
             required
+            className="rounded-none"
+            
           />
         </div>
 
         <DialogFooter className="flex justify-end gap-2 mt-4">
           <Button
-            variant="secondary"
+            variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={loading}
+            className="rounded-none p-6"
           >
             No, Keep It
           </Button>
@@ -82,6 +85,7 @@ export const CancelledDialog: React.FC<CancelledDialogProps> = ({
             variant="destructive"
             onClick={handleConfirm}
             disabled={!canConfirm || loading}
+            className="rounded-none p-6"
           >
             {loading ? "Cancelling..." : "Yes, Cancel"}
           </Button>

@@ -5,6 +5,7 @@ import { Button, } from "@/components/ui/button";
 import { Field, FieldContent, FieldLabel, FieldSet, FieldGroup, FieldTitle, FieldDescription, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, ArrowRight, CheckCircle2Icon } from "lucide-react";
 
 const INBOUND_SOURCES = [
     {
@@ -120,7 +121,7 @@ export function ViberRepliesSheet({
                 <>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Source</FieldLabel>
+                            <FieldLabel className="font-bold">Source</FieldLabel>
                             <RadioGroup value={source} onValueChange={setSource}>
                                 {filteredSources.map(({ label, description }) => (
                                     <FieldLabel key={label}>
@@ -133,11 +134,11 @@ export function ViberRepliesSheet({
                                                 {/* Buttons only visible if selected */}
                                                 {source === label && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={handleBack}>
-                                                            Back
+                                                        <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                                                           <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={handleNext} disabled={!source}>
-                                                            Next
+                                                        <Button type="button" onClick={handleNext} className="rounded-none" disabled={!source}>
+                                                            Next <ArrowRight />
                                                         </Button>
                                                     </div>
                                                 )}
@@ -159,25 +160,23 @@ export function ViberRepliesSheet({
                 <>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Remarks</FieldLabel>
+                            <FieldLabel className="font-bold">Remarks</FieldLabel>
                             <Textarea
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
                                 required
-                                className="capitalize"
+                                className="capitalize rounded-none"
                             />
                         </FieldSet>
                     </FieldGroup>
 
                     <FieldGroup className="mt-4">
                         <FieldSet>
-                            <FieldLabel>Status</FieldLabel>
-
+                            <FieldLabel className="font-bold">Status</FieldLabel>
                             <RadioGroup
                                 value={status}
                                 onValueChange={setStatus}
-                                className="space-y-4"
                             >
                                 {STATUS_OPTIONS.map(({ label, description, value }) => (
                                     <FieldLabel key={value}>
@@ -190,11 +189,11 @@ export function ViberRepliesSheet({
                                                 {/* Buttons only visible if selected */}
                                                 {status === value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={handleBack}>
-                                                            Back
+                                                        <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                                                           <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={handleSave}>
-                                                            Save
+                                                        <Button type="button" className="rounded-none" onClick={handleSave}>
+                                                            Save <CheckCircle2Icon />
                                                         </Button>
                                                     </div>
                                                 )}

@@ -56,7 +56,7 @@ export function SOCard({ activities, loading, error, dateRange }: SourceCardProp
   }, [totalSalesInvoice, totalSOAmount]);
 
   return (
-    <Card className="bg-white text-black z-10">
+    <Card className="bg-white text-black z-10 rounded-none">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>Sales Order Summary</CardTitle>

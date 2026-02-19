@@ -131,7 +131,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
   }, [activities]);
 
   return (
-    <Card className="bg-white text-black z-10">
+    <Card className="bg-white text-black z-10 rounded-none">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>Outbound Calls (Touchbase)</CardTitle>

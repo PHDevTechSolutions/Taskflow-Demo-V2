@@ -516,7 +516,7 @@ export function CreateActivityDialog({
                             Fill out the steps to create a new activity.
                         </SheetDescription>
                         {startDate && (
-                            <div className="fixed bottom-20 right-100 z-50 bg-black/30 text-white rounded-full px-4 py-4 font-mono font-semibold text-lg select-none flex items-center space-x-2 cursor-default min-w-[120px] justify-center">
+                            <div className="fixed bottom-20 right-100 z-50 bg-black/30 text-white rounded-xs px-4 py-4 font-mono font-semibold text-lg select-none flex items-center space-x-2 cursor-default min-w-[120px] justify-center">
                                 <span className="tracking-wide">{elapsedTime}</span>
                             </div>
                         )}

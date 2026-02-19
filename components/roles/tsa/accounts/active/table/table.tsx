@@ -584,7 +584,7 @@ export function AccountsTable({
 
 
                     <div className="flex-grow w-full max-w-lg flex items-center gap-3">
-                        <Button className="cursor-pointer" onClick={() => setIsCreateDialogOpen(true)}><Plus /> Add </Button>
+                        <Button className="cursor-pointer rounded-none" onClick={() => setIsCreateDialogOpen(true)}><Plus /> Add </Button>
                         <AccountsActiveSearch
                             globalFilter={globalFilter}
                             setGlobalFilterAction={setGlobalFilter}

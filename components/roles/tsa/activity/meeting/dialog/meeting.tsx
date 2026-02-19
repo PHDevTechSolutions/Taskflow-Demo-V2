@@ -98,7 +98,7 @@ export function MeetingDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
 
-      <DialogContent className="sm:max-w-lg sm:p-8">
+      <DialogContent className="sm:max-w-lg sm:p-8 rounded-none">
         <DialogHeader>
           <DialogTitle>Create Meeting</DialogTitle>
           <DialogDescription>
@@ -109,9 +109,9 @@ export function MeetingDialog({
         <form onSubmit={handleSubmit} className="grid gap-4">
           {/* Type of Activity */}
           <div className="grid gap-2">
-            <Label>Type of Activity</Label>
-            <Select value={typeActivity} onValueChange={setTypeActivity}>
-              <SelectTrigger>
+            <Label className="font-bold">Type of Activity</Label>
+            <Select value={typeActivity} onValueChange={setTypeActivity} >
+              <SelectTrigger className="rounded-none w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -123,36 +123,39 @@ export function MeetingDialog({
 
           {/* Remarks */}
           <div className="grid gap-2">
-            <Label>Remarks</Label>
+            <Label className="font-bold">Remarks</Label>
             <Textarea
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={3}
+              className="rounded-none"
             />
           </div>
 
           {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Start Date</Label>
+              <Label className="font-bold">Start Date</Label>
               <Input
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-none"
               />
             </div>
             <div className="grid gap-2">
-              <Label>End Date</Label>
+              <Label className="font-bold">End Date</Label>
               <Input
                 type="datetime-local"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="rounded-none"
               />
             </div>
           </div>
 
           <DialogFooter className="pt-6">
-            <Button type="submit">Create</Button>
+            <Button type="submit" className="rounded-none p-6">Create</Button>
           </DialogFooter>
         </form>
       </DialogContent>

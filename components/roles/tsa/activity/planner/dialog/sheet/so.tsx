@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, CheckCircle2Icon } from "lucide-react";
 
 interface Props {
     step: number;
@@ -164,7 +165,7 @@ export function SOSheet(props: Props) {
                 <div>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Source</FieldLabel>
+                            <FieldLabel className="font-bold">Source</FieldLabel>
                             <RadioGroup
                                 value={source}
                                 onValueChange={setSource}
@@ -180,15 +181,11 @@ export function SOSheet(props: Props) {
                                                 {/* Buttons only visible if selected */}
                                                 {source === label && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={handleBack}>
-                                                            Back
+                                                        <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                                                            <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button
-                                                            type="button"
-                                                            onClick={handleNext}
-                                                            disabled={!isStep2Valid}
-                                                        >
-                                                            Next
+                                                        <Button type="button" onClick={handleNext} disabled={!isStep2Valid} className="rounded-none">
+                                                            Next <ArrowRight />
                                                         </Button>
                                                     </div>
                                                 )}
@@ -211,7 +208,7 @@ export function SOSheet(props: Props) {
                     <FieldGroup>
                         {/* SO Amount */}
                         <FieldSet className="mt-3">
-                            <FieldLabel>SO Amount</FieldLabel>
+                            <FieldLabel className="font-bold">SO Amount</FieldLabel>
                             <p className="text-xs text-muted-foreground mb-1">
                                 Total amount of the Sales Order. This should match the approved SO value.
                             </p>
@@ -222,16 +219,17 @@ export function SOSheet(props: Props) {
                                 value={soAmount}
                                 onChange={(e) => setSoAmount(e.target.value)}
                                 placeholder="Enter SO Amount"
+                                className="rounded-none"
                             />
                         </FieldSet>
                     </FieldGroup>
 
                     <div className="flex justify-between mt-4">
-                        <Button variant="outline" onClick={handleBack}>
-                            Back
+                        <Button variant="outline" className="rounded-none" onClick={handleBack}>
+                           <ArrowLeft /> Back 
                         </Button>
-                        <Button onClick={handleNextStep3}>
-                            Next
+                        <Button className="rounded-none" onClick={handleNextStep3}>
+                            Next <ArrowRight />
                         </Button>
                     </div>
                 </div>
@@ -242,7 +240,7 @@ export function SOSheet(props: Props) {
                 <div>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Type</FieldLabel>
+                            <FieldLabel className="font-bold">Type</FieldLabel>
 
                             <RadioGroup
                                 value={callType}
@@ -262,18 +260,20 @@ export function SOSheet(props: Props) {
                                                         <Button
                                                             type="button"
                                                             variant="outline"
+                                                            className="rounded-none"
                                                             onClick={handleBack}
                                                         >
-                                                            Back
+                                                          <ArrowLeft /> Back
                                                         </Button>
 
                                                         <Button
                                                             type="button"
                                                             onClick={handleNextStep4}
                                                             disabled={!isStep4Valid}
+                                                            className="rounded-none"
                                                         >
-                                                            Next
-                                                        </Button>
+                                                            Next <ArrowRight />
+                                                         </Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
@@ -292,15 +292,15 @@ export function SOSheet(props: Props) {
 
             {/* STEP 5 — REMARKS & STATUS */}
             {step === 5 && (
-                <div>
+                <div className="space-y-2">
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Remarks</FieldLabel>
+                            <FieldLabel className="font-bold">Remarks</FieldLabel>
                             <Textarea
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                                 placeholder="Enter remarks"
-                                className="capitalize"
+                                className="capitalize rounded-none"
                                 required
                             />
                         </FieldSet>
@@ -308,9 +308,9 @@ export function SOSheet(props: Props) {
 
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel>Status</FieldLabel>
+                            <FieldLabel className="font-bold">Status</FieldLabel>
 
-                            <RadioGroup value={status} onValueChange={props.setStatus} className="space-y-4">
+                            <RadioGroup value={status} onValueChange={props.setStatus}>
                                 {[
                                     {
                                         value: "SO-Done",
@@ -331,11 +331,11 @@ export function SOSheet(props: Props) {
 
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button type="button" variant="outline" onClick={props.handleBack}>
-                                                            Back
+                                                        <Button type="button" variant="outline" className="rounded-none" onClick={props.handleBack}>
+                                                           <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" onClick={handleSave}>
-                                                            Save
+                                                        <Button type="button" className="rounded-none" onClick={handleSave}>
+                                                            Save <CheckCircle2Icon />
                                                         </Button>
 
                                                     </div>

@@ -279,14 +279,14 @@ export function NationalRanking({
         <div className="text-center text-red-500 py-10">{error}</div>
       ) : (
         <>
-          <Card className="bg-white text-black p-4">
+          <Card className="bg-white text-black p-4 rounded-none">
             <CardContent className="p-0 overflow-auto">
               <div className="flex gap-6">
                 {/* TSA Ranking Column */}
                 <div className="flex-1 min-w-0 border-r">
                   <h3 className="font-semibold mb-2">TSA Ranking</h3>
                   {renderTable(tsaRank)}
-                  <div className="flex justify-end mt-2 gap-2 text-xs font-semibold">
+                  <div className="flex justify-end mt-2 gap-2 p-4 text-xs font-semibold">
                     <span>Overall Total</span>
                     <Badge>{overallTotal}</Badge>
                   </div>

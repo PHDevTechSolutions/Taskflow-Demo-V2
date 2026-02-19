@@ -39,7 +39,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
     totalFollowUp > 0;
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3 mt-20">
@@ -55,7 +55,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
       ) : (
         <div className="flex flex-col gap-2 p-2">
           {totalOutboundTouchbase > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200 dark:border-gray-200">
               <ItemContent className="w-full">
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneOutgoing /> Total Outbound - Touchbase</ItemTitle>
@@ -70,7 +70,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
           )}
 
           {totalSuccessful > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200 dark:border-gray-200">
               <ItemContent className="w-full">
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneCall /> Total Successful Calls</ItemTitle>
@@ -85,7 +85,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
           )}
 
           {totalUnsuccessful > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200 dark:border-gray-200">
               <ItemContent className="w-full">
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneMissed /> Total Unsuccessful Calls</ItemTitle>
@@ -100,7 +100,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
           )}
 
           {totalFollowUp > 0 && (
-            <Item variant="outline" className="w-full rounded-md border border-gray-200 dark:border-gray-200">
+            <Item variant="outline" className="w-full rounded-none border border-gray-200 dark:border-gray-200">
               <ItemContent className="w-full">
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium"><PhoneForwarded /> Total Follow Up</ItemTitle>
@@ -117,7 +117,7 @@ export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
       )}
 
       <CardFooter className="flex justify-end border-t">
-        <Button asChild>
+        <Button asChild className="rounded-none p-6">
           <Link
             href={
               userId

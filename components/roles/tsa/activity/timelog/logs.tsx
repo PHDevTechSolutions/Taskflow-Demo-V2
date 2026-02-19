@@ -50,7 +50,7 @@ export function TimeLogComponent({
 
   return (
     <>
-      <Card>
+      <Card className="rounded-none">
         <CardHeader>
           <CardTitle className="text-sm">Acculog - Time Logs</CardTitle>
         </CardHeader>
