@@ -430,6 +430,7 @@ export function QuotationSheet(props: Props) {
   // Save handler with validation
   const saveWithSelectedProducts = () => {
     setShowQuotationAlert(true);  // Show the Shadcn alert
+    handleDownloadQuotationPDF(); // Generate PDF before saving
     handleSave();
   };
 
@@ -1619,16 +1620,16 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
-                  <Button onClick={handleDownloadQuotationPDF} disabled={!hasGenerated} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotationPDF} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation PDF
                   </Button>
 
                   {!hasDownloaded && hasGenerated && (
-                    <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100">
+                    <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100" hidden={true}>
                       ⚠️ Please download the quotation before saving.
                       <span className="text-sm text-red-600 italic ml-1">
                         Note: If there are no products or the quotation is empty, please do not download.
