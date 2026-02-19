@@ -337,6 +337,7 @@ export function CSRMetricsCard({
       </CardHeader>
 
       <CardContent>
+        
         {/* DEBUG PANEL remain this as a comment
 
         <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
