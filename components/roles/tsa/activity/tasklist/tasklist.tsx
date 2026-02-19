@@ -39,6 +39,7 @@ interface Completed {
     call_type?: string;
     quotation_number?: string;
     quotation_amount?: number;
+    quotation_status?: string;
     so_number?: string;
     so_amount?: number;
     actual_sales?: number;
@@ -72,7 +73,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
     const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -183,6 +183,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             "call_type",
             "quotation_number",
             "quotation_amount",
+            "quotation_status",
             "so_number",
             "so_amount",
             "actual_sales",
@@ -493,6 +494,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Quotation Status</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Type Client</TableHead>
                                 <TableHead>Project Name</TableHead>
@@ -579,6 +581,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                                 {item.status?.replace("-", " ")}
                                             </Badge>
                                         </TableCell>
+                                        <TableCell>{displayValue(item.quotation_status)}</TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell>{displayValue(item.type_client)}</TableCell>
                                         <TableCell>{displayValue(item.project_name)}</TableCell>

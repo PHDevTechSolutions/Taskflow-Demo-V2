@@ -34,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         call_type,
         quotation_number,
         quotation_amount,
+        quotation_status,
         so_number,
         so_amount,
         actual_sales,
