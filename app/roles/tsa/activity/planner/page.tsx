@@ -215,7 +215,7 @@ function DashboardContent() {
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                         <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
-                            <Card>
+                            <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <PlusCircle className="w-5 h-5" />
@@ -236,7 +236,7 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <Loader2 className="w-5 h-5" />
@@ -262,7 +262,7 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <Calendar className="w-5 h-5" />
@@ -289,7 +289,7 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <CheckCircle className="w-5 h-5" />
@@ -308,7 +308,7 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <ClipboardCheck className="w-5 h-5" />
@@ -334,7 +334,7 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card className="border border-red-400">
+                            <Card className="border-3 border-red-400 rounded-none shadow-lg">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <AlertCircle className="w-5 h-5 text-red-500" />

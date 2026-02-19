@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, ArrowRight } from "lucide-react";
 
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -498,7 +498,7 @@ export function CreateActivityDialog({
                 <SheetTrigger asChild>
                     <Button
                         variant="outline"
-                        className="cursor-pointer"
+                        className="cursor-pointer rounded-none"
                         onClick={() => {
                             setActivityRef(activityReferenceNumber || "");
                             setAccountRef(accountReferenceNumber || "");
@@ -674,8 +674,8 @@ export function CreateActivityDialog({
 
                                                                 {typeActivity === item.value && (
                                                                     <div className="mt-4 flex">
-                                                                        <Button onClick={handleNext}>
-                                                                            Next
+                                                                        <Button className="rounded-none" onClick={handleNext}>
+                                                                           Next <ArrowRight />
                                                                         </Button>
                                                                     </div>
                                                                 )}
