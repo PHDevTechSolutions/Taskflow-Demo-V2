@@ -1455,7 +1455,7 @@ export function QuotationSheet(props: Props) {
                   </button>
                   <button
                     type="button"
-                    hidden={true}
+                    hidden={false}
                     onClick={() => {
                       setProductSource('firebase');
                       setSearchTerm("");       // Protocol: Reset input
@@ -1503,16 +1503,34 @@ export function QuotationSheet(props: Props) {
                               let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
                               let rawSpecsText = "";
 
-                              if (data.technicalSpecs?.[0]?.rows) {
-                                specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px;">`;
-                                data.technicalSpecs[0].rows.forEach((row: any) => {
-                                  rawSpecsText += ` ${row.name} ${row.value}`;
-                                  specsHtml += `<tr>
-          <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb;"><b>${row.name}</b></td>
-          <td style="border: 1px solid #e5e7eb; padding: 4px;">${row.value}</td>
-        </tr>`;
+                              if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
+                                data.technicalSpecs.forEach((group: any) => {
+                                  // 1. Add the Group Header (e.g., FIXTURE DETAILS)
+                                  rawSpecsText += ` ${group.specGroup}`;
+                                  specsHtml += `
+            <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                ${group.specGroup}
+            </div>`;
+
+                                  // 2. Start the table for this specific group
+                                  specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
+
+                                  group.specs?.forEach((spec: any) => {
+                                    // 3. Add data to searchable text and HTML rows
+                                    rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                    specsHtml += `
+                                                  <tr>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb; width: 40%;">
+                                                          <b>${spec.name}</b>
+                                                      </td>
+                                                      <td style="border: 1px solid #e5e7eb; padding: 4px;">
+                                                          ${spec.value}
+                                                      </td>
+                                                  </tr>`;
+                                  });
+
+                                  specsHtml += `</table>`;
                                 });
-                                specsHtml += `</table>`;
                               }
 
                               // 2. Map to Product format and resolve ID mismatch
@@ -1523,10 +1541,10 @@ export function QuotationSheet(props: Props) {
                                 price: data.salePrice || data.regularPrice || 0,
                                 description: specsHtml,
                                 images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                skus: data.sku ? [data.sku] : [],
+                                skus: data.itemCode ? [data.itemCode] : [],
                                 discount: 0,
                                 // We attach the search string temporarily for the filter
-                                tempSearchMetadata: (data.name + " " + (data.sku || "") + " " + rawSpecsText).toUpperCase()
+                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + rawSpecsText).toUpperCase()
                               } as any; // Use 'as any' temporarily to bypass the strict Product definition
                             })
                               .filter(product => {
@@ -1600,8 +1618,8 @@ export function QuotationSheet(props: Props) {
 
                         <CardFooter className="text-xs text-gray-600">
                           {item.skus && item.skus.length > 0
-                            ? `SKU${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
-                            : "No SKU available"}
+                            ? `ITEM CODE${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
+                            : "No item code available"}
                         </CardFooter>
                       </Card>
                     ))}
