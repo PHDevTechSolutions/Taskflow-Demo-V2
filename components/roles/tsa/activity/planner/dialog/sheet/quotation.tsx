@@ -1884,19 +1884,32 @@ export function QuotationSheet(props: Props) {
                                 </Button>
                               </td>
                             </tr>
+                            {/* need to fix */}
+                            {/* <tr className="even:bg-gray-50">
+                              <td colSpan={7} className="border border-gray-300 p-2">
+                                <label className="block text-xs font-medium mb-1">Description:</label>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  className="w-full max-h-90 overflow-auto border border-gray-300 rounded p-2 text-xs"
+                                  dangerouslySetInnerHTML={{
+                                    __html: extractTableHtml(p.description || ""),
+                                  }}
+                                  onBlur={(e) => {
+                                    const html = e.currentTarget.innerHTML;
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], description: html };
+                                      return copy;
+                                    });
+                                  }}
+                                />
+                              </td>
+                            </tr> */}
                             {/* SECTION: Product Technical Specifications (Read-Only) */}
                             <tr key={`desc-${idx}`} className="even:bg-[#F9FAFA]">
                               <td colSpan={7} className="border border-gray-300 p-4 align-top">
-                                {/* Identification Header */}
-                                <div className="mb-3">
-                                  <p className="font-black text-[#121212] text-xs uppercase leading-none">
-                                    {p.title || p.name}
-                                  </p>
-                                  <p className="text-[9px] text-blue-600 font-bold tracking-tighter uppercase mt-1">
-                                    {p.skus?.[0] || p.itemCode || "NO SKU AVAILABLE"}
-                                  </p>
-                                </div>
-
+                                <label className="block text-xs font-medium mb-1">Description:</label>
                                 {/* Description Container: Content is now Locked/Non-Editable */}
                                 <div
                                   className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
@@ -1904,10 +1917,6 @@ export function QuotationSheet(props: Props) {
                                     __html: p.description || '<span class="text-gray-400 italic">No specifications provided.</span>'
                                   }}
                                 />
-
-                                <div className="mt-2 text-[8px] text-gray-400 font-bold uppercase italic tracking-widest">
-                                  Reference Department: ENGINEERING | Sales Asset
-                                </div>
                               </td>
                             </tr>
                           </React.Fragment>
