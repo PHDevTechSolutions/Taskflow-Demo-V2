@@ -430,7 +430,6 @@ export function QuotationSheet(props: Props) {
   // Save handler with validation
   const saveWithSelectedProducts = () => {
     setShowQuotationAlert(true);  // Show the Shadcn alert
-
     handleSave();
   };
 
@@ -2220,9 +2219,6 @@ export function QuotationSheet(props: Props) {
           style={{ maxWidth: "950px", width: "100vw" }}
         >
           {(() => {
-            
-
-
             return (
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
 
@@ -2545,7 +2541,7 @@ export function QuotationSheet(props: Props) {
                     <Button
                       onClick={() => { handleDownloadQuotation(); setIsPreviewOpen(false); }}
                       className="bg-[#121212] hover:bg-black rounded-full px-10 h-12 text-white font-black uppercase text-[11px] flex gap-3 items-center shadow-2xl hover:scale-[1.02] transition-all"
-                      
+                      hidden={true}
                     >
                       <Download className="w-4 h-4 text-blue-400" />
                       Generate Official (.xlsx)
