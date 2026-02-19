@@ -255,9 +255,7 @@ function DashboardContent() {
               />
 
               <CSRMetricsCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
+              dateRange={dateCreatedFilterRange}
               />
             </div>
 

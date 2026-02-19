@@ -51,9 +51,7 @@ function Speedometer({
 
   return (
     <div className="flex flex-col items-center">
-
       <div className="relative w-40 h-20">
-
         {/* Background arc */}
         <div className="absolute w-full h-full border-t-[10px] border-gray-200 rounded-t-full"></div>
 
@@ -66,38 +64,35 @@ function Speedometer({
         ></div>
 
         {/* Needle */}
-<div
-  className="absolute bottom-0 left-1/2 origin-bottom transition-transform duration-700 ease-out"
-  style={{
-    transform: `rotate(${angle - 90}deg)`,
-  }}
->
+        <div
+          className="absolute bottom-0 left-1/2 origin-bottom transition-transform duration-700 ease-out"
+          style={{
+            transform: `rotate(${angle - 90}deg)`,
+          }}
+        >
           <div className="w-1 h-16 bg-red-500"></div>
         </div>
 
         {/* Center dot */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full"></div>
-
       </div>
 
       {/* Value */}
-      <div className="text-sm font-bold mt-2">
-        {formatHoursToHMS(value)}
-      </div>
+      <div className="text-sm font-bold mt-2">{formatHoursToHMS(value)}</div>
 
       {/* Label */}
-      <div className="text-xs text-gray-500 text-center">
-        {label}
-      </div>
-
+      <div className="text-xs text-gray-500 text-center">{label}</div>
     </div>
   );
 }
 
-
 /* ================= COMPONENT ================= */
 
-export function CSRMetricsCard() {
+export function CSRMetricsCard({
+  dateRange,
+}: {
+  dateRange?: { from?: Date; to?: Date };
+}) {
   /* ================= DEBUG STATE START ================= */
 
   const today = new Date().toISOString().split("T")[0];
@@ -105,6 +100,14 @@ export function CSRMetricsCard() {
   const [referenceId, setReferenceId] = useState("AE-NCR-555756");
 
   const [targetDate, setTargetDate] = useState(today);
+
+  /* ================= DATE RANGE FROM REACT DATE PICKER ================= */
+
+  const rangeFrom = dateRange?.from ? new Date(dateRange.from).getTime() : null;
+
+  const rangeTo = dateRange?.to
+    ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).getTime()
+    : null;
 
   /* ================= FETCH STATE ================= */
 
@@ -190,15 +193,22 @@ export function CSRMetricsCard() {
 
         const created = new Date(row.date_created).getTime();
 
-        const from = new Date(targetDate).getTime();
+        /* PRIORITY: React Date Picker */
+        if (rangeFrom && rangeTo) {
+          if (isNaN(created) || created < rangeFrom || created > rangeTo)
+            return;
+        } else {
+          /* FALLBACK: Debug Target Date */
+          const from = new Date(targetDate).getTime();
 
-        const toDateEnd = new Date(targetDate);
+          const toDateEnd = new Date(targetDate);
 
-        toDateEnd.setHours(23, 59, 59, 999);
+          toDateEnd.setHours(23, 59, 59, 999);
 
-        const to = toDateEnd.getTime();
+          const to = toDateEnd.getTime();
 
-        if (isNaN(created) || created < from || created > to) return;
+          if (isNaN(created) || created < from || created > to) return;
+        }
 
         /* WRAP UP FILTER */
 
@@ -263,7 +273,7 @@ export function CSRMetricsCard() {
 
         avgSpfHT: spfCount ? spfTotal / spfCount : 0,
       };
-    }, [activities, targetDate]);
+}, [activities, targetDate, rangeFrom, rangeTo]);
 
   /* ================= UI ================= */
 
@@ -324,34 +334,31 @@ export function CSRMetricsCard() {
         ) : error ? (
           <div className="text-red-500">{error}</div>
         ) : (
-<div className="grid grid-cols-2 gap-6 justify-items-center">
+          <div className="grid grid-cols-2 gap-6 justify-items-center">
+            <Speedometer
+              label="TSA Response Time"
+              value={avgResponseTime}
+              maxHours={2}
+            />
 
-  <Speedometer
-    label="TSA Response Time"
-    value={avgResponseTime}
-    maxHours={2}
-  />
+            <Speedometer
+              label="Non-Quotation HT"
+              value={avgNonQuotationHT}
+              maxHours={2}
+            />
 
-  <Speedometer
-    label="Non-Quotation HT"
-    value={avgNonQuotationHT}
-    maxHours={2}
-  />
+            <Speedometer
+              label="Quotation HT"
+              value={avgQuotationHT}
+              maxHours={2}
+            />
 
-  <Speedometer
-    label="Quotation HT"
-    value={avgQuotationHT}
-    maxHours={2}
-  />
-
-  <Speedometer
-    label="SPF Handling Duration"
-    value={avgSpfHT}
-    maxHours={2}
-  />
-
-</div>
-
+            <Speedometer
+              label="SPF Handling Duration"
+              value={avgSpfHT}
+              maxHours={2}
+            />
+          </div>
         )}
       </CardContent>
 
