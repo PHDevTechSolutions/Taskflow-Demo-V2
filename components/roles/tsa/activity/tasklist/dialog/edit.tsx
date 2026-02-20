@@ -215,7 +215,7 @@ export default function TaskListEditDialog({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg rounded-none">
         <DialogHeader>
           <DialogTitle className="text-sm">Edit Activity: {item.activity_reference_number}</DialogTitle>
         </DialogHeader>
@@ -285,10 +285,8 @@ export default function TaskListEditDialog({
           })}
         </div>
         <DialogFooter className="mt-4 flex justify-end space-x-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save</Button>
+          <Button variant="outline" onClick={onClose} className="rounded-none p-6">Cancel</Button>
+          <Button onClick={handleSave} className="rounded-none p-6">Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

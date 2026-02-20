@@ -592,7 +592,7 @@ export function QuotationSheet(props: Props) {
         telNo: safeContactNumber,
         email: safeEmailAddress,
         attention: safeContactPerson
-          ? `${safeContactPerson}${safeContactPerson}`
+          ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
           : "",
 
         subject: "For Quotation",

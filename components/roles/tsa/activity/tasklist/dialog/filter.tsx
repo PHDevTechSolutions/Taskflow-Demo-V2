@@ -40,7 +40,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full max-w-md">
+        <DialogContent className="w-full max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle>Filter Activities</DialogTitle>
             <DialogDescription>
@@ -62,7 +62,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
                 onValueChange={(value) => setFilterStatus(value)}
                 aria-label="Filter by status"
               >
-                <SelectTrigger id="status-select" className="w-full">
+                <SelectTrigger id="status-select" className="w-full rounded-none">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
 
@@ -90,7 +90,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
                 onValueChange={(value) => setFilterTypeActivity(value)}
                 aria-label="Filter by activity type"
               >
-                <SelectTrigger id="type-activity-select" className="w-full">
+                <SelectTrigger id="type-activity-select" className="w-full rounded-none">
                   <SelectValue placeholder="All Activity Types" />
                 </SelectTrigger>
 
@@ -109,15 +109,16 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
           <DialogFooter className="mt-6 flex justify-between">
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
                 setFilterStatus("all");
                 setFilterTypeActivity("all");
               }}
+              className="rounded-none p-6"
             >
               Clear Filters
             </Button>
-            <Button onClick={() => setOpen(false)}>Close</Button>
+            <Button onClick={() => setOpen(false)} className="rounded-none p-6">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
