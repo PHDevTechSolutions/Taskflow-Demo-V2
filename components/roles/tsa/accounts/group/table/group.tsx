@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, } from "
 import { AccountsActiveSearch } from "../../active/search";
 import { AccountsActivePagination } from "../../active/pagination";
 import { type DateRange } from "react-day-picker";
+import { Eye } from "lucide-react";
 
 interface Account {
   id: string;
@@ -160,12 +161,11 @@ export function AccountsTable({
         header: "Action",
         cell: (info) => (
           <Button
-            variant="ghost"
-            size="sm"
-            className="cursor-pointer"
+            variant="outline"
+            className="cursor-pointer rounded-none"
             onClick={() => openGroupDialog(info.row.original)}
           >
-            View Companies
+            <Eye /> View Companies
           </Button>
         ),
       },
@@ -247,7 +247,7 @@ export function AccountsTable({
 
         {/* Dialog showing companies in selected group */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl rounded-none">
             <DialogHeader>
               <DialogTitle className="text-xs">
                 Companies in Industry: {selectedGroup?.industry}
@@ -268,7 +268,7 @@ export function AccountsTable({
             </div>
 
             <div className="mt-6 flex justify-end">
-              <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
+              <Button className="rounded-none p-6" onClick={() => setIsDialogOpen(false)}>Close</Button>
             </div>
           </DialogContent>
         </Dialog>

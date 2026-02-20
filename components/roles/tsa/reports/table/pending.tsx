@@ -247,56 +247,66 @@ export const PendingTable: React.FC<NewTaskProps> = ({
 
   const mergedData = useMemo(() => {
     const historyMap = new Map<string, HistoryRecord[]>();
+
     history.forEach((h) => {
-      const key = h.activity_reference_number?.trim();
+      const key = h.activity_reference_number?.trim().toLowerCase();
+      if (!key) return;
+
       if (!historyMap.has(key)) {
         historyMap.set(key, []);
       }
-      historyMap.get(key)?.push(h);
+      historyMap.get(key)!.push(h);
     });
 
-    // Calculate cutoff date 15 days ago from today
-    const today = new Date();
-    const cutoffDate = new Date(today);
-    cutoffDate.setDate(cutoffDate.getDate() - 15); // 15 days ago
+    // cutoff = 15 days ago
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 15);
 
     return activities
       .filter((a) => allowedStatuses.includes(a.status))
-      // Filter for date_created older than 15 days ago
       .filter((a) => {
-        const createdDate = new Date(a.date_created);
-        return !isNaN(createdDate.getTime()) && createdDate <= cutoffDate;
+        const created = new Date(a.date_created);
+        if (isNaN(created.getTime())) return false;
+        if (created > cutoffDate) return false;
+        return isDateInRange(a.date_created, dateCreatedFilterRange);
       })
       .map((activity) => {
         const company = companies.find(
           (c) => c.account_reference_number === activity.account_reference_number
         );
 
-        const key = activity.activity_reference_number?.trim();
+        const key = activity.activity_reference_number?.trim().toLowerCase();
         const historyRecords = historyMap.get(key) || [];
 
-        const latestHistory = historyRecords[0];
+        // ensure latest
+        const latestHistory = historyRecords.sort(
+          (a, b) =>
+            new Date((b as any).created_at || 0).getTime() -
+            new Date((a as any).created_at || 0).getTime()
+        )[0];
 
         return {
           ...activity,
           company_name: company?.company_name ?? "Unknown Company",
+          contact_person: company?.contact_person ?? "-",
           contact_number: company?.contact_number ?? "-",
-          type_client: company?.type_client ?? "",
-          contact_person: company?.contact_person ?? "",
+          type_client: company?.type_client ?? "-",
           so_number: latestHistory?.so_number ?? "-",
           so_amount: latestHistory?.so_amount ?? "-",
         };
       })
       .sort(
-        (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+        (a, b) =>
+          new Date(b.date_updated).getTime() -
+          new Date(a.date_updated).getTime()
       );
-  }, [activities, companies, history]);
+  }, [activities, companies, history, dateCreatedFilterRange]);
 
   // Apply search filtering (search all fields including so_number & so_amount)
   const filteredData = useMemo(() => {
     if (!searchTerm.trim()) return mergedData;
 
-    const lowerSearch = searchTerm.toLowerCase();
+    const lower = searchTerm.toLowerCase();
 
     return mergedData.filter((item) =>
       [
@@ -309,7 +319,7 @@ export const PendingTable: React.FC<NewTaskProps> = ({
         item.so_amount,
       ]
         .filter(Boolean)
-        .some((field) => field.toLowerCase().includes(lowerSearch))
+        .some((v) => String(v).toLowerCase().includes(lower))
     );
   }, [mergedData, searchTerm]);
 

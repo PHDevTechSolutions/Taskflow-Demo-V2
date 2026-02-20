@@ -22,7 +22,7 @@ export function AccountsActiveSearch({
         placeholder="Search accounts..."
         value={globalFilter}
         onChange={(e) => setGlobalFilterAction(e.target.value)}
-        className="pl-8"
+        className="pl-8 rounded-none"
       />
       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
       {isFiltering && (

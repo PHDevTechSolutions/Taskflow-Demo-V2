@@ -64,9 +64,13 @@ export function BreachesDialog() {
 
   const [userDetails, setUserDetails] = useState<{
     referenceid: string;
+    firstname: string;
+    lastname: string;
     role: string;
   }>({
     referenceid: "",
+    firstname: "",
+    lastname: "",
     role: "",
   });
 
@@ -133,6 +137,9 @@ export function BreachesDialog() {
 
   const [overdueByCompany, setOverdueByCompany] = useState<Record<string, number>>({});
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
+  // View More
+  const [showAllOverdue, setShowAllOverdue] = useState(false);
+  const [showAllNewClients, setShowAllNewClients] = useState(false);
 
   /* -------------------- Sync URL userId -------------------- */
   useEffect(() => {
@@ -183,6 +190,8 @@ export function BreachesDialog() {
         setUserDetails({
           referenceid: refId,
           role: data.Role || "",
+          firstname: data.Firstname || "",
+          lastname: data.Lastname || "",
         });
 
         if (refId) {
@@ -543,15 +552,39 @@ export function BreachesDialog() {
   }, [activities, fromDate]);
 
   useEffect(() => {
+    if (!activities.length || !fromDate) {
+      setNewClientByCompany({});
+      setNewClientCount(0);
+      return;
+    }
+
+    const targetDate = new Date(fromDate);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
     const newClientsGrouped: Record<string, number> = {};
+    let totalNewClients = 0;
+
     activities.forEach((act) => {
-      if (act.status === "Assisted" && act.type_client === "New Client") {
+      const actTime = new Date(act.date_created).getTime();
+
+      if (
+        act.status === "Assisted" &&
+        act.type_client === "New Client" &&
+        actTime >= startOfDay.getTime() &&
+        actTime <= endOfDay.getTime()
+      ) {
         const company = act.company_name || "Unknown";
         newClientsGrouped[company] = (newClientsGrouped[company] || 0) + 1;
+        totalNewClients++;
       }
     });
+
     setNewClientByCompany(newClientsGrouped);
-  }, [activities]); // run only when `activities` changes
+    setNewClientCount(totalNewClients);
+  }, [activities, fromDate]);
 
   // Update newClientCount whenever newClientByCompany changes
   useEffect(() => {
@@ -562,14 +595,25 @@ export function BreachesDialog() {
     setNewClientCount(total);
   }, [newClientByCompany]);
 
+  const overdueEntries = Object.entries(overdueByCompany);
+  const hasMoreThanFive = overdueEntries.length > 5;
+  const visibleOverdue = showAllOverdue
+    ? overdueEntries
+    : overdueEntries.slice(0, 5);
+
+  const newClientEntries = Object.entries(newClientByCompany);
+  const hasMoreThanFiveNewClients = newClientEntries.length > 5;
+  const visibleNewClients = showAllNewClients
+    ? newClientEntries
+    : newClientEntries.slice(0, 5);
 
   /* -------------------- UI -------------------- */
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="fixed bottom-6 right-4 bg-white rounded-lg shadow-xl z-50 overflow-auto border border-gray-100"
-          style={{ width: "90vh", height: "75vh" }}
+          className="fixed bottom-6 right-4 bg-white rounded-none shadow-xl z-50 overflow-auto border border-gray-100"
+          style={{ width: "95vw", maxWidth: "1000px", height: "75vh" }}
         >
           <DialogHeader>
             <DialogTitle className="uppercase tracking-tight font-bold text-[#121212]">
@@ -578,7 +622,7 @@ export function BreachesDialog() {
             <DialogDescription className="text-xs text-muted-foreground">
               {loadingUser
                 ? "Loading Reference ID..."
-                : `Reference ID: ${userDetails.referenceid}`}
+                : `Name: ${userDetails?.lastname ?? ""}, ${userDetails?.firstname ?? ""}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -630,10 +674,10 @@ export function BreachesDialog() {
             </Button>
           </div> */}
 
-          <div className="space-y-4 text-sm font-sans">
+          <div className="grid grid-cols-2 gap-4 text-sm font-sans">
             <ul className="list-none space-y-4">
               {/* LI 1: Outbound Performance */}
-              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-md shadow-sm">
+              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
                 <div className="flex justify-between items-center mb-2">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight">
                     Outbound Performance (20/Day Goal)
@@ -661,7 +705,7 @@ export function BreachesDialog() {
               </li>
 
               {/* LI 2: Dynamic Territory Coverage */}
-              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-md shadow-sm">
+              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
                 <div className="mb-2">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight block">
                     Territory Coverage (Unique Reach)
@@ -732,19 +776,37 @@ export function BreachesDialog() {
                 )}
               </li> */}
 
-              <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+              <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                 <div className="flex justify-between items-center mb-2">
                   <strong className="text-red-500 uppercase text-[11px] tracking-tight">
                     Overdue Activities: {overdueCount}
                   </strong>
+
+                  {hasMoreThanFive && (
+                    <button
+                      onClick={() => setShowAllOverdue((prev) => !prev)}
+                      className="text-[10px] text-blue-600 hover:underline font-medium"
+                    >
+                      {showAllOverdue ? "View less" : "View more"}
+                    </button>
+                  )}
                 </div>
+
                 {loadingOverdue ? (
                   <div className="text-xs text-gray-400">Loading...</div>
                 ) : (
-                  <div className="mt-2 space-y-1">
-                    {Object.entries(overdueByCompany).map(([company, count]) => (
-                      <div key={company} className="flex justify-between items-center px-2 py-1.5 bg-[#F9FAFA] border border-gray-100 rounded shadow-sm">
-                        <span className="text-xs text-gray-600 truncate mr-2">{company}</span>
+                  <div
+                    className={`mt-2 space-y-1 ${showAllOverdue ? "max-h-48 overflow-y-auto pr-1" : ""
+                      }`}
+                  >
+                    {visibleOverdue.map(([company, count]) => (
+                      <div
+                        key={company}
+                        className="flex justify-between items-center px-2 py-1.5 border border-gray-100 rounded-none shadow-sm"
+                      >
+                        <span className="text-xs text-gray-600 truncate mr-2">
+                          {company}
+                        </span>
                         <strong className="text-xs text-[#121212]">{count}</strong>
                       </div>
                     ))}
@@ -771,12 +833,30 @@ export function BreachesDialog() {
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight">
                     New Account Devt: {newClientCount}
                   </strong>
+
+                  {hasMoreThanFiveNewClients && (
+                    <button
+                      onClick={() => setShowAllNewClients((prev) => !prev)}
+                      className="text-[10px] text-blue-600 hover:underline font-medium"
+                    >
+                      {showAllNewClients ? "View less" : "View more"}
+                    </button>
+                  )}
                 </div>
-                {Object.keys(newClientByCompany).length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {Object.entries(newClientByCompany).map(([company, count]) => (
-                      <div key={company} className="flex justify-between items-center px-2 py-1.5 bg-[#F9FAFA] border border-gray-100 rounded shadow-sm">
-                        <span className="text-xs text-gray-600 truncate mr-2">{company}</span>
+
+                {newClientEntries.length > 0 && (
+                  <div
+                    className={`mt-2 space-y-1 ${showAllNewClients ? "max-h-48 overflow-y-auto pr-1" : ""
+                      }`}
+                  >
+                    {visibleNewClients.map(([company, count]) => (
+                      <div
+                        key={company}
+                        className="flex justify-between items-center px-2 py-1.5 border border-gray-100 rounded-none shadow-sm"
+                      >
+                        <span className="text-xs text-gray-600 truncate mr-2">
+                          {company}
+                        </span>
                         <strong className="text-xs text-blue-600">{count}</strong>
                       </div>
                     ))}
@@ -796,8 +876,10 @@ export function BreachesDialog() {
                     ))}
                 </ul>
               </li> */}
+            </ul>
 
-              <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
+            <ul className="list-none space-y-4">
+              <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                 <div className="flex justify-between items-center mb-2 border-b border-gray-50 pb-1">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight">Time Consumed</strong>
                   <span className="text-xs font-bold text-gray-700">{formatDuration(timeConsumedMs)}</span>
@@ -820,7 +902,7 @@ export function BreachesDialog() {
                 {totalSales.toLocaleString()}
               </li> */}
 
-              <li className="p-3 bg-[#121212] border border-[#121212] rounded-md shadow-md">
+              <li className="p-3 bg-[#121212] border border-[#121212] rounded-none shadow-md">
                 <div className="flex flex-col">
                   <strong className="text-gray-400 uppercase text-[10px] tracking-widest mb-1">Total Sales Today</strong>
                   <div className="flex items-baseline gap-1">
@@ -845,7 +927,7 @@ export function BreachesDialog() {
                 )}
               </li> */}
 
-              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-md shadow-sm">
+              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2 border-b border-gray-100 pb-1">
                   CSR Metrics Tickets
                 </strong>
@@ -884,7 +966,7 @@ export function BreachesDialog() {
                 </ul>
               </li> */}
 
-              <li className="p-3 bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-md shadow-sm">
+              <li className="p-3 bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-none shadow-sm">
                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2">Closing of Quotation</strong>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center py-1 border-b border-gray-50">
@@ -909,7 +991,7 @@ export function BreachesDialog() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="rounded-none p-6" onClick={() => setOpen(false)}>
               Close
             </Button>
           </DialogFooter>

@@ -189,7 +189,7 @@ export function AccountsTable({
           const status = getValue() as string;
           return (
             <Badge
-              className={status === "Removed" ? "bg-orange-600 text-white" : ""}
+              className={status === "Removed" ? "bg-orange-600 text-white rounded-xs shadow-sm" : ""}
               variant={status === "Removed" ? undefined : "default"}
             >
               <LoaderPinwheel className="animate-spin inline-block" /> {status === "Removed" ? "Waiting for approval" : status}
@@ -210,8 +210,7 @@ export function AccountsTable({
         cell: ({ row }) => (
           <Button
             variant="outline"
-            size="sm"
-            className="flex items-center gap-1 text-green-700 border-green-300 hover:bg-green-50 cursor-pointer"
+            className="flex items-center gap-1 text-green-700 border-green-300 hover:bg-green-50 cursor-pointer rounded-none"
             onClick={() => {
               setSelectedAccount(row.original);
               setOpenDialog(true);
@@ -264,7 +263,7 @@ export function AccountsTable({
 
       {/* TABLE */}
       <div className="rounded-md border p-4">
-        <Badge variant="outline" className="mb-2">
+        <Badge variant="outline" className="mb-2 rounded-none">
           Total: {filteredData.length}
         </Badge>
 
@@ -307,7 +306,7 @@ export function AccountsTable({
       </div>
 
       <AlertDialog open={openDialog} onOpenChange={setOpenDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-none">
           <AlertDialogHeader>
             <AlertDialogTitle>Revert Account</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2 text-sm">
@@ -332,6 +331,7 @@ export function AccountsTable({
                 setSelectedAccount(null);
                 setOpenDialog(false);
               }}
+              className="rounded-none p-6"
             >
               Cancel
             </AlertDialogCancel>
@@ -342,9 +342,9 @@ export function AccountsTable({
                 setOpenDialog(false);
               }}
               disabled={isReverting}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700 rounded-none p-6"
             >
-              {isReverting ? "Reverting..." : "Confirm Revert"}
+              {isReverting ? "Reverting..." : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

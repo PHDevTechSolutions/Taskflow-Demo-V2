@@ -141,6 +141,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
               onClick={() => setShowHistory(!showHistory)}
               aria-expanded={showHistory}
               aria-controls="history-content"
+              className="rounded-none p-6"
             >
              <Eye /> {showHistory ? "Hide History" : "View History"}
             </Button>
@@ -148,7 +149,7 @@ export function OutboundCard({ activities, loading, error, dateRange }: SourceCa
             <Button variant="outline"
               onClick={() => setShowComputation(!showComputation)}
               aria-label="Show computation details"
-              className="text-blue-600 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800 rounded-none p-6"
               title="Show computation details"
             >
               <Info /> Details
