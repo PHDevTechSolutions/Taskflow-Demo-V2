@@ -823,9 +823,9 @@ export function QuotationSheet(props: Props) {
                                             
                                             /* 1. CLIENT INFORMATION GRID */
                                             .client-grid { border-left: 1.5px solid black; border-right: 1.5px solid black; background: white; }
-                                            .grid-row { display: flex; align-items: center; min-height: 30px; padding: 2px 15px; }
+                                            .grid-row { display: flex; align-items: center; min-height: 20px; padding: 2px 15px; }
                                             .border-t { border-top: 1.5px solid black; }
-                                            .border-b { border-bottom: 1.5px solid black; }
+                                            .border-b { border-bottom: 1.5px solid black; padding-bottom: 10px;}
                                             .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 0; }
                                             .value { flex-grow: 1; font-size: 11px; font-weight: bold; color: #374151; padding-left: 15px; }
 
@@ -844,9 +844,9 @@ export function QuotationSheet(props: Props) {
                                                 table-layout: fixed; 
                                                 margin: 0;
                                             }
-                                            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black; }
+                                            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black;}
                                             .main-table th { 
-                                                padding: 12px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
+                                                padding: 5px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
                                                 text-transform: uppercase; border-right: 1px solid black;
                                             }
                                             .main-table td { 
@@ -860,7 +860,7 @@ export function QuotationSheet(props: Props) {
                                             .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
                                             .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
                                             .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
-                                            .desc-text { width: 100%; font-size: 9px; color: #6b7280; line-height: 1.4; }
+                                            .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
 
                                             .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
 
@@ -1000,7 +1000,7 @@ export function QuotationSheet(props: Props) {
                                     </div>
                                 `);
       pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
-      currentY += 40;
+      currentY += 28; // Header height minus stitch to first row
 
       // C. ITEM ROWS
       for (const [index, item] of payload.items.entries()) {
@@ -1012,7 +1012,7 @@ export function QuotationSheet(props: Props) {
                                                     <td style="width: 40px;" class="qty-col">${item.qty}</td>
                                                     <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
                                                     <td style="width: 200px;">
-                                                        <div class="product-title">${item.title}</div>
+                                                        <div class="product-title" style="font-size: 7px;">${item.title}</div>
                                                         <div class="sku-text">${item.sku}</div>
                                                         <div class="desc-text">${item.description}</div>
                                                     </td>
@@ -1029,7 +1029,7 @@ export function QuotationSheet(props: Props) {
           pageCount++;
           currentY = await initiateNewPage();
           pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
-          currentY += 40; // Re-apply stitch on new page
+          currentY += 28; // Re-apply stitch on new page
         }
 
         pdf.addImage(rowBlock.img, 'JPEG', 0, currentY, pdfWidth, rowBlock.h);
@@ -1685,7 +1685,7 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
