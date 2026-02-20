@@ -1800,7 +1800,10 @@ export function QuotationSheet(props: Props) {
                             setSearchResults(data.products || []);
                           } else {
                             const searchUpper = rawValue.toUpperCase();
-                            const q = query(collection(db, "products"));
+                            const q = query(
+                              collection(db, "products"), 
+                              where("websites", "array-contains", "TaskEcoshiftflow")
+                            );
                             const querySnapshot = await getDocs(q);
 
                             const firebaseResults = querySnapshot.docs.map(doc => {

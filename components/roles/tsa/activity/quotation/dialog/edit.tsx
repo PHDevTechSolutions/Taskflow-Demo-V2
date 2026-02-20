@@ -827,20 +827,20 @@ export default function TaskListEditDialog({
 
                                                             if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
                                                                 data.technicalSpecs.forEach((group: any) => {
-                                                                    // 1. Add the Group Header (e.g., FIXTURE DETAILS)
-                                                                    rawSpecsText += ` ${group.specGroup}`;
-                                                                    specsHtml += `
-                                                                                <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
-                                                                                    ${group.specGroup}
-                                                                                </div>`;
+                                  // 1. Add the Group Header (e.g., FIXTURE DETAILS)
+                                  rawSpecsText += ` ${group.specGroup}`;
+                                  specsHtml += `
+                                                <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                                                    ${group.specGroup}
+                                                </div>`;
 
-                                                                    // 2. Start the table for this specific group
-                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
+                                  // 2. Start the table for this specific group
+                                  specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
 
-                                                                    group.specs?.forEach((spec: any) => {
-                                                                        // 3. Add data to searchable text and HTML rows
-                                                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
-                                                                        specsHtml += `
+                                  group.specs?.forEach((spec: any) => {
+                                    // 3. Add data to searchable text and HTML rows
+                                    rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                    specsHtml += `
                                                   <tr>
                                                       <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb; width: 40%;">
                                                           <b>${spec.name}</b>
@@ -849,10 +849,12 @@ export default function TaskListEditDialog({
                                                           ${spec.value}
                                                       </td>
                                                   </tr>`;
-                                                                    });
+                                  });
 
-                                                                    specsHtml += `</table>`;
-                                                                });
+                                  specsHtml += `</table>`;
+                                });
+                                                                
+                                                               
                                                             }
 
                                                             // 2. Map to Product format and resolve ID mismatch
@@ -1085,12 +1087,13 @@ export default function TaskListEditDialog({
 
                                                 <TableCell className="align-top">
                                                     <div className="flex flex-col">
+                                                        ddd
                                                         {previewStates[index] ? (
                                                             <div
                                                                 className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                                                dangerouslySetInnerHTML={{
-                                                                    __html: product.description || '<span class="text-gray-400 italic">No specifications provided.</span>'
-                                                                }}
+                                                            dangerouslySetInnerHTML={{
+                                                                __html: product.product_description || '<span class="text-gray-400 italic">No specifications provided.</span>'
+                                                            }}
                                                             />
                                                         ) : (
                                                             <Textarea
