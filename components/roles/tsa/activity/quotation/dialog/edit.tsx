@@ -554,7 +554,7 @@ export default function TaskListEditDialog({
                 photo: p.product_photo ?? "",
                 title: p.product_title ?? "",
                 sku: p.product_sku ?? "",
-                description: p.product_description ?? "",
+                description: p.description ?? "",
                 unitPrice,
                 totalAmount,
             };
@@ -830,9 +830,9 @@ export default function TaskListEditDialog({
                                                                     // 1. Add the Group Header (e.g., FIXTURE DETAILS)
                                                                     rawSpecsText += ` ${group.specGroup}`;
                                                                     specsHtml += `
-            <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
-                ${group.specGroup}
-            </div>`;
+                                                                                <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
+                                                                                    ${group.specGroup}
+                                                                                </div>`;
 
                                                                     // 2. Start the table for this specific group
                                                                     specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
