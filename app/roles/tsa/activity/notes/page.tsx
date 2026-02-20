@@ -156,7 +156,7 @@ function DashboardContent() {
                                 tsm={userDetails.tsm}
                                 manager={userDetails.manager}
                                 dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                
                             />
                         </div>
                     </main>
