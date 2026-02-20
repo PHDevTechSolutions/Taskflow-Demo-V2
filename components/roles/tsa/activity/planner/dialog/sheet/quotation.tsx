@@ -591,8 +591,8 @@ export function QuotationSheet(props: Props) {
         address: safeAddress,
         telNo: safeContactNumber,
         email: safeEmailAddress,
-        attention: safeContactPerson || safeAddress
-          ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
+        attention: safeContactPerson
+          ? `${safeContactPerson}${safeContactPerson}`
           : "",
 
         subject: "For Quotation",
