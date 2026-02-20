@@ -591,8 +591,8 @@ export function QuotationSheet(props: Props) {
         address: safeAddress,
         telNo: safeContactNumber,
         email: safeEmailAddress,
-        attention: safeContactPerson
-          ? `${safeContactPerson}${safeContactPerson}`
+        attention: safeContactPerson || safeAddress
+          ? `${safeContactPerson}${safeContactPerson && safeAddress ? ", " : ""}${safeAddress}`
           : "",
 
         subject: "For Quotation",
@@ -1685,7 +1685,7 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={true} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
@@ -1802,7 +1802,7 @@ export function QuotationSheet(props: Props) {
                             const searchUpper = rawValue.toUpperCase();
                             const q = query(
                               collection(db, "products"), 
-                              where("websites", "array-contains", "TaskEcoshiftflow")
+                              where("websites", "array-contains", "Taskflow")
                             );
                             const querySnapshot = await getDocs(q);
 
