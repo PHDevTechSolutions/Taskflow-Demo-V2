@@ -552,15 +552,39 @@ export function BreachesDialog() {
   }, [activities, fromDate]);
 
   useEffect(() => {
+    if (!activities.length || !fromDate) {
+      setNewClientByCompany({});
+      setNewClientCount(0);
+      return;
+    }
+
+    const targetDate = new Date(fromDate);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
     const newClientsGrouped: Record<string, number> = {};
+    let totalNewClients = 0;
+
     activities.forEach((act) => {
-      if (act.status === "Assisted" && act.type_client === "New Client") {
+      const actTime = new Date(act.date_created).getTime();
+
+      if (
+        act.status === "Assisted" &&
+        act.type_client === "New Client" &&
+        actTime >= startOfDay.getTime() &&
+        actTime <= endOfDay.getTime()
+      ) {
         const company = act.company_name || "Unknown";
         newClientsGrouped[company] = (newClientsGrouped[company] || 0) + 1;
+        totalNewClients++;
       }
     });
+
     setNewClientByCompany(newClientsGrouped);
-  }, [activities]); // run only when `activities` changes
+    setNewClientCount(totalNewClients);
+  }, [activities, fromDate]);
 
   // Update newClientCount whenever newClientByCompany changes
   useEffect(() => {
