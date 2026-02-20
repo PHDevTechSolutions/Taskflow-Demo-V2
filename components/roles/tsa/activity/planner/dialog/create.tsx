@@ -4,11 +4,12 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Plus, ArrowRight } from "lucide-react";
+import { Plus, ArrowRight, User, Users } from "lucide-react";
 
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, } from "@/components/ui/empty";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 
 // Dialogs and Sheets
@@ -202,6 +203,11 @@ export function CreateActivityDialog({
     const [elapsedTime, setElapsedTime] = useState("");
     const [showExportNotification, setShowExportNotification] = React.useState(false);
 
+    const [selectedContactPerson, setSelectedContactPerson] = useState(contact_person);
+    const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
+    const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
+
+
     // AUTO SET DATE CREATED
     useEffect(() => {
         setDateCreated(new Date().toISOString());
@@ -364,8 +370,8 @@ export function CreateActivityDialog({
             account_reference_number: accountRef,
             type_client,
             company_name,
-            contact_person,
-            contact_number,
+            contact_person: selectedContactPerson, // <-- array now
+            contact_number: selectedContactNumber, // <-- array now
             email_address,
             address,
             date_created: dateCreated,
@@ -492,8 +498,79 @@ export function CreateActivityDialog({
         setSheetOpen(true);
     };
 
+    const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+    const contactPersons = (contact_person || "").split(",").map(c => c.trim());
+    const contactNumbers = (contact_number || "").split(",").map(c => c.trim());
+
     return (
         <>
+            <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
+                <DialogContent style={{ width: "500px", height: "auto" }} className="rounded-none">
+                    <DialogHeader>
+                        <DialogTitle>Confirm Contact</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="p-4 space-y-4">
+                        <p>Select a contact to use:</p>
+
+                        {/* Contact List as Cards */}
+                        <div className="grid grid-cols-1 gap-3">
+                            {contactPersons.map((person, idx) => {
+                                const number = contactNumbers[idx] || "";
+                                const isSelected = selectedContacts.includes(person);
+
+                                return (
+                                    <div
+                                        key={person}
+                                        onClick={() => setSelectedContacts([person])} // always single
+                                        className={`border rounded-lg p-3 cursor-pointer transition-shadow flex items-center space-x-3
+                ${isSelected ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:shadow-sm"}
+              `}
+                                    >
+                                        <User className="w-6 h-6 text-gray-500" />
+                                        <div className="flex flex-col">
+                                            <p className="font-semibold">{person}</p>
+                                            <p className="text-sm text-gray-600">{number}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="mt-4 flex justify-end space-x-2">
+                        <Button
+                            variant="outline"
+                            className="rounded-none p-6"
+                            onClick={() => setShowContactDialog(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                if (selectedContacts.length === 0) {
+                                    toast.error("Please select a contact.");
+                                    return;
+                                }
+
+                                const selectedPerson = selectedContacts[0];
+                                const idx = contactPersons.indexOf(selectedPerson);
+                                const selectedNumber = contactNumbers[idx] || "";
+
+                                setSelectedContactPerson(selectedPerson);
+                                setSelectedContactNumber(selectedNumber);
+
+                                setShowContactDialog(false);
+                                handleNext(); // move to next step
+                            }}
+                            className="rounded-none p-6"
+                        >
+                            Confirm
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
                 <SheetTrigger asChild>
                     <Button
@@ -674,8 +751,24 @@ export function CreateActivityDialog({
 
                                                                 {typeActivity === item.value && (
                                                                     <div className="mt-4 flex">
-                                                                        <Button className="rounded-none" onClick={handleNext}>
-                                                                           Next <ArrowRight />
+                                                                        <Button
+                                                                            className="rounded-none"
+                                                                            onClick={() => {
+                                                                                const showDialogFor = [
+                                                                                    "Outbound Calls",
+                                                                                    "Inbound Calls",
+                                                                                    "Quotation Preparation",
+                                                                                    "Viber Replies / Messages",
+                                                                                ];
+
+                                                                                if (showDialogFor.includes(item.value)) {
+                                                                                    setShowContactDialog(true);
+                                                                                } else {
+                                                                                    handleNext(); // go to next step directly for other activity types
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            Next <ArrowRight />
                                                                         </Button>
                                                                     </div>
                                                                 )}
@@ -696,7 +789,8 @@ export function CreateActivityDialog({
                                     setStep={setStep}
                                     source={source}
                                     setSource={setSource}
-                                    contact_number={contact_number}
+                                    contact_number={selectedContactNumber}
+                                    setContactNumber={setSelectedContactNumber}
                                     callStatus={callStatus}
                                     setCallStatus={setCallStatus}
                                     callType={callType}
@@ -793,9 +887,9 @@ export function CreateActivityDialog({
                                     managername={managername}
                                     company_name={company_name}
                                     address={address}
-                                    contact_number={contact_number}
                                     email_address={email_address}
-                                    contact_person={contact_person}
+                                    contact_number={selectedContactNumber}
+                                    contact_person={selectedContactPerson}
                                 />
                             )}
 
