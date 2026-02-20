@@ -172,7 +172,7 @@ export function ActivityToday() {
     <>
       {/* MAIN DIALOG */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Activities Scheduled for Today</DialogTitle>
             <DialogDescription>
@@ -188,7 +188,7 @@ export function ActivityToday() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={handleDismiss}>Dismiss</Button>
+            <Button className="rounded-none p-6" onClick={handleDismiss}>Dismiss</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -205,11 +205,12 @@ export function ActivityToday() {
           <DialogFooter>
             <Button
               variant="outline"
+              className="rounded-none p-6"
               onClick={() => setShowDismissConfirm(false)}
             >
               Cancel
             </Button>
-            <Button onClick={confirmDismiss}>Confirm</Button>
+            <Button className="rounded-none p-6" onClick={confirmDismiss}>Confirm</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

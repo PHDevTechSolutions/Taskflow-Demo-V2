@@ -195,7 +195,7 @@ export function NavUser({
 
       {/* Dialog confirmation */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm Logout</DialogTitle>
             <DialogDescription>
@@ -205,6 +205,7 @@ export function NavUser({
           <DialogFooter>
             <Button
               variant="outline"
+              className="rounded-none p-6"
               onClick={() => setIsDialogOpen(false)}
               disabled={isLoggingOut}
             >
@@ -213,7 +214,7 @@ export function NavUser({
             <Button
               onClick={doLogout}
               disabled={isLoggingOut}
-              className="ml-2"
+              className="ml-2 rounded-none p-6"
             >
               {isLoggingOut ? "Logging out..." : "Logout"}
             </Button>
