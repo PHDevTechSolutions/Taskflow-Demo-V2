@@ -64,11 +64,7 @@ export default async function handler(
     const activities = [
       ...(historyData || []).map((item) => ({ source: "history", ...item })),
       ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
-<<<<<<< HEAD
       ...(meetingsData || []).map((item) => ({ source: "meetings", ...item })),
-=======
-      ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
->>>>>>> 302ff9927fdce73a988ae888fee117b402e109c6
       ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
     ].sort(
       (a, b) =>
