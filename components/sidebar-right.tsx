@@ -199,7 +199,7 @@ export function SidebarRight({
           </Card>
         )}
       </SidebarContent>
-     
+      <BreachesDialog />
       <SidebarFooter>
         <div className="border-t border-sidebar-border mt-2 pt-2 text-center text-xs">
           <div>{time}</div>
