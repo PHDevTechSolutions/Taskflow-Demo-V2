@@ -525,40 +525,7 @@ export function CreateActivityDialog({
                     </DialogHeader>
 
                     <div className="p-4 space-y-4">
-                        <p>Select which contact(s) you want to use:</p>
-
-                        {/* Selection Mode */}
-                        <div>
-                            <p className="font-semibold mb-2">Selection Mode</p>
-                            <RadioGroup
-                                value={selectionMode}
-                                onValueChange={(value) => setSelectionMode(value as "single" | "multiple")}
-                            >
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    {/* Single Option */}
-                                    <label
-                                        className={`flex items-center space-x-4 cursor-pointer border rounded-lg p-5 transition-shadow w-full
-        ${selectionMode === "single" ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:shadow-sm"}
-      `}
-                                    >
-                                        <RadioGroupItem value="single" className="w-5 h-5 accent-blue-500" />
-                                        <User className="w-6 h-6 text-gray-500" />
-                                        <span className="font-medium text-gray-800">Single</span>
-                                    </label>
-
-                                    {/* Multiple Option */}
-                                    <label
-                                        className={`flex items-center space-x-4 cursor-pointer border rounded-lg p-5 transition-shadow w-full
-        ${selectionMode === "multiple" ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:shadow-sm"}
-      `}
-                                    >
-                                        <RadioGroupItem value="multiple" className="w-5 h-5 accent-blue-500" />
-                                        <Users className="w-6 h-6 text-gray-500" />
-                                        <span className="font-medium text-gray-800">Multiple</span>
-                                    </label>
-                                </div>
-                            </RadioGroup>
-                        </div>
+                        <p>Select a contact to use:</p>
 
                         {/* Contact List as Cards */}
                         <div className="grid grid-cols-1 gap-3">
@@ -569,7 +536,7 @@ export function CreateActivityDialog({
                                 return (
                                     <div
                                         key={person}
-                                        onClick={() => handleContactSelect(person)}
+                                        onClick={() => setSelectedContacts([person])} // always single
                                         className={`border rounded-lg p-3 cursor-pointer transition-shadow flex items-center space-x-3
                 ${isSelected ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:shadow-sm"}
               `}
@@ -586,24 +553,26 @@ export function CreateActivityDialog({
                     </div>
 
                     <DialogFooter className="mt-4 flex justify-end space-x-2">
-                        <Button variant="outline" className="rounded-none p-6" onClick={() => setShowContactDialog(false)}>
+                        <Button
+                            variant="outline"
+                            className="rounded-none p-6"
+                            onClick={() => setShowContactDialog(false)}
+                        >
                             Cancel
                         </Button>
                         <Button
                             onClick={() => {
                                 if (selectedContacts.length === 0) {
-                                    toast.error("Please select at least one contact.");
+                                    toast.error("Please select a contact.");
                                     return;
                                 }
 
-                                // Map selected contacts to their numbers
-                                const selectedNumbers = selectedContacts.map(c => {
-                                    const idx = contactPersons.indexOf(c);
-                                    return contactNumbers[idx] || "";
-                                });
+                                const selectedPerson = selectedContacts[0];
+                                const idx = contactPersons.indexOf(selectedPerson);
+                                const selectedNumber = contactNumbers[idx] || "";
 
-                                setSelectedContactPerson(selectedContacts.join(", "));
-                                setSelectedContactNumber(selectedNumbers.join(", "));
+                                setSelectedContactPerson(selectedPerson);
+                                setSelectedContactNumber(selectedNumber);
 
                                 setShowContactDialog(false);
                                 handleNext(); // move to next step
