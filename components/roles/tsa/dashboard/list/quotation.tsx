@@ -78,10 +78,10 @@ export function QuotationCard({ activities, loading, error, dateRange }: SourceC
             <Button variant="outline"
               onClick={() => setShowComputation(!showComputation)}
               aria-label="Show computation details"
-              className="text-blue-600 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800 rounded-none p-6"
               title="Show computation details"
             >
-              <Info />
+              <Info /> Details
             </Button>
 
           </div>

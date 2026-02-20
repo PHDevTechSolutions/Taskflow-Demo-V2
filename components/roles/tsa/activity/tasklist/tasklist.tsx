@@ -575,7 +575,7 @@ export const TaskList: React.FC<CompletedProps> = ({
 
                                         <TableCell className="font-semibold">{displayValue(item.company_name)}</TableCell>
                                         <TableCell>
-                                            <Badge variant="default" className={`text-xs whitespace-nowrap ${getBadgeClass(item.status)}`}>
+                                            <Badge variant="default" className={`text-xs rounded-xs shadow-sm whitespace-nowrap ${getBadgeClass(item.status)}`}>
                                                 {item.status?.replace("-", " ")}
                                             </Badge>
                                         </TableCell>
