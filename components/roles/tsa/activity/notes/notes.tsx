@@ -65,12 +65,12 @@ export const Notes: React.FC<NotesProps> = ({
         .from("documentation")
         .select("*")
         .eq("referenceid", referenceid)
-        .order("created_at", { ascending: false });
+        .order("date_created", { ascending: false });
 
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         q = q
-          .gte("created_at", dateCreatedFilterRange.from.toISOString())
-          .lte("created_at", new Date(dateCreatedFilterRange.to.setHours(23, 59, 59, 999)).toISOString());
+          .gte("date_created", dateCreatedFilterRange.from.toISOString())
+          .lte("date_created", new Date(dateCreatedFilterRange.to.setHours(23, 59, 59, 999)).toISOString());
       }
 
       const { data, error } = await q;
