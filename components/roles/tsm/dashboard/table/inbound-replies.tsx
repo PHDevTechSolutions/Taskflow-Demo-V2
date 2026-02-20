@@ -158,7 +158,7 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
   }, [filteredAgents, history]);
 
   return (
-    <Card className="flex flex-col h-full bg-white">
+    <Card className="flex flex-col h-full bg-white rounded-none">
       <CardHeader>
         <CardTitle>Other Activities Duration</CardTitle>
         <CardDescription>
@@ -190,10 +190,10 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
                   {agent.profilePicture ? (
                     <img
                       src={agent.profilePicture}
-                      className="w-8 h-8 rounded-full object-cover"
+                      className="w-6 h-6 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
                       ?
                     </div>
                   )}

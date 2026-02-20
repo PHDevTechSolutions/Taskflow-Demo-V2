@@ -487,10 +487,12 @@ export function AgentList({
                             />
                         )}
 
-                        {selectedAgent == "all" && (
-                            <AgentMeetings agents={agents} selectedAgent={selectedAgent} />
-
-                        )}
+                        <AgentMeetings
+                            agents={agents}
+                            selectedAgent={selectedAgent}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                        />
 
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
@@ -504,7 +506,7 @@ export function AgentList({
                             return (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* CARD 1 – TOTAL DATABASE */}
-                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                                    <div className="p-6 rounded-none border border-gray-200 shadow-md bg-white">
                                         <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
                                             <Building2 className="w-5 h-5" />Total Database
                                         </h2>
@@ -554,7 +556,7 @@ export function AgentList({
                                     </div>
 
                                     {/* CARD 2 – NEXT AVAILABLE TODAY */}
-                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                                    <div className="p-6 rounded-none border border-gray-200 shadow-md bg-white">
                                         <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
                                             <PhoneForwarded className="w-5 h-5" /> OB Calls – Scheduled Accounts For Today
                                         </h2>
@@ -563,7 +565,7 @@ export function AgentList({
 
                                         <Sheet>
                                             <SheetTrigger asChild>
-                                                <Button size="sm" disabled={loadingScheduled}>
+                                                <Button className="rounded-none p-6" disabled={loadingScheduled}>
                                                     View Accounts
                                                 </Button>
                                             </SheetTrigger>
@@ -574,7 +576,7 @@ export function AgentList({
                                                 </SheetHeader>
 
                                                 {/* Card container with fixed max height and scroll */}
-                                                <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
+                                                <div className="mt-4 p-4 bg-white rounded-none max-h-[400px] overflow-y-auto custom-scrollbar">
                                                     {loadingScheduled && (
                                                         <p className="text-sm text-muted-foreground">Loading...</p>
                                                     )}

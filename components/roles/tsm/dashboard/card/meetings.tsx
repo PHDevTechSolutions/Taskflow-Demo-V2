@@ -1,21 +1,9 @@
+"use client";
+
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/utils/supabase";
 
 interface Agent {
   ReferenceID: string;
@@ -35,75 +23,22 @@ interface Meeting {
 interface Props {
   agents: Agent[];
   selectedAgent: string;
-  formatDate?: (dateStr?: string) => string;
+  dateCreatedFilterRange?: [Date, Date];
+  setDateCreatedFilterRangeAction?: (range: [Date, Date] | undefined) => void;
+  formatDate?: (dateStr?: string | null) => string;
 }
 
-export function AgentMeetings({ agents, selectedAgent, formatDate }: Props) {
-  const [agentMeetingMap, setAgentMeetingMap] = useState<Record<string, Meeting[]>>(
-    {}
-  );
-
+export function AgentMeetings({
+  agents,
+  selectedAgent,
+  dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
+  formatDate,
+}: Props) {
+  const [agentMeetingMap, setAgentMeetingMap] = useState<
+    Record<string, Meeting[]>
+  >({});
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!agents.length) return;
-
-    setAgentMeetingMap({});
-    setExpandedAgents(new Set());
-
-    const unsubscribes: (() => void)[] = [];
-
-    const agentsToWatch =
-      selectedAgent === "all"
-        ? agents
-        : agents.filter((a) => a.ReferenceID === selectedAgent);
-
-    agentsToWatch.forEach((agent) => {
-      const q = query(
-        collection(db, "meetings"),
-        where("referenceid", "==", agent.ReferenceID),
-        orderBy("date_created", "desc")
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        if (snapshot.empty) {
-          setAgentMeetingMap((prev) => ({
-            ...prev,
-            [agent.ReferenceID]: [],
-          }));
-          return;
-        }
-
-        const meetings: Meeting[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-
-          const formatDateRaw = (d: any) => {
-            if (!d) return null;
-            if (d.toDate) return d.toDate().toLocaleString();
-            if (typeof d === "string") return new Date(d).toLocaleString();
-            return null;
-          };
-
-          return {
-            start_date: formatDateRaw(data.start_date),
-            end_date: formatDateRaw(data.end_date),
-            remarks: data.remarks ?? "—",
-            type_activity: data.type_activity ?? "—",
-            date_created: data.date_created ?? "—",
-          };
-        });
-
-        setAgentMeetingMap((prev) => ({
-          ...prev,
-          [agent.ReferenceID]: meetings,
-        }));
-      });
-
-      unsubscribes.push(unsubscribe);
-    });
-
-    return () => unsubscribes.forEach((u) => u());
-  }, [selectedAgent, agents]);
 
   const safeFormatDate =
     formatDate ??
@@ -118,23 +53,93 @@ export function AgentMeetings({ agents, selectedAgent, formatDate }: Props) {
     });
   };
 
-  /** ✅ agents na MAY meetings lang */
+  // Helper: fetch all meetings for an agent in batches
+  const fetchAllMeetingsForAgent = async (agentId: string) => {
+    let allMeetings: Meeting[] = [];
+    let from = 0;
+    const batchSize = 5000; // adjust as needed
+
+    while (true) {
+      const { data, error } = await supabase
+        .from("meetings")
+        .select("*")
+        .eq("referenceid", agentId)
+        .order("date_created", { ascending: false })
+        .range(from, from + batchSize - 1);
+
+      if (error) {
+        console.error(`Error fetching meetings for ${agentId}:`, error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+
+      allMeetings = allMeetings.concat(
+        data.map((row: any) => ({
+          start_date: row.start_date,
+          end_date: row.end_date,
+          remarks: row.remarks ?? "—",
+          type_activity: row.type_activity ?? "—",
+          date_created: row.date_created ?? null,
+        }))
+      );
+
+      if (data.length < batchSize) break; // last batch reached
+      from += batchSize;
+    }
+
+    return allMeetings;
+  };
+
+  useEffect(() => {
+    if (!agents.length) return;
+
+    setAgentMeetingMap({});
+    setExpandedAgents(new Set());
+
+    const agentsToFetch =
+      selectedAgent === "all"
+        ? agents
+        : agents.filter((a) => a.ReferenceID === selectedAgent);
+
+    // Fetch all meetings for each agent sequentially to prevent overload
+    (async () => {
+      for (const agent of agentsToFetch) {
+        let meetings = await fetchAllMeetingsForAgent(agent.ReferenceID);
+
+        // Apply date range filter if provided
+        if (dateCreatedFilterRange?.length === 2) {
+          const [start, end] = dateCreatedFilterRange;
+          meetings = meetings.filter((m) => {
+            if (!m.date_created) return false;
+            const created = new Date(m.date_created);
+            return created >= start && created <= end;
+          });
+        }
+
+        setAgentMeetingMap((prev) => ({
+          ...prev,
+          [agent.ReferenceID]: meetings,
+        }));
+      }
+    })();
+  }, [agents, selectedAgent, dateCreatedFilterRange]);
+
+  // Only include agents with at least 1 meeting
   const agentsWithMeetings = useMemo(
     () =>
       agents.filter(
-        (a) => Array.isArray(agentMeetingMap[a.ReferenceID]) &&
+        (a) =>
+          Array.isArray(agentMeetingMap[a.ReferenceID]) &&
           agentMeetingMap[a.ReferenceID].length > 0
       ),
     [agents, agentMeetingMap]
   );
 
-  /** OPTIONAL: kung ayaw mo ipakita card kapag walang meetings kahit isa */
-  if (agentsWithMeetings.length === 0) {
-    return null;
-  }
+  if (agentsWithMeetings.length === 0) return null;
 
   return (
-    <Card>
+    <Card className="rounded-none">
       <CardHeader className="font-semibold">Meetings</CardHeader>
       <CardContent className="font-mono overflow-auto max-h-[500px]">
         <Table>
@@ -151,11 +156,15 @@ export function AgentMeetings({ agents, selectedAgent, formatDate }: Props) {
 
           <TableBody>
             {agentsWithMeetings.map((agent) => {
-              const meetings = agentMeetingMap[agent.ReferenceID];
-
-              const meetingsToShow = expandedAgents.has(agent.ReferenceID)
-                ? meetings
-                : [meetings[0]]; // latest only by default
+              const meetings = agentMeetingMap[agent.ReferenceID] || [];
+              const meetingsToShow =
+                dateCreatedFilterRange?.length === 2
+                  ? meetings
+                  : expandedAgents.has(agent.ReferenceID)
+                  ? meetings
+                  : meetings.length
+                  ? [meetings[0]]
+                  : [];
 
               return meetingsToShow.map((meeting, idx) => {
                 let duration = "—";
@@ -173,9 +182,14 @@ export function AgentMeetings({ agents, selectedAgent, formatDate }: Props) {
                 return (
                   <TableRow key={`${agent.ReferenceID}-${idx}`}>
                     <TableCell
-                      onClick={() => idx === 0 && toggleAgent(agent.ReferenceID)}
-                      className={`cursor-pointer ${idx === 0 ? "font-semibold" : "pl-10"
-                        }`}
+                      onClick={() =>
+                        !dateCreatedFilterRange &&
+                        idx === 0 &&
+                        toggleAgent(agent.ReferenceID)
+                      }
+                      className={`cursor-pointer ${
+                        idx === 0 ? "font-semibold" : "pl-10"
+                      }`}
                     >
                       {idx === 0 && (
                         <div className="flex items-center gap-3">

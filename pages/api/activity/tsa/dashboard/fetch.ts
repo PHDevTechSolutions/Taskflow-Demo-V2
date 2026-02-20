@@ -58,11 +58,14 @@ export default async function handler(
     /* -------------------- 3️⃣ MEETINGS -------------------- */
     const meetingsData = await fetchAllRows("meetings", referenceid, fromDate, toDate);
 
+    const documentationData = await fetchAllRows("documentation", referenceid, fromDate, toDate);
+
     /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
       ...(historyData || []).map((item) => ({ source: "history", ...item })),
       ...(revisedData || []).map((item) => ({ source: "revised_quotation", ...item })),
       ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
+      ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
     ].sort(
       (a, b) =>
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()

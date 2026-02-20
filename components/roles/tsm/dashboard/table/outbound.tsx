@@ -168,7 +168,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
   }, [filteredActivities, obTarget]);
 
   return (
-    <Card className="h-full bg-white text-black">
+    <Card className="h-full bg-white text-black rounded-none">
       <CardHeader className="flex items-center justify-between">
         <div>
           <CardTitle>Outbound Calls (Touch-Based)</CardTitle>
@@ -178,7 +178,7 @@ export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange
           variant="outline"
           onClick={() => setShowComputation(!showComputation)}
           aria-label="Show computation details"
-          className="flex items-center text-blue-600 hover:text-blue-800"
+          className="flex items-center text-blue-600 hover:text-blue-800 rounded-none p-6"
           title="Show computation details"
         >
           <Info className="mr-2" />

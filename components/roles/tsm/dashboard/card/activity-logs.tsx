@@ -39,7 +39,7 @@ const isToday = (dateStr?: string | null) => {
 
 export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
     return (
-        <Card>
+        <Card className="rounded-none">
             <CardHeader className="font-semibold">
                 Agent Login Activity
             </CardHeader>
@@ -50,7 +50,7 @@ export function AgentActivityLogs({ agents, agentActivityMap }: Props) {
                     const activeNow = isToday(activity?.latestLogin);
 
                     return (
-                        <Item key={agent.ReferenceID} variant="outline">
+                        <Item key={agent.ReferenceID} variant="outline" className="rounded-none">
                             <ItemContent className="flex gap-3 font-mono">
                                 <div className="flex items-center gap-4">
                                     <img

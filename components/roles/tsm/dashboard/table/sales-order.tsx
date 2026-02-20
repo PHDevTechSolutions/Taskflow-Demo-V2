@@ -99,7 +99,7 @@ export function SalesOrderTableCard({ history, agents, dateCreatedFilterRange }:
     const formatPercent = (val: number) => `${val.toFixed(2)}%`;
 
     return (
-        <Card className="flex flex-col h-full bg-white text-black">
+        <Card className="flex flex-col h-full bg-white text-black rounded-none">
             <CardHeader className="flex justify-between items-center">
                 <div>
                     <CardTitle>Sales Order Summary</CardTitle>
