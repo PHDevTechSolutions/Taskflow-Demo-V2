@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2Icon, ArrowLeft, ArrowRight } from "lucide-react";
+import { CheckCircle2Icon, ArrowLeft, ArrowRight, PhoneIncoming, Pen } from "lucide-react";
 
 import { FieldGroup, FieldSet, FieldLabel, Field, FieldContent, FieldDescription, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -29,6 +29,7 @@ interface OutboundSheetProps {
     loading: boolean;
 
     contact_number: string;
+    setContactNumber: React.Dispatch<React.SetStateAction<string>>;
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
@@ -52,6 +53,8 @@ export function OutboundSheet(props: OutboundSheetProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMessage, setDialogMessage] = useState("");
     const [useToday, setUseToday] = useState(false);
+    const [editNumber, setEditNumber] = useState(false);
+    const [editedNumber, setEditedNumber] = useState(props.contact_number);
 
     useEffect(() => {
         if (!callType) {
@@ -232,15 +235,86 @@ export function OutboundSheet(props: OutboundSheetProps) {
             {step === 3 && (
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 3 — Call Details</h2>
-                    <Alert>
-                        <CheckCircle2Icon />
-                        <AlertTitle>{props.contact_number}</AlertTitle>
-                        <AlertDescription>
-                            Use this number when calling the client. Ensure accuracy before
-                            proceeding.
-                        </AlertDescription>
+                    {/* STEP 3 — Call Details */}
+                    {/* Contact Number Alert */}
+                    <Alert
+                        variant="default"
+                        className="mb-4 flex flex-col gap-4 border-cyan-300 border-2 bg-cyan-50 rounded-lg p-4 shadow-sm"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 mr-6">
+                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-full text-lg">
+                                    <Button
+                                        variant="outline"
+                                        className="rounded-sm px-2 py-0.5 text-xs border-none"
+                                        onClick={() => setEditNumber(true)}
+                                    >
+                                        <Pen />
+                                    </Button>
+                                </span>
+
+                                <div className="flex flex-col">
+                                    <AlertTitle className="font-semibold text-gray-800 flex items-center gap-2">
+                                        Contact #
+                                    </AlertTitle>
+                                    <AlertDescription className="text-gray-600">{props.contact_number}</AlertDescription>
+                                </div>
+                            </div>
+
+                            {/* Viber Call Button */}
+                            <Button
+                                className="rounded-sm p-2 flex items-center gap-1"
+                                onClick={() => {
+                                    const phoneNumber = props.contact_number.replace(/\D/g, "");
+                                    window.open(`viber://chat?number=${phoneNumber}`, "_blank");
+                                }}
+                            >
+                                <PhoneIncoming /> Viber Tap
+                            </Button>
+                        </div>
+                        <p className="text-sm text-gray-700 mt-2">
+                            Tap the button to open Viber and start a chat or call with the client directly. Multiple Number Not Allowed in One Click,
+                            <span className="font-bold text-red-500"> Make sure the contact number is in Viber format, starting with +63</span>.
+                        </p>
                     </Alert>
 
+                    {/* Edit Number Dialog */}
+                    <Dialog open={editNumber} onOpenChange={setEditNumber}>
+                        <DialogContent style={{ width: "400px", maxWidth: "90%" }} className="rounded-none">
+                            <DialogHeader>
+                                <DialogTitle>Edit Contact Number</DialogTitle>
+                                <DialogDescription>Update the contact number for this client.</DialogDescription>
+                            </DialogHeader>
+                            <div className="p-4">
+                                <Input
+                                    value={editedNumber}
+                                    onChange={(e) => setEditedNumber(e.target.value)}
+                                    placeholder="Enter contact number"
+                                />
+                            </div>
+                            <DialogFooter className="flex justify-end gap-2">
+                                <Button
+                                    variant="ghost"
+                                    className="rounded-none"
+                                    onClick={() => {
+                                        setEditedNumber(props.contact_number); // reset
+                                        setEditNumber(false);
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="rounded-none"
+                                    onClick={() => {
+                                        props.setContactNumber(editedNumber); // update parent state
+                                        setEditNumber(false);
+                                    }}
+                                >
+                                    Save
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                     <FieldGroup className="mt-4">
                         <FieldSet>
                             <FieldLabel className="font-bold">Call Status</FieldLabel>
@@ -250,7 +324,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             <RadioGroup
                                 value={callStatus}
                                 onValueChange={props.setCallStatus}
-                                className="space-y-4"
                             >
                                 {[
                                     {
@@ -451,10 +524,10 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
                                                         <Button type="button" variant="outline" className="rounded-none" onClick={props.handleBack}>
-                                                          <ArrowLeft /> Back
+                                                            <ArrowLeft /> Back
                                                         </Button>
                                                         <Button type="button" className="rounded-none" onClick={onSaveClick}>
-                                                           <CheckCircle2Icon /> Save
+                                                            <CheckCircle2Icon /> Save
                                                         </Button>
 
                                                     </div>
