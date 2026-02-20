@@ -63,7 +63,7 @@ export default async function handler(
     /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
       ...(historyData || []).map((item) => ({ source: "history", ...item })),
-      ...(revisedData || []).map((item) => ({ source: "revised_quotation", ...item })),
+      ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
       ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
       ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
     ].sort(
