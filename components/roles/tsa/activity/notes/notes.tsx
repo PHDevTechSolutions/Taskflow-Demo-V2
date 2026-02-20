@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/utils/supabase";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Check, Trash, Pen } from "lucide-react";
-import { AccountsActiveDeleteDialog } from "./dialog/delete";
 import { type DateRange } from "react-day-picker";
 
 /* ================= TYPES ================= */
@@ -35,10 +34,26 @@ interface NotesProps {
 
 /* ================= HELPERS ================= */
 
-const toTimestamp = (datetime: string) => new Date(datetime).toISOString();
-const truncate = (text: string, len = 50) => (text.length > len ? text.slice(0, len) + "…" : text);
-const formatDateTimeLocal = (dt: string) => dt.slice(0, 16); // YYYY-MM-DDTHH:mm
-const getDurationDays = (start: string, end: string) => Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / (1000*60*60*24));
+// Truncate long text
+const truncate = (text: string, len = 50) =>
+  text.length > len ? text.slice(0, len) + "…" : text;
+
+// Format datetime for input
+const formatDateTimeLocal = (dt: string) => dt.slice(0, 16);
+
+// Get duration as H:M:S
+const getDurationHMS = (start: string, end: string) => {
+  const diffMs = new Date(end).getTime() - new Date(start).getTime();
+  if (diffMs < 0) return "0:00:00";
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+  return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+};
 
 /* ================= COMPONENT ================= */
 
@@ -54,102 +69,133 @@ export const Notes: React.FC<NotesProps> = ({
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteRemarks, setDeleteRemarks] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /* ================= FETCH ================= */
   useEffect(() => {
     const fetchNotes = async () => {
-      let q = supabase
-        .from("documentation")
-        .select("*")
-        .eq("referenceid", referenceid)
-        .order("date_created", { ascending: false });
+      try {
+        let q = supabase
+          .from("documentation")
+          .select("*")
+          .eq("referenceid", referenceid)
+          .order("date_created", { ascending: false });
 
-      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-        q = q
-          .gte("date_created", dateCreatedFilterRange.from.toISOString())
-          .lte("date_created", new Date(dateCreatedFilterRange.to.setHours(23, 59, 59, 999)).toISOString());
+        // Only apply date filter if range is provided
+        if (dateCreatedFilterRange?.from) {
+          const fromDate = dateCreatedFilterRange.from.toISOString().slice(0, 10);
+          q = q.gte("date_created", fromDate);
+        }
+        if (dateCreatedFilterRange?.to) {
+          const toDate = dateCreatedFilterRange.to.toISOString().slice(0, 10);
+          q = q.lte("date_created", toDate);
+        }
+
+        const { data, error } = await q;
+        if (error) throw error;
+        setNotes(data ?? []);
+      } catch (err: any) {
+        console.error("Error fetching notes:", err.message);
+        toast.error("Failed to fetch notes");
       }
-
-      const { data, error } = await q;
-      if (!error) setNotes(data ?? []);
     };
+
     fetchNotes();
   }, [referenceid, dateCreatedFilterRange]);
 
   /* ================= SAVE ================= */
   const saveNote = async () => {
     if (!startDate || !endDate) return toast.error("Start and End date required");
-    if (new Date(endDate) < new Date(startDate)) return toast.error("End date cannot be earlier than start date");
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) return toast.error("End date cannot be earlier than start date");
 
     setIsSubmitting(true);
+
     const payload = {
       referenceid,
       tsm,
       manager,
       type_activity: typeActivity,
       remarks: remarks || "No remarks",
-      start_date: toTimestamp(startDate),
-      end_date: toTimestamp(endDate),
+      start_date: start.toISOString(),
+      end_date: end.toISOString(),
     };
 
-    const { error } = selectedNote
-      ? await supabase.from("documentation").update(payload).eq("id", selectedNote.id)
-      : await supabase.from("documentation").insert(payload);
+    try {
+      const { error } = selectedNote
+        ? await supabase.from("documentation").update(payload).eq("id", selectedNote.id)
+        : await supabase.from("documentation").insert(payload);
 
-    if (error) toast.error(error.message);
-    else {
+      if (error) throw error;
+
       toast.success(selectedNote ? "Updated" : "Saved");
+
       setSelectedNote(null);
       setRemarks("");
       setStartDate("");
       setEndDate("");
-      // refresh notes
-      const { data } = await supabase.from("documentation").select("*").eq("referenceid", referenceid).order("created_at", { ascending: false });
+
+      const { data, error: fetchError } = await supabase
+        .from("documentation")
+        .select("*")
+        .eq("referenceid", referenceid)
+        .order("date_created", { ascending: false });
+
+      if (fetchError) throw fetchError;
       setNotes(data ?? []);
+    } catch (err: any) {
+      console.error("Error saving note:", err.message);
+      toast.error(err.message || "Failed to save note");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   /* ================= DELETE ================= */
-  const confirmDelete = async () => {
-    if (!selectedNote) return;
-    await supabase.from("documentation").delete().eq("id", selectedNote.id);
-    setNotes((p) => p.filter((n) => n.id !== selectedNote.id));
-    setSelectedNote(null);
-    setDeleteOpen(false);
-    toast.success("Deleted");
+  const handleDelete = async (note: NoteItem) => {
+    try {
+      await supabase.from("documentation").delete().eq("id", note.id);
+      setNotes((prev) => prev.filter((n) => n.id !== note.id));
+      toast.success("Deleted successfully");
+      if (selectedNote?.id === note.id) setSelectedNote(null);
+    } catch (err: any) {
+      console.error("Error deleting note:", err.message);
+      toast.error(err.message || "Failed to delete note");
+    }
   };
 
   /* ================= UI ================= */
   return (
     <div className="flex gap-6">
       {/* LEFT: TABLE */}
-      <div className="w-2/3 border rounded p-2 overflow-auto max-h-[600px]">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">Type</th>
-              <th className="border p-2">Remarks</th>
-              <th className="border p-2">Start</th>
-              <th className="border p-2">End</th>
-              <th className="border p-2">Duration (days)</th>
-              <th className="border p-2">Actions</th>
+      <div className="w-2/3 overflow-auto max-h-[600px] bg-white rounded-xl shadow-lg border border-gray-200">
+        <table className="w-full table-auto text-sm text-left border-collapse">
+          <thead className="bg-gray-100 sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">Type</th>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">Remarks</th>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">Start</th>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">End</th>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">Duration</th>
+              <th className="px-4 py-3 border-b border-gray-200 font-medium text-gray-700">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {notes.map((n) => (
-              <tr key={n.id} className="border-b hover:bg-gray-50">
-                <td className="border p-1">{n.type_activity}</td>
-                <td className="border p-1">{truncate(n.remarks, 30)}</td>
-                <td className="border p-1">{new Date(n.start_date).toLocaleString()}</td>
-                <td className="border p-1">{new Date(n.end_date).toLocaleString()}</td>
-                <td className="border p-1">{getDurationDays(n.start_date, n.end_date)}</td>
-                <td className="border p-1">
+            {notes.map((n, idx) => (
+              <tr
+                key={n.id}
+                className={`border-b ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition`}
+              >
+                <td className="px-4 py-2">{n.type_activity}</td>
+                <td className="px-4 py-2">{truncate(n.remarks, 30)}</td>
+                <td className="px-4 py-2">{new Date(n.start_date).toLocaleString()}</td>
+                <td className="px-4 py-2">{new Date(n.end_date).toLocaleString()}</td>
+                <td className="px-4 py-2 font-mono">{getDurationHMS(n.start_date, n.end_date)}</td>
+                <td className="px-4 py-2 flex gap-2">
                   <Button
-                    size="sm"
+                    variant="outline"
+                    className="rounded-none p-6"
                     onClick={() => {
                       setSelectedNote(n);
                       setTypeActivity(n.type_activity);
@@ -158,7 +204,14 @@ export const Notes: React.FC<NotesProps> = ({
                       setEndDate(formatDateTimeLocal(n.end_date));
                     }}
                   >
-                    <Pen /> Edit
+                    <Pen className="mr-1" /> Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="rounded-none p-6"
+                    onClick={() => handleDelete(n)}
+                  >
+                    <Trash className="mr-1" /> Delete
                   </Button>
                 </td>
               </tr>
@@ -195,25 +248,11 @@ export const Notes: React.FC<NotesProps> = ({
             </FieldGroup>
           </FieldSet>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" className="rounded-none p-6" disabled={isSubmitting}>
             <Check /> {selectedNote ? "Update" : "Submit"}
           </Button>
-
-          {selectedNote && (
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash /> Delete
-            </Button>
-          )}
         </form>
       </div>
-
-      <AccountsActiveDeleteDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        removeRemarks={deleteRemarks}
-        setRemoveRemarks={setDeleteRemarks}
-        onConfirmRemove={confirmDelete}
-      />
     </div>
   );
 };

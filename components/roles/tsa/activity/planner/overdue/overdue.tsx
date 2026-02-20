@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Dot } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner"
 import { supabase } from "@/utils/supabase";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
@@ -190,24 +189,24 @@ export const Overdue: React.FC<NewTaskProps> = ({
         return true;
     };
 
-    const allowedStatuses = ["Done"];
-
     const mergedData = activities
-        .filter((a) => a.status === "Assisted" || a.status === "Not Assisted")
+        // keep your overdue filter (scheduled_date < today)
         .filter((a) => {
-            // Check if overdue (scheduled_date < today)
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
             const schedDate = new Date(a.scheduled_date);
             schedDate.setHours(0, 0, 0, 0);
 
-            return schedDate < today; // only overdue
+            return schedDate < today;
         })
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
         .map((activity) => {
+            // only include history items with call_status "Unsuccessful"
             const relatedHistoryItems = history.filter(
-                (h) => h.activity_reference_number === activity.activity_reference_number
+                (h) =>
+                    h.activity_reference_number === activity.activity_reference_number &&
+                    h.call_status === "Unsuccessful"
             );
 
             return {

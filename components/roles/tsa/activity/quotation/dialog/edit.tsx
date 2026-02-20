@@ -371,6 +371,8 @@ export default function TaskListEditDialog({
                 contact_number: item.contact_number,
                 email_address: item.email_address,
                 address: item.address,
+                start_date: startDate,
+      end_date: endDate
             };
 
             const res = await fetch(`/api/act-update-history?id=${item.id}`, {

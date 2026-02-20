@@ -32,6 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "contact_number",
     "email_address",
     "address",
+    "start_date",
+    "end_date"
   ];
 
   const filteredData: Record<string, any> = {};
