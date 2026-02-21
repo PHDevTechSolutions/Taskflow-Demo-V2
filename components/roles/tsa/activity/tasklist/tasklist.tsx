@@ -626,7 +626,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <Button size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
+                            <Button onClick={handlePrevPage} disabled={currentPage === 1}>
                                 Prev
                             </Button>
 
@@ -634,7 +634,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                                 <Button
                                     key={page}
-                                    size="sm"
                                     variant={page === currentPage ? "default" : "outline"}
                                     onClick={() => handlePageSelect(page)}
                                 >
