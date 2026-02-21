@@ -740,7 +740,7 @@ export function QuotationSheet(props: Props) {
       address: address ?? "",
       telNo: contact_number ?? "",
       email: email_address ?? "",
-      attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
+      attention: contact_person ?? "",
       subject: "For Quotation",
       items,
       vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
