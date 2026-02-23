@@ -14,7 +14,6 @@ interface CCGItem {
     tsm: string;
     manager: string;
     type_activity?: string;
-    date_created: string;
     date_updated: string;
     status: string;
     company_name: string;
@@ -56,7 +55,7 @@ function eventsByHour(items: CCGItem[]) {
     const map: Record<number, CCGItem[]> = {};
     for (let i = 0; i < 24; i++) map[i] = [];
     items.forEach((it) => {
-        const d = parseDateCreated(it.date_created);
+        const d = parseDateCreated(it.date_updated);
         if (!d) return;
         const hour = d.getHours();
         map[hour].push(it);
@@ -64,7 +63,7 @@ function eventsByHour(items: CCGItem[]) {
     for (let h = 0; h < 24; h++) {
         map[h].sort(
             (a, b) =>
-                parseDateCreated(a.date_created)!.getTime() - parseDateCreated(b.date_created)!.getTime()
+                parseDateCreated(a.date_updated)!.getTime() - parseDateCreated(b.date_updated)!.getTime()
         );
     }
     return map;
@@ -92,36 +91,36 @@ export const CCG: React.FC<{
     // Fetch activities only (history includes company info)
     const fetchActivities = useCallback(() => {
         if (!referenceid) {
-          setActivities([]);
-          return;
+            setActivities([]);
+            return;
         }
-    
+
         setLoading(true);
         setError(null);
-    
+
         const from = dateCreatedFilterRange?.from
-          ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-          : null;
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
         const to = dateCreatedFilterRange?.to
-          ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-          : null;
-    
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
+
         const url = new URL("/api/activity/tsa/calendar/fetch", window.location.origin);
         url.searchParams.append("referenceid", referenceid);
         if (from && to) {
-          url.searchParams.append("from", from);
-          url.searchParams.append("to", to);
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
         }
-    
+
         fetch(url.toString())
-          .then(async (res) => {
-            if (!res.ok) throw new Error("Failed to fetch activities");
-            return res.json();
-          })
-          .then((data) => setActivities(data.activities || []))
-          .catch((err) => setError(err.message))
-          .finally(() => setLoading(false));
-      }, [referenceid, dateCreatedFilterRange]);
+            .then(async (res) => {
+                if (!res.ok) throw new Error("Failed to fetch activities");
+                return res.json();
+            })
+            .then((data) => setActivities(data.activities || []))
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
     useEffect(() => {
         fetchActivities();
@@ -168,8 +167,8 @@ export const CCG: React.FC<{
     const mergedActivities = useMemo(() => {
         return activities.sort(
             (a, b) =>
-                new Date(b.date_updated ?? b.date_created).getTime() -
-                new Date(a.date_updated ?? a.date_created).getTime()
+                new Date(b.date_updated ?? b.date_updated).getTime() -
+                new Date(a.date_updated ?? a.date_updated).getTime()
         );
     }, [activities]);
 
@@ -202,7 +201,7 @@ export const CCG: React.FC<{
     const eventsByDateMap = useMemo(() => {
         const map: Record<string, CCGItem[]> = {};
         for (const item of filteredActivities) {
-            const d = parseDateCreated(item.date_created);
+            const d = parseDateCreated(item.date_updated);
             if (!d) continue;
             const key = formatDateLocal(d);
             if (!map[key]) map[key] = [];
@@ -211,7 +210,7 @@ export const CCG: React.FC<{
         Object.keys(map).forEach((k) =>
             map[k].sort(
                 (a, b) =>
-                    parseDateCreated(a.date_created)!.getTime() - parseDateCreated(b.date_created)!.getTime()
+                    parseDateCreated(a.date_updated)!.getTime() - parseDateCreated(b.date_updated)!.getTime()
             )
         );
         return map;
@@ -383,7 +382,7 @@ export const CCG: React.FC<{
                                                         <div className="text-xs text-muted-foreground italic">—</div>
                                                     ) : (
                                                         groupedByHour[hour].map((ev) => {
-                                                            const dt = parseDateCreated(ev.date_created)!;
+                                                            const dt = parseDateCreated(ev.date_updated)!;
                                                             return (
                                                                 <div key={ev.id} className="rounded-md p-5 bg-muted hover:bg-muted/80 cursor-pointer">
                                                                     <p className="font-semibold text-xs">

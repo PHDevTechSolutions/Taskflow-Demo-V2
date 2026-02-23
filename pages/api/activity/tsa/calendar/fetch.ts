@@ -30,11 +30,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         company_name,
         remarks
       `)
-      .eq("referenceid", referenceid);
+      .eq("referenceid", referenceid)
+      .order("date_updated", { ascending: false }); // <-- order by datetime
 
-    // Apply date_created filter if both from & to are provided
+    // Apply date_updated filter if both from & to are provided
     if (fromDate && toDate) {
-      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+      query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
     }
 
     const { data, error } = await query;

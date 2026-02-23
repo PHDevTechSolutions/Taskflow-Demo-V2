@@ -68,6 +68,7 @@ interface NewTaskProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
+    onCountChange?: (count: number) => void;
 }
 
 export const Progress: React.FC<NewTaskProps> = ({
@@ -81,6 +82,7 @@ export const Progress: React.FC<NewTaskProps> = ({
     managername,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
+    onCountChange
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(false);
@@ -265,6 +267,10 @@ export const Progress: React.FC<NewTaskProps> = ({
         }
     };
 
+    useEffect(() => {
+        onCountChange?.(filteredData.length);
+    }, [filteredData.length]);
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-40">
@@ -273,46 +279,16 @@ export const Progress: React.FC<NewTaskProps> = ({
         );
     }
 
-    if (error) {
-        return (
-            <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-                <div className="flex items-center space-x-3">
-                    <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                    <div>
-                        <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-                        <AlertDescription className="text-xs">
-                            Please check your internet connection or try again later.
-                        </AlertDescription>
-                    </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                    <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                    <div>
-                        <AlertTitle className="text-black">Add New Data</AlertTitle>
-                        <AlertDescription className="text-xs">
-                            You can start by adding new entries to populate your database.
-                        </AlertDescription>
-                    </div>
-                </div>
-            </Alert>
-        );
-    }
-
     return (
         <>
             <Input
                 type="search"
                 placeholder="Search company, ticket ref, quotation no, so no..."
-                className="text-xs flex-grow mb-3 rounded-none"
+                className="text-xs flex-grow rounded-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Search accounts"
             />
-
-            <div className="mb-2 text-xs font-bold mt-2 mb-2">
-                Total On-Progress Activities: {mergedData.length}
-            </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">

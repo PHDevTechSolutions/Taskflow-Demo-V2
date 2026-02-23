@@ -10,7 +10,7 @@ function formatDate(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-/* ------------------ Fetch overdue activities ------------------ */
+/* ------------------ Fetch overdue activities with status ------------------ */
 async function fetchOverdueActivities(referenceid: string, today: string) {
   let allActivities: any[] = [];
   let offset = 0;
@@ -25,7 +25,19 @@ async function fetchOverdueActivities(referenceid: string, today: string) {
 
     if (error) throw error;
 
-    allActivities.push(...(data || []));
+    // Filter out activities with status Cancelled or Done
+    const filteredActivities = (data || []).filter(
+      (activity) => activity.status !== "Cancelled" && activity.status !== "Done"
+    );
+
+    // Add status "Assisted" to each activity
+    const activitiesWithStatus = filteredActivities.map(activity => ({
+      ...activity,
+      status: "Assisted",
+    }));
+
+    allActivities.push(...activitiesWithStatus);
+
     if (!data || data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
@@ -66,7 +78,6 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
 
   return filteredUnsuccessful;
 }
-
 /* ------------------ API Handler ------------------ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { referenceid } = req.query;

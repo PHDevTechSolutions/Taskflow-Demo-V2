@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Globe, Calendar } from "lucide-react";
 import Link from "next/link";
+import { X, Check } from "lucide-react";
+import { Progress } from "@/components/ui/progress"
 
 // Firestore imports
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -252,6 +254,32 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     await handlePostLogin(null);
   };
 
+  function ProgressBar() {
+    const [progress, setProgress] = React.useState(0);
+
+    React.useEffect(() => {
+      let start = 0;
+      const interval = setInterval(() => {
+        start += 2; // slower increment
+        if (start >= 100) {
+          start = 100;
+          clearInterval(interval);
+        }
+        setProgress(start);
+      }, 100); // 100ms per increment
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <div className="w-64">
+        <Progress
+          value={progress}
+          className="h-4 rounded-full transition-all duration-200 ease-in-out"
+        />
+      </div>
+    );
+  }
+
   // ---------------- Render ----------------
   return (
     <>
@@ -260,7 +288,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] 
                  bg-[size:24px_24px] z-10 pointer-events-none"
         />
-        <Card className="overflow-hidden p-0">
+
+        <Card className="overflow-hidden p-0 rounded-none z-20 shadow-md">
           <CardContent className="grid p-0 md:grid-cols-2">
             <form onSubmit={handleLoginSubmit} className="p-6 md:p-8">
               <FieldGroup>
@@ -279,6 +308,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     placeholder="m@taskflow.com"
                     required
                     value={Email}
+                    className="rounded-xs p-6"
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </Field>
@@ -299,12 +329,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     placeholder="••••••••"
                     required
                     value={Password}
+                    className="rounded-xs p-6"
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </Field>
 
                 <Field>
-                  <Button type="submit" disabled={loading} className="w-full">
+                  <Button type="submit" disabled={loading} className="w-full rounded-none p-6">
                     {loading ? "Signing in..." : "Login"}
                   </Button>
                 </Field>
@@ -404,7 +435,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       {/* ---------------- Location Permission Dialog ---------------- */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Allow Location Access?</DialogTitle>
 
@@ -419,31 +450,41 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           </DialogHeader>
 
           <DialogFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onDenyLocation}>
-              Deny
+            <Button variant="outline" className="rounded-none p-6" onClick={onDenyLocation}>
+              <X /> Deny
             </Button>
-            <Button onClick={onAllowLocation}>
-              Allow
+            <Button className="rounded-none p-6" onClick={onAllowLocation}>
+              Allow <Check />
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {loadingRedirect && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Background grid overlay */}
-          <div
-            className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] 
-                 bg-[size:24px_24px] z-10 pointer-events-none"
-          />
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          {/* Blurred background overlay */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-500" />
 
-          {/* Spinner (optional behind image) */}
-          <div className="absolute z-30">
-            <div className="w-16 h-16 border-4 border-t-white border-white/30 rounded-full animate-spin"></div>
+          {/* Progress card */}
+          <div className="relative z-[10000] flex flex-col items-center gap-6 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl animate-fadeIn">
+
+            {/* Animated progress bar */}
+            <ProgressBar />
+
+            {/* Status text with subtle bounce */}
+            <p className="text-gray-900 dark:text-white font-semibold animate-bounceSlow">
+              Logging in...
+            </p>
+
+            {/* Animated dots */}
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow"></span>
+              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow animation-delay-200"></span>
+              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow animation-delay-400"></span>
+            </div>
           </div>
         </div>
       )}
-
     </>
   );
 }

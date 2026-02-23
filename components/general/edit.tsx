@@ -339,13 +339,13 @@ export default function ProfileClient() {
                         accept="image/*"
                         onChange={onImageChange}
                         disabled={uploading}
-                        className="hidden"
+                        className="hidden rounded-none p-6"
                       />
 
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-auto"
+                        className="w-auto rounded-none p-6"
                         onClick={() =>
                           document.getElementById("profilePicture")?.click()
                         }
@@ -374,6 +374,7 @@ export default function ProfileClient() {
                               onChange={handleChange}
                               autoComplete="given-name"
                               required
+                              className="rounded-none"
                             />
                           </div>
 
@@ -387,6 +388,7 @@ export default function ProfileClient() {
                               onChange={handleChange}
                               autoComplete="family-name"
                               required
+                              className="rounded-none"
                             />
                           </div>
 
@@ -399,7 +401,7 @@ export default function ProfileClient() {
                               value={userDetails.Gender}
                               onChange={handleChange}
                               autoComplete="family-name"
-                              className="capitalize"
+                              className="capitalize rounded-none"
                             />
                           </div>
 
@@ -412,7 +414,7 @@ export default function ProfileClient() {
                               value={userDetails.Birthday}
                               onChange={handleChange}
                               autoComplete="family-name"
-                              className="capitalize"
+                              className="capitalize rounded-none"
                             />
                           </div>
                         </fieldset>
@@ -432,6 +434,7 @@ export default function ProfileClient() {
                               onChange={handleChange}
                               autoComplete="email"
                               disabled
+                              className="rounded-none"
                             />
                           </div>
 
@@ -444,6 +447,7 @@ export default function ProfileClient() {
                               value={userDetails.OtherEmail || ""}
                               onChange={handleChange}
                               autoComplete="email"
+                              className="rounded-none"
                             />
                           </div>
 
@@ -456,6 +460,7 @@ export default function ProfileClient() {
                               value={userDetails.ContactNumber}
                               onChange={handleChange}
                               autoComplete="tel"
+                              className="rounded-none"
                             />
                           </div>
 
@@ -468,6 +473,7 @@ export default function ProfileClient() {
                               value={userDetails.AnotherNumber || ""}
                               onChange={handleChange}
                               autoComplete="tel"
+                              className="rounded-none"
                             />
                           </div>
 
@@ -480,7 +486,8 @@ export default function ProfileClient() {
                               value={userDetails.Address || ""}
                               onChange={handleChange}
                               autoComplete="street-address"
-                              className="capitalize"
+                              className="capitalize rounded-none"
+                              
                             />
                           </div>
                         </fieldset>
@@ -517,10 +524,10 @@ export default function ProfileClient() {
                                   />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => sigCanvas.current?.clear()}>
+                                  <Button type="button" variant="outline" className="rounded-none p-6" onClick={() => sigCanvas.current?.clear()}>
                                     <Eraser className="w-4 h-4 mr-2" /> Clear Pad
                                   </Button>
-                                  <Button type="button" size="sm" onClick={saveSignatureFromPad} disabled={uploadingSignature} className="bg-[#121212] text-white">
+                                  <Button type="button" onClick={saveSignatureFromPad} disabled={uploadingSignature} className="bg-[#121212] text-white rounded-none p-6">
                                     <PenTool className="w-4 h-4 mr-2" /> {uploadingSignature ? "Syncing..." : "Confirm Signature"}
                                   </Button>
                                 </div>
@@ -535,7 +542,7 @@ export default function ProfileClient() {
                                     accept="image/*" 
                                     onChange={onSignatureFileSelect}
                                     disabled={uploadingSignature}
-                                    className="bg-white"
+                                    className="bg-white rounded-none"
                                   />
                                 </div>
                                 
@@ -599,13 +606,14 @@ export default function ProfileClient() {
                                 onChange={handleChange}
                                 maxLength={10}
                                 autoComplete="new-password"
-                                className="flex-1"
+                                className="flex-1 rounded-none"
                               />
 
                               <div className="flex space-x-2">
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="rounded-none"
                                   onClick={() => setShowPassword(!showPassword)}
                                 >
                                   <Eye /> {showPassword ? "Hide" : "Show"}
@@ -613,6 +621,7 @@ export default function ProfileClient() {
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="rounded-none"
                                   onClick={handleGeneratePassword}
                                 >
                                   <WandSparkles /> Generate
@@ -649,13 +658,14 @@ export default function ProfileClient() {
                                 onChange={handleChange}
                                 maxLength={10}
                                 autoComplete="new-password"
-                                className="flex-1"
+                                className="flex-1 rounded-none"
                               />
 
                               <div>
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="rounded-none"
                                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
                                   <Eye /> {showConfirmPassword ? "Hide" : "Show"}
@@ -669,7 +679,7 @@ export default function ProfileClient() {
                         <Button
                           type="submit"
                           disabled={saving || uploading}
-                          className="w-full md:w-auto bg-[#121212] text-white"
+                          className="w-full md:w-auto bg-[#121212] text-white rounded-none p-6"
                         >
                           <Save /> {saving
                             ? "Saving..."

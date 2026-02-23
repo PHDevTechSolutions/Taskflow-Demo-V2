@@ -626,7 +626,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <Button onClick={handlePrevPage} disabled={currentPage === 1}>
+                            <Button className="rounded-none" onClick={handlePrevPage} disabled={currentPage === 1}>
                                 Prev
                             </Button>
 
@@ -636,13 +636,14 @@ export const TaskList: React.FC<CompletedProps> = ({
                                     key={page}
                                     variant={page === currentPage ? "default" : "outline"}
                                     onClick={() => handlePageSelect(page)}
+                                    className="rounded-none"
                                 >
                                     {page}
                                 </Button>
                             ))}
 
                             <Button
-                                size="sm"
+                                className="rounded-none"
                                 onClick={handleNextPage}
                                 disabled={currentPage === totalPages}
                             >
@@ -655,7 +656,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             )}
 
             <Dialog open={reSoOpen} onOpenChange={setReSoOpen}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md rounded-none">
                     <DialogHeader>
                         <DialogTitle>Sales Order Information</DialogTitle>
                     </DialogHeader>
@@ -676,7 +677,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                         setEditSoNumber(e.target.value.toUpperCase())
                                     }
                                     placeholder="Enter SO Number"
-                                    className="uppercase"
+                                    className="uppercase rounded-none"
                                 />
                             )}
                         </div>
@@ -703,6 +704,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                                         )
                                     }
                                     placeholder="Enter SO Amount"
+                                    className="rounded-none"
                                 />
                             )}
                         </div>
@@ -712,6 +714,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                         {/* Cancel / Close */}
                         <Button
                             variant="outline"
+                            className="rounded-none p-6"
                             onClick={() => {
                                 if (isEditingSo) {
                                     // balik view mode, wag isara dialog
@@ -728,15 +731,18 @@ export const TaskList: React.FC<CompletedProps> = ({
 
                         {/* Update / Save */}
                         {!isEditingSo ? (
-                            <Button onClick={() => {
-                                setEditSoNumber("");
-                                setEditSoAmount("");
-                                setIsEditingSo(true);
-                            }}>
+                            <Button
+                                className="rounded-none p-6"
+                                onClick={() => {
+                                    setEditSoNumber("");
+                                    setEditSoAmount("");
+                                    setIsEditingSo(true);
+                                }}>
                                 Update
                             </Button>
                         ) : (
                             <Button
+                                className="rounded-none p-6"
                                 onClick={async () => {
                                     if (!reSoItem) return;
 

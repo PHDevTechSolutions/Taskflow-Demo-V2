@@ -79,6 +79,7 @@ interface ScheduledProps {
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
+  onCountChange?: (count: number) => void;
 }
 
 export const Scheduled: React.FC<ScheduledProps> = ({
@@ -93,6 +94,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   managername,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
+  onCountChange
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -439,6 +441,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
   const selectedTicketReferenceNumber = selectedActivity?.ticket_reference_number || null;
 
+  useEffect(() => {
+    onCountChange?.(filteredActivities.length);
+  }, [filteredActivities.length]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -475,8 +481,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex items-center gap-2 mb-4 w-full">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           {/* Search Bar - humahaba */}
           <Input
             type="search"
@@ -506,9 +512,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         </div>
       </div>
 
-      <div className="mb-4 text-xs font-bold">
-        Total Follow Up: ({filteredActivities.length})
-      </div>
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
           {filteredActivities.length === 0 ? (
@@ -699,7 +702,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                       {item.overdueDays > 0 && (
                         <h1 className="justify-center flex items-center font-mono text-[10px]">
-                         {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago..
+                          {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago..
                         </h1>
                       )}
                     </div>
