@@ -13,15 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator"
 import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
-// Firebase Project Dependencies
-import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  getDocs
-} from "firebase/firestore";
-// Ensure 'db' is initialized in your firebase configuration file
+import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface SupervisorDetails {
@@ -212,7 +204,6 @@ export function QuotationSheet(props: Props) {
   const [open, setOpen] = useState(false);
   const [discount, setDiscount] = React.useState(0);
   const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
-
   const [useToday, setUseToday] = useState(false);
 
   function addDaysToDate(days: number): string {
@@ -258,9 +249,8 @@ export function QuotationSheet(props: Props) {
   const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [hasDownloaded, setHasDownloaded] = useState(false);
-
-  // Manual Creation and Submission to Shopify
-  const [manualProducts, setManualProducts] = useState<ManualProduct[]>([]);
+  const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   async function handleGenerateQuotation() {
     if (!quotationType || !tsm || isGenerating) return;
@@ -375,72 +365,6 @@ export function QuotationSheet(props: Props) {
     setProductTitle,
   ]);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, idx: number) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 3 * 1024 * 1024) {
-      alert("File size exceeds 3MB limit");
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const base64String = reader.result as string; // full data URL
-
-      setManualProducts((prev) => {
-        const copy = [...prev];
-        copy[idx] = {
-          ...copy[idx],
-          images: [{ src: base64String }], // For image preview (data URL)
-          base64Attachment: base64String.split(",")[1], // base64 part only, for backend
-          imageFilename: file.name,
-        };
-        return copy;
-      });
-    };
-
-    reader.readAsDataURL(file);
-  }
-
-  async function submitProductToShopify(product: ManualProduct) {
-    try {
-      const payload = {
-        title: product.title,
-        sku: product.skus[0] || "",
-        description: product.description,
-        quantity: product.quantity ?? 1,
-        price: product.price !== undefined ? product.price.toString() : "0.00",
-        imageAttachment: product.base64Attachment,
-        imageFilename: product.imageFilename,
-      };
-
-      const res = await fetch("/api/manual-product", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        let errorMessage = "Failed to submit product";
-        try {
-          const errorData = await res.json();
-          if (errorData?.message) errorMessage = errorData.message;
-          if (errorData?.details) errorMessage += ": " + errorData.details;
-        } catch {
-          const errorText = await res.text();
-          if (errorText) errorMessage += ": " + errorText;
-        }
-        throw new Error(errorMessage);
-      }
-
-      toast.success(`Product "${product.title}" submitted successfully!`);
-    } catch (error: any) {
-      toast.error(`Error submitting product: ${error.message || error.toString()}`);
-    }
-  }
-
   function extractTable(html: string): string {
     const match = html.match(/<table[\s\S]*?<\/table>/i);
     return match ? match[0] : "";
@@ -452,14 +376,6 @@ export function QuotationSheet(props: Props) {
     handleDownloadQuotationPDF(); // Generate PDF before saving
     handleSave();
   };
-
-  function setDescriptionAtIndex(idx: number, newDesc: string) {
-    setManualProducts((prev) => {
-      const copy = [...prev];
-      copy[idx] = { ...copy[idx], description: newDesc };
-      return copy;
-    });
-  }
 
   const filteredSources =
     typeClient === "CSR Client"
@@ -489,37 +405,6 @@ export function QuotationSheet(props: Props) {
   const handleCancelFollowUp = () => {
     setShowConfirmFollowUp(false);
   };
-
-  // Function to extract <table>...</table> from full HTML string
-  function extractTableHtml(html: string): string {
-    const match = html.match(/<table[\s\S]*?<\/table>/i);
-    return match ? match[0] : "";
-  }
-
-  useEffect(() => {
-    // PH VAT rate
-    const VAT_RATE = 0.12;
-
-    const totalAfterDiscountAndVAT = selectedProducts.reduce((acc, p) => {
-      const baseAmount = p.price * p.quantity;
-
-      // If the row is discounted (checkbox checked)
-      const discountedAmount = p.isDiscounted
-        ? (baseAmount * discount) / 100
-        : 0;
-
-      // Subtotal for this product after discount
-      const subtotalAfterDiscount = baseAmount - discountedAmount;
-
-      // Apply VAT based on vatType
-      let totalWithVat = subtotalAfterDiscount;
-
-
-      return acc + totalWithVat;
-    }, 0);
-
-    setQuotationAmount(totalAfterDiscountAndVAT.toFixed(2));
-  }, [selectedProducts, discount, vatType]);
 
   function formatCurrency(value: number | null | undefined): string {
     if (value == null) return "₱0.00";
@@ -606,8 +491,7 @@ export function QuotationSheet(props: Props) {
         address: safeAddress,
         telNo: safeContactNumber,
         email: safeEmailAddress,
-        attention: safeContactPerson,
-
+        attention: safeContactPerson ? safeContactPerson : "",
         subject: "For Quotation",
         items,
         vatType:
@@ -656,26 +540,6 @@ export function QuotationSheet(props: Props) {
     }
   };
 
-  // Routing for product retrieval
-  const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
-
-  // Ensures Firebase documents match the existing UI table keys
-  const mapFirebaseToSchema = (doc: any) => ({
-    id: doc.id,
-    title: doc.title || "Untitled Product",
-    // Ensure price is a number for the calculation logic
-    price: Number(doc.price) || 0,
-    // Map Firebase "desc" or "body" to the expected "description" key
-    description: doc.description || doc.body_html || "",
-    brand: doc.brand || "",
-    // Map images to an array format expected by the thumbnail logic
-    images: doc.image_url ? [{ src: doc.image_url }] : (doc.images || []),
-    skus: doc.sku ? [doc.sku] : [],
-    uid: `firebase-${doc.id}` // Unique identifier for key stability
-  });
-
-  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
-
   const getQuotationPayload = () => {
     const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
     const emailUsername = email?.split("@")[0] ?? "";
@@ -713,39 +577,6 @@ export function QuotationSheet(props: Props) {
       };
     });
 
-    const handleDownloadPDF = async () => {
-      const payload = getQuotationPayload();
-
-      try {
-        let apiEndpoint = "/api/quotation/disruptive/pdf"; // Adjust based on your API structure
-        if (quotationType === "Ecoshift Corporation") {
-          apiEndpoint = "/api/quotation/ecoshift/pdf";
-        }
-
-        const resExport = await fetch(apiEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!resExport.ok) throw new Error("PDF Generation Failed");
-
-        const blob = await resExport.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Quotation_${payload.referenceNo}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        toast.success("PDF Export Successful");
-      } catch (error) {
-        console.error("PDF Protocol Error:", error);
-        toast.error("Failed to generate PDF.");
-      }
-    };
-
     return {
       referenceNo: quotationNumber ?? "DRAFT-XXXX",
       date: new Date().toLocaleDateString(),
@@ -753,7 +584,7 @@ export function QuotationSheet(props: Props) {
       address: address ?? "",
       telNo: contact_number ?? "",
       email: email_address ?? "",
-      attention: contact_person ?? "",
+      attention: contact_person ? contact_person : "",
       subject: "For Quotation",
       items,
       vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
@@ -780,8 +611,6 @@ export function QuotationSheet(props: Props) {
   const headerImagePath = isEcoshift
     ? "/ecoshift-banner.png"
     : "/disruptive-banner.png";
-
-
 
   const handleDownloadQuotationPDF = async () => {
     console.log('pdf dl');
@@ -818,118 +647,119 @@ export function QuotationSheet(props: Props) {
 
       iframeDoc.open();
       iframeDoc.write(`
-                                    <html>
-                                    <head>
-                                        <style>
-                                            * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
-                                            body { 
-                                                font-family: 'Arial', sans-serif; 
-                                                margin: 0; 
-                                                padding: 0; 
-                                                background: white; /* Changed from OFF_WHITE to white for seamless capture */
-                                                width: 816px; 
-                                                color: ${PRIMARY_CHARCOAL};
-                                                overflow: hidden; /* Prevents scrollbar padding */
-                                            }
-                                            .header-img { width: 100%; display: block; }
-                                            .content-area { 
-                                                padding: 0px 60px; 
-                                                margin: 0 !important; /* Ensure no external margins */
-                                            }
-                                            
-                                            /* 1. CLIENT INFORMATION GRID */
-                                            .client-grid { border-left: 1.5px solid black; border-right: 1.5px solid black; background: white; }
-                                            .grid-row { display: flex; align-items: center; min-height: 20px; padding: 2px 15px; }
-                                            .border-t { border-top: 1.5px solid black; }
-                                            .border-b { border-bottom: 1.5px solid black; padding-bottom: 10px;}
-                                            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 0; }
-                                            .value { flex-grow: 1; font-size: 11px; font-weight: bold; color: #374151; padding-left: 15px; }
+          <html>
+            <head>
+            <style>
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+            body { 
+            font-family: 'Arial', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background: white; /* Changed from OFF_WHITE to white for seamless capture */
+            width: 816px; 
+            color: ${PRIMARY_CHARCOAL};
+            overflow: hidden; /* Prevents scrollbar padding */
+            }
+            
+            .header-img { width: 100%; display: block; }
+            .content-area { 
+            padding: 0px 60px; 
+            margin: 0 !important; /* Ensure no external margins */
+            }
+            
+            /* 1. CLIENT INFORMATION GRID */
+            .client-grid { border-left: 1.5px solid black; border-right: 1.5px solid black; background: white; }
+            .grid-row { display: flex; align-items: center; min-height: 20px; padding: 2px 15px; }
+            .border-t { border-top: 1.5px solid black; }
+            .border-b { border-bottom: 1.5px solid black; padding-bottom: 10px;}
+            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 0; }
+            .value { flex-grow: 1; font-size: 11px; font-weight: bold; color: #374151; padding-left: 15px; }
+            .intro-text { font-size: 10px; font-style: italic; color: #6b7280; font-weight: 500; padding: 5px 0; }
+            
+            /* 2. SPECIFICATION TABLE */
+            .table-container { 
+            border: 1.5px solid black; 
+            border-bottom: none; /* Let the row blocks handle the bottom border */
+            background: white; 
+            margin: 0;
+            }
+            
+            .main-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            table-layout: fixed; 
+            margin: 0;
+            }
+            
+            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black;}
+            .main-table th { 
+            padding: 5px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
+            text-transform: uppercase; border-right: 1px solid black;
+            }
+            
+            .main-table td { 
+            padding: 15px 10px; vertical-align: top; border-right: 1px solid black; 
+            border-bottom: 1px solid black; font-size: 10px; 
+            }
+            
+            .main-table td:last-child, .main-table th:last-child { border-right: none; }
+            .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
+            .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
+            .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
+            .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
+            .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
+            .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
+            .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
+            
+            /* LOGISTICS GRID */
+            .logistics-container { margin-top: 15px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
+            .logistics-row { display: flex; border-bottom: 1px solid black; }
+            .logistics-row:last-child { border-bottom: none; }
+            .logistics-label { width: 100px; padding: 8px; font-weight: 900; border-right: 1px solid black; flex-shrink: 0; }
+            .logistics-value { padding: 8px; flex-grow: 1; }
+            .bg-yellow-header { background-color: #facc15; }
+            .bg-yellow-content { background-color: #fef9c3; }
+            .bg-yellow-note { background-color: #fefce8; }
+            .text-red-strong { color: #dc2626; font-weight: 900; display: block; margin-top: 4px; }
 
-                                            .intro-text { font-size: 10px; font-style: italic; color: #6b7280; font-weight: 500; padding: 5px 0; }
-
-                                            /* 2. SPECIFICATION TABLE */
-                                            .table-container { 
-                                                border: 1.5px solid black; 
-                                                border-bottom: none; /* Let the row blocks handle the bottom border */
-                                                background: white; 
-                                                margin: 0;
-                                            }
-                                            .main-table { 
-                                                width: 100%; 
-                                                border-collapse: collapse; 
-                                                table-layout: fixed; 
-                                                margin: 0;
-                                            }
-                                            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black;}
-                                            .main-table th { 
-                                                padding: 5px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
-                                                text-transform: uppercase; border-right: 1px solid black;
-                                            }
-                                            .main-table td { 
-                                                padding: 15px 10px; vertical-align: top; border-right: 1px solid black; 
-                                                border-bottom: 1px solid black; font-size: 10px; 
-                                            }
-                                            .main-table td:last-child, .main-table th:last-child { border-right: none; }
-
-                                            .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
-                                            .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
-                                            .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
-                                            .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
-                                            .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
-                                            .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
-
-                                            .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
-
-                                            /* LOGISTICS GRID */
-                                            .logistics-container { margin-top: 10px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
-                                            .logistics-row { display: flex; border-bottom: 1px solid black; }
-                                            .logistics-row:last-child { border-bottom: none; }
-                                            .logistics-label { width: 100px; padding: 8px; font-weight: 900; border-right: 1px solid black; flex-shrink: 0; }
-                                            .logistics-value { padding: 8px; flex-grow: 1; }
-                                            .bg-yellow-header { background-color: #facc15; }
-                                            .bg-yellow-content { background-color: #fef9c3; }
-                                            .bg-yellow-note { background-color: #fefce8; }
-                                            .text-red-strong { color: #dc2626; font-weight: 900; display: block; margin-top: 4px; }
-
-                                            /* 3. EXTENDED TERMS & CONDITIONS */
-                                            .terms-section { margin-top: 25px; border-top: 2.5px solid black; padding-top: 10px; }
-                                            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 5px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }
-                                            .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
-                                            .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
-                                            .terms-val { padding: 4px 12px; border-left: 1px solid #e5e7eb; }
-                                            .terms-highlight { background-color: #fef9c3; }
-                                            .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-
-                                            /* SUMMARY BAR */
-                                            .summary-bar { background: ${PRIMARY_CHARCOAL}; color: white; height: 45px; }
-                                            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
-                                            .tax-label { color: #f87171; font-style: italic; font-weight: 900; font-size: 9px; text-transform: uppercase; }
-                                            .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
-                                            .tax-active { color: white; }
-                                            .tax-inactive { color: rgba(255,255,255,0.3); }
-                                            .grand-total-label { text-align: right; font-weight: 900; font-size: 10px; text-transform: uppercase; }
-                                            .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
-
-                                            /* 4. OFFICIAL SIGNATURE HIERARCHY */
-                                            .sig-hierarchy { margin-top: 20px; padding-top: 10px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
-                                            .sig-message { font-size: 9px; margin-bottom: 10px; font-weight: 500; line-height: 1.4; }
-                                            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-                                            .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
-                                            .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
-                                            .sig-line { border-bottom: 1px solid black; width: 256px; }
-                                            .sig-rep-box { 
-                                                width: 156px; 
-                                                height: 20px; 
-                                                justify-content: center; 
-                                                align-items: center; 
-                                                display: flex;
-                                            }
-                                            .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
-                                        </style>
-                                    </head>
-                                    <body></body>
-                                    </html>
-                                `);
+            /* 3. EXTENDED TERMS & CONDITIONS */
+            .terms-section { margin-top: 25px; border-top: 2.5px solid black; padding-top: 10px; }
+            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
+            .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
+            .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
+            .terms-val { padding: 4px 12px; border-left: 1px solid #e5e7eb; }
+            .terms-highlight { background-color: #fef9c3; }
+            .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+            
+            /* SUMMARY BAR */
+            .summary-bar { background: ${PRIMARY_CHARCOAL}; color: white; height: 45px; }
+            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
+            .tax-label { color: #f87171; font-style: italic; font-weight: 900; font-size: 9px; text-transform: uppercase; }
+            .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+            .tax-active { color: white; }
+            .tax-inactive { color: rgba(255,255,255,0.3); }
+            .grand-total-label { text-align: right; font-weight: 900; font-size: 10px; text-transform: uppercase; }
+            .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
+            
+            /* 4. OFFICIAL SIGNATURE HIERARCHY */
+            .sig-hierarchy { margin-top: 48px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 80px; }
+            .sig-message { font-size: 9px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; }
+            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+            .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
+            .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
+            .sig-line { border-bottom: 1px solid black; width: 256px; }
+            .sig-rep-box { width: 256px; height: 40px; background: rgba(248, 113, 113, 0.1); 
+            border: 1px solid #f87171; display: flex; align-items: center; 
+            justify-content: center; text-align: center; font-size: 8px; 
+            font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
+            }
+            
+            .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+            </style>
+          </head>
+        <body></body>
+      </html>
+      `);
       iframeDoc.close();
 
       // 2. HELPER: ATOMIC SECTION CAPTURE
@@ -979,66 +809,87 @@ export function QuotationSheet(props: Props) {
 
       // A. CLIENT INFO BLOCK
       const clientBlock = await renderBlock(`
-                                    <div class="content-area">
-                                        <div style="text-align:right; font-weight:900; font-size:10px; margin-bottom:10px;">
-                                            REFERENCE NO: ${payload.referenceNo}<br>DATE: ${payload.date}
-                                        </div>
-                                        <div class="client-grid">
-                                            <div class="grid-row border-t"><div class="label">COMPANY NAME:</div><div class="value">${payload.companyName}</div></div>
-                                            <div class="grid-row"><div class="label">ADDRESS:</div><div class="value">${payload.address}</div></div>
-                                            <div class="grid-row"><div class="label">TEL NO:</div><div class="value">${payload.telNo}</div></div>
-                                            <div class="grid-row border-b"><div class="label">EMAIL ADDRESS:</div><div class="value">${payload.email}</div></div>
-                                            <div class="grid-row"><div class="label">ATTENTION:</div><div class="value">${payload.attention}</div></div>
-                                            <div class="grid-row border-b"><div class="label">SUBJECT:</div><div class="value">${payload.subject}</div></div>
-                                        </div>
-                                        <p class="intro-text">We are pleased to offer you the following products for consideration:</p>
-                                    </div>
-                                `);
+        <div class="content-area">
+        <div style="text-align:right; font-weight:900; font-size:10px; margin-bottom:10px;">
+        REFERENCE NO: ${payload.referenceNo}<br>DATE: ${payload.date}
+        </div>
+        
+        <div class="client-grid">
+        <div class="grid-row border-t">
+        <div class="label">COMPANY NAME:</div>
+        <div class="value">${payload.companyName}</div>
+        </div>
+        
+        <div class="grid-row"><div class="label">ADDRESS:</div>
+        <div class="value">${payload.address}</div></div>
+        <div class="grid-row">
+        <div class="label">TEL NO:</div>
+        <div class="value">${payload.telNo}</div>
+        </div>
+        
+        <div class="grid-row border-b">
+        <div class="label">EMAIL ADDRESS:</div>
+        <div class="value">${payload.email}</div>
+        </div>
+        
+        <div class="grid-row">
+        <div class="label">ATTENTION:</div>
+        <div class="value">${payload.attention}</div>
+        </div>
+        
+        <div class="grid-row border-b">
+        <div class="label">SUBJECT:</div>
+        <div class="value">${payload.subject}</div>
+        </div>
+        </div>
+        <p class="intro-text">We are pleased to offer you the following products for consideration:</p>
+        </div>
+        `);
       pdf.addImage(clientBlock.img, 'JPEG', 0, currentY, pdfWidth, clientBlock.h);
       currentY += clientBlock.h;
 
       // B. TABLE HEADER BLOCK
       const headerBlock = await renderBlock(`
-                                    <div class="content-area">
-                                        <div class="table-container" style="border-bottom: 1.5px solid black;">
-                                            <table class="main-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th style="width: 40px;">ITEM NO</th>
-                                                        <th style="width: 40px;">QTY</th>
-                                                        <th style="width: 120px;">REFERENCE PHOTO</th>
-                                                        <th style="width: 200px;">PRODUCT DESCRIPTION</th>
-                                                        <th style="width: 80px; text-align:right;">UNIT PRICE</th>
-                                                        <th style="width: 80px; text-align:right;">TOTAL AMOUNT</th>
-                                                    </tr>
-                                                </thead>
-                                            </table>
-                                        </div>
-                                    </div>
-                                `);
+        <div class="content-area">
+        <div class="table-container" style="border-bottom: 1.5px solid black;">
+        <table class="main-table">
+        <thead>
+        <tr>
+        <th style="width: 40px;">ITEM NO</th>
+        <th style="width: 40px;">QTY</th>
+        <th style="width: 120px;">REFERENCE PHOTO</th>
+        <th style="width: 200px;">PRODUCT DESCRIPTION</th>
+        <th style="width: 80px; text-align:right;">UNIT PRICE</th>
+        <th style="width: 80px; text-align:right;">TOTAL AMOUNT</th>
+        </tr>
+        </thead>
+        </table>
+        </div>
+        </div>
+        `);
       pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
       currentY += 28; // Header height minus stitch to first row
 
       // C. ITEM ROWS
       for (const [index, item] of payload.items.entries()) {
         const rowBlock = await renderBlock(`
-                                        <div class="content-area">
-                                            <table class="main-table" style="border: 1.5px solid black; border-top: none;">
-                                                <tr>
-                                                    <td style="width: 40px;" class="item-no">${index + 1}</td>
-                                                    <td style="width: 40px;" class="qty-col">${item.qty}</td>
-                                                    <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
-                                                    <td style="width: 200px;">
-                                                        <div class="product-title" style="font-size: 7px;">${item.title}</div>
-                                                        <div class="sku-text">${item.sku}</div>
-                                                        <div class="desc-text">${item.description}</div>
-                                                    </td>
-                                                    <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
-                                                    <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
-                                                </tr>
-                                            </table>
-                                        </div>
-                                    `);
+          <div class="content-area">
+          <table class="main-table" style="border: 1.5px solid black; border-top: none;">
+          <tr>
+          <td style="width: 40px;" class="item-no">${index + 1}</td>
+          <td style="width: 40px;" class="qty-col">${item.qty}</td>
+          <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
+          <td style="width: 200px;">
+          <div class="product-title" style="font-size: 7px;">${item.title}</div>
+          <div class="sku-text">${item.sku}</div>
+          <div class="desc-text">${item.description}</div>
+          </td>
+          <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
+          <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
+          </tr>
+          </table>
+          </div>
+          `);
 
         // Handle Page Breaks (Same logic)
         if (currentY + rowBlock.h > (pdfHeight - 50)) {
@@ -1057,30 +908,29 @@ export function QuotationSheet(props: Props) {
 
       // D. GRAND TOTAL & LOGISTICS
       const footerBlock = await renderBlock(`
-                                                                        <div class="content-area" style="padding-top:0; padding-bottom:0;">
-                                                                            <div class="table-container">
-                                                                                <table class="main-table">
-                                                                                    <tr class="summary-bar">
-                                                                                        <td colspan="2"></td>
-                                                                                        <td class="tax-label">Tax Type:</td>
-                                                                                        <td style="width: 200px;">
-                                                                                            <div class="tax-options">
-                                                                                                <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
-                                                                                                    ${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
-                                                                                                </span>
-                                                                                                <span class="${payload.vatTypeLabel === "VAT Exe" ? 'tax-active' : 'tax-inactive'}">
-                                                                                                    ${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
-                                                                                                </span>
-                                                                                            </div>
-                                                                                        </td>
-                                                                                        <td style="width: 80px; text-align:right;" class="grand-total-label">Grand Total:</td>
-                                                                                        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                                                                    </tr>
-                                                                                </table>
-                                                                            </div>
-                                                                        </div>
-                                                                        
-                                                                    `);
+        <div class="content-area" style="padding-top:0; padding-bottom:0;">
+        <div class="table-container">
+        <table class="main-table">
+        <tr class="summary-bar">
+        <td colspan="2"></td>
+        <td class="tax-label">Tax Type:</td>
+        <td style="width: 200px;">
+        <div class="tax-options">
+        <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
+        ${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+        </span>
+        <span class="${payload.vatTypeLabel === "VAT Exe" ? 'tax-active' : 'tax-inactive'}">
+        ${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+        </span>
+        </div>
+        </td>
+        <td style="width: 80px; text-align:right;" class="grand-total-label">Grand Total:</td>
+        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        </tr>
+        </table>
+        </div>
+        </div>
+        `);
       if (currentY + footerBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
         pageCount++;
@@ -1090,78 +940,78 @@ export function QuotationSheet(props: Props) {
 
       // --- SECTION E.1: LOGISTICS & EXCLUSIONS ---
       const logisticsBlock = await renderBlock(`
-                                                <div class="content-area" style="padding-top:0;">
-                                                    <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
-                                                    <div class="logistics-container">
-                                                        <div class="logistics-row">
-                                                            <div class="logistics-label bg-yellow-header">Included:</div>
-                                                            <div class="logistics-value bg-yellow-content">
-                                                                <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
-                                                                <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
-                                                            </div>
-                                                        </div>
-                                                        <div class="logistics-row">
-                                                            <div class="logistics-label bg-yellow-header">Excluded:</div>
-                                                            <div class="logistics-value bg-yellow-content">
-                                                                <p>All lamp poles are subject to a delivery charge.</p>
-                                                                <p>Installation and all hardware/accessories not indicated above.</p>
-                                                                <p>Freight charges, arrastre, and other processing fees.</p>
-                                                            </div>
-                                                        </div>
-                                                        <div class="logistics-row">
-                                                            <div class="logistics-label">Notes:</div>
-                                                            <div class="logistics-value bg-yellow-note" style="font-style: italic;">
-                                                                <p>Deliveries are up to the vehicle unloading point only.</p>
-                                                                <p>Additional shipping fee applies for other areas not mentioned above.</p>
-                                                                <p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p>
-                                                                <span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+        <div class="content-area" style="padding-top:0;">
+        <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
+        <div class="logistics-container">
+        <div class="logistics-row">
+        <div class="logistics-label bg-yellow-header">Included:</div>
+        <div class="logistics-value bg-yellow-content">
+        <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+        <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
+        </div>
+        </div>
+        
+        <div class="logistics-row">
+        <div class="logistics-label bg-yellow-header">Excluded:</div>
+        <div class="logistics-value bg-yellow-content">
+        <p>All lamp poles are subject to a delivery charge.</p>
+        <p>Installation and all hardware/accessories not indicated above.</p>
+        <p>Freight charges, arrastre, and other processing fees.</p>
+        </div>
+        </div>
+        <div class="logistics-row">
+        <div class="logistics-label">Notes:</div>
+        <div class="logistics-value bg-yellow-note" style="font-style: italic;">
+        <p>Deliveries are up to the vehicle unloading point only.</p>
+        <p>Additional shipping fee applies for other areas not mentioned above.</p>
+        <p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p>
+        <span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span>
+        </div>
+        </div>
+        </div>
+        
+        <div class="terms-section">
+        <div class="terms-header">Terms and Conditions</div>
+        <div class="terms-grid">
+        <div class="terms-label">Availability:</div>
+        <div class="terms-val terms-highlight">
+        <p>*5-7 days if on stock upon receipt of approved PO.</p>
+        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
+        </div>
+        
+        <div class="terms-label">Warranty:</div>
+        <div class="terms-val terms-highlight">
+        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+        <p>The warranty will be VOID under the following circumstances:</p>
+        <p>*If the unit is being tampered with.</p>
+        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+        <p>*Shipping costs for warranty claims are for customers' account.</p>
+        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
+        </div>
+        
+        <div class="terms-label">SO Validity:</div>
+        <div class="terms-val">
+        <p>Sales order has <b style="color:red;">validity period of 14 working days.</b> (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <b style="color:red;">14-day period will be automatically cancelled.</b></p>
+        </div>
+        
+        <div class="terms-label">Storage:</div>
+        <div class="terms-val terms-highlight">
+        <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <b style="color:red;">(10% / 30 days = 0.33% per day).</b></p>
+        </div>
+        
+        <div class="terms-label">Return:</div>
+        <div class="terms-val terms-highlight">
+        <p><b style="color:red;"><u>7 days return policy -</u></b>  if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
+        </div>
+        </div>
+        </div>
+        </div>
+        `);
 
-                                                    <div class="terms-section">
-                                                      <div class="terms-header">Terms and Conditions</div>
-                                                      <div class="terms-grid">
-                                                        <div class="terms-label">Availability:</div>
-                                                        <div class="terms-val terms-highlight">
-                                                            <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                                                            <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
-                                                            <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
-                                                        </div>
-
-                                                        <div class="terms-label">Warranty:</div>
-                                                        <div class="terms-val terms-highlight">
-                                                            <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
-                                                            <p>The warranty will be VOID under the following circumstances:</p>
-                                                            <p>*If the unit is being tampered with.</p>
-                                                            <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
-                                                            <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
-                                                            <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
-                                                            <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
-                                                            <p>*Shipping costs for warranty claims are for customers' account.</p>
-                                                            <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
-                                                        </div>
-
-                                                        <div class="terms-label">SO Validity:</div>
-                                                        <div class="terms-val">
-                                                            <p>Sales order has <b style="color:red;">validity period of 14 working days.</b> (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <b style="color:red;">14-day period will be automatically cancelled.</b></p>
-                                                        </div>
-
-                                                        <div class="terms-label">Storage:</div>
-                                                        <div class="terms-val terms-highlight">
-                                                            <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <b style="color:red;">(10% / 30 days = 0.33% per day).</b></p>
-                                                        </div>
-
-                                                        <div class="terms-label">Return:</div>
-                                                        <div class="terms-val terms-highlight">
-                                                            <p><b style="color:red;"><u>7 days return policy -</u></b>  if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
-                                                        </div>
-                                                      </div>
-                                                    </div>
-                                                </div>
-
-
-                                            `);
       if (currentY + logisticsBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
       }
@@ -1170,97 +1020,96 @@ export function QuotationSheet(props: Props) {
 
       // --- SECTION E.2: FULL TERMS & SIGNATURE HIERARCHY ---
       const termsAndSigBlock = await renderBlock(`
-                                                    <div class="content-area" style="padding-top:0;">
-                                                            <div class="terms-grid">
-                                                                <div class="terms-label">Payment:</div>
-                                                                <div class="terms-val">
-                                                                    <p><strong style="color:red;">Cash on Delivery (COD)</strong></p>
-                                                                    <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
-                                                                    <p>For special items, Seventy Percent (70%) down payment, 30% upon delivery.</p>
-                                                                    <br>
-                                                                    <p><strong>BANK DETAILS</strong></p>
-                                                                    <p><b>Payee to: </b><strong>${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</strong></p>
-                                                                    <br>
-                                                                    <div class="bank-grid" style="display: flex; gap: 20px;">
-                                                                        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</div>
-                                                                        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="terms-label">DELIVERY:</div>
-                                                                <div class="terms-val terms-highlight">
-                                                                    <p>Delivery/Pick up is subject to confirmation.</p>
-                                                                </div>
-
-                                                                <div class="terms-label">Validity:</div>
-                                                                <div class="terms-val">
-                                                                    <p><b style="color:red;"><u>Thirty (30) calendar days from the date of this offer.</u></b></p>
-                                                                    <p>In the event of changes in prevailing market conditions, duties, taxes, and all other importation charges, quoted prices are subject to change.</p>
-                                                                </div>
-
-                                                                <div class="terms-label">CANCELLATION:</div>
-                                                                <div class="terms-val terms-highlight">
-                                                                    <p>1. Above quoted items are non-cancellable.</p>
-                                                                    <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
-                                                                    <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
-                                                                    <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
-                                                                    <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
-                                                                </div>
-                                                            </div>
-                                                      
-
-                                                            <div class="sig-hierarchy">
-                                                              <p class="sig-message">
-                                                                Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
-                                                              </p>
-
-                                                              <div class="sig-grid">
-                                                                <div class="sig-side-internal">
-                                                                  <div>
-                                                                    <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+        <div class="content-area" style="padding-top:0;">
+        <div class="terms-grid">
+        <div class="terms-label">Payment:</div>
+        <div class="terms-val">
+        <p><strong style="color:red;">Cash on Delivery (COD)</strong></p>
+        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
+        <p>For special items, Seventy Percent (70%) down payment, 30% upon delivery.</p>
+        <br>
+        <p><strong>BANK DETAILS</strong></p>
+        <p><b>Payee to: </b><strong>${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</strong></p>
+        <br>
+        
+        <div class="bank-grid" style="display: flex; gap: 20px;">
+        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</div>
+        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}<br/>Account Number: ${isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</div>
+        </div>
+        </div>
+        
+        <div class="terms-label">DELIVERY:</div>
+        <div class="terms-val terms-highlight">
+        <p>Delivery/Pick up is subject to confirmation.</p>
+        </div>
+        
+        <div class="terms-label">Validity:</div>
+        <div class="terms-val">
+        <p><b style="color:red;"><u>Thirty (30) calendar days from the date of this offer.</u></b></p>
+        <p>In the event of changes in prevailing market conditions, duties, taxes, and all other importation charges, quoted prices are subject to change.</p>
+        </div>
+        
+        <div class="terms-label">CANCELLATION:</div>
+        <div class="terms-val terms-highlight">
+        <p>1. Above quoted items are non-cancellable.</p>
+        <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
+        <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+        <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+        <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
+        </div>
+        </div>
+        
+        <div class="sig-hierarchy">
+        <p class="sig-message">
+        Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.
+        </p>
+        
+        <div class="sig-grid">
+        <div class="sig-side-internal">
+        <div>
+        <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
                                                                     <img src="${payload.signature || ''}" class="sig-rep-box" />
-                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
-                                                                    <div class="sig-line"></div>
-                                                                    <p class="sig-sub-label">Sales Representative</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
-                                                                  </div>
-
-                                                                  <div>
-                                                                    <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
-                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
-                                                                    <div class="sig-line"></div>
-                                                                    <p class="sig-sub-label">SALES MANAGER</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
-                                                                  </div>
-
-                                                                  <div>
-                                                                    <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
-                                                                    <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
-                                                                    <div class="sig-line"></div>
-                                                                    <p class="sig-sub-label">Sales-B2B</p>
-                                                                  </div>
-                                                                </div>
-
-                                                                <div class="sig-side-client">
-                                                                  <div>
-                                                                    <div class="sig-line" style="margin-top: 73px;"></div>
-                                                                    <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Company Authorized Representative</p>
-                                                                  </div>
-                                                                  <div style="width: 256px;">
-                                                                    <div class="sig-line" style="margin-top: 68px;"></div>
-                                                                    <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Payment Release Date</p>
-                                                                  </div>
-                                                                  <div style="width: 256px;">
-                                                                    <div class="sig-line" style="margin-top: 68px;"></div>
-                                                                      <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Position in the Company</p>
-                                                                    </div>
-                                                                  </div>
-                                                                </div>
-                                                                            </div>
-                                                                          </div>
-                                                                      `);
+        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
+        <div class="sig-line"></div>
+        <p class="sig-sub-label">Sales Representative</p>
+        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
+        <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
+        </div>
+        <div>
+        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
+        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
+        <div class="sig-line"></div>
+        <p class="sig-sub-label">SALES MANAGER</p>
+        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
+        <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
+        </div>
+        <div>
+        
+        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
+        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
+        <div class="sig-line"></div>
+        <p class="sig-sub-label">Sales-B2B</p>
+        </div>
+        </div>
+        
+        <div class="sig-side-client">
+        <div>
+        <div class="sig-line" style="margin-top: 73px;"></div>
+        <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Company Authorized Representative</p>
+        </div>
+        <div style="width: 256px;">
+        <div class="sig-line" style="margin-top: 68px;"></div>
+        <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Payment Release Date</p>
+        </div>
+        <div style="width: 256px;">
+        <div class="sig-line" style="margin-top: 68px;"></div>
+        <p style="font-size: 9px; text-align: center; font-weight: 900; margin-top: 4px; text-transform: uppercase;">Position in the Company</p>
+        </div>
+        </div>
+        </div>
+        </div>
+        </div>
+        `);
 
       if (currentY + termsAndSigBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
@@ -1582,13 +1431,12 @@ export function QuotationSheet(props: Props) {
                 <></>
               )}
 
-              <FieldLabel className="font-bold">Remarks <span className="text-red-500 text-[10px]">*Required</span></FieldLabel>
+              <FieldLabel className="font-bold">Remarks</FieldLabel>
               <Textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Enter any remarks here..."
                 rows={3}
-                required
                 className="capitalize rounded-none"
               />
 
@@ -1730,7 +1578,6 @@ export function QuotationSheet(props: Props) {
                     </Button>
                   </div>
                 </div>
-
               </div>
             </div>
           )}
@@ -1819,7 +1666,7 @@ export function QuotationSheet(props: Props) {
                           } else {
                             const searchUpper = rawValue.toUpperCase();
                             const q = query(
-                              collection(db, "products"), 
+                              collection(db, "products"),
                               where("websites", "array-contains", "Taskflow")
                             );
                             const querySnapshot = await getDocs(q);
