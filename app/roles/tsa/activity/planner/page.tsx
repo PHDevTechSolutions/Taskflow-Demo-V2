@@ -44,6 +44,15 @@ interface Account {
     company_group?: string;
 }
 
+interface SupervisorDetails {
+    firstname: string;
+    lastname: string;
+    email: string;
+    profilePicture: string;
+    signatureImage: string;
+    contact: string;
+}
+
 interface UserDetails {
     referenceid: string;
     tsm: string;
@@ -55,6 +64,9 @@ interface UserDetails {
     contact: string;
     tsmname: string;
     managername: string;
+    signature: string;
+    managerDetails: SupervisorDetails | null;
+    tsmDetails: SupervisorDetails | null;
 }
 
 function DashboardContent() {
@@ -72,6 +84,9 @@ function DashboardContent() {
         contact: "",
         tsmname: "",
         managername: "",
+        signature: "",
+        managerDetails: null,
+        tsmDetails: null
     });
 
     const [posts, setPosts] = useState<Account[]>([]);
@@ -94,10 +109,11 @@ function DashboardContent() {
         }
     }, [queryUserId, userId, setUserId]);
 
+    const [hierarchy, setHierarchy] = useState({ manager: null, tsm: null });
+
     // Fetch user details when userId changes
     useEffect(() => {
         if (!userId) {
-
             setLoadingUser(false);
             return;
         }
@@ -121,6 +137,15 @@ function DashboardContent() {
                     contact: data.ContactNumber || "",
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
+                    signature: data.signatureImage || "",
+                    managerDetails: data.managerDetails || null,
+                    tsmDetails: data.tsmDetails || null
+                });
+
+                // Set the new hierarchy details
+                setHierarchy({
+                    manager: data.managerDetails,
+                    tsm: data.tsmDetails
                 });
 
                 toast.success("User data loaded successfully!");
@@ -239,7 +264,7 @@ function DashboardContent() {
                             <Card className="rounded-none">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
-                                        <Loader2 className="w-5 h-5" />
+                                        <Loader2 className="w-4 h-4 animate-spin" />
                                         <span>In Progress</span>
                                     </CardTitle>
                                     <CardDescription>
