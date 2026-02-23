@@ -224,14 +224,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const mergedActivities = activities
     .filter((a) => !isDelivered(a.status)) // Remove delivered/completed/cancelled
-    .filter((a) => {
-      // Remove Assisted activities that are overdue
-      if (a.status === "Assisted") {
-        const overdueDays = getOverdueDays(a.scheduled_date);
-        return overdueDays === 0; // only keep if not overdue
-      }
-      return true; // keep other statuses
-    })
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
