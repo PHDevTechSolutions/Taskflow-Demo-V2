@@ -24,6 +24,15 @@ import {
 // Ensure 'db' is initialized in your firebase configuration file
 import { db } from "@/lib/firebase";
 
+interface SupervisorDetails {
+  firstname: string | null;
+  lastname: string | null;
+  email: string | null;
+  profilePicture: string | null;
+  signatureImage: string | null;
+  contact: string | null;
+}
+
 interface Props {
   step: number;
   setStep: (step: number) => void;
@@ -83,6 +92,9 @@ interface Props {
   contact_person: string;
   salesManagerContact?: string;
   salesManagerEmail?: string;
+  managerDetails: SupervisorDetails | null;
+  tsmDetails: SupervisorDetails | null;
+  signature: string | null;
 }
 
 const Quotation_SOURCES = [
@@ -183,7 +195,10 @@ export function QuotationSheet(props: Props) {
     email_address,
     contact_person,
     salesManagerContact,
-    salesManagerEmail
+    salesManagerEmail,
+    managerDetails,
+    tsmDetails,
+    signature
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -750,6 +765,9 @@ export function QuotationSheet(props: Props) {
       salesmanagername: managername ?? "",
       salesManagerContact: salesManagerContact ?? "",
       salesManagerEmail: salesManagerEmail ?? "",
+      tsmDetails,
+      managerDetails,
+      signature
     };
   };
 
@@ -863,7 +881,7 @@ export function QuotationSheet(props: Props) {
                                             .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
 
                                             /* LOGISTICS GRID */
-                                            .logistics-container { margin-top: 15px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
+                                            .logistics-container { margin-top: 10px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
                                             .logistics-row { display: flex; border-bottom: 1px solid black; }
                                             .logistics-row:last-child { border-bottom: none; }
                                             .logistics-label { width: 100px; padding: 8px; font-weight: 900; border-right: 1px solid black; flex-shrink: 0; }
@@ -875,7 +893,7 @@ export function QuotationSheet(props: Props) {
 
                                             /* 3. EXTENDED TERMS & CONDITIONS */
                                             .terms-section { margin-top: 25px; border-top: 2.5px solid black; padding-top: 10px; }
-                                            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
+                                            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 5px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }
                                             .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
                                             .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
                                             .terms-val { padding: 4px 12px; border-left: 1px solid #e5e7eb; }
@@ -893,17 +911,18 @@ export function QuotationSheet(props: Props) {
                                             .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
 
                                             /* 4. OFFICIAL SIGNATURE HIERARCHY */
-                                            .sig-hierarchy { margin-top: 48px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 80px; }
-                                            .sig-message { font-size: 9px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; }
+                                            .sig-hierarchy { margin-top: 20px; padding-top: 10px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
+                                            .sig-message { font-size: 9px; margin-bottom: 10px; font-weight: 500; line-height: 1.4; }
                                             .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
                                             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
                                             .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
                                             .sig-line { border-bottom: 1px solid black; width: 256px; }
                                             .sig-rep-box { 
-                                                width: 256px; height: 40px; background: rgba(248, 113, 113, 0.1); 
-                                                border: 1px solid #f87171; display: flex; align-items: center; 
-                                                justify-content: center; text-align: center; font-size: 8px; 
-                                                font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
+                                                width: 156px; 
+                                                height: 20px; 
+                                                justify-content: center; 
+                                                align-items: center; 
+                                                display: flex;
                                             }
                                             .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
                                         </style>
@@ -1199,6 +1218,7 @@ export function QuotationSheet(props: Props) {
                                                                 <div class="sig-side-internal">
                                                                   <div>
                                                                     <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                                                                    <img src="${payload.signature || ''}" class="sig-rep-box" />
                                                                     <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
                                                                     <div class="sig-line"></div>
                                                                     <p class="sig-sub-label">Sales Representative</p>
@@ -1211,8 +1231,8 @@ export function QuotationSheet(props: Props) {
                                                                     <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
                                                                     <div class="sig-line"></div>
                                                                     <p class="sig-sub-label">SALES MANAGER</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salesManagerContact || 'N/A'}</p>
-                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesManagerEmail || 'N/A'}</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
+                                                                    <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
                                                                   </div>
 
                                                                   <div>
@@ -2550,6 +2570,7 @@ export function QuotationSheet(props: Props) {
                       <div className="space-y-10">
                         <div>
                           <p className="italic text-[10px] font-black mb-10">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                          <img src={payload.signature || ""} alt="Signature" className="w-34 h-10 object-contain" />
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
                           <div className="border-b border-black w-64"></div>
                           <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales Representative</p>
@@ -2562,8 +2583,8 @@ export function QuotationSheet(props: Props) {
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
                           <div className="border-b border-black w-64"></div>
                           <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact || "N/A"}</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesManagerEmail || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.tsmDetails?.contact || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.tsmDetails?.email || "N/A"}</p>
                         </div>
 
                         <div>

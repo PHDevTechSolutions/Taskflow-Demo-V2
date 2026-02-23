@@ -138,7 +138,7 @@ function DashboardContent() {
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
                     signature: data.signatureImage || "",
-                    managerDetails: data.managerDetails || null,
+                    managerDetails: data.managerDetails || null, 
                     tsmDetails: data.tsmDetails || null
                 });
 
@@ -257,7 +257,8 @@ function DashboardContent() {
                                         referenceid={userDetails.referenceid}
                                         userDetails={userDetails}
                                         onSaveAccountAction={handleSaveAccount}
-                                        onRefreshAccountsAction={refreshAccounts} />
+                                        onRefreshAccountsAction={refreshAccounts}
+                                    />
                                 </CardContent>
                             </Card>
 
@@ -283,7 +284,12 @@ function DashboardContent() {
                                         managername={userDetails.managername}
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature}                                    
+                                    />
+                                        
                                 </CardContent>
                             </Card>
 

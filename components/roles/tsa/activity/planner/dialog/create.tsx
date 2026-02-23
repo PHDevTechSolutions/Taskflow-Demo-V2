@@ -83,6 +83,15 @@ interface Activity {
     end_date?: string;
 }
 
+interface SupervisorDetails {
+  firstname: string | null;
+  lastname: string | null;
+  email: string | null;
+  profilePicture: string | null;
+  signatureImage: string | null;
+  contact: string | null;
+}
+
 interface CreateActivityDialogProps {
     onCreated: (newActivity: Activity) => void;
     referenceid: string;
@@ -105,6 +114,9 @@ interface CreateActivityDialogProps {
     agent: string;
     activityReferenceNumber?: string;
     accountReferenceNumber?: string;
+    managerDetails: SupervisorDetails | null;
+    tsmDetails: SupervisorDetails | null;
+    signature: string | null;
 }
 
 function SpinnerEmpty({ onCancel }: { onCancel?: () => void }) {
@@ -150,6 +162,9 @@ export function CreateActivityDialog({
     managername,
     activityReferenceNumber,
     accountReferenceNumber,
+    managerDetails,
+    tsmDetails,
+    signature
 
 }: CreateActivityDialogProps) {
     const [sheetOpen, setSheetOpen] = useState(false);
@@ -890,6 +905,9 @@ export function CreateActivityDialog({
                                     email_address={email_address}
                                     contact_number={selectedContactNumber}
                                     contact_person={selectedContactPerson}
+                                    managerDetails={managerDetails ?? null}
+                                    tsmDetails={tsmDetails ?? null}
+                                    signature={signature}
                                 />
                             )}
 
