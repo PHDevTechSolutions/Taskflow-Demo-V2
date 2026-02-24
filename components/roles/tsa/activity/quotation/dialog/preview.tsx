@@ -10,7 +10,7 @@ type Item = {
     photo?: string;
     title: string;
     sku: string;
-    description: string;
+    product_description: string;
     unitPrice: number;
     totalAmount: number;
 };
@@ -153,7 +153,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                         <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
                                         <div
                                             className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
-                                            dangerouslySetInnerHTML={{ __html: item.description }}
+                                            dangerouslySetInnerHTML={{ __html: item.product_description }}
                                         />
                                     </td>
                                     <td className="p-4 text-right border-r border-black align-top font-medium">

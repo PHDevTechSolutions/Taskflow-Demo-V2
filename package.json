@@ -72,6 +72,7 @@
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "leaflet.markercluster": "^1.5.3",
+    "lotte": "^0.2.3",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.553.0",
     "luxon": "^3.7.2",

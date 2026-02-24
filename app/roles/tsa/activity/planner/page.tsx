@@ -150,7 +150,7 @@ function DashboardContent() {
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
                     signature: data.signatureImage || "",
-                    managerDetails: data.managerDetails || null,
+                    managerDetails: data.managerDetails || null, 
                     tsmDetails: data.tsmDetails || null
                 });
 
@@ -292,7 +292,8 @@ function DashboardContent() {
                                         referenceid={userDetails.referenceid}
                                         userDetails={userDetails}
                                         onSaveAccountAction={handleSaveAccount}
-                                        onRefreshAccountsAction={refreshAccounts} />
+                                        onRefreshAccountsAction={refreshAccounts}
+                                    />
                                 </CardContent>
                             </Card>
 
@@ -339,7 +340,12 @@ function DashboardContent() {
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         onCountChange={setProgressCount}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature} 
+                                                                           
                                     />
+                                        
                                 </CardContent>
 
                             </Card>

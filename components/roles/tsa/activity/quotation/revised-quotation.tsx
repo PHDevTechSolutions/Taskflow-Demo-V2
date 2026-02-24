@@ -13,6 +13,15 @@ import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { AccountsActiveDeleteDialog } from "../planner/dialog/delete";
 
+interface SupervisorDetails {
+    firstname: string;
+    lastname: string;
+    email: string;
+    profilePicture: string;
+    signatureImage: string;
+    contact: string;
+}
+
 interface Completed {
     id: number;
     activity_reference_number: string;
@@ -330,8 +339,37 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         return parts.join(" ");
     }
 
+    const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(null);
+    const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(null);
+
+    useEffect(() => {
+        if (!referenceid) return;
+
+        const fetchHierarchy = async () => {
+            try {
+                const response = await fetch(`/api/user?id=${encodeURIComponent(referenceid)}`);
+
+                if (!response.ok) throw new Error("Failed to fetch hierarchy details");
+
+                const data = await response.json();
+
+                setTsmDetails(data.tsmDetails ?? null);
+                setManagerDetails(data.managerDetails ?? null);
+
+            } catch (error) {
+                console.error("Hierarchy fetch error:", error);
+            }
+        };
+
+        fetchHierarchy();
+    }, [referenceid]);
+
+    console.log("TSM Details:", tsmDetails);
+    console.log("Manager Details:", managerDetails);
+
     return (
         <>
+        
             {/* Search + Filter */}
             <div className="mb-4 flex items-center justify-between gap-4">
                 <Input

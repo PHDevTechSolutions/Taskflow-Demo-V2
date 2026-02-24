@@ -16,6 +16,15 @@ import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, ArrowLeft, ArrowRigh
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+interface SupervisorDetails {
+  firstname: string | null;
+  lastname: string | null;
+  email: string | null;
+  profilePicture: string | null;
+  signatureImage: string | null;
+  contact: string | null;
+}
+
 interface Props {
   step: number;
   setStep: (step: number) => void;
@@ -75,6 +84,9 @@ interface Props {
   contact_person: string;
   salesManagerContact?: string;
   salesManagerEmail?: string;
+  managerDetails: SupervisorDetails | null;
+  tsmDetails: SupervisorDetails | null;
+  signature: string | null;
 }
 
 const Quotation_SOURCES = [
@@ -162,7 +174,10 @@ export function QuotationSheet(props: Props) {
     email_address,
     contact_person,
     salesManagerContact,
-    salesManagerEmail
+    salesManagerEmail,
+    managerDetails,
+    tsmDetails,
+    signature
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -568,6 +583,9 @@ export function QuotationSheet(props: Props) {
       salesmanagername: managername ?? "",
       salesManagerContact: salesManagerContact ?? "",
       salesManagerEmail: salesManagerEmail ?? "",
+      tsmDetails,
+      managerDetails,
+      signature
     };
   };
 
@@ -1037,6 +1055,7 @@ export function QuotationSheet(props: Props) {
         <div class="sig-side-internal">
         <div>
         <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                                                                    <img src="${payload.signature || ''}" class="sig-rep-box" />
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">Sales Representative</p>
@@ -1048,8 +1067,8 @@ export function QuotationSheet(props: Props) {
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">SALES MANAGER</p>
-        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salesManagerContact || 'N/A'}</p>
-        <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesManagerEmail || 'N/A'}</p>
+        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
+        <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
         </div>
         <div>
         
@@ -2475,6 +2494,7 @@ export function QuotationSheet(props: Props) {
                       <div className="space-y-10">
                         <div>
                           <p className="italic text-[10px] font-black mb-10">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
+                          <img src={payload.signature || ""} alt="Signature" className="w-34 h-10 object-contain" />
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
                           <div className="border-b border-black w-64"></div>
                           <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales Representative</p>
@@ -2487,8 +2507,8 @@ export function QuotationSheet(props: Props) {
                           <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
                           <div className="border-b border-black w-64"></div>
                           <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesManagerContact || "N/A"}</p>
-                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesManagerEmail || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.tsmDetails?.contact || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.tsmDetails?.email || "N/A"}</p>
                         </div>
 
                         <div>
