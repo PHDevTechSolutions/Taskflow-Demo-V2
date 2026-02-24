@@ -17,10 +17,6 @@ import { FieldLabel } from "@/components/ui/field";
 
 import { Preview } from "./preview";
 import ConfirmationDialog from "./confirmation";
-import { Description } from "@radix-ui/react-alert-dialog";
-
-// import jsPDF from "jspdf";
-// import html2canvas from "html2canvas";
 
 interface Completed {
     id: number;
@@ -36,7 +32,6 @@ interface Completed {
     quotation_amount?: number | string;
     quotation_type: string;
     version?: string;
-
     // Submit to API
     activity_reference_number?: string;
     referenceid?: string;
@@ -129,10 +124,6 @@ function splitAndTrim(value?: string): string[] {
     return value.split(",").map((v) => v.trim());
 }
 
-function joinArray(arr: (string | undefined)[]): string {
-    return arr.filter((v) => v !== undefined && v !== "").join(", ");
-}
-
 function splitDescription(value?: string): string[] {
     if (!value) return [];
     return value.split("||").map((v) => v.trim());
@@ -167,16 +158,19 @@ export default function TaskListEditDialog({
     const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
     // Confirmation dialog state
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-
     const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<RevisedQuotation | null>(null);
     const [revisedQuotations, setRevisedQuotations] = useState<RevisedQuotation[]>([]);
 
-    const [productsToDisplay, setProductsToDisplay] = useState(products);
     const activityReferenceNumber = item.activity_reference_number;
 
     const [startDate, setStartDate] = useState<string>(() => new Date().toISOString());
     const [liveTime, setLiveTime] = useState<Date>(() => new Date());
     const [endDate, setEndDate] = useState<string>(() => new Date().toISOString());
+
+    // Routing for product retrieval
+    const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+    const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+    const [openDescription, setOpenDescription] = useState<Record<number, boolean>>({});
 
     useEffect(() => {
         // Pag-open ng dialog, itakda startDate sa current time, palaging bago
@@ -312,8 +306,6 @@ export default function TaskListEditDialog({
         return "";
     };
 
-
-
     function serializeArrayFixed(arr: (string | undefined | null)[]): string {
         return arr.map(v => v ?? "").join(",");
     }
@@ -391,17 +383,6 @@ export default function TaskListEditDialog({
     const onClickSave = () => {
         setShowConfirmDialog(true);
     };
-
-    const toggleCheckbox = (index: number) => {
-        setCheckedRows((prev) => ({
-            ...prev,
-            [index]: !prev[index],
-        }));
-    };
-
-    // Routing for product retrieval
-    const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
-    const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
     // Download handler with your given logic integrated
     const DownloadExcel = async () => {
@@ -614,15 +595,6 @@ export default function TaskListEditDialog({
 
             salesmanagername: managername ?? "",
         };
-    };
-
-    const [openDescription, setOpenDescription] = useState<Record<number, boolean>>({});
-
-    const toggleDescription = (index: number) => {
-        setOpenDescription(prev => ({
-            ...prev,
-            [index]: !prev[index]
-        }));
     };
 
     const handleAddProduct = (product: Product) => {
@@ -1284,6 +1256,20 @@ export default function TaskListEditDialog({
         }
     }
 
+    const toggleCheckbox = (index: number) => {
+        setCheckedRows((prev) => ({
+            ...prev,
+            [index]: !prev[index],
+        }));
+    };
+
+    const toggleDescription = (index: number) => {
+        setOpenDescription(prev => ({
+            ...prev,
+            [index]: !prev[index]
+        }));
+    };
+
     return (
         <>
             <Dialog open={true} onOpenChange={onClose}>
@@ -1349,6 +1335,7 @@ export default function TaskListEditDialog({
                                         PRODUCT DATABASE
                                     </button>
                                 </div>
+
                                 {!isManualEntry && (
                                     <>
                                         <FieldLabel>Product Name</FieldLabel>
@@ -1377,7 +1364,7 @@ export default function TaskListEditDialog({
                                                         const searchUpper = rawValue.toUpperCase();
                                                         const q = query(
                                                             collection(db, "products"),
-                                                            where("websites", "array-contains", "Shopify")
+                                                            where("websites", "array-contains", "Taskflow")
                                                         );
                                                         const querySnapshot = await getDocs(q);
 
@@ -1579,7 +1566,7 @@ export default function TaskListEditDialog({
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead className="text-xs">Item</TableHead>
+                                        <TableHead className="text-xs">Vat Adjust</TableHead>
                                         <TableHead className="text-xs">Product Photo</TableHead>
                                         <TableHead className="text-xs">Title</TableHead>
                                         <TableHead className="text-xs">Quantity</TableHead>
@@ -1614,7 +1601,7 @@ export default function TaskListEditDialog({
                                             <React.Fragment key={index}>
                                                 {/* ✅ PRODUCT ROW */}
                                                 <TableRow>
-                                                    <TableCell className="font-semibold align-top text-xs">
+                                                    <TableCell className="font-semibold text-xs">
                                                         <input
                                                             type="checkbox"
                                                             checked={isChecked}
@@ -1624,7 +1611,7 @@ export default function TaskListEditDialog({
                                                         />
                                                     </TableCell>
 
-                                                    <TableCell className="align-top text-xs">
+                                                    <TableCell className="text-xs">
                                                         {product.product_photo && (
                                                             <img
                                                                 src={product.product_photo}
@@ -1634,7 +1621,7 @@ export default function TaskListEditDialog({
                                                         )}
                                                     </TableCell>
 
-                                                    <TableCell className="align-top">
+                                                    <TableCell>
                                                         <Textarea
                                                             value={product.product_title ?? ""}
                                                             onChange={(e) =>
@@ -1648,7 +1635,7 @@ export default function TaskListEditDialog({
                                                         </div>
                                                     </TableCell>
 
-                                                    <TableCell className="align-top">
+                                                    <TableCell>
                                                         <Input
                                                             type="number"
                                                             min={0}
@@ -1661,7 +1648,7 @@ export default function TaskListEditDialog({
                                                         />
                                                     </TableCell>
 
-                                                    <TableCell className="align-top">
+                                                    <TableCell>
                                                         <Input
                                                             type="number"
                                                             min={0}
@@ -1674,7 +1661,7 @@ export default function TaskListEditDialog({
                                                         />
                                                     </TableCell>
 
-                                                    <TableCell className="align-top font-semibold text-xs">
+                                                    <TableCell className="font-semibold text-xs">
                                                         ₱
                                                         {discountedTotal.toLocaleString(undefined, {
                                                             minimumFractionDigits: 2,
@@ -1682,32 +1669,31 @@ export default function TaskListEditDialog({
                                                         })}
                                                     </TableCell>
 
-                                                    <div className="flex items-center gap-2">
+                                                    <TableCell className="font-semibold text-xs flex items-center gap-2">
                                                         <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            variant="outline"
                                                             onClick={() => toggleDescription(index)}
-                                                            className="flex items-center gap-1"
+                                                            className="flex items-center gap-1 rounded-xs"
                                                         >
                                                             {openDescription[index] ? (
                                                                 <>
-                                                                    <EyeOff size={16} />
+                                                                    <EyeOff size={16} /> View
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <Eye size={16} />
+                                                                    <Eye size={16} /> View
                                                                 </>
                                                             )}
                                                         </Button>
 
                                                         <Button
-                                                            variant="destructive"
-                                                            size="sm"
+                                                            variant="outline"
+                                                            className="rounded-none"
                                                             onClick={() => handleRemoveRow(index)}
                                                         >
-                                                            <Trash />
+                                                            <Trash className="text-red-600" />
                                                         </Button>
-                                                    </div>
+                                                    </TableCell>
                                                 </TableRow>
 
                                                 {/* ✅ DESCRIPTION ROW (Immediately after product row) */}
