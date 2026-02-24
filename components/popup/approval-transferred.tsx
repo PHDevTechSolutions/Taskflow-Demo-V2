@@ -216,7 +216,7 @@ export function ApproveTransferDialog() {
     <>
       {/* Main Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>New Company for Transfer</DialogTitle>
             <DialogDescription>
@@ -248,14 +248,14 @@ export function ApproveTransferDialog() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={handleDismiss}>Dismiss</Button>
+            <Button onClick={handleDismiss} className="rounded-none p-6">Dismiss</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Dismiss confirmation dialog */}
       <Dialog open={showDismissConfirm} onOpenChange={setShowDismissConfirm}>
-        <DialogContent>
+        <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm Dismiss</DialogTitle>
             <DialogDescription>
@@ -263,8 +263,8 @@ export function ApproveTransferDialog() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={cancelDismiss}>Cancel</Button>
-            <Button onClick={confirmDismiss}>Confirm</Button>
+            <Button variant="outline" onClick={cancelDismiss} className="rounded-none p-6">Cancel</Button>
+            <Button onClick={confirmDismiss} className="rounded-none p-6">Confirm</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

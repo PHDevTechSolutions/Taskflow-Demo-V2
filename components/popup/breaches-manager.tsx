@@ -427,185 +427,185 @@ export function BreachesManagerDialog() {
 
     /* -------------------- Compute Time Consumed & Quotas -------------------- */
     useEffect(() => {
-        if (!activities.length) {
-            setOutboundDaily(0);
-            setOutboundWeekly(0);
-            setOutboundMonthly(0);
-            setUniqueClientReach(0);
-            setTimeByActivity({});
-            setTimeConsumedMs(0);
-            setTotalSales(0);
-            setNewClientCount(0);
-            return;
-        }
-
-        setLoadingTime(true);
-        try {
+            if (!activities.length) {
+                setOutboundDaily(0);
+                setOutboundWeekly(0);
+                setOutboundMonthly(0);
+                setUniqueClientReach(0);
+                setTimeByActivity({});
+                setTimeConsumedMs(0);
+                setTotalSales(0);
+                setNewClientCount(0);
+                return;
+            }
+    
+            setLoadingTime(true);
+            try {
+                const targetDate = new Date(fromDate);
+                const startOfDay = new Date(targetDate);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(targetDate);
+                endOfDay.setHours(23, 59, 59, 999);
+    
+                const dailyActivities = activities.filter((act) => {
+                    const actTime = new Date(act.date_created).getTime();
+                    return actTime >= startOfDay.getTime() && actTime <= endOfDay.getTime();
+                });
+    
+                // Time By Activity
+                const grouped = computeTimeByActivity(dailyActivities);
+                setTimeByActivity(grouped);
+                const totalTime = Object.values(grouped).reduce((sum, ms) => sum + ms, 0);
+                setTimeConsumedMs(totalTime);
+    
+                // Total Sales & New Clients (only Delivered)
+                let sales = 0;
+                let newClients = 0;
+                dailyActivities.forEach((act) => {
+                    if (act.status === "Delivered") {
+                        sales += Number(act.actual_sales) || 0;
+                        if (act.type_client === "New Client") newClients++;
+                    }
+                });
+                setTotalSales(sales);
+                setNewClientCount(newClients);
+    
+                // Outbound Daily / Weekly / Monthly
+                const daily = dailyActivities.filter(
+                    (a) => a.type_activity === "Outbound Calls" || a.source === "history",
+                ).length;
+                const sixDaysAgo = new Date(targetDate);
+                sixDaysAgo.setDate(targetDate.getDate() - 6);
+                const weekly = activities.filter((act) => {
+                    const actDate = new Date(act.date_created).getTime();
+                    return (
+                        actDate >= new Date(sixDaysAgo.toDateString()).getTime() &&
+                        actDate <= new Date(targetDate.toDateString()).getTime() &&
+                        (act.type_activity === "Outbound Calls" || act.source === "history")
+                    );
+                }).length;
+                const monthly = activities.filter(
+                    (act) =>
+                        new Date(act.date_created).getMonth() === targetDate.getMonth() &&
+                        new Date(act.date_created).getFullYear() === targetDate.getFullYear() &&
+                        (act.type_activity === "Outbound Calls" || act.source === "history"),
+                ).length;
+    
+                setOutboundDaily(daily);
+                setOutboundWeekly(weekly);
+                setOutboundMonthly(monthly);
+    
+                // Territory Coverage
+                const uniqueMap = new Map();
+                activities.forEach((act) => {
+                    const identifier = act.account_reference_number || act.company_name;
+                    if (!uniqueMap.has(identifier)) uniqueMap.set(identifier, act);
+                });
+                const uniqueActivities = Array.from(uniqueMap.values());
+                setUniqueClientReach(uniqueActivities.length);
+    
+                setClientSegments({
+                    top50: uniqueActivities.filter((a) => a.type_client === "Top 50").length,
+                    next30: uniqueActivities.filter((a) => a.type_client === "Next 30").length,
+                    bal20: uniqueActivities.filter((a) => a.type_client === "Bal 20").length,
+                    csrClient: uniqueActivities.filter((a) => a.type_client === "CSR Client").length,
+                    newClient: uniqueActivities.filter((a) => a.type_client === "New Client").length,
+                    inbound: activities.filter((a) => a.call_type === "Inbound" || a.type_activity?.includes("Inbound")).length,
+                    outbound: activities.filter((a) => a.call_type === "Outbound" || a.type_activity?.includes("Outbound")).length,
+                });
+    
+                // Quotation Pending Counts
+                setPendingClientApprovalCount(
+                    activities.filter(
+                        (act) =>
+                            act.status === "Quote-Done" &&
+                            act.quotation_status === "Pending Client Approval",
+                    ).length,
+                );
+    
+                setSpfPendingClientApproval(
+                    activities.filter(
+                        (act) =>
+                            act.call_type === "Quotation with SPF Preparation" &&
+                            act.quotation_status === "Pending Client Approval",
+                    ).length,
+                );
+    
+                setSpfPendingProcurement(
+                    activities.filter(
+                        (act) =>
+                            act.call_type === "Quotation with SPF Preparation" &&
+                            act.quotation_status === "Pending Procurement",
+                    ).length,
+                );
+    
+                setSpfPendingPD(
+                    activities.filter(
+                        (act) =>
+                            act.call_type === "Quotation with SPF Preparation" &&
+                            act.quotation_status === "Pending PD",
+                    ).length,
+                );
+            } finally {
+                setLoadingTime(false);
+            }
+        }, [activities, fromDate]);
+    
+        useEffect(() => {
+            if (!activities.length || !fromDate) {
+                setNewClientByCompany({});
+                setNewClientCount(0);
+                return;
+            }
+    
             const targetDate = new Date(fromDate);
             const startOfDay = new Date(targetDate);
             startOfDay.setHours(0, 0, 0, 0);
             const endOfDay = new Date(targetDate);
             endOfDay.setHours(23, 59, 59, 999);
-
-            const dailyActivities = activities.filter((act) => {
+    
+            // ✅ Allowed statuses for NEW CLIENT
+            const NEW_CLIENT_STATUSES = [
+                "Assisted",
+                "Quote-Done",
+                "SO-Done",
+                "Delivered",
+            ];
+    
+            const newClientsGrouped: Record<string, number> = {};
+            let totalNewClients = 0;
+    
+            activities.forEach((act) => {
                 const actTime = new Date(act.date_created).getTime();
-                return actTime >= startOfDay.getTime() && actTime <= endOfDay.getTime();
-            });
-
-            // Time By Activity
-            const grouped = computeTimeByActivity(dailyActivities);
-            setTimeByActivity(grouped);
-            const totalTime = Object.values(grouped).reduce((sum, ms) => sum + ms, 0);
-            setTimeConsumedMs(totalTime);
-
-            // Total Sales & New Clients (only Delivered)
-            let sales = 0;
-            let newClients = 0;
-            dailyActivities.forEach((act) => {
-                if (act.status === "Delivered") {
-                    sales += Number(act.actual_sales) || 0;
-                    if (act.type_client === "New Client") newClients++;
+    
+                if (
+                    NEW_CLIENT_STATUSES.includes(act.status) &&
+                    act.type_client === "New Client" &&
+                    actTime >= startOfDay.getTime() &&
+                    actTime <= endOfDay.getTime()
+                ) {
+                    const company = act.company_name || "Unknown";
+                    newClientsGrouped[company] =
+                        (newClientsGrouped[company] || 0) + 1;
+                    totalNewClients++;
                 }
             });
-            setTotalSales(sales);
-            setNewClientCount(newClients);
-
-            // Outbound Daily / Weekly / Monthly
-            const daily = dailyActivities.filter(
-                (a) => a.type_activity === "Outbound Calls" || a.source === "history",
-            ).length;
-            const sixDaysAgo = new Date(targetDate);
-            sixDaysAgo.setDate(targetDate.getDate() - 6);
-            const weekly = activities.filter((act) => {
-                const actDate = new Date(act.date_created).getTime();
-                return (
-                    actDate >= new Date(sixDaysAgo.toDateString()).getTime() &&
-                    actDate <= new Date(targetDate.toDateString()).getTime() &&
-                    (act.type_activity === "Outbound Calls" || act.source === "history")
-                );
-            }).length;
-            const monthly = activities.filter(
-                (act) =>
-                    new Date(act.date_created).getMonth() === targetDate.getMonth() &&
-                    new Date(act.date_created).getFullYear() === targetDate.getFullYear() &&
-                    (act.type_activity === "Outbound Calls" || act.source === "history"),
-            ).length;
-
-            setOutboundDaily(daily);
-            setOutboundWeekly(weekly);
-            setOutboundMonthly(monthly);
-
-            // Territory Coverage
-            const uniqueMap = new Map();
-            activities.forEach((act) => {
-                const identifier = act.account_reference_number || act.company_name;
-                if (!uniqueMap.has(identifier)) uniqueMap.set(identifier, act);
-            });
-            const uniqueActivities = Array.from(uniqueMap.values());
-            setUniqueClientReach(uniqueActivities.length);
-
-            setClientSegments({
-                top50: uniqueActivities.filter((a) => a.type_client === "Top 50").length,
-                next30: uniqueActivities.filter((a) => a.type_client === "Next 30").length,
-                bal20: uniqueActivities.filter((a) => a.type_client === "Bal 20").length,
-                csrClient: uniqueActivities.filter((a) => a.type_client === "CSR Client").length,
-                newClient: uniqueActivities.filter((a) => a.type_client === "New Client").length,
-                inbound: activities.filter((a) => a.call_type === "Inbound" || a.type_activity?.includes("Inbound")).length,
-                outbound: activities.filter((a) => a.call_type === "Outbound" || a.type_activity?.includes("Outbound")).length,
-            });
-
-            // Quotation Pending Counts
-            setPendingClientApprovalCount(
-                activities.filter(
-                    (act) =>
-                        act.status === "Quote-Done" &&
-                        act.quotation_status === "Pending Client Approval",
-                ).length,
-            );
-
-            setSpfPendingClientApproval(
-                activities.filter(
-                    (act) =>
-                        act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending Client Approval",
-                ).length,
-            );
-
-            setSpfPendingProcurement(
-                activities.filter(
-                    (act) =>
-                        act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending Procurement",
-                ).length,
-            );
-
-            setSpfPendingPD(
-                activities.filter(
-                    (act) =>
-                        act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending PD",
-                ).length,
-            );
-        } finally {
-            setLoadingTime(false);
-        }
-    }, [activities, fromDate]);
-
-    useEffect(() => {
-        if (!activities.length || !fromDate) {
-            setNewClientByCompany({});
-            setNewClientCount(0);
-            return;
-        }
-
-        const targetDate = new Date(fromDate);
-        const startOfDay = new Date(targetDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(targetDate);
-        endOfDay.setHours(23, 59, 59, 999);
-
-        const newClientsGrouped: Record<string, number> = {};
-        let totalNewClients = 0;
-
-        activities.forEach((act) => {
-            const actTime = new Date(act.date_created).getTime();
-
-            if (
-                act.status === "Assisted" &&
-                act.type_client === "New Client" &&
-                actTime >= startOfDay.getTime() &&
-                actTime <= endOfDay.getTime()
-            ) {
-                const company = act.company_name || "Unknown";
-                newClientsGrouped[company] = (newClientsGrouped[company] || 0) + 1;
-                totalNewClients++;
-            }
-        });
-
-        setNewClientByCompany(newClientsGrouped);
-        setNewClientCount(totalNewClients);
-    }, [activities, fromDate]);
-
-    // Update newClientCount whenever newClientByCompany changes
-    useEffect(() => {
-        const total = Object.values(newClientByCompany).reduce(
-            (sum, count) => sum + count,
-            0
-        );
-        setNewClientCount(total);
-    }, [newClientByCompany]);
-
-    const overdueEntries = Object.entries(overdueByCompany);
-    const hasMoreThanFive = overdueEntries.length > 5;
-    const visibleOverdue = showAllOverdue
-        ? overdueEntries
-        : overdueEntries.slice(0, 5);
-
-    const newClientEntries = Object.entries(newClientByCompany);
-    const hasMoreThanFiveNewClients = newClientEntries.length > 5;
-    const visibleNewClients = showAllNewClients
-        ? newClientEntries
-        : newClientEntries.slice(0, 5);
+    
+            setNewClientByCompany(newClientsGrouped);
+            setNewClientCount(totalNewClients);
+        }, [activities, fromDate]);
+    
+        const overdueEntries = Object.entries(overdueByCompany);
+        const hasMoreThanFive = overdueEntries.length > 5;
+        const visibleOverdue = showAllOverdue
+            ? overdueEntries
+            : overdueEntries.slice(0, 5);
+    
+        const newClientEntries = Object.entries(newClientByCompany);
+        const hasMoreThanFiveNewClients = newClientEntries.length > 5;
+        const visibleNewClients = showAllNewClients
+            ? newClientEntries
+            : newClientEntries.slice(0, 5);
 
     /* -------------------- UI -------------------- */
     return (
