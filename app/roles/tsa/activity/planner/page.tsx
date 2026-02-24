@@ -339,9 +339,11 @@ function DashboardContent() {
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        onCountChange={setProgressCount}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature}                                    
+                                        signature={userDetails.signature} 
+                                                                           
                                     />
                                         
                                 </CardContent>
