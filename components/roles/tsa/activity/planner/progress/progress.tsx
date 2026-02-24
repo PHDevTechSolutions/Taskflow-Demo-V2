@@ -97,7 +97,7 @@ export const Progress: React.FC<NewTaskProps> = ({
     setDateCreatedFilterRangeAction,
     tsmDetails,
     managerDetails,
-    signature
+    signature,
     onCountChange
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
