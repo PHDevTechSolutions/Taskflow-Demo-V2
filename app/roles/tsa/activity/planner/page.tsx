@@ -328,6 +328,7 @@ function DashboardContent() {
                                         : "max-h-0 opacity-0 p-0"
                                         }`}
                                 >
+                                    {userDetails.signature} sig
                                     <Progress
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
@@ -392,6 +393,9 @@ function DashboardContent() {
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         onCountChange={setScheduledCount}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature} 
                                     />
                                 </CardContent>
                             </Card>
@@ -429,6 +433,9 @@ function DashboardContent() {
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         onCountChange={setCompletedCount}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature} 
                                     />
                                 </CardContent>
 
@@ -475,6 +482,9 @@ function DashboardContent() {
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         onCountChange={setDoneCount}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature} 
                                     />
                                 </CardContent>
 

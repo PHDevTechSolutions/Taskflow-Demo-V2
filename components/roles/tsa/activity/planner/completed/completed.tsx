@@ -15,6 +15,16 @@ import { type DateRange } from "react-day-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+
+interface SupervisorDetails {
+  firstname: string | null;
+  lastname: string | null;
+  email: string | null;
+  profilePicture: string | null;
+  signatureImage: string | null;
+  contact: string | null;
+}
+
 /* ================= TYPES ================= */
 
 interface HistoryItem {
@@ -70,6 +80,9 @@ interface CompletedProps {
   setDateCreatedFilterRangeAction?: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
+  managerDetails: SupervisorDetails | null;
+  tsmDetails: SupervisorDetails | null;
+  signature: string | null;
   onCountChange?: (count: number) => void;
 }
 
@@ -78,6 +91,9 @@ interface CompletedProps {
 export const Completed: React.FC<CompletedProps> = ({
   referenceid,
   dateCreatedFilterRange,
+  tsmDetails,
+  managerDetails,
+  signature,
   onCountChange
 }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
