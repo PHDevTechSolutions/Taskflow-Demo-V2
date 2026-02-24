@@ -59,6 +59,7 @@ interface ProductItem {
     product_photo?: string;
     product_title?: string;
     product_sku?: string;
+    discount?: number;
 }
 
 interface Product {
@@ -1571,11 +1572,11 @@ export default function TaskListEditDialog({
                                         <TableHead className="text-xs">Title</TableHead>
                                         <TableHead className="text-xs">Quantity</TableHead>
                                         <TableHead className="text-xs">Amount</TableHead>
+                                        <TableHead className="text-xs">Discount</TableHead>
                                         <TableHead className="text-xs">Total Amount</TableHead>
                                         <TableHead className="text-xs">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
-
 
                                 <TableBody>
                                     {products.length === 0 && (
@@ -1601,17 +1602,42 @@ export default function TaskListEditDialog({
                                             <React.Fragment key={index}>
                                                 {/* ✅ PRODUCT ROW */}
                                                 <TableRow>
-                                                    <TableCell className="font-semibold text-xs">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isChecked}
-                                                            onChange={() => toggleCheckbox(index)}
-                                                            disabled={vatType !== "vat_exe"}
-                                                            className="h-5 w-5 rounded-full"
-                                                        />
+                                                    {/* Checkbox + Discount Input */}
+                                                    <TableCell className="font-semibold text-xs p-2 align-middle text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isChecked}
+                                                                onChange={() => toggleCheckbox(index)}
+                                                                disabled={vatType !== "vat_exe"}
+                                                                className="h-5 w-5 rounded-full"
+                                                            />
+
+                                                            {/* Discount Input (only if checked and VAT type is vat_exe) */}
+                                                            {isChecked && vatType === "vat_exe" && (
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    max={100}
+                                                                    step={0.01}
+                                                                    value={product.discount ?? 12} // use per-row discount or default 12%
+                                                                    onChange={(e) => {
+                                                                        const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                                                                        setProducts((prev) => {
+                                                                            const copy = [...prev];
+                                                                            copy[index] = { ...copy[index], discount: val };
+                                                                            return copy;
+                                                                        });
+                                                                    }}
+                                                                    className="w-20 text-xs text-center"
+                                                                    placeholder="0%"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </TableCell>
 
-                                                    <TableCell className="text-xs">
+                                                    {/* Product Photo */}
+                                                    <TableCell className="text-xs p-2 align-middle text-center">
                                                         {product.product_photo && (
                                                             <img
                                                                 src={product.product_photo}
@@ -1621,81 +1647,95 @@ export default function TaskListEditDialog({
                                                         )}
                                                     </TableCell>
 
-                                                    <TableCell>
+                                                    {/* Product Title */}
+                                                    <TableCell className="p-2 align-middle">
                                                         <Textarea
                                                             value={product.product_title ?? ""}
-                                                            onChange={(e) =>
-                                                                handleProductChange(index, "product_title", e.target.value)
-                                                            }
-                                                            className="border-none p-0 shadow-none text-xs"
+                                                            onChange={(e) => handleProductChange(index, "product_title", e.target.value)}
+                                                            className="border-none p-1 shadow-none text-xs resize-none w-full"
                                                         />
-
-                                                        <div className="text-xs text-gray-500">
+                                                        <div className="text-xs text-gray-500 mt-1">
                                                             ITEM CODE: {product.product_sku || <i>None</i>}
                                                         </div>
                                                     </TableCell>
 
-                                                    <TableCell>
+                                                    {/* Quantity */}
+                                                    <TableCell className="p-2 align-middle text-center">
                                                         <Input
                                                             type="number"
                                                             min={0}
                                                             step="any"
                                                             value={product.product_quantity ?? ""}
-                                                            onChange={(e) =>
-                                                                handleProductChange(index, "product_quantity", e.target.value)
-                                                            }
-                                                            className="border-none shadow-none text-xs"
+                                                            onChange={(e) => handleProductChange(index, "product_quantity", e.target.value)}
+                                                            className="border-none shadow-none text-xs text-center"
                                                         />
                                                     </TableCell>
 
-                                                    <TableCell>
+                                                    {/* Amount */}
+                                                    <TableCell className="p-2 align-middle text-center">
                                                         <Input
                                                             type="number"
                                                             min={0}
                                                             step="any"
                                                             value={product.product_amount ?? ""}
-                                                            onChange={(e) =>
-                                                                handleProductChange(index, "product_amount", e.target.value)
-                                                            }
-                                                            className="border-none shadow-none text-xs"
+                                                            onChange={(e) => handleProductChange(index, "product_amount", e.target.value)}
+                                                            className="border-none shadow-none text-xs text-center"
                                                         />
                                                     </TableCell>
 
-                                                    <TableCell className="font-semibold text-xs">
-                                                        ₱
-                                                        {discountedTotal.toLocaleString(undefined, {
-                                                            minimumFractionDigits: 2,
-                                                            maximumFractionDigits: 2,
-                                                        })}
+                                                    {/* Discount Display */}
+                                                    <TableCell className="font-semibold text-xs p-2 align-middle text-center">
+                                                        {isChecked && vatType === "vat_exe"
+                                                            ? `₱${(lineTotal * ((product.discount ?? 12) / 100)).toLocaleString(undefined, {
+                                                                minimumFractionDigits: 2,
+                                                                maximumFractionDigits: 2,
+                                                            })}`
+                                                            : "₱0.00"}
                                                     </TableCell>
 
-                                                    <TableCell className="font-semibold text-xs flex items-center gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            onClick={() => toggleDescription(index)}
-                                                            className="flex items-center gap-1 rounded-xs"
-                                                        >
-                                                            {openDescription[index] ? (
-                                                                <>
-                                                                    <EyeOff size={16} /> View
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Eye size={16} /> View
-                                                                </>
-                                                            )}
-                                                        </Button>
+                                                    {/* Total Amount */}
+                                                    <TableCell className="font-semibold text-xs p-2 align-middle text-center">
+                                                        ₱
+                                                        {isChecked && vatType === "vat_exe"
+                                                            ? (lineTotal * (1 - (product.discount ?? 12) / 100)).toLocaleString(undefined, {
+                                                                minimumFractionDigits: 2,
+                                                                maximumFractionDigits: 2,
+                                                            })
+                                                            : lineTotal.toLocaleString(undefined, {
+                                                                minimumFractionDigits: 2,
+                                                                maximumFractionDigits: 2,
+                                                            })}
+                                                    </TableCell>
 
-                                                        <Button
-                                                            variant="outline"
-                                                            className="rounded-none"
-                                                            onClick={() => handleRemoveRow(index)}
-                                                        >
-                                                            <Trash className="text-red-600" />
-                                                        </Button>
+                                                    {/* Actions */}
+                                                    <TableCell className="font-semibold text-xs p-2 align-middle text-center">
+                                                        <div className="flex justify-center items-center gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                onClick={() => toggleDescription(index)}
+                                                                className="flex items-center gap-1 rounded-xs text-xs"
+                                                            >
+                                                                {openDescription[index] ? (
+                                                                    <>
+                                                                        <EyeOff size={16} /> View
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Eye size={16} /> View
+                                                                    </>
+                                                                )}
+                                                            </Button>
+
+                                                            <Button
+                                                                variant="outline"
+                                                                className="rounded-none text-xs"
+                                                                onClick={() => handleRemoveRow(index)}
+                                                            >
+                                                                <Trash className="text-red-600" />
+                                                            </Button>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
-
                                                 {/* ✅ DESCRIPTION ROW (Immediately after product row) */}
                                                 {openDescription[index] && (
                                                     <TableRow>
@@ -1720,8 +1760,6 @@ export default function TaskListEditDialog({
                                             </React.Fragment>
                                         );
                                     })}
-
-
                                 </TableBody>
                             </Table>
                         </div>

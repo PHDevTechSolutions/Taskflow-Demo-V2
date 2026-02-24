@@ -23,6 +23,15 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
 
+interface SupervisorDetails {
+  firstname: string | null;
+  lastname: string | null;
+  email: string | null;
+  profilePicture: string | null;
+  signatureImage: string | null;
+  contact: string | null;
+}
+
 interface Activity {
   id: string;
   referenceid: string;
@@ -79,6 +88,9 @@ interface ScheduledProps {
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
+  managerDetails: SupervisorDetails | null;
+  tsmDetails: SupervisorDetails | null;
+  signature: string | null;
   onCountChange?: (count: number) => void;
 }
 
@@ -94,6 +106,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   managername,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
+  tsmDetails,
+  managerDetails,
+  signature,
   onCountChange
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -559,7 +574,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           accountReferenceNumber={item.account_reference_number}
                           onCreated={() => {
                             fetchAllData();
-                          }}
+                          } } 
+                          managerDetails={managerDetails ?? null}
+                          tsmDetails={tsmDetails ?? null}
+                          signature={signature}                     
                         />
 
                         <DropdownMenu>
