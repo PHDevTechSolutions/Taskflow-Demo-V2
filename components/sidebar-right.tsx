@@ -10,6 +10,8 @@ import { type DateRange } from "react-day-picker";
 
 import { Meeting } from "@/components/roles/tsa/activity/meeting/meeting";
 import { BreachesDialog } from "@/components/popup/breaches";
+import { BreachesTSMDialog } from "@/components/popup/breaches-tsm";
+import { BreachesManagerDialog } from "@/components/popup/breaches-manager";
 import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
@@ -199,7 +201,14 @@ export function SidebarRight({
           </Card>
         )}
       </SidebarContent>
-      <BreachesDialog />
+      {/*Territory Sales Associate*/}
+      {userDetails.Role === "Territory Sales Associate" && <BreachesDialog />}
+
+      {/*Territory Sales Manager*/}
+      {userDetails.Role === "Territory Sales Manager" && <BreachesTSMDialog />}
+
+      {/*Head Manager*/}
+      {userDetails.Role === "Manager" && <BreachesManagerDialog />}
       <SidebarFooter>
         <div className="border-t border-sidebar-border mt-2 pt-2 text-center text-xs">
           <div>{time}</div>

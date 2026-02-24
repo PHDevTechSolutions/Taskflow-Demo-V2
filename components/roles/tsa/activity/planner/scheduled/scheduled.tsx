@@ -210,48 +210,18 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress", "Transfer"].includes(status);
   }
 
-  function getOverdueDays(scheduledDate: string): number {
-    const sched = new Date(scheduledDate);
-    const today = new Date();
-
-    // reset time para date lang ang comparison
-    sched.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    const diffMs = today.getTime() - sched.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    return diffDays > 0 ? diffDays : 0;
-  }
-
   const mergedActivities = activities
     .filter((a) => !isDelivered(a.status)) // Remove delivered/completed/cancelled
-    .filter((a) => {
-      // Remove Assisted activities that are overdue
-      if (a.status === "Assisted") {
-        const overdueDays = getOverdueDays(a.scheduled_date);
-        return overdueDays === 0; // only keep if not overdue
-      }
-      return true; // keep other statuses
-    })
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
       );
 
-      const overdueDays = getOverdueDays(activity.scheduled_date);
-
       return {
         ...activity,
         relatedHistoryItems,
-        overdueDays,
       };
     })
-    .sort(
-      (a, b) =>
-        new Date(b.scheduled_date).getTime() -
-        new Date(a.scheduled_date).getTime()
-    );
 
   const term = searchTerm.toLowerCase();
 
@@ -699,12 +669,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           </Badge>
                         );
                       })()}
-
-                      {item.overdueDays > 0 && (
-                        <h1 className="justify-center flex items-center font-mono text-[10px]">
-                          {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago..
-                        </h1>
-                      )}
                     </div>
                   </div>
 

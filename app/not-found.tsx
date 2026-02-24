@@ -11,14 +11,14 @@ export default function NotFound() {
                 className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] 
                  bg-[size:24px_24px] z-10 pointer-events-none"
             />
-            <h1 className="text-6xl font-bold">404</h1>
+            <h1 className="text-8xl font-bold">404</h1>
 
             <p className="text-muted-foreground text-lg">
                 Oops! Page not found.
             </p>
 
             <Link href="/">
-                <Button>
+                <Button className="rounded-none p-6">
                     Back to Home
                 </Button>
             </Link>

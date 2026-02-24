@@ -31,7 +31,7 @@ export function TransferDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="rounded-none">
                 <DialogHeader>
                     <DialogTitle>Transfer Accounts</DialogTitle>
                     <DialogDescription>
@@ -45,7 +45,7 @@ export function TransferDialog({
                     defaultValue=""
                     disabled={!agents.length}
                 >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full rounded-none">
                         <SelectValue placeholder="Select agent" />
                     </SelectTrigger>
                     <SelectContent>
@@ -67,7 +67,7 @@ export function TransferDialog({
                 </Select>
 
                 <DialogFooter className="flex justify-end gap-2 mt-4">
-                    <Button variant="secondary" onClick={() => onOpenChange(false)}>
+                    <Button variant="secondary" className="rounded-none p-6" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
 
@@ -75,7 +75,7 @@ export function TransferDialog({
                         onClick={() => {
                             if (selectedAgent) onConfirmTransfer(selectedAgent, selectedAccountIds);
                         }}
-                        disabled={!selectedAgent}
+                        disabled={!selectedAgent} className="rounded-none p-6"
                     >
                         Confirm Transfer
                     </Button>

@@ -9,52 +9,71 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  // Validate date params
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
 
   try {
-    // Build Supabase query
-    let query = supabase
-      .from("history")
-      .select(`
-        id,
-        quotation_amount,
-        quotation_number,
-        ticket_reference_number,
-        remarks,
-        date_created,
-        date_updated,
-        company_name,
-        contact_number,
-        contact_person,
-        type_client,
-        status,
-        type_activity,
-        source,
-        actual_sales,
-        dr_number,
-        delivery_date,
-        si_date,
-        payment_terms,
-        so_number,
-        so_amount,
-        call_type
-      `)
-      .eq("referenceid", referenceid);
+    const batchSize = 1000; // fetch 1000 rows per batch
+    let allData: any[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    // Apply date_created filter if both from & to are provided
-    if (fromDate && toDate) {
-      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    while (hasMore) {
+      let query = supabase
+        .from("history")
+        .select(`
+          id,
+          referenceid,
+          quotation_amount,
+          quotation_number,
+          ticket_reference_number,
+          remarks,
+          date_created,
+          date_updated,
+          company_name,
+          contact_number,
+          contact_person,
+          type_client,
+          status,
+          type_activity,
+          source,
+          actual_sales,
+          dr_number,
+          delivery_date,
+          si_date,
+          payment_terms,
+          so_number,
+          so_amount,
+          call_type,
+          quotation_status
+        `)
+        .eq("referenceid", referenceid)
+        .range(page * batchSize, (page + 1) * batchSize - 1);
+
+      // Apply date_updated filter if provided
+      if (fromDate && toDate) {
+        query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return res.status(500).json({ message: error.message });
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allData = allData.concat(data);
+        if (data.length < batchSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      return res.status(500).json({ message: error.message });
-    }
-
-    return res.status(200).json({ activities: data, cached: false });
+    return res.status(200).json({ activities: allData, cached: false });
   } catch (err) {
     console.error("Server error:", err);
     return res.status(500).json({ message: "Server error" });
