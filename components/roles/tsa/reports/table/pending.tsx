@@ -277,6 +277,7 @@ export const PendingTable: React.FC<PendingProps> = ({
                   <TableHead className="text-right text-xs">Quotation Amount</TableHead>
                   <TableHead className="text-xs">Company Name</TableHead>
                   <TableHead className="text-xs">Contact Number</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Remarks</TableHead>
                 </TableRow>
               </TableHeader>
@@ -291,6 +292,7 @@ export const PendingTable: React.FC<PendingProps> = ({
                     </TableCell>
                     <TableCell>{item.company_name || "-"}</TableCell>
                     <TableCell>{item.contact_number || "-"}</TableCell>
+                    <TableCell>{item.quotation_status || "-"}</TableCell>
                     <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
                   </TableRow>
                 ))}
