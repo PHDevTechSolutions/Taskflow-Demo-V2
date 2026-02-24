@@ -325,6 +325,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
+  function getStatusStyles(status: string): { badgeClass?: string; bgClass?: string } {
+    switch (status) {
+      case "Assisted":
+      case "On-Progress":
+        return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
+      case "SO-Done":
+        return { badgeClass: "bg-yellow-400 text-white", bgClass: "bg-yellow-100" };
+      case "Quote-Done":
+        return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+      case "Cancelled":
+        return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
+      default:
+        return { badgeClass: "", bgClass: "bg-white" };
+    }
+  }
+
   const openDoneDialog = (id: string) => {
     setSelectedActivityId(id);
     setDialogDoneOpen(true);
@@ -470,13 +486,31 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 {statusFilter === "All" ? <Filter /> : statusFilter} Filter
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => setStatusFilter("All")}>All</DropdownMenuItem>
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => (
-                <DropdownMenuItem key={status} onClick={() => setStatusFilter(status)}>
-                  {status}
-                </DropdownMenuItem>
-              ))}
+
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setStatusFilter("All")}>
+                <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" />
+                All
+              </DropdownMenuItem>
+
+              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => {
+                const { badgeClass } = getStatusStyles(status);
+
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className="flex items-center gap-2"
+                  >
+                    {/* Colored Dot */}
+                    <span
+                      className={`w-2 h-2 rounded-full ${badgeClass}`}
+                    />
+
+                    <span className="capitalize">{status}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -491,9 +525,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           ) : (
             filteredActivities.map((item) => {
               const badgeProps = getBadgeProps(item.status);
+              const statusStyles = getStatusStyles(item.status);
 
               return (
-                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
+                <AccordionItem key={item.id} value={item.id} className={`w-full border rounded-none shadow-sm mt-2 ${statusStyles.bgClass}`}>
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
                       <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">

@@ -564,6 +564,14 @@ export function BreachesTSMDialog() {
         const endOfDay = new Date(targetDate);
         endOfDay.setHours(23, 59, 59, 999);
 
+        // ✅ Allowed statuses for NEW CLIENT
+        const NEW_CLIENT_STATUSES = [
+            "Assisted",
+            "Quote-Done",
+            "SO-Done",
+            "Delivered",
+        ];
+
         const newClientsGrouped: Record<string, number> = {};
         let totalNewClients = 0;
 
@@ -571,13 +579,14 @@ export function BreachesTSMDialog() {
             const actTime = new Date(act.date_created).getTime();
 
             if (
-                act.status === "Assisted" &&
+                NEW_CLIENT_STATUSES.includes(act.status) &&
                 act.type_client === "New Client" &&
                 actTime >= startOfDay.getTime() &&
                 actTime <= endOfDay.getTime()
             ) {
                 const company = act.company_name || "Unknown";
-                newClientsGrouped[company] = (newClientsGrouped[company] || 0) + 1;
+                newClientsGrouped[company] =
+                    (newClientsGrouped[company] || 0) + 1;
                 totalNewClients++;
             }
         });
@@ -585,15 +594,6 @@ export function BreachesTSMDialog() {
         setNewClientByCompany(newClientsGrouped);
         setNewClientCount(totalNewClients);
     }, [activities, fromDate]);
-
-    // Update newClientCount whenever newClientByCompany changes
-    useEffect(() => {
-        const total = Object.values(newClientByCompany).reduce(
-            (sum, count) => sum + count,
-            0
-        );
-        setNewClientCount(total);
-    }, [newClientByCompany]);
 
     const overdueEntries = Object.entries(overdueByCompany);
     const hasMoreThanFive = overdueEntries.length > 5;
@@ -625,7 +625,7 @@ export function BreachesTSMDialog() {
                                 : `Name: ${userDetails?.lastname ?? ""}, ${userDetails?.firstname ?? ""}`}
                         </DialogDescription>
                     </DialogHeader>
-
+                    
                     <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
                         <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
                             Debugging Calibration
@@ -757,24 +757,6 @@ export function BreachesTSMDialog() {
                                 </div>
                             </li>
 
-                            {/* OVERDUE ACTIVITIES */}
-                            {/* <li className="pl-5 list-disc">
-                <strong className="text-red-500">
-                  Overdue Activities: {overdueCount}
-                </strong>
-                {loadingOverdue ? (
-                  <div className="text-xs text-gray-400">Loading...</div>
-                ) : (
-                  <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                    {Object.entries(overdueByCompany).map(([company, count]) => (
-                      <li key={company}>
-                        {company}: <strong>{count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li> */}
-
                             <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                                 <div className="flex justify-between items-center mb-2">
                                     <strong className="text-red-500 uppercase text-[11px] tracking-tight">
@@ -813,20 +795,6 @@ export function BreachesTSMDialog() {
                                 )}
                             </li>
 
-                            {/* NEW ACCOUNT DEVT */}
-                            {/* <li className="pl-5 list-disc">
-                <strong>New Account Devt: {newClientCount}</strong>
-                {Object.keys(newClientByCompany).length > 0 && (
-                  <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                    {Object.entries(newClientByCompany).map(([company, count]) => (
-                      <li key={company}>
-                        {company}: <strong>{count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li> */}
-
                             <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
                                 <div className="flex justify-between items-center mb-2">
                                     <strong className="text-[#121212] uppercase text-[11px] tracking-tight">
@@ -862,19 +830,6 @@ export function BreachesTSMDialog() {
                                     </div>
                                 )}
                             </li>
-
-                            {/* TIME CONSUMED */}
-                            {/* <li className="pl-5 list-disc">
-                <strong>Time Consumed:</strong> {formatDuration(timeConsumedMs)}
-                <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                  {!loadingTime &&
-                    Object.entries(timeByActivity).map(([type, ms]) => (
-                      <li key={type}>
-                        {type}: {formatDuration(ms)}
-                      </li>
-                    ))}
-                </ul>
-              </li> */}
                         </ul>
 
                         <ul className="list-none space-y-4">
@@ -895,12 +850,6 @@ export function BreachesTSMDialog() {
                                 )}
                             </li>
 
-                            {/* TOTAL SALES */}
-                            {/* <li className="pl-5 list-disc">
-                <strong>Total Sales Today:</strong> ₱
-                {totalSales.toLocaleString()}
-              </li> */}
-
                             <li className="p-3 bg-[#121212] border border-[#121212] rounded-none shadow-md">
                                 <div className="flex flex-col">
                                     <strong className="text-gray-400 uppercase text-[10px] tracking-widest mb-1">Total Sales Today</strong>
@@ -910,21 +859,6 @@ export function BreachesTSMDialog() {
                                     </div>
                                 </div>
                             </li>
-
-                            {/* CSR METRICS */}
-                            {/* <li className="pl-5 list-disc">
-                <strong>CSR Metrics Tickets</strong>
-                {loadingCsrMetrics ? (
-                  <div className="text-xs text-gray-400">Loading...</div>
-                ) : (
-                  <ul className="pl-4 text-xs">
-                    <li>TSA Response Time: {formatHoursToHMS(avgResponseTime)}</li>
-                    <li>Non-Quotation HT: {formatHoursToHMS(avgNonQuotationHT)}</li>
-                    <li>Quotation HT: {formatHoursToHMS(avgQuotationHT)}</li>
-                    <li>SPF Handling Duration: {formatHoursToHMS(avgSpfHT)}</li>
-                  </ul>
-                )}
-              </li> */}
 
                             <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
                                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2 border-b border-gray-100 pb-1">
@@ -953,17 +887,6 @@ export function BreachesTSMDialog() {
                                     </div>
                                 )}
                             </li>
-
-                            {/* CLOSING OF QUOTATION */}
-                            {/* <li className="pl-5 list-disc font-bold">
-                Closing of Quotation
-                <ul className="pl-4 list-none font-normal text-xs mt-1 space-y-1">
-                  <li className="text-red-500">• Pending Client Approval: {pendingClientApprovalCount}</li>
-                  <li className="text-red-500">• SPF - Pending Client: {spfPendingClientApproval}</li>
-                  <li className="text-red-500">• SPF - Pending Procurement: {spfPendingProcurement}</li>
-                  <li className="text-red-500">• SPF - Pending PD: {spfPendingPD}</li>
-                </ul>
-              </li> */}
 
                             <li className="p-3 bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-none shadow-sm">
                                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2">Closing of Quotation</strong>
