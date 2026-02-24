@@ -140,19 +140,18 @@ export function AccountDialog({
 }: AccountDialogProps) {
   // --- Form state ---
   const [formData, setFormData] = useState<AccountFormData>({
-    company_name: "",
-    contact_person: [""],
-    contact_number: [""],
-    email_address: [""],
-    address: "",
-    region: "",
-    status: "Active",
-    delivery_address: "",
-    type_client: "TSA CLIENT",
-    industry: "OTHER",
-    company_group: "",
-    ...initialData,
-  });
+  company_name: initialData?.company_name ?? "",
+  contact_person: initialData?.contact_person ?? [""],
+  contact_number: initialData?.contact_number ?? [""],
+  email_address: initialData?.email_address ?? [""],
+  address: initialData?.address ?? "",
+  region: initialData?.region ?? "",
+  status: initialData?.status ?? "Active",
+  delivery_address: initialData?.delivery_address ?? "", // ✅ FIX
+  type_client: initialData?.type_client ?? "TSA CLIENT",
+  industry: initialData?.industry ?? "OTHER",
+  company_group: initialData?.company_group ?? "",
+});
 
   // --- Duplicate check ---
   const [companyError, setCompanyError] = useState("");
