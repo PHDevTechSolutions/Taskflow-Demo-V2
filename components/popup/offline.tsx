@@ -8,6 +8,10 @@ import {
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
+import Lottie from "lottie-react";
+
+// Import JSON animation from public folder
+import noInternetAnimation from "../../public/animation/No internet.json";
 
 export function OfflineDialog() {
     const [isOffline, setIsOffline] = useState(false);
@@ -36,11 +40,15 @@ export function OfflineDialog() {
         };
     }, []);
 
-
     return (
         <Dialog open={isOffline} onOpenChange={() => { /* prevent closing */ }}>
-            <DialogContent>
-                <DialogHeader>
+            <DialogContent className="rounded-none flex flex-col items-center justify-center gap-4 p-6">
+                <Lottie
+                    animationData={noInternetAnimation}
+                    loop
+                    className="w-60 h-60"
+                />
+                <DialogHeader className="text-center">
                     <DialogTitle>No Internet Connection</DialogTitle>
                     <DialogDescription>
                         Please check your network connection and try again.

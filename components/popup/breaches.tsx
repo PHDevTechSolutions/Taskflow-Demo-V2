@@ -426,6 +426,7 @@ export function BreachesDialog() {
   };
 
   /* -------------------- Compute Time Consumed & Quotas -------------------- */
+
   useEffect(() => {
     if (!activities.length) {
       setOutboundDaily(0);
@@ -464,7 +465,6 @@ export function BreachesDialog() {
       dailyActivities.forEach((act) => {
         if (act.status === "Delivered") {
           sales += Number(act.actual_sales) || 0;
-          if (act.type_client === "New Client") newClients++;
         }
       });
       setTotalSales(sales);
@@ -564,6 +564,14 @@ export function BreachesDialog() {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
+    // ✅ Allowed statuses for NEW CLIENT
+    const NEW_CLIENT_STATUSES = [
+      "Assisted",
+      "Quote-Done",
+      "SO-Done",
+      "Delivered",
+    ];
+
     const newClientsGrouped: Record<string, number> = {};
     let totalNewClients = 0;
 
@@ -571,13 +579,14 @@ export function BreachesDialog() {
       const actTime = new Date(act.date_created).getTime();
 
       if (
-        act.status === "Assisted" &&
+        NEW_CLIENT_STATUSES.includes(act.status) &&
         act.type_client === "New Client" &&
         actTime >= startOfDay.getTime() &&
         actTime <= endOfDay.getTime()
       ) {
         const company = act.company_name || "Unknown";
-        newClientsGrouped[company] = (newClientsGrouped[company] || 0) + 1;
+        newClientsGrouped[company] =
+          (newClientsGrouped[company] || 0) + 1;
         totalNewClients++;
       }
     });
@@ -585,15 +594,6 @@ export function BreachesDialog() {
     setNewClientByCompany(newClientsGrouped);
     setNewClientCount(totalNewClients);
   }, [activities, fromDate]);
-
-  // Update newClientCount whenever newClientByCompany changes
-  useEffect(() => {
-    const total = Object.values(newClientByCompany).reduce(
-      (sum, count) => sum + count,
-      0
-    );
-    setNewClientCount(total);
-  }, [newClientByCompany]);
 
   const overdueEntries = Object.entries(overdueByCompany);
   const hasMoreThanFive = overdueEntries.length > 5;
@@ -628,7 +628,7 @@ export function BreachesDialog() {
 
           {/* DEBUGGING PANEL */}
 
-         {/*<div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
+          {/*<div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
             <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
               Debugging Calibration
             </h4>

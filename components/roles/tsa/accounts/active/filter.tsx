@@ -32,14 +32,14 @@ export function AccountsActiveFilter({
         variant="outline"
         onClick={() => setOpen(true)}
         aria-label="Open filters"
-        className="flex items-center justify-center cursor-pointer"
+        className="flex items-center justify-center cursor-pointer rounded-none"
       >
         <Filter />
       </Button>
 
       {/* Dialog with all filters */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full max-w-md">
+        <DialogContent className="w-full max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle>Filters</DialogTitle>
           </DialogHeader>
@@ -49,7 +49,7 @@ export function AccountsActiveFilter({
             <div>
               <label className="block mb-1 font-medium text-xs">Type Client</label>
               <Select value={typeFilter} onValueChange={setTypeFilterAction}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full rounded-none">
                   <SelectValue placeholder="Type Client" />
                 </SelectTrigger>
                 <SelectContent>
@@ -75,7 +75,7 @@ export function AccountsActiveFilter({
                       setAlphabeticalFilterAction(val === "none" ? null : val)
                     }
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full rounded-none">
                       <SelectValue placeholder="Sort Alphabetically" />
                     </SelectTrigger>
                     <SelectContent>
@@ -87,7 +87,7 @@ export function AccountsActiveFilter({
                 </div>
                 <Button
                   variant={dateCreatedFilter ? "default" : "outline"}
-                  className="w-full justify-between"
+                  className="w-full justify-between rounded-none"
                   onClick={() =>
                     setDateCreatedFilterAction(dateCreatedFilter === "asc" ? "desc" : "asc")
                   }
@@ -97,7 +97,7 @@ export function AccountsActiveFilter({
 
                 <Button
                   variant="destructive"
-                  className="w-full"
+                  className="w-full rounded-none p-6"
                   onClick={() => {
                     setDateCreatedFilterAction(null);
                     setAlphabeticalFilterAction(null);
@@ -110,8 +110,8 @@ export function AccountsActiveFilter({
             </div>
           </div>
 
-          <DialogFooter className="mt-6 flex justify-end">
-            <Button onClick={() => setOpen(false)}>Close</Button>
+          <DialogFooter className="flex justify-end">
+            <Button onClick={() => setOpen(false)} className="rounded-none p-6">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

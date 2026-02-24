@@ -79,6 +79,7 @@ interface ScheduledProps {
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
+  onCountChange?: (count: number) => void;
 }
 
 export const Scheduled: React.FC<ScheduledProps> = ({
@@ -93,6 +94,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   managername,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
+  onCountChange
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -208,48 +210,18 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress", "Transfer"].includes(status);
   }
 
-  function getOverdueDays(scheduledDate: string): number {
-    const sched = new Date(scheduledDate);
-    const today = new Date();
-
-    // reset time para date lang ang comparison
-    sched.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    const diffMs = today.getTime() - sched.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    return diffDays > 0 ? diffDays : 0;
-  }
-
   const mergedActivities = activities
     .filter((a) => !isDelivered(a.status)) // Remove delivered/completed/cancelled
-    .filter((a) => {
-      // Remove Assisted activities that are overdue
-      if (a.status === "Assisted") {
-        const overdueDays = getOverdueDays(a.scheduled_date);
-        return overdueDays === 0; // only keep if not overdue
-      }
-      return true; // keep other statuses
-    })
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) => h.activity_reference_number === activity.activity_reference_number
       );
 
-      const overdueDays = getOverdueDays(activity.scheduled_date);
-
       return {
         ...activity,
         relatedHistoryItems,
-        overdueDays,
       };
     })
-    .sort(
-      (a, b) =>
-        new Date(b.scheduled_date).getTime() -
-        new Date(a.scheduled_date).getTime()
-    );
 
   const term = searchTerm.toLowerCase();
 
@@ -353,6 +325,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
+  function getStatusStyles(status: string): { badgeClass?: string; bgClass?: string } {
+    switch (status) {
+      case "Assisted":
+      case "On-Progress":
+        return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
+      case "SO-Done":
+        return { badgeClass: "bg-yellow-400 text-white", bgClass: "bg-yellow-100" };
+      case "Quote-Done":
+        return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+      case "Cancelled":
+        return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
+      default:
+        return { badgeClass: "", bgClass: "bg-white" };
+    }
+  }
+
   const openDoneDialog = (id: string) => {
     setSelectedActivityId(id);
     setDialogDoneOpen(true);
@@ -439,6 +427,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
   const selectedTicketReferenceNumber = selectedActivity?.ticket_reference_number || null;
 
+  useEffect(() => {
+    onCountChange?.(filteredActivities.length);
+  }, [filteredActivities.length]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -475,8 +467,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex items-center gap-2 mb-4 w-full">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           {/* Search Bar - humahaba */}
           <Input
             type="search"
@@ -494,21 +486,36 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 {statusFilter === "All" ? <Filter /> : statusFilter} Filter
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => setStatusFilter("All")}>All</DropdownMenuItem>
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => (
-                <DropdownMenuItem key={status} onClick={() => setStatusFilter(status)}>
-                  {status}
-                </DropdownMenuItem>
-              ))}
+
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setStatusFilter("All")}>
+                <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" />
+                All
+              </DropdownMenuItem>
+
+              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => {
+                const { badgeClass } = getStatusStyles(status);
+
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className="flex items-center gap-2"
+                  >
+                    {/* Colored Dot */}
+                    <span
+                      className={`w-2 h-2 rounded-full ${badgeClass}`}
+                    />
+
+                    <span className="capitalize">{status}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <div className="mb-4 text-xs font-bold">
-        Total Follow Up: ({filteredActivities.length})
-      </div>
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
           {filteredActivities.length === 0 ? (
@@ -518,9 +525,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           ) : (
             filteredActivities.map((item) => {
               const badgeProps = getBadgeProps(item.status);
+              const statusStyles = getStatusStyles(item.status);
 
               return (
-                <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
+                <AccordionItem key={item.id} value={item.id} className={`w-full border rounded-none shadow-sm mt-2 ${statusStyles.bgClass}`}>
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
                       <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
@@ -696,12 +704,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           </Badge>
                         );
                       })()}
-
-                      {item.overdueDays > 0 && (
-                        <h1 className="justify-center flex items-center font-mono text-[10px]">
-                         {item.overdueDays} day{item.overdueDays > 1 ? "s" : ""} Ago..
-                        </h1>
-                      )}
                     </div>
                   </div>
 

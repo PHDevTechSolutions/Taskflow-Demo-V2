@@ -136,19 +136,6 @@ function getQuotationPrefix(type: string): string {
   return map[type.trim()] || "";
 }
 
-interface ManualProduct {
-  id: number;
-  title: string;
-  skus: string[];
-  description: string;
-  brand?: string;
-  images: { src: string }[];
-  base64Attachment?: string;
-  imageFilename?: string;
-  quantity?: number;
-  price?: number | string;
-}
-
 export function QuotationSheet(props: Props) {
   const {
     step, setStep,
@@ -206,6 +193,16 @@ export function QuotationSheet(props: Props) {
   const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
   const [useToday, setUseToday] = useState(false);
 
+  const [showQuotationAlert, setShowQuotationAlert] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+
+  const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
+
   function addDaysToDate(days: number): string {
     const date = new Date();
     date.setDate(date.getDate() + days);
@@ -243,14 +240,6 @@ export function QuotationSheet(props: Props) {
   useEffect(() => {
     setUseToday(false);
   }, [callType]);
-
-  const [showQuotationAlert, setShowQuotationAlert] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
-  const [hasGenerated, setHasGenerated] = useState(false);
-  const [hasDownloaded, setHasDownloaded] = useState(false);
-  const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
-  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   async function handleGenerateQuotation() {
     if (!quotationType || !tsm || isGenerating) return;
@@ -314,19 +303,15 @@ export function QuotationSheet(props: Props) {
     const total = selectedProducts.reduce((acc, p) => {
       const isDiscounted = p.isDiscounted ?? false;
       const baseAmount = p.price * p.quantity;
-      let discountedAmount = 0;
-
-      if (isDiscounted && discount > 0) {
-        discountedAmount = (baseAmount * discount) / 100;
-        // You can customize discount logic based on vatType here if needed
-      }
-
+      const rowDiscount = isDiscounted ? (p.discount ?? 0) : 0; // use per-product discount
+      const discountedAmount = (baseAmount * rowDiscount) / 100;
       const totalAfterDiscount = baseAmount - discountedAmount;
+
       return acc + totalAfterDiscount;
     }, 0);
 
-    setQuotationAmount(total.toFixed(2)); // Assuming quotationAmount is string, else remove toFixed
-  }, [selectedProducts, discount, vatType]);
+    setQuotationAmount(total.toFixed(2)); // keeps it as string, or remove toFixed if number
+  }, [selectedProducts]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -559,6 +544,7 @@ export function QuotationSheet(props: Props) {
       const qty = p.quantity ?? 0;
       const unitPrice = p.price ?? 0;
       const isDiscounted = p.isDiscounted ?? false;
+      const discount = isDiscounted ? (p.discount ?? 0) : 0;
 
       // Logic mirrored from handleDownloadQuotation
       const baseAmount = qty * unitPrice;
@@ -573,6 +559,7 @@ export function QuotationSheet(props: Props) {
         sku: p.skus?.join(", ") ?? "",
         description: p.description ?? "",
         unitPrice,
+        discount,
         totalAmount,
       };
     });
@@ -1123,6 +1110,10 @@ export function QuotationSheet(props: Props) {
       console.error("Critical Export Error:", error);
     }
   }
+
+  const toggleRow = (uid: string) => {
+    setExpandedRows((prev) => ({ ...prev, [uid]: !prev[uid] }));
+  };
 
   return (
     <>
@@ -1857,12 +1848,15 @@ export function QuotationSheet(props: Props) {
                           const newVatType = value as "vat_inc" | "vat_exe" | "zero_rated";
                           setVatType(newVatType);
 
-                          // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
-                          if (newVatType === "vat_exe") {
-                            setDiscount(12);
-                          } else {
-                            setDiscount(0);
-                          }
+                          // Update per-product discount for all selected products
+                          setSelectedProducts((prev) =>
+                            prev.map((p) => {
+                              const isDiscounted = p.isDiscounted ?? false;
+                              const newDiscount =
+                                newVatType === "vat_exe" && isDiscounted ? 12 : p.discount ?? 0;
+                              return { ...p, discount: newDiscount };
+                            })
+                          );
                         }}
                         className="flex items-center gap-3"
                       >
@@ -1876,7 +1870,7 @@ export function QuotationSheet(props: Props) {
                         <div className="flex items-center gap-1">
                           <RadioGroupItem value="vat_exe" id="vat-exe" />
                           <label htmlFor="vat-exe" className="text-xs cursor-pointer">
-                            VAT Exe
+                            VAT Exe <span className="text-[10px] text-red-600">(12%)</span>
                           </label>
                         </div>
 
@@ -1886,81 +1880,97 @@ export function QuotationSheet(props: Props) {
                             Zero Rated
                           </label>
                         </div>
-                      </RadioGroup> |
-
-                      {/* DISCOUNT */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-medium">Discount (%)</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={discount}
-                          onChange={(e) =>
-                            setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
-                          }
-                          className="w-24 text-xs h-8 rounded-none"
-                          placeholder="0.00"
-                        />
-                      </div>
+                      </RadioGroup>
                     </div>
                   </div>
 
                   <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
-                        <th className="border border-gray-300 p-2 text-center w-12"></th>
-                        <th className="border border-gray-300 p-2 text-left">Product</th>
-                        <th className="border border-gray-300 p-2 text-left w-30">Quantity</th>
-                        <th className="border border-gray-300 p-2 text-left w-30">Price per item</th>
-                        <th className="border border-gray-300 p-2 text-right w-30">Discounted</th>
-                        <th className="border border-gray-300 p-2 text-right w-30">Subtotal</th>
-                        <th className="border border-gray-300 p-2 text-center w-20">Tool</th>
+                        <th className="border border-gray-300 p-4 text-center w-5">Vat Adjust</th>
+                        <th className="border border-gray-300 p-4 text-left w-45">Product</th>
+                        <th className="border border-gray-300 p-4 text-center w-5">Quantity</th>
+                        <th className="border border-gray-300 p-4 text-center w-15">Price</th>
+                        <th className="border border-gray-300 p-4 text-center w-10">Discounted</th>
+                        <th className="border border-gray-300 p-4 text-center w-10">Subtotal</th>
+                        <th className="border border-gray-300 p-4 text-center w-5">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedProducts.map((p, idx) => {
                         const isDiscounted = p.isDiscounted ?? false;
 
+                        // default discount based on VAT type
+                        const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
+                        const rowDiscount = p.discount ?? defaultDiscount;
+
                         const baseAmount = p.price * p.quantity;
-                        let discountedAmount = 0;
-                        if (isDiscounted && discount > 0) {
-                          discountedAmount = (baseAmount * discount) / 100;
-                        }
+                        const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
                         const totalAfterDiscount = baseAmount - discountedAmount;
+
+                        const isExpanded = expandedRows[p.uid] ?? false;
 
                         return (
                           <React.Fragment key={p.uid}>
-                            <tr className="even:bg-gray-50">
+                            <tr
+                              className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "bg-gray-100" : ""}`}
+
+                            >
                               <td className="border border-gray-300 p-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={isDiscounted}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], isDiscounted: checked };
-                                      return copy;
-                                    });
-                                  }}
-                                  className="cursor-pointer"
-                                />
+                                <div className="flex items-center justify-center p-2 gap-2">
+                                  {/* Styled Checkbox */}
+                                  <input
+                                    type="checkbox"
+                                    checked={isDiscounted}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedProducts((prev) => {
+                                        const copy = [...prev];
+                                        copy[idx] = {
+                                          ...copy[idx],
+                                          isDiscounted: checked,
+                                          discount: checked
+                                            ? vatType === "vat_exe"
+                                              ? 12
+                                              : 0
+                                            : 0, // if unchecked, reset to 0
+                                        };
+                                        return copy;
+                                      });
+                                    }}
+                                    className="cursor-pointer h-5 w-5 rounded border border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500 transition-colors"
+                                  />
+
+                                  {/* Discount Input */}
+                                  {isDiscounted && (
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      value={p.discount ?? 0}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                        setSelectedProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[idx] = { ...copy[idx], discount: val };
+                                          return copy;
+                                        });
+                                      }}
+                                      className="w-full p-2 rounded-none"
+                                    />
+                                  )}
+                                </div>
                               </td>
 
-                              <td className="p-2 flex items-center gap-3">
-                                {p.images?.[0]?.src ? (
-                                  <img
-                                    src={p.images[0].src}
-                                    alt={p.title}
-                                    className="w-12 h-12 object-cover rounded"
-                                  />
-                                ) : (
-                                  <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
-                                    No Image
-                                  </div>
-                                )}
+                              <td className="p-2 flex items-center gap-2">
+                                {/* Product Image */}
+                                <img
+                                  src={p.images?.[0]?.src || "/Taskflow.png"} // use default if no image
+                                  alt={p.title}
+                                  className="w-12 h-12 object-cover rounded"
+                                />
 
+                                {/* Product Title (Editable) */}
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
@@ -1991,7 +2001,7 @@ export function QuotationSheet(props: Props) {
                                       return copy;
                                     });
                                   }}
-                                  className="border-none shadow-none w-full p-0"
+                                  className="w-full p-2 rounded-none"
                                 />
                               </td>
 
@@ -2009,11 +2019,11 @@ export function QuotationSheet(props: Props) {
                                       return copy;
                                     });
                                   }}
-                                  className="border-none shadow-none w-full p-2"
+                                  className="w-full p-2 rounded-none"
                                 />
                               </td>
 
-                              <td className="border border-gray-300 p-2 font-semibold text-right">
+                              <td className="border border-gray-300 p-2 font-semibold text-center">
                                 {isDiscounted && discountedAmount > 0
                                   ? `₱${discountedAmount.toFixed(2)}`
                                   : "₱0.00"}
@@ -2040,26 +2050,39 @@ export function QuotationSheet(props: Props) {
                                 </div>
                               </td> */}
 
-                              <td className="border border-gray-300 p-2 font-semibold text-right">
+                              <td className="border border-gray-300 p-2 font-semibold text-center">
                                 ₱{totalAfterDiscount.toFixed(2)}
                               </td>
 
-                              <td className="border border-gray-300 p-2 text-center">
-                                <Button
-                                  variant="destructive"
-                                  onClick={() => {
-                                    setSelectedProducts((prev) =>
-                                      prev.filter((item) => item.uid !== p.uid)
-                                    );
-                                    setVisibleDescriptions((prev) => {
-                                      const copy = { ...prev };
-                                      delete copy[p.uid];
-                                      return copy;
-                                    });
-                                  }}
-                                >
-                                  <Trash />
-                                </Button>
+                              <td className="border border-gray-300 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => toggleRow(p.uid)}
+                                    className="flex items-center rounded-none gap-1"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    View
+                                  </Button>
+
+                                  <Button
+                                    variant="outline"
+                                    className="flex items-center rounded-none gap-1"
+                                    onClick={() => {
+                                      setSelectedProducts((prev) =>
+                                        prev.filter((item) => item.uid !== p.uid)
+                                      );
+                                      setVisibleDescriptions((prev) => {
+                                        const copy = { ...prev };
+                                        delete copy[p.uid];
+                                        return copy;
+                                      });
+                                    }}
+                                  >
+                                    <Trash className="text-red-600" />
+                                  </Button>
+
+                                </div>
                               </td>
                             </tr>
                             {/* need to fix */}
@@ -2085,23 +2108,74 @@ export function QuotationSheet(props: Props) {
                               </td>
                             </tr> */}
                             {/* SECTION: Product Technical Specifications (Read-Only) */}
-                            <tr key={`desc-${idx}`} className="even:bg-[#F9FAFA]">
-                              <td colSpan={7} className="border border-gray-300 p-4 align-top">
-                                <label className="block text-xs font-medium mb-1">Description:</label>
-                                {/* Description Container: Content is now Locked/Non-Editable */}
-                                <div
-                                  className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                  dangerouslySetInnerHTML={{
-                                    __html: p.description || '<span class="text-gray-400 italic">No specifications provided.</span>'
-                                  }}
-                                />
-                              </td>
-                            </tr>
+                            {isExpanded && (
+                              <tr className="even:bg-[#F9FAFA]">
+                                <td colSpan={7} className="border border-gray-300 p-4 align-top">
+                                  <label className="block text-xs font-medium mb-1">Description:</label>
+                                  <div
+                                    className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        p.description ||
+                                        '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                    }}
+                                  />
+                                </td>
+                              </tr>
+                            )}
                           </React.Fragment>
                         );
                       })}
 
                     </tbody>
+                    <tfoot className="bg-gray-100 font-bold text-xs">
+                      <tr>
+                        {/* Vat Adjust Column */}
+                        <td className="border border-gray-300 p-2 text-center">
+
+                        </td>
+
+                        {/* Product Column: leave empty */}
+                        <td className="border border-gray-300 p-2"></td>
+
+                        {/* Quantity Column */}
+                        <td className="border border-gray-300 p-4 text-left">
+                          {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
+                        </td>
+
+                        {/* Price Column */}
+                        <td className="border border-gray-300 p-4 text-left">
+                          {selectedProducts
+                            .reduce((acc, p) => acc + p.price, 0)
+                            .toFixed(2)}
+                        </td>
+
+                        {/* Discounted Column */}
+                        <td className="border border-gray-300 p-2 text-center">
+                          ₱{selectedProducts
+                            .reduce((acc, p) => {
+                              const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                              const baseAmount = p.price * p.quantity;
+                              return acc + (baseAmount * discount) / 100;
+                            }, 0)
+                            .toFixed(2)}
+                        </td>
+
+                        {/* Subtotal Column */}
+                        <td className="border border-gray-300 p-2 text-center">
+                          ₱{selectedProducts
+                            .reduce((acc, p) => {
+                              const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                              const baseAmount = p.price * p.quantity;
+                              return acc + baseAmount - (baseAmount * discount) / 100;
+                            }, 0)
+                            .toFixed(2)}
+                        </td>
+
+                        {/* Action Column: leave empty */}
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </>
               )}
@@ -2135,9 +2209,6 @@ export function QuotationSheet(props: Props) {
                 </Button>
               </div>
             )}
-
-            {/* Right side: Total + Download button */}
-
 
             <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
               <XCircle /> Close
@@ -2255,9 +2326,15 @@ export function QuotationSheet(props: Props) {
                             </td>
                             <td className="p-4 text-right border-r border-black align-top font-medium">
                               ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+
                             </td>
                             <td className="p-4 text-right font-black align-top text-[#121212]">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              {item.discount > 0 && (
+                                <div className="text-[9px] text-red-600 font-bold mt-1">
+                                  -{item.discount}% Discount
+                                </div>
+                              )}
                             </td>
                           </tr>
                         ))}

@@ -24,7 +24,7 @@ import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-import { PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck, AlertCircle } from "lucide-react"
+import { PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck, AlertCircle, ChevronDown, ChevronRight } from "lucide-react"
 
 interface Account {
     id: string;
@@ -98,7 +98,19 @@ function DashboardContent() {
     >(undefined);
 
     // NEW: State to toggle completed card visibility
-    const [showCompleted, setShowCompleted] = useState(false);
+    const [collapseState, setCollapseState] = useState({
+        inProgress: true,
+        scheduled: true,
+        completed: true,
+        done: true,
+        overdue: true,
+    });
+
+    const [progressCount, setProgressCount] = useState(0);
+    const [scheduledCount, setScheduledCount] = useState(0);
+    const [completedCount, setCompletedCount] = useState(0);
+    const [doneCount, setDoneCount] = useState(0);
+    const [overdueCount, setOverdueCount] = useState(0);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
@@ -160,8 +172,6 @@ function DashboardContent() {
         fetchUserData();
     }, [userId]);
 
-    const loading = loadingUser || loadingAccounts;
-
     async function handleSaveAccount(data: Account & UserDetails) {
         const payload = {
             ...data,
@@ -219,6 +229,31 @@ function DashboardContent() {
         }
     }
 
+    const COLLAPSE_KEY = "activity_planner_collapsible_state";
+
+    useEffect(() => {
+        const saved = localStorage.getItem(COLLAPSE_KEY);
+        if (saved) {
+            try {
+                setCollapseState(JSON.parse(saved));
+            } catch {
+                // fallback kung may corrupted data
+                localStorage.removeItem(COLLAPSE_KEY);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState));
+    }, [collapseState]);
+
+    const toggleCollapse = (key: keyof typeof collapseState) => {
+        setCollapseState(prev => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
     return (
         <>
             <ProtectedPageWrapper>
@@ -239,8 +274,8 @@ function DashboardContent() {
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-${showCompleted ? "4" : "2"}  `}>
-                            <Card className="rounded-none">
+                        <div className="w-full columns-1 sm:columns-2 lg:columns-2 gap-4 [&>*]:break-inside-avoid">
+                            <Card className="rounded-none h-auto transition-all duration-300">
                                 <CardHeader>
                                     <CardTitle className="flex items-center space-x-2">
                                         <PlusCircle className="w-5 h-5" />
@@ -262,18 +297,37 @@ function DashboardContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card className="rounded-none">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>In Progress</span>
+                            <Card className="rounded-none h-auto transition-all duration-300">
+                                <CardHeader
+                                    className="cursor-pointer"
+                                    onClick={() => toggleCollapse("inProgress")}
+                                >
+                                    <CardTitle className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            {/* Loader only spins when count > 0 */}
+                                            <Loader2
+                                                className={`w-4 h-4 ${progressCount > 0 ? "animate-spin" : ""}`}
+                                            />
+                                            <span>In Progress</span>
+                                            <span className="text-xs text-red-600 font-bold">
+                                                ({progressCount})
+                                            </span>
+                                        </div>
+                                        <span className="text-xs rounded-sm border p-1">
+                                            {collapseState.inProgress ? <ChevronRight /> : <ChevronDown />}
+                                        </span>
                                     </CardTitle>
                                     <CardDescription>
                                         View and track all ongoing tasks to ensure timely completion and effective follow-up.
                                     </CardDescription>
                                 </CardHeader>
 
-                                <CardContent>
+                                <CardContent
+                                    className={`transition-all duration-300 overflow-hidden ${collapseState.inProgress
+                                        ? "max-h-[2000px] opacity-100"
+                                        : "max-h-0 opacity-0 p-0"
+                                        }`}
+                                >
                                     <Progress
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
@@ -291,20 +345,38 @@ function DashboardContent() {
                                     />
                                         
                                 </CardContent>
+
                             </Card>
 
-                            <Card className="rounded-none">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <Calendar className="w-5 h-5" />
-                                        <span>Scheduled</span>
+                            <Card className="rounded-none h-auto transition-all duration-300">
+                                <CardHeader
+                                    className="cursor-pointer"
+                                    onClick={() => toggleCollapse("scheduled")}
+                                >
+                                    <CardTitle className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <Calendar className="w-4 h-4" />
+                                            <span>Scheduled</span>
+                                            <span className="text-xs text-red-600 font-bold">
+                                                ({scheduledCount})
+                                            </span>
+                                        </div>
+
+                                        <span className="text-xs rounded-sm border p-1">
+                                            {collapseState.scheduled ? <ChevronRight /> : <ChevronDown />}
+                                        </span>
                                     </CardTitle>
                                     <CardDescription>
                                         View all upcoming scheduled tasks and track their progress for timely completion.
                                     </CardDescription>
                                 </CardHeader>
 
-                                <CardContent>
+                                <CardContent
+                                    className={`transition-all duration-300 overflow-hidden ${collapseState.scheduled
+                                        ? "max-h-[2000px] opacity-100"
+                                        : "max-h-0 opacity-0 p-0"
+                                        }`}
+                                >
                                     <Scheduled
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
@@ -316,41 +388,79 @@ function DashboardContent() {
                                         managername={userDetails.managername}
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        onCountChange={setScheduledCount}
+                                    />
                                 </CardContent>
                             </Card>
 
-                            <Card className="rounded-none">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <CheckCircle className="w-5 h-5" />
-                                        <span>Completed</span>
+                            <Card className="rounded-none h-auto transition-all duration-300">
+                                <CardHeader
+                                    className="cursor-pointer"
+                                    onClick={() => toggleCollapse("completed")}
+                                >
+                                    <CardTitle className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span>Completed</span>
+                                            <span className="text-xs text-red-600 font-bold">
+                                                ({completedCount})
+                                            </span>
+                                        </div>
+                                        <span className="text-xs rounded-sm border p-1">
+                                            {collapseState.completed ? <ChevronRight /> : <ChevronDown />}
+                                        </span>
                                     </CardTitle>
                                     <CardDescription>
                                         Review all delivered transactions and successfully completed tasks for your records.
                                     </CardDescription>
                                 </CardHeader>
 
-                                <CardContent>
+                                <CardContent
+                                    className={`transition-all duration-300 overflow-hidden ${collapseState.completed
+                                        ? "max-h-[2000px] opacity-100"
+                                        : "max-h-0 opacity-0 p-0"
+                                        }`}
+                                >
                                     <Completed
                                         referenceid={userDetails.referenceid}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        onCountChange={setCompletedCount}
+                                    />
                                 </CardContent>
+
                             </Card>
 
-                            <Card className="rounded-none">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <ClipboardCheck className="w-5 h-5" />
-                                        <span>Done</span>
+                            <Card className="rounded-none h-auto transition-all duration-300">
+                                <CardHeader
+                                    className="cursor-pointer"
+                                    onClick={() => toggleCollapse("done")}
+                                >
+                                    <CardTitle className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <ClipboardCheck className="w-4 h-4" />
+                                            <span>Done</span>
+                                            <span className="text-xs text-red-600 font-bold">
+                                                ({doneCount})
+                                            </span>
+                                        </div>
+                                        <span className="text-xs rounded-sm border p-1">
+                                            {collapseState.done ? <ChevronRight /> : <ChevronDown />}
+                                        </span>
                                     </CardTitle>
                                     <CardDescription>
                                         This task has been completed.
                                     </CardDescription>
                                 </CardHeader>
 
-                                <CardContent>
+
+                                <CardContent
+                                    className={`transition-all duration-300 overflow-hidden ${collapseState.done
+                                        ? "max-h-[2000px] opacity-100"
+                                        : "max-h-0 opacity-0 p-0"
+                                        }`}
+                                >
                                     <Done
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
@@ -361,22 +471,41 @@ function DashboardContent() {
                                         managername={userDetails.managername}
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        onCountChange={setDoneCount}
+                                    />
                                 </CardContent>
+
                             </Card>
 
-                            <Card className="border-3 border-red-400 rounded-none shadow-lg">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center space-x-2">
-                                        <AlertCircle className="w-5 h-5 text-red-500" />
-                                        <span>Overdue</span>
+                            <Card className="border-3 border-red-400 rounded-none shadow-lg h-auto transition-all duration-300">
+                                <CardHeader
+                                    className="cursor-pointer"
+                                    onClick={() => toggleCollapse("overdue")}
+                                >
+                                    <CardTitle className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <AlertCircle className="w-4 h-4" />
+                                            <span>Overdue</span>
+                                            <span className="text-xs text-red-600 font-bold">
+                                                ({overdueCount})
+                                            </span>
+                                        </div>
+                                        <span className="text-xs rounded-sm border p-1">
+                                            {collapseState.overdue ? <ChevronRight /> : <ChevronDown />}
+                                        </span>
                                     </CardTitle>
                                     <CardDescription>
                                         This activity has passed its scheduled date and requires attention.
                                     </CardDescription>
                                 </CardHeader>
 
-                                <CardContent>
+                                <CardContent
+                                    className={`transition-all duration-300 overflow-hidden ${collapseState.overdue
+                                        ? "max-h-[2000px] opacity-100"
+                                        : "max-h-0 opacity-0 p-0"
+                                        }`}
+                                >
                                     <Overdue
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
@@ -387,7 +516,9 @@ function DashboardContent() {
                                         managername={userDetails.managername}
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
-                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        onCountChange={setOverdueCount}
+                                    />
                                 </CardContent>
                             </Card>
                         </div>

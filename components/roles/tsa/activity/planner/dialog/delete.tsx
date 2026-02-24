@@ -21,7 +21,7 @@ export function AccountsActiveDeleteDialog({
 }: AccountsActiveDeleteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="rounded-none p-6">
         <DialogHeader>
           <DialogTitle>Remove Selected Accounts</DialogTitle>
           <DialogDescription>
@@ -30,7 +30,7 @@ export function AccountsActiveDeleteDialog({
         </DialogHeader>
 
         <textarea
-          className="w-full border rounded p-2 mt-2 mb-4"
+          className="w-full border rounded-none p-2 mt-2 mb-4"
           rows={4}
           value={removeRemarks}
           onChange={(e) => setRemoveRemarks(e.target.value)}
@@ -44,11 +44,13 @@ export function AccountsActiveDeleteDialog({
               onOpenChange(false);
               setRemoveRemarks("");
             }}
+            className="rounded-none p-6"
           >
             Cancel
           </Button>
           <Button
             variant="destructive"
+            className="rounded-none p-6"
             disabled={!removeRemarks.trim()}
             onClick={onConfirmRemove}
           >

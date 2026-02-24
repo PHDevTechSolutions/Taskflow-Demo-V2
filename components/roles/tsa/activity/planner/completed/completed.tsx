@@ -70,6 +70,7 @@ interface CompletedProps {
   setDateCreatedFilterRangeAction?: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
+  onCountChange?: (count: number) => void;
 }
 
 /* ================= COMPONENT ================= */
@@ -77,6 +78,7 @@ interface CompletedProps {
 export const Completed: React.FC<CompletedProps> = ({
   referenceid,
   dateCreatedFilterRange,
+  onCountChange
 }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -217,6 +219,14 @@ export const Completed: React.FC<CompletedProps> = ({
     "Cancelled",
   ];
 
+  const deliveredData = filteredData.filter(
+    (item) => item.status === "Delivered"
+  );
+
+  useEffect(() => {
+          onCountChange?.(deliveredData.length);
+        }, [deliveredData.length]);
+
   /* ================= UI ================= */
 
   if (loading) {
@@ -237,10 +247,6 @@ export const Completed: React.FC<CompletedProps> = ({
     );
   }
 
-  const deliveredData = filteredData.filter(
-    (item) => item.status === "Delivered"
-  );
-
   return (
     <>
       <Input
@@ -250,10 +256,6 @@ export const Completed: React.FC<CompletedProps> = ({
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
-
-      <div className="mb-2 text-xs font-bold mt-2 mb-4">
-        Total Completed Activities: ({deliveredData.length})
-      </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
         <Accordion type="single" collapsible>

@@ -335,7 +335,7 @@ export function AccountsTable({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 {/* Card 1 */}
-                <Card className="text-center">
+                <Card className="text-center rounded-none">
                     <CardHeader>
                         <CardTitle className="text-sm font-semibold">Total Accounts</CardTitle>
                     </CardHeader>
@@ -345,7 +345,7 @@ export function AccountsTable({
                 </Card>
 
                 {/* Card 3 */}
-                <Card className="text-center">
+                <Card className="text-center rounded-none">
                     <CardHeader>
                         <CardTitle className="text-sm font-semibold">Balance / Next / Top</CardTitle>
                     </CardHeader>
@@ -363,7 +363,7 @@ export function AccountsTable({
                 </Card>
 
                 {/* Card 2 */}
-                <Card className="text-center">
+                <Card className="text-center rounded-none">
                     <CardHeader>
                         <CardTitle className="text-sm font-semibold">Clients by Type</CardTitle>
                     </CardHeader>
@@ -378,7 +378,7 @@ export function AccountsTable({
                 </Card>
 
                 {/* Card 4 */}
-                <Card className="text-center">
+                <Card className="text-center rounded-none">
                     <CardHeader>
                         <CardTitle className="text-sm font-semibold">Companies Scheduled Today</CardTitle>
                     </CardHeader>
@@ -416,14 +416,14 @@ export function AccountsTable({
                         agents={agents}
                     />
 
-                    <Button variant="outline" onClick={handleDownloadCSV}>
+                    <Button variant="outline" className="rounded-none" onClick={handleDownloadCSV}>
                        <DownloadCloud /> Download
                     </Button>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="rounded-md border p-4 space-y-2 overflow-x-auto">
+            <div className="rounded-none border p-4 space-y-2 overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>

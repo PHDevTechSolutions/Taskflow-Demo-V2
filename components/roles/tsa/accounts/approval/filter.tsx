@@ -62,7 +62,7 @@ export function AccountsAllFilter({
                 variant="outline"
                 onClick={() => setOpen(true)}
                 aria-label="Open filters"
-                className="flex items-center justify-center"
+                className="flex items-center justify-center rounded-none"
             >
                 <Filter />
             </Button>

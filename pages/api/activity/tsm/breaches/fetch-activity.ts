@@ -11,7 +11,7 @@ function formatDate(date: Date) {
 }
 
 /* ------------------ Fetch overdue activities with status ------------------ */
-async function fetchOverdueActivities(referenceid: string, today: string) {
+async function fetchOverdueActivities(tsm: string, today: string) {
   let allActivities: any[] = [];
   let offset = 0;
 
@@ -19,7 +19,7 @@ async function fetchOverdueActivities(referenceid: string, today: string) {
     const { data, error } = await supabase
       .from("activity")
       .select("*")
-      .eq("referenceid", referenceid)
+      .eq("tsm", tsm)
       .lt("scheduled_date", today) // only overdue
       .range(offset, offset + BATCH_SIZE - 1);
 
@@ -80,17 +80,17 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
 }
 /* ------------------ API Handler ------------------ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid } = req.query;
+  const { tsm } = req.query;
 
-  if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  if (!tsm || typeof tsm !== "string") {
+    return res.status(400).json({ message: "Missing or invalid tsm" });
   }
 
   const today = formatDate(new Date());
 
   try {
     // 1️⃣ Fetch overdue activities
-    const activities = await fetchOverdueActivities(referenceid, today);
+    const activities = await fetchOverdueActivities(tsm, today);
 
     const activityIds = activities.map(a => a.activity_reference_number);
 

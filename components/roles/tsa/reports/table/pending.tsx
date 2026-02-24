@@ -1,211 +1,117 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
+import { AreaChart, Area, XAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+
 import { supabase } from "@/utils/supabase";
-import { type DateRange } from "react-day-picker";
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
 
-interface Company {
-  account_reference_number: string;
-  company_name: string;
-  contact_number?: string;
-  type_client?: string;
-  contact_person?: string;
-}
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
-interface Activity {
-  id: string;
-  referenceid: string;
-  target_quota?: string;
-  tsm: string;
-  manager: string;
-  activity_reference_number: string;
-  account_reference_number: string;
-  status: string;
-  date_updated: string;
+interface Pending {
+  id: number;
+  quotation_number?: string;
+  quotation_amount?: number;
+  remarks?: string;
   date_created: string;
+  company_name?: string;
+  contact_number?: string;
+  quotation_status?: string;
+  type_activity: string;
+  status: string;
 }
 
-interface HistoryRecord {
-  activity_reference_number: string;
-  so_number: string;
-  so_amount: string;
-}
-
-interface NewTaskProps {
+interface PendingProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: DateRange | undefined;
-  setDateCreatedFilterRangeAction: React.Dispatch<
-    React.SetStateAction<DateRange | undefined>
-  >;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
 const PAGE_SIZE = 10;
 
-export const PendingTable: React.FC<NewTaskProps> = ({
+export const PendingTable: React.FC<PendingProps> = ({
   referenceid,
   target_quota,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
 }) => {
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [history, setHistory] = useState<HistoryRecord[]>([]);
-  const [loadingCompanies, setLoadingCompanies] = useState(false);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
-  const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  const [activities, setActivities] = useState<Pending[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  // Fetch companies
-  useEffect(() => {
-    if (!referenceid) {
-      setCompanies([]);
-      return;
-    }
-    setLoadingCompanies(true);
-    setErrorCompanies(null);
-
-    fetch(`/api/com-fetch-companies`, {
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch company data");
-        return res.json();
-      })
-      .then((data) => {
-        setCompanies(data.data || []);
-      })
-      .catch((err) => {
-        setErrorCompanies(err.message || "Error fetching company data");
-      })
-      .finally(() => {
-        setLoadingCompanies(false);
-      });
-  }, [referenceid]);
+  // Pagination state
+  const [page, setPage] = useState(1);
 
   // Fetch activities
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
       return;
     }
-    setLoadingActivities(true);
-    setErrorActivities(null);
 
-    try {
-      const res = await fetch(
-        `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        }
-      );
+    setLoading(true);
+    setError(null);
 
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error || "Failed to fetch activities");
-      }
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
 
-      const json = await res.json();
-      setActivities(json.data || []);
-    } catch (error: any) {
-      setErrorActivities(error.message || "Error fetching activities");
-    } finally {
-      setLoadingActivities(false);
+    const url = new URL("/api/reports/tsa/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
     }
-  }, [referenceid]);
 
-  // Fetch history, accepts activity refs as parameter
-  const fetchHistory = useCallback(
-    async (activityRefs: string[]) => {
-      if (!referenceid) {
-        setHistory([]);
-        return;
-      }
-      if (activityRefs.length === 0) {
-        setHistory([]);
-        return;
-      }
-      setLoadingHistory(true);
-      setErrorHistory(null);
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
-      try {
-        const queryParams = activityRefs
-          .map((ref) => `activity_reference_numbers=${encodeURIComponent(ref)}`)
-          .join("&");
-
-        const res = await fetch(`/api/act-fetch-so-pending?${queryParams}`, {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        });
-
-        if (!res.ok) {
-          const json = await res.json();
-          throw new Error(json.message || "Failed to fetch history data");
-        }
-
-        const json = await res.json();
-        setHistory(json.data || []);
-      } catch (error: any) {
-        setErrorHistory(error.message || "Error fetching history data");
-      } finally {
-        setLoadingHistory(false);
-      }
-    },
-    [referenceid]
-  );
-
-  // Effect to fetch activities + subscribe to real-time updates
   useEffect(() => {
-    fetchActivities();
+    // Wrap async call in a function
+    const fetch = async () => {
+      await fetchActivities();
+    };
+    fetch(); // call it
 
     if (!referenceid) return;
 
     const channel = supabase
-      .channel(`public:activity:referenceid=eq.${referenceid}`)
+      .channel(`public:history:referenceid=eq.${referenceid}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "activity",
+          table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
         (payload) => {
-          const newRecord = payload.new as Activity;
-          const oldRecord = payload.old as Activity;
+          const newRecord = payload.new as Pending;
+          const oldRecord = payload.old as Pending;
 
           setActivities((curr) => {
             switch (payload.eventType) {
               case "INSERT":
-                if (!curr.some((a) => a.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
+                if (!curr.some((a) => a.id === newRecord.id)) return [...curr, newRecord];
                 return curr;
               case "UPDATE":
                 return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
@@ -219,258 +125,224 @@ export const PendingTable: React.FC<NewTaskProps> = ({
       )
       .subscribe();
 
+    // Cleanup function
     return () => {
       supabase.removeChannel(channel);
     };
   }, [referenceid, fetchActivities]);
 
-  // Effect to fetch history when activities change
-  useEffect(() => {
-    const activityRefs = activities
-      .map((a) => a.activity_reference_number)
-      .filter(Boolean);
-    fetchHistory(activityRefs);
-  }, [activities, fetchHistory]);
-
-  // Date range filter helper
-  const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
-    if (!range) return true;
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return false;
-    const { from, to } = range;
-    if (from && date < from) return false;
-    if (to && date > to) return false;
-    return true;
-  };
-
-  const allowedStatuses = ["SO-Done"];
-
-  const mergedData = useMemo(() => {
-    const historyMap = new Map<string, HistoryRecord[]>();
-
-    history.forEach((h) => {
-      const key = h.activity_reference_number?.trim().toLowerCase();
-      if (!key) return;
-
-      if (!historyMap.has(key)) {
-        historyMap.set(key, []);
-      }
-      historyMap.get(key)!.push(h);
-    });
-
-    // cutoff = 15 days ago
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 15);
+  // ===================== FILTER LOGIC =====================
+  const filteredActivities = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+    const now = new Date();
 
     return activities
-      .filter((a) => allowedStatuses.includes(a.status))
-      .filter((a) => {
-        const created = new Date(a.date_created);
-        if (isNaN(created.getTime())) return false;
-        if (created > cutoffDate) return false;
-        return isDateInRange(a.date_created, dateCreatedFilterRange);
-      })
-      .map((activity) => {
-        const company = companies.find(
-          (c) => c.account_reference_number === activity.account_reference_number
+      // Only quotations with status "Convert to SO"
+      .filter((item) => item.quotation_status?.toLowerCase() === "convert to so")
+      // Optional search filter
+      .filter((item) => {
+        if (!search) return true;
+        return (
+          (item.company_name?.toLowerCase().includes(search) ?? false) ||
+          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
+          (item.remarks?.toLowerCase().includes(search) ?? false)
         );
-
-        const key = activity.activity_reference_number?.trim().toLowerCase();
-        const historyRecords = historyMap.get(key) || [];
-
-        // ensure latest
-        const latestHistory = historyRecords.sort(
-          (a, b) =>
-            new Date((b as any).created_at || 0).getTime() -
-            new Date((a as any).created_at || 0).getTime()
-        )[0];
-
-        return {
-          ...activity,
-          company_name: company?.company_name ?? "Unknown Company",
-          contact_person: company?.contact_person ?? "-",
-          contact_number: company?.contact_number ?? "-",
-          type_client: company?.type_client ?? "-",
-          so_number: latestHistory?.so_number ?? "-",
-          so_amount: latestHistory?.so_amount ?? "-",
-        };
       })
-      .sort(
-        (a, b) =>
-          new Date(b.date_updated).getTime() -
-          new Date(a.date_updated).getTime()
-      );
-  }, [activities, companies, history, dateCreatedFilterRange]);
+      // Optional status filter
+      .filter((item) => {
+        if (filterStatus !== "all" && item.status !== filterStatus) return false;
+        return true;
+      })
+      // Pending >= 15 days based on date_created only
+      .filter((item) => {
+        const createdDate = new Date(item.date_created);
+        if (isNaN(createdDate.getTime())) return false;
+        const diffDays = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays >= 15;
+      })
+      // Sort newest first
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+  }, [activities, searchTerm, filterStatus]);
 
-  // Apply search filtering (search all fields including so_number & so_amount)
-  const filteredData = useMemo(() => {
-    if (!searchTerm.trim()) return mergedData;
+  // ===================== PAGINATION =====================
+  const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
+  const paginatedActivities = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredActivities.slice(start, start + PAGE_SIZE);
+  }, [filteredActivities, page]);
 
-    const lower = searchTerm.toLowerCase();
+  useEffect(() => setPage(1), [searchTerm, filterStatus, dateCreatedFilterRange]);
 
-    return mergedData.filter((item) =>
-      [
-        item.company_name,
-        item.contact_person,
-        item.contact_number,
-        item.status,
-        item.type_client,
-        item.so_number,
-        item.so_amount,
-      ]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(lower))
-    );
-  }, [mergedData, searchTerm]);
+  // ===================== CHART =====================
+  const chartData = useMemo(() => {
+    const dataByDate: Record<string, { count: number; amount: number }> = {};
 
-  // Pagination logic
-  const pageCount = Math.ceil(filteredData.length / PAGE_SIZE);
+    filteredActivities.forEach(({ date_created, quotation_amount }) => {
+      const date = new Date(date_created).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      if (!dataByDate[date]) dataByDate[date] = { count: 0, amount: 0 };
+      dataByDate[date].count += 1;
+      dataByDate[date].amount += quotation_amount ?? 0;
+    });
 
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredData.slice(start, start + PAGE_SIZE);
-  }, [filteredData, currentPage]);
+    return Object.entries(dataByDate)
+      .map(([date, { count, amount }]) => ({ date, count, amount }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [filteredActivities]);
 
-  // Update loading and error to include history
-  const isLoading = loadingCompanies || loadingActivities || loadingHistory;
-  const error = errorCompanies || errorActivities || errorHistory;
+  const chartConfig = {
+    count: { label: "Count", color: "var(--chart-1)" },
+    amount: { label: "Quotation Amount", color: "var(--chart-2)" },
+  } satisfies ChartConfig;
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <Spinner className="size-8" />
-      </div>
-    );
-  }
+  const totalQuotationAmount = useMemo(
+    () => filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0),
+    [filteredActivities]
+  );
 
-  if (error) {
-    return (
-      <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-        <div className="flex items-center space-x-3">
-          <AlertCircleIcon className="h-6 w-6 text-red-600" />
-          <div>
-            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-            <AlertDescription className="text-xs">
-              Please check your internet connection or try again later.
-            </AlertDescription>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-          <div>
-            <AlertTitle className="text-black">Add New Data</AlertTitle>
-            <AlertDescription className="text-xs">
-              You can start by adding new entries to populate your database.
-            </AlertDescription>
-          </div>
-        </div>
-      </Alert>
-    );
-  }
-
+  // ===================== RENDER =====================
   return (
-    <div>
-      {/* Top bar with total + search */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <Input
-          type="text"
-          placeholder="Search company, quotation number or remarks..."
-          className="input input-bordered input-sm flex-grow max-w-md"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Search quotations"
-        />
-      </div>
+    <>
+      {!loading && !error && filteredActivities.length === 0 && (
+        <div className="flex justify-center items-center h-40">
+          <Alert variant="destructive" className="flex flex-col items-center space-y-2 p-4 text-center text-xs">
+            <AlertTitle>No Data Found</AlertTitle>
+            <AlertDescription>Check your date range or try again later.</AlertDescription>
+          </Alert>
+        </div>
+      )}
 
-      <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">Company Name</TableHead>
-              <TableHead className="text-xs">Contact Person</TableHead>
-              <TableHead className="text-xs">Contact Number</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-              <TableHead className="text-xs">Date Created</TableHead>
-              <TableHead className="text-xs">SO Number</TableHead>
-              <TableHead className="text-xs">SO Amount</TableHead>
-            </TableRow>
-          </TableHeader>
+      {!loading && !error && filteredActivities.length !== 0 && (
+        <div className="flex flex-col md:flex-row gap-2">
+          {/* Left: Chart */}
+          {chartData.length > 0 && (
+            <Card className="md:w-1/2 bg-white rounded-md shadow p-4">
+              <CardHeader>
+                <CardTitle>Pending SO Activities Over Time</CardTitle>
+                <CardDescription>{`Showing ${filteredActivities.length} records`}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center items-center h-40"><Spinner /></div>
+                ) : (
+                  <ChartContainer config={chartConfig}>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 10, bottom: 0 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 12 }} />
+                        <ChartTooltip
+                          cursor={false}
+                          content={<ChartTooltipContent indicator="line" />}
+                          formatter={(value: number, name: string) =>
+                            name === "amount"
+                              ? value.toLocaleString(undefined, { style: "currency", currency: "PHP" })
+                              : value
+                          }
+                          labelFormatter={(label) => `Date: ${label}`}
+                        />
+                        <Area type="natural" dataKey="count" name="Count" fill="var(--chart-1)" fillOpacity={0.4} stroke="var(--chart-1)" strokeWidth={2} />
+                        <Area type="natural" dataKey="amount" name="Quotation Amount" fill="var(--chart-2)" fillOpacity={0.4} stroke="var(--chart-2)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                )}
+              </CardContent>
+              <CardFooter>
+                <div className="flex w-full items-center gap-2 text-sm text-muted-foreground">
+                  <div>
+                    Data from {chartData[0]?.date} to {chartData[chartData.length - 1]?.date}
+                  </div>
+                </div>
+              </CardFooter>
+            </Card>
+          )}
 
-          <TableBody>
-            {paginatedData.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-xs py-6">
-                  No matching records found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedData.map((item) => {
-                let badgeColor: "default" | "secondary" | "destructive" | "outline" = "default";
-
-                if (item.status === "SO-Done") {
-                  badgeColor = "secondary";
-                }
-
-                return (
-                  <TableRow key={item.id} className="text-xs">
-                    <TableCell>{item.company_name}</TableCell>
-                    <TableCell>{item.contact_person}</TableCell>
-                    <TableCell>{item.contact_number}</TableCell>
-                    <TableCell>
-                      <Badge variant={badgeColor} className="text-[8px]">
-                        {item.status.replace("-", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-
-                    <TableCell>{item.so_number}</TableCell>
-                    <TableCell>{item.so_amount}</TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {pageCount > 1 && (
-        <Pagination>
-          <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (currentPage > 1) setCurrentPage(currentPage - 1);
-                }}
-                aria-disabled={currentPage === 1}
-                className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-              >
-                Previous
-              </PaginationPrevious>
-            </PaginationItem>
-
-            <div className="px-4 font-medium select-none">
-              {pageCount === 0 ? "0 / 0" : `${currentPage} / ${pageCount}`}
+          {/* Right: Table */}
+          <div className={`${chartData.length > 1 ? "md:w-1/2" : "w-full"} overflow-auto bg-white rounded-md shadow p-4`}>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <Input
+                type="text"
+                placeholder="Search company, quotation number or remarks..."
+                className="input input-bordered input-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search quotations"
+              />
             </div>
 
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (currentPage < pageCount) setCurrentPage(currentPage + 1);
-                }}
-                aria-disabled={currentPage === pageCount}
-                className={currentPage === pageCount ? "pointer-events-none opacity-50" : ""}
-              >
-                Next
-              </PaginationNext>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px] text-xs">Date Created</TableHead>
+                  <TableHead className="text-xs">Quotation Number</TableHead>
+                  <TableHead className="text-right text-xs">Quotation Amount</TableHead>
+                  <TableHead className="text-xs">Company Name</TableHead>
+                  <TableHead className="text-xs">Contact Number</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Remarks</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {paginatedActivities.map((item) => (
+                  <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
+                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                    <TableCell className="uppercase">{item.quotation_number || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      {item.quotation_amount?.toLocaleString(undefined, { style: "currency", currency: "PHP" }) ?? "-"}
+                    </TableCell>
+                    <TableCell>{item.company_name || "-"}</TableCell>
+                    <TableCell>{item.contact_number || "-"}</TableCell>
+                    <TableCell>{item.quotation_status || "-"}</TableCell>
+                    <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+
+              <tfoot>
+                <TableRow className="bg-muted font-semibold text-xs">
+                  <TableCell colSpan={2} className="text-right pr-4">Totals:</TableCell>
+                  <TableCell className="text-right">
+                    {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                  </TableCell>
+                  <TableCell colSpan={4}></TableCell>
+                </TableRow>
+              </tfoot>
+            </Table>
+
+            {pageCount > 1 && (
+              <Pagination>
+                <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (page > 1) setPage(page - 1);
+                      }}
+                      aria-disabled={page === 1}
+                      className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+
+                  <div className="px-4 font-medium select-none">{pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}</div>
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (page < pageCount) setPage(page + 1);
+                      }}
+                      aria-disabled={page === pageCount}
+                      className={page === pageCount ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 };

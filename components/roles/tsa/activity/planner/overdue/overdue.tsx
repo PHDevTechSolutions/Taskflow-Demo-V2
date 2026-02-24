@@ -2,14 +2,19 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Dot } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Check, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Dot, MoreVertical, AlertCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/utils/supabase";
+import { CancelledDialog } from "../dialog/cancelled";
+import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
 
 interface Activity {
     id: string;
@@ -64,6 +69,7 @@ interface NewTaskProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
+    onCountChange?: (count: number) => void;
 }
 
 export const Overdue: React.FC<NewTaskProps> = ({
@@ -77,6 +83,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
     managername,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
+    onCountChange
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(false);
@@ -84,6 +91,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
     const [activitiesLoading, setActivitiesLoading] = useState(false);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [history, setHistory] = useState<HistoryItem[]>([]);
+
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
+    const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -230,29 +242,100 @@ export const Overdue: React.FC<NewTaskProps> = ({
         );
     });
 
-    if (error) {
-        return (
-            <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-                <div className="flex items-center space-x-3">
-                    <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                    <div>
-                        <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-                        <AlertDescription className="text-xs">
-                            Please check your internet connection or try again later.
-                        </AlertDescription>
-                    </div>
-                </div>
+    const openCancelledDialog = (id: string) => {
+        setSelectedActivityId(id);
+        setDialogOpen(true);
+    };
 
-                <div className="flex items-center space-x-3">
-                    <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                    <div>
-                        <AlertTitle className="text-black">Add New Data</AlertTitle>
-                        <AlertDescription className="text-xs">
-                            You can start by adding new entries to populate your database.
-                        </AlertDescription>
-                    </div>
-                </div>
-            </Alert>
+    const handleConfirmCancelled = async (cancellationRemarks: string) => {
+        if (!selectedActivityId) return;
+
+        if (!cancellationRemarks) {
+            toast.error("Cancellation remarks are required.");
+            return;
+        }
+
+        try {
+            setUpdatingId(selectedActivityId);
+            setDialogOpen(false);
+
+            const res = await fetch("/api/act-cancelled-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: selectedActivityId,
+                    cancellation_remarks: cancellationRemarks,
+                }),
+                cache: "no-store",
+            });
+
+            const result = await res.json();
+
+            if (!res.ok) {
+                toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+                setUpdatingId(null);
+                return;
+            }
+
+            await fetchAllData();
+            window.location.reload();
+
+            toast.success("Transaction marked as Cancelled.");
+        } catch {
+            toast.error("An error occurred while updating status.");
+        } finally {
+            setUpdatingId(null);
+            setSelectedActivityId(null);
+        }
+    };
+
+    const openDoneDialog = (id: string) => {
+        setSelectedActivityId(id);
+        setDialogDoneOpen(true);
+    };
+
+    const handleConfirmDone = async () => {
+        if (!selectedActivityId) return;
+
+        try {
+            setUpdatingId(selectedActivityId);
+            setDialogDoneOpen(false);
+
+            const res = await fetch("/api/act-update-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: selectedActivityId }),
+                cache: "no-store",
+            });
+
+            const result = await res.json();
+
+            if (!res.ok) {
+                toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+                setUpdatingId(null);
+                return;
+            }
+
+            await fetchAllData();
+
+            toast.success("Transaction marked as Done.");
+        } catch {
+            toast.error("An error occurred while updating status.");
+        } finally {
+            setUpdatingId(null);
+            setSelectedActivityId(null);
+        }
+    };
+
+    useEffect(() => {
+        onCountChange?.(filteredData.length);
+    }, [filteredData.length]);
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-40">
+                <Spinner className="size-8" />
+            </div>
         );
     }
 
@@ -261,15 +344,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
             <Input
                 type="search"
                 placeholder="Search..."
-                className="text-xs flex-grow mb-3 rounded-none"
+                className="text-xs flex-grow rounded-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Search accounts"
             />
-
-            <div className="mb-2 text-xs font-bold mt-2 mb-2">
-                Total Overdue Activities: ({mergedData.length})
-            </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
@@ -316,6 +395,38 @@ export const Overdue: React.FC<NewTaskProps> = ({
                                                     fetchAllData();
                                                 }}
                                             />
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button className="cursor-pointer rounded-none">
+                                                        Actions <MoreVertical />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuGroup>
+                                                        <DropdownMenuItem
+                                                            disabled={updatingId === item.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openDoneDialog(item.id);
+                                                            }}
+                                                        >
+                                                            <Check className="mr-2 h-4 w-4 text-green-600" />
+                                                            Mark as Done
+                                                        </DropdownMenuItem>
+
+                                                        <DropdownMenuItem
+                                                            disabled={updatingId === item.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openCancelledDialog(item.id);
+                                                            }}
+                                                        >
+                                                            <AlertCircle className="mr-2 h-4 w-4 text-red-600" />
+                                                            Cancel
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuGroup>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </div>
 
@@ -532,6 +643,20 @@ export const Overdue: React.FC<NewTaskProps> = ({
                     })}
                 </Accordion>
             </div>
+
+            <DoneDialog
+                open={dialogDoneOpen}
+                onOpenChange={setDialogDoneOpen}
+                onConfirm={handleConfirmDone}
+                loading={updatingId !== null}
+            />
+
+            <CancelledDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                onConfirm={handleConfirmCancelled}
+                loading={updatingId !== null}
+            />
         </>
     );
 };

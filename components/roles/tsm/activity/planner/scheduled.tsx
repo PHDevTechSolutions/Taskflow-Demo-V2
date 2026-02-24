@@ -353,7 +353,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                                 <TableCell className="font-semibold whitespace-nowrap">
                                     {item.company_name ?? "-"} <br />
-                                    <Badge className="text-[10px]">{item.call_type}</Badge>
+                                    <Badge className="text-[10px] rounded-xs shadow-sm">{item.call_type}</Badge>
                                 </TableCell>
 
                                 <TableCell className="whitespace-nowrap">
@@ -402,7 +402,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                 </TableCell>
                                 <TableCell className="text-right whitespace-nowrap">
                                     <Button
-                                        size="sm"
+                                        className="rounded-none p-6"
                                         disabled={updatingId === item.activity_reference_number}
                                         onClick={() => openDone(item)}
                                     >

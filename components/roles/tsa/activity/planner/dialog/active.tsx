@@ -359,7 +359,7 @@ export function AccountDialog({
       case 1:
         return (
           formData.address.trim() !== "" &&
-          formData.delivery_address.trim() !== "" &&
+          formData.delivery_address.length > 0 &&
           formData.region !== ""
         );
       case 2:
@@ -1051,7 +1051,7 @@ export function AccountDialog({
             type="button"
             className="rounded-none p-6 font-bold"
           >
-             <ArrowLeft /> Back
+            <ArrowLeft /> Back
           </Button>
 
           {step === totalSteps - 1 ? (
@@ -1068,7 +1068,7 @@ export function AccountDialog({
               onClick={handleNext}
               disabled={!canProceedToNext()}
               className="rounded-none p-6 font-bold"
-              >
+            >
               Next <ArrowRight />
             </Button>
 

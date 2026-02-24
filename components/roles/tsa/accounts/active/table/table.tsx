@@ -316,7 +316,7 @@ export function AccountsTable({
                     if (value === "Active") variant = "default";
                     else if (value === "Pending") variant = "secondary";
                     else if (value === "Inactive") variant = "destructive";
-                    return <Badge variant={variant}>{value ?? "-"}</Badge>;
+                    return <Badge variant={variant} className="rounded-xs shadow-sm">{value ?? "-"}</Badge>;
                 },
             },
         ],
@@ -613,7 +613,7 @@ export function AccountsTable({
                         <>
                             <Button
                                 variant="outline"
-                                className="cursor-pointer"
+                                className="cursor-pointer rounded-none"
                                 onClick={() => setIsTransferDialogOpen(true)}
                             >
                                 <Repeat />  Transfer
@@ -621,7 +621,7 @@ export function AccountsTable({
 
                             <Button
                                 variant="destructive"
-                                className="cursor-pointer"
+                                className="cursor-pointer rounded-none"
                                 onClick={() => setIsRemoveDialogOpen(true)}
                             >
                                 <Archive />  Archive

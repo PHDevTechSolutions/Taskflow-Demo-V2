@@ -68,6 +68,7 @@ interface NewTaskProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
+    onCountChange?: (count: number) => void;
 }
 
 export const Done: React.FC<NewTaskProps> = ({
@@ -81,6 +82,7 @@ export const Done: React.FC<NewTaskProps> = ({
     managername,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
+    onCountChange
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(false);
@@ -220,6 +222,10 @@ export const Done: React.FC<NewTaskProps> = ({
         );
     });
 
+    useEffect(() => {
+        onCountChange?.(filteredData.length);
+    }, [filteredData.length]);
+
     if (error) {
         return (
             <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
@@ -251,15 +257,11 @@ export const Done: React.FC<NewTaskProps> = ({
             <Input
                 type="search"
                 placeholder="Search..."
-                className="text-xs flex-grow mb-3 rounded-none"
+                className="text-xs flex-grow rounded-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Search accounts"
             />
-
-            <div className="mb-2 text-xs font-bold mt-2 mb-2">
-                Total Done Activities: ({mergedData.length})
-            </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
