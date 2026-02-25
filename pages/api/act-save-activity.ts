@@ -56,6 +56,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       start_date,
       end_date,
       tsm_approved_status,
+
+      // Signatories
+      // Agent
+      contact,
+      email,
+      signature,
+      // TSM
+      tsmname,
+      // Manager
+      managername,
     } = req.body;
 
     // Basic required field validation
@@ -182,6 +192,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (error) {
       console.error("Supabase Insert Error:", error);
       return res.status(500).json({ error: error.message });
+    }
+
+    // Insert signature sa signatories table
+    if (signature) {
+      const { data: sigData, error: sigError } = await supabase
+        .from("signatories")
+        .insert({
+          referenceid,
+          agent_contact_number: contact,
+          agent_email_address: email,
+          agent_signature: signature,
+          tsm,
+          tsm_name: tsmname,
+          manager,
+          manager_name: managername,
+          quotation_number,
+          date_created: new Date().toISOString(),
+        })
+        .select();
+
+      if (sigError) {
+        console.error("Supabase Signatories Insert Error:", sigError);
+        return res.status(500).json({ error: sigError.message });
+      }
     }
 
     // Cache inserted data for 5 minutes

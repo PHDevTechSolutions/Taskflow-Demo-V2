@@ -53,6 +53,14 @@ interface Completed {
     contact_person: string;
     tsm_approved_status: string;
     tsm_approved_date: string;
+
+    // Signatories
+    agent_signature: string;
+    agent_contact_number: string;
+    agent_email_address: string;
+    tsm_signature: string;
+    tsm_contact_number: string;
+    tsm_email_address: string;
 }
 
 interface CompletedProps {
@@ -446,7 +454,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[40px]" />
-                                <TableHead className="w-[60px] text-center">Edit</TableHead>
+                                <TableHead className="w-[60px] text-center">Tools</TableHead>
                                 <TableHead>Date Created</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
@@ -615,6 +623,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     }}
                     downloadAction={downloadAction}
                     onDownloadComplete={() => setDownloadAction(null)}
+                    agentSignature={editItem.agent_signature}
+                    agentContactNumber={editItem.agent_contact_number}
+                    agentEmailAddress={editItem.agent_email_address}
+                    TsmSignature={editItem.tsm_signature}
+                    TsmEmailAddress={editItem.tsm_email_address}
+                    TsmContactNumber={editItem.tsm_contact_number}
                 />
             )}
 

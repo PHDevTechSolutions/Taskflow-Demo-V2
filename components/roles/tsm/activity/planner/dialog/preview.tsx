@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
 
 type Item = {
     itemNo: number | string;
@@ -41,9 +39,10 @@ type Payload = {
     agentSignature?: string | null;
     agentContactNumber?: string | null;
     agentEmailAddress?: string | null;
-    TsmSignature?: string | null;
-    TsmEmailAddress?: string | null;
-    TsmContactNumber?: string | null;
+
+    signature?: string | null;
+    tsmcontact?: string | null;
+    tsmemail?: string | null;
 
 };
 
@@ -345,9 +344,9 @@ export const Preview: React.FC<PreviewProps> = ({
 
                             <div>
                                 <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Approved By:</p>
-                                {payload.TsmSignature ? (
+                                {payload.signature ? (
                                     <img
-                                        src={payload.TsmSignature}
+                                        src={payload.signature}
                                         alt="Agent Signature"
                                         className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
                                     />
@@ -356,9 +355,9 @@ export const Preview: React.FC<PreviewProps> = ({
                                 )}
                                 <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
                                 <div className="border-b border-black w-64"></div>
-                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.TsmContactNumber || "N/A"}</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.TsmEmailAddress || "N/A"}</p>
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">TERRITORY SALES MANAGER</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.tsmcontact || "N/A"}</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.tsmemail || "N/A"}</p>
                             </div>
 
                             <div>
@@ -391,17 +390,6 @@ export const Preview: React.FC<PreviewProps> = ({
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {/* ACTION BUTTONS BAR */}
-            <div className="p-8 bg-white border-t border-gray-100 flex justify-between items-center sticky bottom-0 z-50">
-                <Button
-                    variant="outline"
-                    onClick={() => setIsPreviewOpen(false)}
-                    className="rounded-none border-2 border-[#121212] font-black uppercase text-[10px] px-8 h-12 hover:bg-gray-50 transition-all"
-                >
-                    Back to Editor
-                </Button>
             </div>
         </div>
     );

@@ -130,6 +130,15 @@ interface TaskListEditDialogProps {
     quotation_number?: string;
     downloadAction?: "pdf" | "excel" | null;
     onDownloadComplete?: () => void;
+    
+    // Signatories
+    agentSignature?: string;
+    agentContactNumber?: string;
+    agentEmailAddress?: string;
+    TsmSignature?: string;
+    TsmEmailAddress?: string;
+    TsmContactNumber?: string;
+
 }
 
 export default function TaskListEditDialog({
@@ -146,7 +155,15 @@ export default function TaskListEditDialog({
     tsmcontact,
     managername,
     downloadAction,
-    onDownloadComplete
+    onDownloadComplete,
+
+    // Signatories
+    agentSignature,
+    agentContactNumber,
+    agentEmailAddress,
+    TsmSignature,
+    TsmContactNumber,
+    TsmEmailAddress
 
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -571,6 +588,15 @@ export default function TaskListEditDialog({
             salestsmcontact: tsmcontact ?? "",
 
             salesmanagername: managername ?? "",
+
+            // Signatories
+            agentSignature: agentSignature ?? null,
+            agentContactNumber: agentContactNumber ?? null,
+            agentEmailAddress: agentEmailAddress ?? null,
+            TsmSignature: TsmSignature ?? null,
+            TsmEmailAddress: TsmEmailAddress ?? null,
+            TsmContactNumber: TsmContactNumber ?? null,
+
         };
     };
 
@@ -855,8 +881,7 @@ export default function TaskListEditDialog({
             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
             .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
             .sig-line { border-bottom: 1px solid black; width: 256px; }
-            .sig-rep-box { width: 256px; height: 40px; background: rgba(248, 113, 113, 0.1); 
-            border: 1px solid #f87171; display: flex; align-items: center; 
+            .sig-rep-box { width: 256px; height: 40px; display: flex; align-items: center; 
             justify-content: center; text-align: center; font-size: 8px; 
             font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
             }
@@ -1175,20 +1200,22 @@ export default function TaskListEditDialog({
         <div class="sig-side-internal">
         <div>
         <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                                                    
+                                   
+        <img src="${payload.agentSignature || ''}" class="sig-rep-box" />
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">Sales Representative</p>
-        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
-        <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
+        <p style="font-size: 10px; font-style: italic;">Mobile: ${payload.agentContactNumber || 'N/A'}</p>
+        <p style="font-size: 10px; font-style: italic;">Email: ${payload.agentEmailAddress || 'N/A'}</p>
         </div>
         <div>
         <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
+        <img src="${payload.TsmSignature || ''}" class="sig-rep-box" />
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">SALES MANAGER</p>
-        <p style="font-size: 8px; font-style: italic;">Mobile: || 'N/A'}</p>
-        <p style="font-size: 8px; font-style: italic;">Email: || 'N/A'}</p>
+        <p style="font-size: 10px; font-style: italic;">Mobile: ${payload.TsmContactNumber || 'N/A'}</p>
+        <p style="font-size: 10px; font-style: italic;">Email: ${payload.TsmEmailAddress || 'N/A'}</p>
         </div>
         <div>
         

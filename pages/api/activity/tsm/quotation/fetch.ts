@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     // 1️⃣ Fetch history
     // -----------------------------
-    let historyQuery = supabase.from("history").select("*").eq("referenceid", referenceid);
+    let historyQuery = supabase.from("history").select("*").eq("tsm", referenceid);
 
     if (fromDate && toDate) {
       historyQuery = historyQuery.gte("date_created", fromDate).lte("date_created", toDate);
@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     const activityRefs = historyData.map((h) => h.activity_reference_number).filter(Boolean);
 
-    let signatoriesQuery = supabase.from("signatories").select("*").eq("referenceid", referenceid);
+    let signatoriesQuery = supabase.from("signatories").select("*").eq("tsm", referenceid);
     if (activityRefs.length > 0) {
       signatoriesQuery = signatoriesQuery.in("activity_reference_number", activityRefs);
     }
@@ -51,9 +51,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         agent_signature: sig?.agent_signature || null,
         agent_contact_number: sig?.agent_contact_number || null, 
         agent_email_address: sig?.agent_email_address || null, 
-        tsm_signature: sig?.tsm_signature || null, 
-        tsm_contact_number: sig?.tsm_contact_number || null, 
-        tsm_email_address: sig?.tsm_email_address || null, 
       };
     });
 

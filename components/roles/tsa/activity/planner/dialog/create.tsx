@@ -40,6 +40,13 @@ interface Activity {
 
     target_quota?: string;
     referenceid: string;
+
+    // Signatories
+    contact: string;
+    email: string;
+    signature: string | null;
+    tsmname: string;
+    managername: string;
     tsm: string;
     manager: string;
 
@@ -396,6 +403,13 @@ export function CreateActivityDialog({
             type_activity: typeActivity,
             target_quota,
             referenceid,
+            // Signatories
+            contact,
+            email,
+            signature,
+            tsmname,
+            managername,
+
             tsm,
             manager,
             ticket_reference_number,

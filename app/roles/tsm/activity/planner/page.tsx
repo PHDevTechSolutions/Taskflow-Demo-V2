@@ -30,6 +30,7 @@ interface UserDetails {
     tsmname: string;
     managername: string;
     profilePicture: string;
+    signature: string;
 }
 
 function DashboardContent() {
@@ -48,6 +49,7 @@ function DashboardContent() {
         tsmname: "",
         managername: "",
         profilePicture: "",
+        signature: "",
     });
 
     const [loadingUser, setLoadingUser] = useState(true);
@@ -90,6 +92,7 @@ function DashboardContent() {
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
                     profilePicture: data.profilePicture || "",
+                    signature: data.signatureImage || "",
                 });
 
                 toast.success("User data loaded successfully!");
@@ -126,14 +129,16 @@ function DashboardContent() {
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Follow-Ups</CardTitle>
+                                <CardTitle>Quotation Approval</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <Scheduled
                                     referenceid={userDetails.referenceid}
+                                    email={userDetails.email}
+                                    contact={userDetails.contact}
+                                    signature={userDetails.signature}
                                     dateCreatedFilterRange={dateCreatedFilterRange}
                                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                    userDetails={userDetails}
                                 />
                             </CardContent>
                         </Card>

@@ -1,137 +1,145 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
-    Pagination,
-    PaginationContent,
-    PaginationItem,
-    PaginationPrevious,
-    PaginationNext,
-} from "@/components/ui/pagination";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toast } from "sonner";
-import { DoneDialog } from "./dialog/done";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, FileSpreadsheet, FileText, MoreVertical, } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-import { type DateRange } from "react-day-picker";
-import { Stamp } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import TaskListEditDialog from "./dialog/edit";
 
-interface HistoryItem {
-    id: string;
-    activity_reference_number: string;
-    quotation_number?: string | null;
-    quotation_amount?: number | null;
-    so_number?: string | null;
-    so_amount?: number | null;
-    call_type?: string;
-    source?: string;
-    call_status?: string;
-    type_activity: string;
-    remarks: string;
-
-    date_followup?: string;
-    ticket_reference_number?: string;
-    tsm_approved_status: string;
-    tsm_approved_date: string;
-    account_reference_number?: string;
-    date_created?: string;
-    date_updated?: string;
-    referenceid: string;
-
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-
-    // Comma-separated product info
-    product_quantity: string;
-    product_amount: string;
-    product_description: string;
-    product_photo: string;
-    product_sku: string;
-    product_title: string;
-    quotation_type: string;
-    vat_type: string;
+interface SupervisorDetails {
+    firstname: string;
+    lastname: string;
+    email: string;
+    profilePicture: string;
+    signatureImage: string;
+    contact: string;
 }
 
-interface UserDetails {
+interface Completed {
+    id: number;
+    activity_reference_number: string;
     referenceid: string;
     tsm: string;
     manager: string;
-    firstname: string;
-    lastname: string;
-    profilePicture: string;
+    type_client: string;
+    project_name?: string;
+    product_category?: string;
+    project_type?: string;
+    source?: string;
+    type_activity?: string;
+    quotation_number?: string;
+    quotation_amount?: number;
+    ticket_reference_number?: string;
+    remarks?: string;
+    status?: string;
+    start_date: string;
+    end_date: string;
+    date_created: string;
+    date_updated?: string;
+    account_reference_number?: string;
+    quotation_type: string;
+    company_name: string;
+    contact_number: string;
+    email_address: string;
+    address: string;
+    contact_person: string;
+    tsm_approved_status: string;
+    tsm_approved_date: string;
+
+    // Signatories
+    agent_signature: string;
+    agent_contact_number: string;
+    agent_email_address: string;
 }
 
-interface ScheduledProps {
+interface CompletedProps {
     referenceid: string;
-    dateCreatedFilterRange: DateRange | undefined;
-    setDateCreatedFilterRangeAction: React.Dispatch<
-        React.SetStateAction<DateRange | undefined>
-    >;
-    userDetails: UserDetails;
+    target_quota?: string;
+    firstname?: string;
+    lastname?: string;
+    email?: string;
+    contact?: string;
+    tsmname?: string;
+    managername?: string;
+    signature?: string;
+    dateCreatedFilterRange: any;
+    setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
-export const Scheduled: React.FC<ScheduledProps> = ({
+export const Scheduled: React.FC<CompletedProps> = ({
     referenceid,
+    target_quota,
+    firstname,
+    lastname,
+    email,
+    contact,
+    tsmname,
+    managername,
+    signature,
     dateCreatedFilterRange,
-    userDetails,
+    setDateCreatedFilterRangeAction,
 }) => {
-    const [history, setHistory] = useState<HistoryItem[]>([]);
-
+    const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-    const [search, setSearch] = useState("");
-    const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [editItem, setEditItem] = useState<Completed | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
 
-    const [doneOpen, setDoneOpen] = useState(false);
-    const [selectedActivityRef, setSelectedActivityRef] = useState<string | null>(
-        null
-    );
-    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
-    const [agents, setAgents] = useState<any[]>([]);
+    const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(null);
+    const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(null);
 
-    const fetchAll = useCallback(async () => {
-        if (!referenceid) return;
+    // -----------------------------
+    // FETCH ACTIVITIES
+    // -----------------------------
+    const fetchActivities = useCallback(() => {
+        if (!referenceid) {
+            setActivities([]);
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
-        try {
-            const res = await fetch(
-                `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(
-                    referenceid
-                )}`
-            );
-            if (!res.ok) throw new Error("Failed to load history data");
-            const data = await res.json();
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            : null;
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            : null;
 
-            setHistory(data.activities || []);
-        } catch {
-            setError("Failed to load data");
-        } finally {
-            setLoading(false);
+        const url = new URL("/api/activity/tsm/quotation/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+        if (from && to) {
+            url.searchParams.append("from", from);
+            url.searchParams.append("to", to);
         }
-    }, [referenceid]);
 
-    useEffect(() => {
-        fetchAll();
-    }, [fetchAll]);
+        fetch(url.toString())
+            .then(async (res) => {
+                if (!res.ok) throw new Error("Failed to fetch activities");
+                return res.json();
+            })
+            .then((data) => setActivities(data.activities || []))
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, [referenceid, dateCreatedFilterRange]);
 
+    // -----------------------------
+    // REAL-TIME SUBSCRIPTION
+    // -----------------------------
     useEffect(() => {
         if (!referenceid) return;
 
-        const historyChannel = supabase
+        fetchActivities();
+
+        const channel = supabase
             .channel(`history-${referenceid}`)
             .on(
                 "postgres_changes",
@@ -141,140 +149,76 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     table: "history",
                     filter: `tsm=eq.${referenceid}`,
                 },
-                fetchAll
+                () => {
+                    fetchActivities();
+                }
             )
             .subscribe();
 
         return () => {
-            supabase.removeChannel(historyChannel);
+            supabase.removeChannel(channel);
         };
-    }, [referenceid, fetchAll]);
+    }, [referenceid, fetchActivities]);
 
-    const allowedType = [
-        "Quotation Standard Preparation",
-        "Quotation with Special Price Preparation",
-        "Quotation with SPF Preparation",
-    ];
+    // -----------------------------
+    // SORT & FILTER
+    // -----------------------------
+    const sortedActivities = useMemo(() => {
+        return [...activities].sort(
+            (a, b) =>
+                new Date(b.date_updated ?? b.date_created).getTime() -
+                new Date(a.date_updated ?? a.date_created).getTime()
+        );
+    }, [activities]);
 
-    const filteredHistory = useMemo(() => {
-        const term = search.toLowerCase();
+    const hasMeaningfulData = (item: Completed) => {
+        const columnsToCheck = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
+        return columnsToCheck.some((col) => {
+            const val = (item as any)[col];
+            if (val === null || val === undefined) return false;
+            if (typeof val === "string") return val.trim() !== "";
+            if (typeof val === "number") return !isNaN(val);
+            return Boolean(val);
+        });
+    };
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // zero time for date-only comparison
-
-        return history
-            .filter((h) => allowedType.includes(h.call_type ?? ""))
+    const filteredActivities = useMemo(() => {
+        const search = searchTerm.toLowerCase();
+        return sortedActivities
             .filter((item) => {
-                if (
-                    !(item.company_name ?? "").toLowerCase().includes(term) &&
-                    !(item.ticket_reference_number ?? "").toLowerCase().includes(term) &&
-                    !(item.quotation_number ?? "").toLowerCase().includes(term) &&
-                    !(item.so_number ?? "").toLowerCase().includes(term) &&
-                    !(item.remarks ?? "").toLowerCase().includes(term)
-                ) {
-                    return false;
-                }
-
-                if (
-                    dateCreatedFilterRange?.from &&
-                    new Date(item.date_created ?? "") < dateCreatedFilterRange.from
-                ) return false;
-
-                if (
-                    dateCreatedFilterRange?.to &&
-                    new Date(item.date_created ?? "") > dateCreatedFilterRange.to
-                ) return false;
-
-                // FILTER BY FOLLOW-UP DATE: only show if follow-up date is today or earlier (not future)
-                if (item.date_followup) {
-                    const followUpDate = new Date(item.date_followup);
-                    followUpDate.setHours(0, 0, 0, 0);
-                    if (followUpDate > today) return false;
-                }
-
-                return true;
+                if (!search) return true;
+                return Object.values(item).some((val) => val && String(val).toLowerCase().includes(search));
             })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? "").getTime() -
-                    new Date(a.date_updated ?? "").getTime()
-            );
-    }, [history, search, dateCreatedFilterRange]);
-
-    const openDone = (item: HistoryItem) => {
-        setSelectedActivityRef(item.activity_reference_number);
-        setSelectedItem(item);
-        setDoneOpen(true);
-    };
-
-    const confirmDone = async (data: {
-        tsmapprovedstatus: string;
-        tsmapprovedremarks: string;
-        tsmapproveddate: string;
-    }) => {
-        if (!selectedActivityRef) return;
-
-        setUpdatingId(selectedActivityRef);
-        setDoneOpen(false);
-
-        try {
-            const response = await fetch("/api/act-update-tsm-status", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    activity_reference_number: selectedActivityRef,
-                    tsmapprovedstatus: data.tsmapprovedstatus,
-                    tsmapprovedremarks: data.tsmapprovedremarks,
-                    tsmapproveddate: data.tsmapproveddate,
-                }),
+            .filter((item) => item.type_activity === "Quotation Preparation")
+            .filter(hasMeaningfulData)
+            .filter((item) => {
+                if (!dateCreatedFilterRange) return true;
+                const updated = item.date_updated ? new Date(item.date_updated) : new Date(item.date_created);
+                if (isNaN(updated.getTime())) return false;
+                const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+                const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+                if (from && updated < from) return false;
+                if (to && updated > to) return false;
+                return true;
             });
+    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
 
-            const result = await response.json();
-
-            if (!response.ok) {
-                toast.error(result.error || "Failed to update");
-                setUpdatingId(null);
-                return;
-            }
-
-            toast.success("Transaction successfully approved");
-            setUpdatingId(null);
-            setSelectedActivityRef(null);
-            fetchAll();
-        } catch (err) {
-            toast.error("Server error");
-            setUpdatingId(null);
-        }
-    };
-
-    const ITEMS_PER_PAGE = 10;
-    const [currentPage, setCurrentPage] = useState(1);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, dateCreatedFilterRange]);
-
-    const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
-
-    const paginatedHistory = filteredHistory.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
+    // -----------------------------
+    // AGENT MAP
+    // -----------------------------
+    const [agents, setAgents] = useState<any[]>([]);
+    const userDetails = { referenceid }; // placeholder
     useEffect(() => {
         if (!userDetails.referenceid) return;
 
         const fetchAgents = async () => {
             try {
-                const response = await fetch(
-                    `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
-                );
+                const response = await fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`);
                 if (!response.ok) throw new Error("Failed to fetch agents");
-
                 const data = await response.json();
                 setAgents(data);
             } catch (err) {
-                console.error("Error fetching agents:", err);
+                console.error(err);
                 setError("Failed to load agents.");
             }
         };
@@ -295,179 +239,247 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return map;
     }, [agents]);
 
+    // -----------------------------
+    // UTILS
+    // -----------------------------
+    const displayValue = (v: any) => (v === null || v === undefined || String(v).trim() === "" ? "-" : String(v));
+
+    function formatDuration(start?: string, end?: string) {
+        if (!start || !end) return "-";
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
+        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000);
+        if (diff < 0) diff = 0;
+        const hours = Math.floor(diff / 3600);
+        diff %= 3600;
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+        const parts: string[] = [];
+        if (hours) parts.push(`${hours} hr${hours !== 1 ? "s" : ""}`);
+        if (minutes) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+        parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+        return parts.join(" ");
+    }
+
+    // -----------------------------
+    // SELECTION
+    // -----------------------------
+
+    const openEditDialog = (item: Completed) => {
+        setEditItem(item);
+        setEditOpen(true);
+    };
+
+    const closeEditDialog = () => {
+        setEditOpen(false);
+        setEditItem(null);
+    };
+
+    const onEditSaved = () => {
+        fetchActivities();
+        closeEditDialog();
+    };
+
     return (
         <>
-            <Input
-                placeholder="Search company, ticket, quotation, SO..."
-                className="text-xs mb-4"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-            />
-
-            <div className="w-full overflow-auto">
-                <Table className="w-full min-w-max">
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="text-xs whitespace-nowrap">Agent</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Company</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Quotation #</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">TSA Remarks</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Feedback</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Follow-Up Date</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap">Approved Date</TableHead>
-                            <TableHead className="text-xs whitespace-nowrap text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {paginatedHistory.length === 0 && (
-                            <TableRow>
-                                <TableCell
-                                    colSpan={10}
-                                    className="text-center text-xs whitespace-nowrap"
-                                >
-                                    No records found
-                                </TableCell>
-                            </TableRow>
-                        )}
-
-                        {paginatedHistory.map((item) => (
-                            <TableRow key={item.id} className="text-xs">
-                                <TableCell className="whitespace-nowrap">
-                                    <div className="flex items-center gap-2 capitalize">
-                                        {agentMap[item.referenceid?.toLowerCase() ?? ""]
-                                            ?.profilePicture ? (
-                                            <img
-                                                src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
-                                                alt={agentMap[item.referenceid?.toLowerCase()]!.name}
-                                                className="w-6 h-6 rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                                                N/A
-                                            </div>
-                                        )}
-                                        <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
-                                    </div>
-                                </TableCell>
-
-                                <TableCell className="font-semibold whitespace-nowrap">
-                                    {item.company_name ?? "-"} <br />
-                                    <Badge className="text-[10px] rounded-xs shadow-sm">{item.call_type}</Badge>
-                                </TableCell>
-
-                                <TableCell className="whitespace-nowrap">
-                                    {item.quotation_number ?? "-"}
-                                    <br />
-                                    {(item.quotation_amount ?? 0).toLocaleString("en-PH", {
-                                        style: "currency",
-                                        currency: "PHP",
-                                    })}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap capitalize">{item.remarks ?? "-"}</TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                    {item.tsm_approved_status ? (
-                                        <Badge
-                                            className={
-                                                item.tsm_approved_status.toLowerCase() === "approved"
-                                                    ? "bg-green-600 text-white hover:bg-green-600"
-                                                    : item.tsm_approved_status.toLowerCase() === "declined"
-                                                        ? "bg-red-600 text-white hover:bg-red-600"
-                                                        : "bg-red-600 text-white hover:bg-red-400"
-                                            }
-                                        >
-                                            {item.tsm_approved_status.toUpperCase()}
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="secondary">PENDING</Badge>
-                                    )}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                    {item.date_followup
-                                        ? new Date(item.date_followup).toLocaleDateString("en-PH", {
-                                            year: "numeric",
-                                            month: "short",
-                                            day: "numeric",
-                                        })
-                                        : "-"}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                    {item.tsm_approved_date
-                                        ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
-                                            year: "numeric",
-                                            month: "short",
-                                            day: "numeric",
-                                        })
-                                        : "-"}
-                                </TableCell>
-                                <TableCell className="text-right whitespace-nowrap">
-                                    <Button
-                                        className="rounded-none p-6"
-                                        disabled={updatingId === item.activity_reference_number}
-                                        onClick={() => openDone(item)}
-                                    >
-                                        <Stamp />{" "}
-                                        {updatingId === item.activity_reference_number
-                                            ? "Validating..."
-                                            : "Validate"}
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+            {/* Search */}
+            <div className="mb-4 flex items-center gap-4">
+                <Input
+                    type="text"
+                    placeholder="Search..."
+                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
             </div>
 
-            {/* Pagination controls */}
-            <Pagination>
-                <PaginationContent className="flex items-center space-x-4">
-                    <PaginationItem>
-                        <PaginationPrevious
-                            href="#"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                if (currentPage > 1) setCurrentPage(currentPage - 1);
-                            }}
-                            aria-disabled={currentPage <= 1}
-                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                        />
-                    </PaginationItem>
-
-                    <div className="px-4 font-medium">
-                        {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
+            {/* Error */}
+            {error && (
+                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
+                    <div className="flex items-center space-x-3">
+                        <AlertCircleIcon className="h-6 w-6 text-red-600" />
+                        <div>
+                            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
+                            <AlertDescription className="text-xs">
+                                Please check your internet connection or try again later.
+                            </AlertDescription>
+                        </div>
                     </div>
+                    <div className="flex items-center space-x-3">
+                        <CheckCircle2Icon className="h-6 w-6 text-green-600" />
+                        <div>
+                            <AlertTitle className="text-black">Create New Data</AlertTitle>
+                            <AlertDescription className="text-xs">
+                                You can start by adding new entries to populate your database.
+                            </AlertDescription>
+                        </div>
+                    </div>
+                </Alert>
+            )}
 
-                    <PaginationItem>
-                        <PaginationNext
-                            href="#"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                            }}
-                            aria-disabled={currentPage >= totalPages}
-                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                        />
-                    </PaginationItem>
-                </PaginationContent>
-            </Pagination>
+            {/* Total Records */}
+            {filteredActivities.length > 0 && (
+                <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
+            )}
 
-            <DoneDialog
-                open={doneOpen}
-                onOpenChange={setDoneOpen}
-                onConfirm={confirmDone}
-                loading={updatingId !== null}
-                quotation_number={selectedItem?.quotation_number ?? null}
-                quotation_amount={selectedItem?.quotation_amount ?? null}
-                quotation_type={selectedItem?.quotation_type ?? null}
+            {/* Table */}
+            {filteredActivities.length > 0 && (
+                <div className="overflow-auto space-y-8 custom-scrollbar">
+                    <Table className="text-xs">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[60px] text-center">Tools</TableHead>
+                                <TableHead>Agent</TableHead>
+                                <TableHead>Date Created</TableHead>
+                                <TableHead>Duration</TableHead>
+                                <TableHead>Company</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
+                                <TableHead>Date Approved/Decline</TableHead>
+                                <TableHead>Contact #</TableHead>
+                                <TableHead>Quotation #</TableHead>
+                                <TableHead>Quotation Amount</TableHead>
+                                <TableHead className="text-center">Source</TableHead>
+                            </TableRow>
+                        </TableHeader>
 
-                product_quantity={selectedItem?.product_quantity ?? ""}
-                product_amount={selectedItem?.product_amount ?? ""}
-                product_description={selectedItem?.product_description ?? ""}
-                product_photo={selectedItem?.product_photo ?? ""}
-                product_sku={selectedItem?.product_sku ?? ""}
-                product_title={selectedItem?.product_title ?? ""}
-                vat_type={selectedItem?.vat_type ?? ""}
-            />
+                        <TableBody>
+                            {filteredActivities.map((item) => {
+                                const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                                return (
+                                    <TableRow key={item.id}>
+                                        <TableCell className="text-center flex space-x-2 justify-center">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        className="rounded-none flex items-center gap-1 text-xs cursor-pointer"
+                                                    >
+                                                        Actions
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+
+                                                <DropdownMenuContent align="end" className="rounded-none text-xs">
+                                                    {/* Edit */}
+                                                    <DropdownMenuItem
+                                                        onClick={() => openEditDialog(item)}
+                                                        className="flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                        View
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+
+                                        <TableCell className="whitespace-nowrap">
+                                            <div className="flex items-center gap-2 capitalize">
+                                                {agent?.profilePicture ? (
+                                                    <img
+                                                        src={agent.profilePicture}
+                                                        alt={agent.name}
+                                                        className="w-6 h-6 rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                                                        N/A
+                                                    </div>
+                                                )}
+                                                <span>{agent?.name || "-"}</span>
+                                            </div>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
+                                                timeZone: "Asia/Manila",
+                                            })}
+                                        </TableCell>
+
+                                        <TableCell className="whitespace-nowrap font-mono">
+                                            {formatDuration(item.start_date, item.end_date)}
+                                        </TableCell>
+
+                                        <TableCell className="font-semibold">{item.company_name}<br/>{item.activity_reference_number}</TableCell>
+                                        <TableCell className="p-2 font-semibold text-center">
+                                            <span
+                                                className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
+                                                ${item.tsm_approved_status === "Approved"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : item.tsm_approved_status === "Pending"
+                                                            ? "bg-orange-100 text-orange-700"
+                                                            : item.tsm_approved_status === "Decline"
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-gray-100 text-gray-600"
+                                                    }`}
+                                            >
+                                                {item.tsm_approved_status}
+                                            </span>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            {item.tsm_approved_date
+                                                ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                                    timeZone: "Asia/Manila",
+                                                })
+                                                : "-"}
+                                        </TableCell>
+
+                                        <TableCell>{displayValue(item.contact_number)}</TableCell>
+                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
+                                        <TableCell>
+                                            {displayValue(item.quotation_amount) !== "-"
+                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                })
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <span
+                                                className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
+                                                ${item.quotation_type === "Ecoshift Corporation"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : item.quotation_type === "Disruptive Solutions Inc"
+                                                            ? "bg-rose-100 text-rose-800"
+                                                            : "bg-gray-100 text-gray-600"
+                                                    }`}
+                                            >
+                                                {displayValue(item.quotation_type)}
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
+            {/* Edit Dialog */}
+            {editOpen && editItem && (
+                <TaskListEditDialog
+                    item={editItem}
+                    onClose={closeEditDialog}
+                    onSave={onEditSaved}
+                    firstname={firstname}
+                    lastname={lastname}
+                    email={email}
+                    contact={contact}
+                    tsmname={tsmname}
+                    managername={managername}
+                    signature={signature}
+                    company={{
+                        company_name: editItem.company_name,
+                        contact_number: editItem.contact_number,
+                        email_address: editItem.email_address,
+                        address: editItem.address,
+                        contact_person: editItem.contact_person,
+                    }}
+                    agentSignature={editItem.agent_signature}
+                    agentContactNumber={editItem.agent_contact_number}
+                    agentEmailAddress={editItem.agent_email_address}
+                />
+            )}
         </>
     );
 };

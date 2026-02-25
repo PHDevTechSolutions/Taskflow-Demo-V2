@@ -1544,13 +1544,13 @@ export function QuotationSheet(props: Props) {
                     )}
                   </Button>
 
-                  <Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
+                  {/*<Button onClick={handleDownloadQuotation} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation Excel
                   </Button>
 
                   <Button onClick={handleDownloadQuotationPDF} disabled={!hasGenerated} hidden={false} className="cursor-pointer rounded-none" style={{ padding: "2.5rem" }}>
                     <Download /> Download Quotation PDF
-                  </Button>
+                  </Button>*/}
 
                   {!hasDownloaded && hasGenerated && (
                     <p className="text-sm text-yellow-600 mt-2 border border-dashed p-2 bg-red-100" hidden={false}>
