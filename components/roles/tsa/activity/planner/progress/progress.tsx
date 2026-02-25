@@ -356,8 +356,8 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 onCreated={() => {
                                                     fetchAllData();
                                                 } } 
-                                                managerDetails={managerDetails ?? null}
-                                                tsmDetails={tsmDetails ?? null}
+                                                managerDetails={managerDetails}
+                                                tsmDetails={tsmDetails}
                                                 signature={signature}
                                             />
 
