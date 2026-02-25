@@ -170,7 +170,9 @@ export default function TaskListEditDialog({
     const [endDate, setEndDate] = useState<string>(() => new Date().toISOString());
 
     // Routing for product retrieval
-    const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
+    const [productSource, setProductSource] = useState<
+        "shopify" | "firebase_shopify" | "firebase_taskflow"
+    >("shopify");
     const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
     const [openDescription, setOpenDescription] = useState<Record<number, boolean>>({});
 
@@ -1334,24 +1336,40 @@ export default function TaskListEditDialog({
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setProductSource('shopify');
-                                            setSearchTerm("");       // Protocol: Reset input
-                                            setSearchResults([]);   // Protocol: Clear results
+                                            setProductSource("shopify");
+                                            setSearchTerm("");
+                                            setSearchResults([]);
                                         }}
-                                        className={`flex-1 py-6 text-[10px] font-bold transition-colors ${productSource === 'shopify' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                                        className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "shopify"
+                                            ? "bg-[#121212] text-white"
+                                            : "bg-white text-gray-500 hover:bg-gray-50"
                                             }`}
                                     >
                                         SHOPIFY
                                     </button>
                                     <button
                                         type="button"
-                                        hidden={false}
                                         onClick={() => {
-                                            setProductSource('firebase');
-                                            setSearchTerm("");       // Protocol: Reset input
-                                            setSearchResults([]);   // Protocol: Clear results
+                                            setProductSource("firebase_shopify");
+                                            setSearchTerm("");
+                                            setSearchResults([]);
                                         }}
-                                        className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === 'firebase' ? 'bg-[#121212] text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+                                        className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "firebase_shopify"
+                                            ? "bg-[#121212] text-white"
+                                            : "bg-white text-gray-500 hover:bg-gray-50"
+                                            }`}
+                                    >
+                                        SHOPIFY 1
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setProductSource("firebase_taskflow");
+                                            setSearchTerm("");
+                                            setSearchResults([]);
+                                        }}
+                                        className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === "firebase_taskflow"
+                                            ? "bg-[#121212] text-white"
+                                            : "bg-white text-gray-500 hover:bg-gray-50"
                                             }`}
                                     >
                                         PRODUCT DATABASE
@@ -1382,69 +1400,82 @@ export default function TaskListEditDialog({
                                                         const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
                                                         let data = await res.json();
                                                         setSearchResults(data.products || []);
-                                                    } else {
+                                                    } else if (
+                                                        productSource === "firebase_shopify" ||
+                                                        productSource === "firebase_taskflow"
+                                                    ) {
                                                         const searchUpper = rawValue.toUpperCase();
+
+                                                        const websiteFilter =
+                                                            productSource === "firebase_shopify"
+                                                                ? "Shopify"
+                                                                : "Taskflow";
+
                                                         const q = query(
                                                             collection(db, "products"),
-                                                            where("websites", "array-contains", "Taskflow")
+                                                            where("websites", "array-contains", websiteFilter)
                                                         );
+
                                                         const querySnapshot = await getDocs(q);
 
-                                                        const firebaseResults = querySnapshot.docs.map(doc => {
-                                                            const data = doc.data();
+                                                        const firebaseResults = querySnapshot.docs
+                                                            .map(doc => {
+                                                                const data = doc.data();
 
-                                                            // 1. Build Specifications HTML and Searchable Text
-                                                            let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                                            let rawSpecsText = "";
+                                                                let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                                                let rawSpecsText = "";
 
-                                                            if (data.technicalSpecs && Array.isArray(data.technicalSpecs)) {
-                                                                data.technicalSpecs.forEach((group: any) => {
-                                                                    // 1. Add the Group Header (e.g., FIXTURE DETAILS)
-                                                                    rawSpecsText += ` ${group.specGroup}`;
-                                                                    specsHtml += `
-                                                                                <div style="background: #121212; color: white; padding: 4px 8px; font-weight: 900; text-transform: uppercase; font-size: 9px; margin-top: 8px;">
-                                                                                    ${group.specGroup}
-                                                                                </div>`;
+                                                                if (Array.isArray(data.technicalSpecs)) {
+                                                                    data.technicalSpecs.forEach((group: any) => {
+                                                                        rawSpecsText += ` ${group.specGroup}`;
 
-                                                                    // 2. Start the table for this specific group
-                                                                    specsHtml += `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">`;
-
-                                                                    group.specs?.forEach((spec: any) => {
-                                                                        // 3. Add data to searchable text and HTML rows
-                                                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
                                                                         specsHtml += `
-                                                  <tr>
-                                                      <td style="border: 1px solid #e5e7eb; padding: 4px; background: #f9fafb; width: 40%;">
-                                                          <b>${spec.name}</b>
-                                                      </td>
-                                                      <td style="border: 1px solid #e5e7eb; padding: 4px;">
-                                                          ${spec.value}
-                                                      </td>
-                                                  </tr>`;
+                                                <div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
+                                                ${group.specGroup}
+                                                </div>`;
+
+                                                                        specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+
+                                                                        group.specs?.forEach((spec: any) => {
+                                                                            rawSpecsText += ` ${spec.name} ${spec.value}`;
+
+                                                                            specsHtml += `
+                                                <tr>
+                                                <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
+                                                <b>${spec.name}</b>
+                                                </td>
+                                                <td style="border:1px solid #e5e7eb;padding:4px">
+                                                ${spec.value}
+                                                </td>
+                                                </tr>`;
+                                                                        });
+
+                                                                        specsHtml += `</table>`;
                                                                     });
+                                                                }
 
-                                                                    specsHtml += `</table>`;
-                                                                });
-                                                            }
+                                                                return {
+                                                                    id: doc.id,
 
-                                                            // 2. Map to Product format and resolve ID mismatch
-                                                            return {
-                                                                // Convert string ID to a hash number if your system strictly requires numbers
-                                                                id: Math.abs(doc.id.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)),
-                                                                title: data.name || "No Name",
-                                                                price: data.salePrice || data.regularPrice || 0,
-                                                                description: specsHtml,
-                                                                images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                                                skus: data.itemCode ? [data.itemCode] : [],
-                                                                discount: 0,
-                                                                // We attach the search string temporarily for the filter
-                                                                tempSearchMetadata: (data.name + " " + (data.itemCode || "") + " " + rawSpecsText).toUpperCase()
-                                                            } as any; // Use 'as any' temporarily to bypass the strict Product definition
-                                                        })
-                                                            .filter(product => {
-                                                                // 3. Perform the deep "Contains" search
-                                                                return product.tempSearchMetadata.includes(searchUpper);
-                                                            }) as Product[]; // Cast the final filtered array back to Product[]
+                                                                    title: data.name || "No Name",
+                                                                    price: data.salePrice || data.regularPrice || 0,
+                                                                    description: specsHtml,
+
+                                                                    images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                                                    skus: data.itemCode ? [data.itemCode] : [],
+
+                                                                    discount: 0,
+
+                                                                    tempSearchMetadata: (
+                                                                        data.name +
+                                                                        " " +
+                                                                        (data.itemCode || "") +
+                                                                        " " +
+                                                                        rawSpecsText
+                                                                    ).toUpperCase()
+                                                                };
+                                                            })
+                                                            .filter(p => p.tempSearchMetadata.includes(searchUpper));
 
                                                         setSearchResults(firebaseResults);
                                                     }
