@@ -62,6 +62,16 @@ interface ProductItem {
     discount?: number;
 }
 
+function splitAndTrim(value?: string): string[] {
+    if (!value) return [];
+    return value.split(",").map((v) => v.trim());
+}
+
+function splitDescription(value?: string): string[] {
+    if (!value) return [];
+    return value.split("||").map((v) => v.trim());
+}
+
 interface Product {
     id: string;
     title: string;
@@ -118,16 +128,7 @@ interface TaskListEditDialogProps {
     email_address?: string;
     address?: string;
     quotation_number?: string;
-}
-
-function splitAndTrim(value?: string): string[] {
-    if (!value) return [];
-    return value.split(",").map((v) => v.trim());
-}
-
-function splitDescription(value?: string): string[] {
-    if (!value) return [];
-    return value.split("||").map((v) => v.trim());
+    downloadAction?: "pdf" | "excel" | null;
 }
 
 export default function TaskListEditDialog({
@@ -143,6 +144,8 @@ export default function TaskListEditDialog({
     tsmemail,
     tsmcontact,
     managername,
+    downloadAction,
+
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [previewStates, setPreviewStates] = useState<boolean[]>([]);
@@ -173,6 +176,7 @@ export default function TaskListEditDialog({
     const [productSource, setProductSource] = useState<'shopify' | 'firebase'>('shopify');
     const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
     const [openDescription, setOpenDescription] = useState<Record<number, boolean>>({});
+    
 
     useEffect(() => {
         // Pag-open ng dialog, itakda startDate sa current time, palaging bago
@@ -734,7 +738,6 @@ export default function TaskListEditDialog({
         fetchRevisedQuotations();
     }, [activityReferenceNumber]);
 
-
     // 1. DATA INITIALIZATION: Defined here so both the UI and handleDownloadQuotation can access it.
     const payload = getQuotationPayload();
     // 1. BRAND SELECTION LOGIC
@@ -745,8 +748,7 @@ export default function TaskListEditDialog({
         ? "/ecoshift-banner.png"
         : "/disruptive-banner.png";
 
-
-    async function DownloadPDF() {
+    const DownloadPDF = async () => {
         console.log('pdf dl');
         if (typeof window === 'undefined') return;
         const PRIMARY_CHARCOAL = '#121212';
@@ -1258,12 +1260,13 @@ export default function TaskListEditDialog({
         }
     }
 
-    const toggleCheckbox = (index: number) => {
-        setCheckedRows((prev) => ({
-            ...prev,
-            [index]: !prev[index],
-        }));
-    };
+    useEffect(() => {
+        if (!downloadAction) return;
+
+        if (downloadAction === "pdf") DownloadPDF();
+        if (downloadAction === "excel") DownloadExcel();
+
+    }, [downloadAction]);
 
     const toggleDescription = (index: number) => {
         setOpenDescription(prev => ({
@@ -1557,7 +1560,7 @@ export default function TaskListEditDialog({
                                     <div className="flex items-center gap-1">
                                         <RadioGroupItem value="vat_exe" id="vat-exe" />
                                         <label htmlFor="vat-exe" className="text-xs cursor-pointer">
-                                            VAT Exe
+                                            VAT Exe <span className="text-red-600 text-[10px]">12%</span>
                                         </label>
                                     </div>
 
@@ -1569,6 +1572,7 @@ export default function TaskListEditDialog({
                                     </div>
                                 </RadioGroup>
                             </div>
+
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -1592,7 +1596,6 @@ export default function TaskListEditDialog({
                                         </TableRow>
                                     )}
 
-
                                     {products.map((product, index) => {
                                         const qty = parseFloat(product.product_quantity ?? "0") || 0;
                                         const amt = parseFloat(product.product_amount ?? "0") || 0;
@@ -1606,22 +1609,20 @@ export default function TaskListEditDialog({
                                                     {/* Checkbox + Discount Input */}
                                                     <TableCell className="font-semibold text-xs p-2 align-middle text-center">
                                                         <div className="flex items-center justify-center gap-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isChecked}
-                                                                onChange={() => toggleCheckbox(index)}
-                                                                disabled={vatType !== "vat_exe"}
-                                                                className="h-5 w-5 rounded-full"
-                                                            />
-
-                                                            {/* Discount Input (only if checked and VAT type is vat_exe) */}
-                                                            {isChecked && vatType === "vat_exe" && (
+                                                            {(vatType === "vat_exe" || vatType === "vat_inc" || vatType === "zero_rated") && (
                                                                 <Input
                                                                     type="number"
                                                                     min={0}
                                                                     max={100}
                                                                     step={0.01}
-                                                                    value={product.discount ?? ""} // use per-row discount or default 12%
+                                                                    // Default 12 for vat_exe, 0 for others
+                                                                    value={
+                                                                        product.discount !== undefined
+                                                                            ? product.discount
+                                                                            : vatType === "vat_exe"
+                                                                                ? 12
+                                                                                : 0
+                                                                    }
                                                                     onChange={(e) => {
                                                                         const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
                                                                         setProducts((prev) => {
@@ -1631,9 +1632,12 @@ export default function TaskListEditDialog({
                                                                         });
                                                                     }}
                                                                     className="w-20 text-xs text-center"
-                                                                    placeholder="0%"
+                                                                    placeholder={
+                                                                        vatType === "vat_exe" ? "12" : "0"
+                                                                    }
                                                                 />
                                                             )}
+                                                            %
                                                         </div>
                                                     </TableCell>
 
@@ -1686,7 +1690,7 @@ export default function TaskListEditDialog({
 
                                                     {/* Discount Display */}
                                                     <TableCell className="font-semibold text-xs p-2 align-middle text-center">
-                                                        {isChecked && vatType === "vat_exe"
+                                                        {vatType === "vat_exe"
                                                             ? `₱${(lineTotal * ((product.discount ?? 12) / 100)).toLocaleString(undefined, {
                                                                 minimumFractionDigits: 2,
                                                                 maximumFractionDigits: 2,
@@ -1777,10 +1781,7 @@ export default function TaskListEditDialog({
                     <DialogFooter className="mt-4 flex justify-between items-center">
                         <div className="font-semibold text-sm">
                             Actual Quotation Amount: ₱
-                            {quotationAmount.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
+                            {item.quotation_amount}
                         </div>
                         <div className="flex space-x-2">
                             <Button
@@ -1790,8 +1791,6 @@ export default function TaskListEditDialog({
                                 <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
                             </Button>
-                            <Button type="button" onClick={DownloadPDF} className="rounded-xs p-6 bg-yellow-600"><FileText /> PDF</Button>
-                            <Button type="button" onClick={DownloadExcel} className="rounded-xs p-6 bg-green-600"><FileSpreadsheet /> Excel</Button>
                             <Button variant="outline" className="rounded-none p-6" onClick={onClose}>Cancel</Button>
                             <Button onClick={onClickSave} className="rounded-none p-6">Save</Button>
                         </div>
@@ -1824,7 +1823,6 @@ export default function TaskListEditDialog({
                                     payload={getQuotationPayload()}
                                     quotationType={quotation_type}
                                     setIsPreviewOpen={setIsPreviewOpen}
-                                    DownloadPDF={DownloadPDF}
                                 />
                             </>
                         );

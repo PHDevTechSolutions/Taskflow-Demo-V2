@@ -345,9 +345,7 @@ function DashboardContent() {
                                         signature={userDetails.signature} 
                                                                            
                                     />
-                                        
                                 </CardContent>
-
                             </Card>
 
                             <Card className="rounded-none h-auto transition-all duration-300">

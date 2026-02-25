@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, PenIcon } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, PenIcon, FileSpreadsheet, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,7 @@ interface Completed {
     email_address: string;
     address: string;
     contact_person: string;
+    tsm_approved_status: string;
 }
 
 interface CompletedProps {
@@ -91,6 +92,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const [editOpen, setEditOpen] = useState(false);
 
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [downloadAction, setDownloadAction] = useState<"pdf" | "excel" | null>(null);
 
     // Delete dialog states
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -364,18 +366,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         fetchHierarchy();
     }, [referenceid]);
 
-    console.log("TSM Details:", tsmDetails);
-    console.log("Manager Details:", managerDetails);
-
     return (
         <>
-        
+
             {/* Search + Filter */}
             <div className="mb-4 flex items-center justify-between gap-4">
                 <Input
                     type="text"
                     placeholder="Search company, reference ID, status, or activity..."
-                    className="input input-bordered input-sm flex-grow max-w-md"
+                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     aria-label="Search activities"
@@ -395,7 +394,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         <Button
                             variant="destructive"
                             onClick={() => setDeleteDialogOpen(true)}
-                            className="flex items-center space-x-1 cursor-pointer"
+                            className="flex items-center space-x-1 cursor-pointer rounded-none"
                         >
                             <span>Delete Selected ({selectedIds.size})</span>
                         </Button>
@@ -449,6 +448,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead>Date</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
+                                <TableHead>Status</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
@@ -469,6 +469,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 onCheckedChange={() => toggleSelect(item.id)}
                                             />
                                         </TableCell>
+
                                         <TableCell className="text-center flex space-x-2 justify-center">
                                             <Button
                                                 variant="outline"
@@ -477,6 +478,33 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             >
                                                 <PenIcon /> Edit
                                             </Button>
+
+                                            {item.tsm_approved_status === "Approved" && (
+                                                <>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="rounded-none"
+                                                        onClick={() => {
+                                                            setDownloadAction("pdf");
+                                                            openEditDialog(item);
+                                                        }}
+                                                    >
+                                                        <FileText /> PDF
+                                                    </Button>
+
+                                                    <Button
+                                                        variant="outline"
+                                                        className="rounded-none"
+                                                        onClick={() => {
+                                                            setDownloadAction("excel");
+                                                            openEditDialog(item);
+                                                        }}
+                                                    >
+                                                        <FileSpreadsheet /> Excel
+                                                    </Button>
+                                                </>
+                                            )}
+
                                         </TableCell>
 
                                         <TableCell>
@@ -489,6 +517,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
                                         <TableCell className="font-semibold">
                                             {item.company_name}
+                                        </TableCell>
+                                        <TableCell className="font-semibold">
+                                            {item.tsm_approved_status}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell className="uppercase">
@@ -535,6 +566,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
+                    downloadAction={downloadAction}
                 />
             )}
 

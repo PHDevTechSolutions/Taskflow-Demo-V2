@@ -49,7 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         product_description,
         product_photo,
         product_title,
-        product_sku
+        product_sku,
+        tsm_approved_status
       `)
       .eq("referenceid", referenceid);
 

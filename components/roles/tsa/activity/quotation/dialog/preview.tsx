@@ -42,14 +42,12 @@ type PreviewProps = {
     payload: Payload;
     quotationType: string;
     setIsPreviewOpen: (open: boolean) => void;
-    DownloadPDF: () => void;
 };
 
 export const Preview: React.FC<PreviewProps> = ({
     payload,
     quotationType,
     setIsPreviewOpen,
-    DownloadPDF,
 }) => {
     const isEcoshift = quotationType === "Ecoshift Corporation";
     const headerImagePath = isEcoshift
