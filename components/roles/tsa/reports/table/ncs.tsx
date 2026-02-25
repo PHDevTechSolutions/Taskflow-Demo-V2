@@ -138,7 +138,7 @@ export const NCSTable: React.FC<NCSProps> = ({
         return activities
             // TYPE CLIENT FILTER
             .filter((item) =>
-                ["csr client", "tsa client"].includes(
+                ["csr client", "tsa client", "new client"].includes(
                     item.type_client?.toLowerCase() ?? ""
                 )
             )

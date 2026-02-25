@@ -62,7 +62,6 @@ const editableFields: (keyof Completed)[] = [
   "source",
   "type_activity", // disabled input
   "call_status",
-  "quotation_number",
   "quotation_amount",
   "quotation_status",
   "so_number",
@@ -223,7 +222,7 @@ export default function TaskListEditDialog({
         <div className="space-y-4 max-h-[60vh] overflow-auto">
           {Object.entries(formData).map(([key, value]) => {
             if (key === "type_activity") {
-              return <Input key={key} type="hidden" value={value as any} disabled readOnly />;
+              return <Input key={key} type="hidden" className="rounded-none" value={value as any} disabled readOnly />;
             }
 
             if (key === "call_status") {
@@ -231,7 +230,7 @@ export default function TaskListEditDialog({
                 <div key={key} className="flex flex-col">
                   <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
                   <Select value={String(value ?? "")} onValueChange={(val) => handleChange(key as keyof Completed, val)}>
-                    <SelectTrigger className="w-full text-left">
+                    <SelectTrigger className="w-full text-left rounded-none">
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -250,7 +249,7 @@ export default function TaskListEditDialog({
                 <div key={key} className="flex flex-col">
                   <Label className="capitalize mb-2">Quotation Status</Label>
                   <Select value={String(value ?? "")} onValueChange={(val) => handleChange("quotation_status", val)}>
-                    <SelectTrigger className="w-full text-left">
+                    <SelectTrigger className="w-full text-left rounded-none">
                       <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -271,7 +270,7 @@ export default function TaskListEditDialog({
               return (
                 <div key={key} className="flex flex-col">
                   <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Textarea className="w-full" value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+                  <Textarea className="w-full rounded-none" value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
                 </div>
               );
             }
@@ -279,12 +278,12 @@ export default function TaskListEditDialog({
             return (
               <div key={key} className="flex flex-col">
                 <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                <Input className="w-full" type={getInputType(key)} value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+                <Input className="w-full rounded-none" type={getInputType(key)} value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
               </div>
             );
           })}
         </div>
-        <DialogFooter className="mt-4 flex justify-end space-x-2">
+        <DialogFooter className="mt-4 flex justify-end">
           <Button variant="outline" onClick={onClose} className="rounded-none p-6">Cancel</Button>
           <Button onClick={handleSave} className="rounded-none p-6">Save</Button>
         </DialogFooter>

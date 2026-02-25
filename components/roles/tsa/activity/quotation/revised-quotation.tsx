@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, PenIcon, FileSpreadsheet, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
+import { AlertCircleIcon, CheckCircle2Icon, PenIcon, FileSpreadsheet, FileText, MoreVertical } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ interface Completed {
     address: string;
     contact_person: string;
     tsm_approved_status: string;
+    tsm_approved_date: string;
 }
 
 interface CompletedProps {
@@ -445,14 +447,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             <TableRow>
                                 <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Edit</TableHead>
-                                <TableHead>Date</TableHead>
+                                <TableHead>Date Created</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
+                                <TableHead>Date Approved/Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
-                                <TableHead>Source</TableHead>
+                                <TableHead className="text-center">Source</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -471,39 +474,54 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell className="text-center flex space-x-2 justify-center">
-                                            <Button
-                                                variant="outline"
-                                                className="rounded-none"
-                                                onClick={() => openEditDialog(item)}
-                                            >
-                                                <PenIcon /> Edit
-                                            </Button>
-
-                                            {item.tsm_approved_status === "Approved" && (
-                                                <>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
                                                     <Button
-                                                        variant="outline"
-                                                        className="rounded-none"
-                                                        onClick={() => {
-                                                            setDownloadAction("pdf");
-                                                            openEditDialog(item);
-                                                        }}
+                                                        className="rounded-none flex items-center gap-1 text-xs cursor-pointer"
                                                     >
-                                                        <FileText /> PDF
+                                                        Actions
+                                                        <MoreVertical className="w-4 h-4" />
                                                     </Button>
+                                                </DropdownMenuTrigger>
 
-                                                    <Button
-                                                        variant="outline"
-                                                        className="rounded-none"
-                                                        onClick={() => {
-                                                            setDownloadAction("excel");
-                                                            openEditDialog(item);
-                                                        }}
+                                                <DropdownMenuContent align="end" className="rounded-none text-xs">
+                                                    {/* Edit */}
+                                                    <DropdownMenuItem
+                                                        onClick={() => openEditDialog(item)}
+                                                        className="flex items-center gap-2 cursor-pointer"
                                                     >
-                                                        <FileSpreadsheet /> Excel
-                                                    </Button>
-                                                </>
-                                            )}
+                                                        <PenIcon className="w-4 h-4" />
+                                                        Edit
+                                                    </DropdownMenuItem>
+
+                                                    {/* PDF & Excel only if Approved */}
+                                                    {item.tsm_approved_status === "Approved" && (
+                                                        <>
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    setDownloadAction("pdf");
+                                                                    openEditDialog(item);
+                                                                }}
+                                                                className="flex items-center gap-2 cursor-pointer"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                                Download PDF
+                                                            </DropdownMenuItem>
+
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    setDownloadAction("excel");
+                                                                    openEditDialog(item);
+                                                                }}
+                                                                className="flex items-center gap-2 cursor-pointer"
+                                                            >
+                                                                <FileSpreadsheet className="w-4 h-4" />
+                                                                Download Excel
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
 
                                         </TableCell>
 
@@ -518,8 +536,27 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         <TableCell className="font-semibold">
                                             {item.company_name}
                                         </TableCell>
-                                        <TableCell className="font-semibold">
-                                            {item.tsm_approved_status}
+                                        <td className="p-2 font-semibold text-center">
+                                            <span
+                                                className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
+                                                     ${item.tsm_approved_status === "Approved"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : item.tsm_approved_status === "Pending"
+                                                            ? "bg-orange-100 text-orange-700"
+                                                            : item.tsm_approved_status === "Decline"
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-gray-100 text-gray-600"
+                                                    }`}
+                                            >
+                                                {item.tsm_approved_status}
+                                            </span>
+                                        </td>
+                                        <TableCell>
+                                            {item.tsm_approved_date
+                                                ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                                    timeZone: "Asia/Manila",
+                                                })
+                                                : "-"}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell className="uppercase">
@@ -536,9 +573,19 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 )
                                                 : "-"}
                                         </TableCell>
-                                        <TableCell className="capitalize">
-                                            {displayValue(item.quotation_type)}
-                                        </TableCell>
+                                        <td className="p-2 text-center">
+                                            <span
+                                                className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
+                                                    ${item.quotation_type === "Ecoshift Corporation"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : item.quotation_type === "Disruptive Solutions Inc"
+                                                            ? "bg-rose-100 text-rose-800"
+                                                            : "bg-gray-100 text-gray-600"
+                                                    }`}
+                                            >
+                                                {displayValue(item.quotation_type)}
+                                            </span>
+                                        </td>
                                     </TableRow>
                                 );
                             })}
@@ -567,6 +614,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     downloadAction={downloadAction}
+                    onDownloadComplete={() => setDownloadAction(null)}
                 />
             )}
 

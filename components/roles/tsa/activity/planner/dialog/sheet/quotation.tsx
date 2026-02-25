@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator"
-import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
+import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -1585,7 +1585,7 @@ export function QuotationSheet(props: Props) {
             : "w-[90vw]"
             }`}
           style={{
-            maxWidth: selectedProducts.length === 0 ? "900px" : "1600px",
+            maxWidth: selectedProducts.length === 0 ? "900px" : "1900px",
             width: "100vw",
           }}
         >
@@ -1631,7 +1631,7 @@ export function QuotationSheet(props: Props) {
                       : "bg-white text-gray-500 hover:bg-gray-50"
                       }`}
                   >
-                    SHOPIFY 1
+                    CMS
                   </button>
                   <button
                     onClick={() => {
@@ -1789,7 +1789,7 @@ ${spec.value}
                                   },
                                 ]);
                               }}
-                              className="w-6 h-6 p-0 flex items-center justify-center rounded-full"
+                              className="w-6 h-6 p-0 flex items-center justify-center rounded-full cursor-pointer"
                             >
                               <Plus className="w-3 h-3" />
                             </Button>
@@ -1807,7 +1807,7 @@ ${spec.value}
                               className="w-24 h-24 object-cover rounded"
                             />
                           ) : (
-                            <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400">
+                            <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400 cursor-not-allowed">
                               No Image
                             </div>
                           )}
@@ -1918,13 +1918,13 @@ ${spec.value}
                   <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
-                        <th className="border border-gray-300 p-4 text-center w-5">Vat Adjust</th>
-                        <th className="border border-gray-300 p-4 text-left w-45">Product</th>
-                        <th className="border border-gray-300 p-4 text-center w-5">Quantity</th>
-                        <th className="border border-gray-300 p-4 text-center w-15">Price</th>
-                        <th className="border border-gray-300 p-4 text-center w-10">Discounted</th>
-                        <th className="border border-gray-300 p-4 text-center w-10">Subtotal</th>
-                        <th className="border border-gray-300 p-4 text-center w-5">Action</th>
+                        <th className="border p-4 text-center w-5">Vat Adjust</th>
+                        <th className="border p-4 text-left w-45">Product</th>
+                        <th className="border p-4 text-center w-5">Quantity</th>
+                        <th className="border p-4 text-center w-15">Price</th>
+                        <th className="border p-4 text-center w-10">Discounted</th>
+                        <th className="border p-4 text-center w-10">Subtotal</th>
+                        <th className="border p-4 text-center w-5">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1944,7 +1944,7 @@ ${spec.value}
                         return (
                           <React.Fragment key={p.uid}>
                             <tr
-                              className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "bg-gray-100" : ""}`}
+                              className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "" : ""}`}
 
                             >
                               <td className="border border-gray-300 p-2 text-center">
@@ -1987,9 +1987,10 @@ ${spec.value}
                                           return copy;
                                         });
                                       }}
-                                      className="w-full p-2 rounded-none"
+                                      className="w-15 p-0 border-none rounded-none"
                                     />
                                   )}
+                                  % Vat
                                 </div>
                               </td>
 
@@ -2092,10 +2093,18 @@ ${spec.value}
                                     onClick={() => toggleRow(p.uid)}
                                     className="flex items-center rounded-none gap-1"
                                   >
-                                    <Eye className="w-4 h-4" />
-                                    View
+                                    {expandedRows[p.uid] ? (
+                                      <>
+                                        <EyeOff className="w-4 h-4" />
+                                        Hide
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="w-4 h-4" />
+                                        View
+                                      </>
+                                    )}
                                   </Button>
-
                                   <Button
                                     variant="outline"
                                     className="flex items-center rounded-none gap-1"
