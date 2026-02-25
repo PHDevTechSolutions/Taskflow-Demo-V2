@@ -162,6 +162,7 @@ export default function TaskListEditDialog({
     const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<RevisedQuotation | null>(null);
     const [revisedQuotations, setRevisedQuotations] = useState<RevisedQuotation[]>([]);
 
+
     const activityReferenceNumber = item.activity_reference_number;
 
     const [startDate, setStartDate] = useState<string>(() => new Date().toISOString());
@@ -1271,6 +1272,26 @@ export default function TaskListEditDialog({
         }));
     };
 
+    const subtotal = products.reduce((sum, product, index) => {
+        const qty = parseFloat(product.product_quantity ?? "0") || 0;
+        const amt = parseFloat(product.product_amount ?? "0") || 0;
+        const lineTotal = qty * amt;
+
+        const isChecked = checkedRows[index] || false;
+        const discountPercent = product.discount ?? 0;
+
+        const finalTotal =
+            isChecked && vatType === "vat_exe"
+                ? lineTotal * (1 - discountPercent / 100)
+                : lineTotal;
+
+        return sum + finalTotal;
+    }, 0);
+
+    useEffect(() => {
+        setQuotationAmount(subtotal);
+    }, [subtotal]);
+
     return (
         <>
             <Dialog open={true} onOpenChange={onClose}>
@@ -1546,23 +1567,7 @@ export default function TaskListEditDialog({
                                             Zero Rated
                                         </label>
                                     </div>
-                                </RadioGroup> |
-
-                                {/* DISCOUNT */}
-                                <div className="flex items-center gap-1">
-                                    <span className="text-xs font-medium">Discount (%)</span>
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        step="0.01"
-                                        value={discount}
-                                        onChange={(e) =>
-                                            setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
-                                        }
-                                        className="w-24 text-xs h-8"
-                                        placeholder="0.00"
-                                    />
-                                </div>
+                                </RadioGroup>
                             </div>
                             <Table>
                                 <TableHeader>
@@ -1587,16 +1592,12 @@ export default function TaskListEditDialog({
                                         </TableRow>
                                     )}
 
+
                                     {products.map((product, index) => {
                                         const qty = parseFloat(product.product_quantity ?? "0") || 0;
                                         const amt = parseFloat(product.product_amount ?? "0") || 0;
                                         const lineTotal = qty * amt;
                                         const isChecked = checkedRows[index] || false;
-
-                                        const discountedTotal =
-                                            isChecked && vatType === "vat_exe"
-                                                ? lineTotal * ((100 - discount) / 100)
-                                                : lineTotal;
 
                                         return (
                                             <React.Fragment key={index}>
@@ -1620,7 +1621,7 @@ export default function TaskListEditDialog({
                                                                     min={0}
                                                                     max={100}
                                                                     step={0.01}
-                                                                    value={product.discount ?? 12} // use per-row discount or default 12%
+                                                                    value={product.discount ?? ""} // use per-row discount or default 12%
                                                                     onChange={(e) => {
                                                                         const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
                                                                         setProducts((prev) => {
@@ -1767,7 +1768,7 @@ export default function TaskListEditDialog({
 
                     <div className="flex justify-end font-semibold text-sm">
                         Subtotal: ₱
-                        {quotationAmount.toLocaleString(undefined, {
+                        {subtotal.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                         })}
@@ -1776,9 +1777,11 @@ export default function TaskListEditDialog({
                     <DialogFooter className="mt-4 flex justify-between items-center">
                         <div className="font-semibold text-sm">
                             Actual Quotation Amount: ₱
-                            {item.quotation_amount}
+                            {quotationAmount.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                            })}
                         </div>
-
                         <div className="flex space-x-2">
                             <Button
                                 className="bg-[#121212] rounded-none hover:bg-black text-white px-8 p-6 flex gap-2 items-center"

@@ -328,7 +328,6 @@ function DashboardContent() {
                                         : "max-h-0 opacity-0 p-0"
                                         }`}
                                 >
-                                    {userDetails.signature} sig
                                     <Progress
                                         referenceid={userDetails.referenceid}
                                         firstname={userDetails.firstname}
