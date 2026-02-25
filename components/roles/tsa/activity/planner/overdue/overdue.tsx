@@ -16,6 +16,15 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 
+interface SupervisorDetails {
+    firstname: string | null;
+    lastname: string | null;
+    email: string | null;
+    profilePicture: string | null;
+    signatureImage: string | null;
+    contact: string | null;
+}
+
 interface Activity {
     id: string;
     referenceid: string;
@@ -69,6 +78,9 @@ interface NewTaskProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
+    managerDetails: SupervisorDetails | null;
+    tsmDetails: SupervisorDetails | null;
+    signature: string | null;
     onCountChange?: (count: number) => void;
 }
 
@@ -83,6 +95,9 @@ export const Overdue: React.FC<NewTaskProps> = ({
     managername,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
+    tsmDetails,
+    managerDetails,
+    signature,
     onCountChange
 }) => {
     const [activities, setActivities] = useState<Activity[]>([]);
@@ -394,7 +409,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
                                                 onCreated={() => {
                                                     fetchAllData();
                                                 }}
+                                                managerDetails={managerDetails ?? null}
+                                                tsmDetails={tsmDetails ?? null}
+                                                signature={signature}
                                             />
+
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button className="cursor-pointer rounded-none">

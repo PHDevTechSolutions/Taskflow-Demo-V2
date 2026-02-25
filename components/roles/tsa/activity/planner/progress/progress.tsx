@@ -16,12 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
 
 interface SupervisorDetails {
-  firstname: string | null;
-  lastname: string | null;
-  email: string | null;
-  profilePicture: string | null;
-  signatureImage: string | null;
-  contact: string | null;
+    firstname: string | null;
+    lastname: string | null;
+    email: string | null;
+    profilePicture: string | null;
+    signatureImage: string | null;
+    contact: string | null;
 }
 
 interface Activity {
@@ -78,9 +78,9 @@ interface NewTaskProps {
     setDateCreatedFilterRangeAction: React.Dispatch<
         React.SetStateAction<DateRange | undefined>
     >;
-        managerDetails: SupervisorDetails | null;
-        tsmDetails: SupervisorDetails | null;
-        signature: string | null;
+    managerDetails: SupervisorDetails | null;
+    tsmDetails: SupervisorDetails | null;
+    signature: string | null;
     onCountChange?: (count: number) => void;
 }
 
@@ -355,7 +355,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 accountReferenceNumber={item.account_reference_number}
                                                 onCreated={() => {
                                                     fetchAllData();
-                                                } } 
+                                                }}
                                                 managerDetails={managerDetails ?? null}
                                                 tsmDetails={tsmDetails ?? null}
                                                 signature={signature}
