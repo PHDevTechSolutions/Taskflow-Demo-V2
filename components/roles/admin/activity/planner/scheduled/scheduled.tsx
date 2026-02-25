@@ -490,32 +490,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                         </AccordionTrigger>
 
                                         <div className="flex gap-2 ml-4">
-                                            <CreateActivityDialog
-                                                firstname={firstname}
-                                                lastname={lastname}
-                                                target_quota={target_quota}
-                                                email={email}
-                                                contact={contact}
-                                                tsmname={tsmname}
-                                                managername={managername}
-                                                referenceid={item.referenceid}
-                                                tsm={item.tsm}
-                                                manager={item.manager}
-                                                type_client={item.type_client}
-                                                contact_number={item.contact_number}
-                                                email_address={item.email_address}
-                                                activityReferenceNumber={item.activity_reference_number}
-                                                ticket_reference_number={item.ticket_reference_number}
-                                                agent={item.agent}
-                                                company_name={item.company_name}
-                                                contact_person={item.contact_person}
-                                                address={item.address}
-                                                accountReferenceNumber={item.account_reference_number}
-                                                onCreated={() => {
-                                                    fetchActivities();
-                                                }}
-                                            />
-
                                             <Button
                                                 type="button"
                                                 className="cursor-pointer"
