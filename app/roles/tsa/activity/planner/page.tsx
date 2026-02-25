@@ -526,6 +526,9 @@ function DashboardContent() {
                                         target_quota={userDetails.target_quota}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        managerDetails={userDetails.managerDetails ?? null}
+                                        tsmDetails={userDetails.tsmDetails ?? null}
+                                        signature={userDetails.signature} 
                                         onCountChange={setOverdueCount}
                                     />
                                 </CardContent>
