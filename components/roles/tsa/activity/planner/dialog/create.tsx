@@ -77,6 +77,7 @@ interface Activity {
 
     date_followup?: string;
     remarks: string;
+    tsm_approved_status: string;
     // CSR
     agent: string;
     start_date?: string;
@@ -429,7 +430,7 @@ export function CreateActivityDialog({
 
             date_followup: followUpDate || undefined,
             remarks,
-
+            tsm_approved_status: "Pending",
             start_date: startDate,
             end_date: new Date().toISOString(),
         };
