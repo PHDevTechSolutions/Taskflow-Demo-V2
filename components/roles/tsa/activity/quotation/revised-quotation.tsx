@@ -588,10 +588,13 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 </>
                                             )}
                                         </TableCell>
+
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
+                                        
                                         <TableCell className="uppercase">
                                             {displayValue(item.quotation_number)}
                                         </TableCell>
+
                                         <TableCell>
                                             ₱{displayValue(item.quotation_amount) !== "-"
                                                 ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(

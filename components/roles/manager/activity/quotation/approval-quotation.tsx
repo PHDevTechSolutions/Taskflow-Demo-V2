@@ -51,16 +51,21 @@ interface Completed {
 
     // Signatories
     // Agent
+    agent_name: string;
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
 
     // TSM
+    tsm_name: string;
     tsm_signature: string;
     tsm_contact_number: string;
     tsm_email_address: string;
     tsm_approval_date: string;
     tsm_remarks: string;
+
+    // Manager
+    manager_name: string;
 }
 
 interface CompletedProps {
@@ -514,12 +519,15 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     // Signatories
+                    agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
+                    tsmName={editItem.tsm_name}
                     tsmSignature={editItem.tsm_signature}
                     tsmContactNumber={editItem.tsm_contact_number}
                     tsmEmailAddress={editItem.tsm_email_address}
+                    managerName={editItem.manager_name}
                 />
             )}
         </>

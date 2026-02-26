@@ -48,13 +48,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return {
         ...h,
+        agent_name: sig?.agent_name || null,
         agent_signature: sig?.agent_signature || null,
         agent_contact_number: sig?.agent_contact_number || null, 
         agent_email_address: sig?.agent_email_address || null, 
+        tsm_name: sig?.tsm_name || null,
         tsm_signature: sig?.tsm_signature || null, 
         tsm_contact_number: sig?.tsm_contact_number || null, 
         tsm_email_address: sig?.tsm_email_address || null, 
         tsm_approval_date: sig?.tsm_approval_date || null, 
+        manager_name: sig?.manager_name || null,
         manager_approval_date: sig?.manager_approval_date || null, 
         tsm_remarks: sig?.tsm_remarks || null, 
       };

@@ -53,7 +53,9 @@ interface Completed {
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
+    agent_name: string;
 
+    tsm_name: string;
     tsm_approval_date: string;
     tsm_remarks: string;
 }
@@ -190,7 +192,7 @@ export const Scheduled: React.FC<CompletedProps> = ({
         return sortedActivities
             // 🔴 EXCLUDE declined quotations
             .filter((item) =>
-                ["Approved", "Pending", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
+                ["Approved", "Pending", "Endorsed to Sales Head", "Approved By Sales Head"].includes(item.tsm_approved_status)
             )
 
             // 🔍 search filter
@@ -511,9 +513,11 @@ export const Scheduled: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
+                    agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
+                    tsmName={editItem.tsm_name}
                 />
             )}
         </>

@@ -36,9 +36,11 @@ type Payload = {
     salesManagerEmail?: string;
 
     // Signatories
+    agentName?: string | null;
     agentSignature?: string | null;
     agentContactNumber?: string | null;
     agentEmailAddress?: string | null;
+    tsmName?: string | null;
 
     signature?: string | null;
     tsmcontact?: string | null;
@@ -335,7 +337,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                 ) : (
                                     <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
                                 )}
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.salesRepresentative}</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.agentName}</p>
                                 <div className="border-b border-black w-64"></div>
                                 <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales Representative</p>
                                 <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.agentContactNumber || "N/A"}</p>
@@ -353,7 +355,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                 ) : (
                                     <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
                                 )}
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.tsmName}</p>
                                 <div className="border-b border-black w-64"></div>
                                 <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">TERRITORY SALES MANAGER</p>
                                 <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.tsmcontact || "N/A"}</p>

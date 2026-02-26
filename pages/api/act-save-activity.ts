@@ -62,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contact,
       email,
       signature,
+      agent_name,
       // TSM
       tsmname,
       // Manager
@@ -203,6 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           agent_contact_number: contact,
           agent_email_address: email,
           agent_signature: signature,
+          agent_name: agent_name,
           tsm,
           tsm_name: tsmname,
           manager,

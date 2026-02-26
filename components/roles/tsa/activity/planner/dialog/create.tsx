@@ -49,6 +49,7 @@ interface Activity {
     managername: string;
     tsm: string;
     manager: string;
+    agent_name: string;
 
     // optional outbound fields
     source: string;
@@ -387,6 +388,8 @@ export function CreateActivityDialog({
     const handleSave = async () => {
         setLoading(true);
 
+        const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+
         const newActivity: Activity = {
             id: activityRef,
             activity_reference_number: activityRef,
@@ -409,6 +412,7 @@ export function CreateActivityDialog({
             signature,
             tsmname,
             managername,
+            agent_name,
 
             tsm,
             manager,

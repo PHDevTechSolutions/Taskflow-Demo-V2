@@ -100,7 +100,7 @@ const data = {
       pages: [
         { name: "Activity Planner", url: "/roles/tsa/activity/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/roles/tsa/activity/tasklist", icon: ClipboardList },
-        { name: "Revised Quotations", url: "/roles/tsa/activity/revised-quotation", icon: Compass },
+        { name: "Quotations", url: "/roles/tsa/activity/revised-quotation", icon: Compass },
         { name: "Daily Admin Task", url: "/roles/tsa/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
 
