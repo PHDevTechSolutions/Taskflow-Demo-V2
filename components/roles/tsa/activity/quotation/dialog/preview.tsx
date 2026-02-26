@@ -44,7 +44,9 @@ type Payload = {
     TsmSignature?: string | null;
     TsmEmailAddress?: string | null;
     TsmContactNumber?: string | null;
-
+    ManagerSignature?: string | null;
+    ManagerContactNumber?: string | null;
+    ManagerEmailAddress?: string | null;
 };
 
 type PreviewProps = {
@@ -363,9 +365,20 @@ export const Preview: React.FC<PreviewProps> = ({
 
                             <div>
                                 <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Noted By:</p>
+                                {payload.ManagerSignature ? (
+                                    <img
+                                        src={payload.ManagerSignature}
+                                        alt="Agent Signature"
+                                        className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
+                                    />
+                                ) : (
+                                    <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
+                                )}
                                 <p className="text-[11px] font-black uppercase mt-1">{payload.salesmanagername}</p>
                                 <div className="border-b border-black w-64"></div>
                                 <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales-B2B</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.ManagerContactNumber || "N/A"}</p>
+                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.ManagerEmailAddress || "N/A"}</p>
                                 {/* <p className="text-[9px] font-black uppercase tracking-tighter">SALES HEAD</p> */}
                             </div>
                         </div>

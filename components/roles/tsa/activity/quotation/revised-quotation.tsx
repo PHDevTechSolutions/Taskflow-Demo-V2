@@ -60,8 +60,13 @@ interface Completed {
     tsm_signature: string;
     tsm_contact_number: string;
     tsm_email_address: string;
+    manager_signature: string;
+    manager_contact_number: string;
+    manager_email_address: string;
+
     tsm_approval_date: string;
     tsm_remarks: string;
+    manager_remarks: string;
 }
 
 interface CompletedProps {
@@ -505,33 +510,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                         <PenIcon className="w-4 h-4" />
                                                         Edit
                                                     </DropdownMenuItem>
-
-                                                    {/* PDF & Excel only if Approved */}
-                                                    {(item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head") && (
-                                                        <>
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    setDownloadAction("pdf");
-                                                                    openEditDialog(item);
-                                                                }}
-                                                                className="flex items-center gap-2 cursor-pointer"
-                                                            >
-                                                                <FileText className="w-4 h-4" />
-                                                                Download PDF
-                                                            </DropdownMenuItem>
-
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    setDownloadAction("excel");
-                                                                    openEditDialog(item);
-                                                                }}
-                                                                className="flex items-center gap-2 cursor-pointer"
-                                                            >
-                                                                <FileSpreadsheet className="w-4 h-4" />
-                                                                Download Excel
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
 
@@ -576,7 +554,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 })
                                                 : "-"}
                                             <br />
-                                            {displayValue(item.tsm_remarks)}
+                                            {displayValue(item.tsm_remarks)} - {displayValue(item.manager_remarks)}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell className="uppercase">
@@ -634,14 +612,17 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
-                    downloadAction={downloadAction}
-                    onDownloadComplete={() => setDownloadAction(null)}
+                    
+                    // Signatories
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
                     TsmSignature={editItem.tsm_signature}
                     TsmEmailAddress={editItem.tsm_email_address}
                     TsmContactNumber={editItem.tsm_contact_number}
+                    ManagerSignature={editItem.manager_signature}
+                    ManagerContactNumber={editItem.manager_contact_number}
+                    ManagerEmailAddress={editItem.manager_email_address}
                 />
             )}
 

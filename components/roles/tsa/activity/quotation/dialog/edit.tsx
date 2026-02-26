@@ -128,9 +128,7 @@ interface TaskListEditDialogProps {
     email_address?: string;
     address?: string;
     quotation_number?: string;
-    downloadAction?: "pdf" | "excel" | null;
-    onDownloadComplete?: () => void;
-    
+
     // Signatories
     agentSignature?: string;
     agentContactNumber?: string;
@@ -138,6 +136,9 @@ interface TaskListEditDialogProps {
     TsmSignature?: string;
     TsmEmailAddress?: string;
     TsmContactNumber?: string;
+    ManagerSignature?: string;
+    ManagerContactNumber?: string;
+    ManagerEmailAddress?: string;
 
 }
 
@@ -154,8 +155,6 @@ export default function TaskListEditDialog({
     tsmemail,
     tsmcontact,
     managername,
-    downloadAction,
-    onDownloadComplete,
 
     // Signatories
     agentSignature,
@@ -163,7 +162,10 @@ export default function TaskListEditDialog({
     agentEmailAddress,
     TsmSignature,
     TsmContactNumber,
-    TsmEmailAddress
+    TsmEmailAddress,
+    ManagerSignature,
+    ManagerContactNumber,
+    ManagerEmailAddress
 
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -411,6 +413,113 @@ export default function TaskListEditDialog({
         setShowConfirmDialog(true);
     };
 
+    const getQuotationPayload = () => {
+        const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+        const emailUsername = email?.split("@")[0] ?? "";
+
+        let emailDomain = "";
+        if (quotation_type === "Disruptive Solutions Inc") {
+            emailDomain = "disruptivesolutionsinc.com";
+        } else if (quotation_type === "Ecoshift Corporation") {
+            emailDomain = "ecoshiftcorp.com";
+        } else {
+            emailDomain = email?.split("@")[1] ?? "";
+        }
+
+        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+
+        const items = products.map((p: ProductItem, index: number) => {
+            // Use the 'product_xxx' fields which are updated by handleProductChange
+            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+            const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
+            const isDiscounted = checkedRows[index] ?? false; // Use the row's checked state
+
+            const baseAmount = qty * unitPrice;
+            const discountedAmount = (isDiscounted && vatType === "vat_inc")
+                ? (baseAmount * discount) / 100
+                : 0;
+            const totalAmount = baseAmount - discountedAmount;
+
+            return {
+                itemNo: index + 1,
+                qty,
+                // Ensure these match the fields initialized in your useEffect
+                photo: p.product_photo ?? "",
+                title: p.product_title ?? "",
+                sku: p.product_sku ?? "",
+                product_description: p.description?.trim()
+                    ? p.description
+                    : p.product_description || "",
+                unitPrice,
+                totalAmount,
+            };
+        });
+
+        const handleDownloadPDF = async () => {
+            const payload = getQuotationPayload();
+
+            try {
+                let apiEndpoint = "/api/quotation/disruptive/pdf"; // Adjust based on your API structure
+                if (quotation_type === "Ecoshift Corporation") {
+                    apiEndpoint = "/api/quotation/ecoshift/pdf";
+                }
+
+                const resExport = await fetch(apiEndpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!resExport.ok) throw new Error("PDF Generation Failed");
+
+                const blob = await resExport.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `Quotation_${payload.referenceNo}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                toast.success("PDF Export Successful");
+            } catch (error) {
+                console.error("PDF Protocol Error:", error);
+                toast.error("Failed to generate PDF.");
+            }
+        };
+
+        return {
+            referenceNo: quotationNumber ?? "DRAFT-XXXX", date: new Date().toLocaleDateString(),
+            companyName: company_name ?? "",
+            address: address ?? "",
+            telNo: contact_number ?? "",
+            email: email_address ?? "",
+            attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
+            subject: "For Quotation",
+            items,
+            vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+            totalPrice: Number(quotationAmount ?? 0),
+            salesRepresentative: salesRepresentativeName,
+            salesemail,
+            salescontact: contact ?? "",
+            salestsmname: tsmname ?? "",
+            salestsmemail: tsmemail ?? "",
+            salestsmcontact: tsmcontact ?? "",
+
+            salesmanagername: managername ?? "",
+            // Signatories
+            agentSignature: agentSignature ?? null,
+            agentContactNumber: agentContactNumber ?? null,
+            agentEmailAddress: agentEmailAddress ?? null,
+            TsmSignature: TsmSignature ?? null,
+            TsmEmailAddress: TsmEmailAddress ?? null,
+            TsmContactNumber: TsmContactNumber ?? null,
+            ManagerSignature: ManagerSignature ?? null,
+            ManagerContactNumber: ManagerContactNumber ?? null,
+            ManagerEmailAddress: ManagerEmailAddress ?? null,
+        };
+    };
+
     // Download handler with your given logic integrated
     const DownloadExcel = async () => {
         // Prepare data arrays
@@ -524,80 +633,6 @@ export default function TaskListEditDialog({
             toast.error("Export failed. Please try again.");
             setShowConfirmDialog(false);
         }
-    };
-
-    const getQuotationPayload = () => {
-        const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
-        const emailUsername = email?.split("@")[0] ?? "";
-
-        let emailDomain = "";
-        if (quotation_type === "Disruptive Solutions Inc") {
-            emailDomain = "disruptivesolutionsinc.com";
-        } else if (quotation_type === "Ecoshift Corporation") {
-            emailDomain = "ecoshiftcorp.com";
-        } else {
-            emailDomain = email?.split("@")[1] ?? "";
-        }
-
-        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
-
-        const items = products.map((p: ProductItem, index: number) => {
-            // Use the 'product_xxx' fields which are updated by handleProductChange
-            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-            const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
-            const isDiscounted = checkedRows[index] ?? false; // Use the row's checked state
-
-            const baseAmount = qty * unitPrice;
-            const discountedAmount = (isDiscounted && vatType === "vat_inc")
-                ? (baseAmount * discount) / 100
-                : 0;
-            const totalAmount = baseAmount - discountedAmount;
-
-            return {
-                itemNo: index + 1,
-                qty,
-                // Ensure these match the fields initialized in your useEffect
-                photo: p.product_photo ?? "",
-                title: p.product_title ?? "",
-                sku: p.product_sku ?? "",
-                product_description: p.description?.trim()
-                    ? p.description
-                    : p.product_description || "",
-                unitPrice,
-                totalAmount,
-            };
-        });
-
-        return {
-            referenceNo: quotationNumber ?? "DRAFT-XXXX",
-            date: new Date().toLocaleDateString(),
-            companyName: company_name ?? "",
-            address: address ?? "",
-            telNo: contact_number ?? "",
-            email: email_address ?? "",
-            attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
-            subject: "For Quotation",
-            items,
-            vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-            totalPrice: Number(quotationAmount ?? 0),
-            salesRepresentative: salesRepresentativeName,
-            salesemail,
-            salescontact: contact ?? "",
-            salestsmname: tsmname ?? "",
-            salestsmemail: tsmemail ?? "",
-            salestsmcontact: tsmcontact ?? "",
-
-            salesmanagername: managername ?? "",
-
-            // Signatories
-            agentSignature: agentSignature ?? null,
-            agentContactNumber: agentContactNumber ?? null,
-            agentEmailAddress: agentEmailAddress ?? null,
-            TsmSignature: TsmSignature ?? null,
-            TsmEmailAddress: TsmEmailAddress ?? null,
-            TsmContactNumber: TsmContactNumber ?? null,
-
-        };
     };
 
     const handleAddProduct = (product: Product) => {
@@ -805,8 +840,8 @@ export default function TaskListEditDialog({
             .grid-row { display: flex; align-items: center; min-height: 20px; padding: 2px 15px; }
             .border-t { border-top: 1.5px solid black; }
             .border-b { border-bottom: 1.5px solid black; padding-bottom: 10px;}
-            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 0; }
-            .value { flex-grow: 1; font-size: 11px; font-weight: bold; color: #374151; padding-left: 15px; }
+            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 1; }
+            .value { flex-grow: 1; font-size: 10px; font-weight: bold; color: #374151; padding-left: 15px; text-transform: uppercase; }
             .intro-text { font-size: 10px; font-style: italic; color: #6b7280; font-weight: 500; padding: 5px 0; }
             
             /* 2. SPECIFICATION TABLE */
@@ -860,7 +895,7 @@ export default function TaskListEditDialog({
             .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
             .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
             .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
-            .terms-val { padding: 4px 12px; border-left: 1px solid #e5e7eb; }
+            .terms-val { padding: 4px 12px;}
             .terms-highlight { background-color: #fef9c3; }
             .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             
@@ -871,17 +906,17 @@ export default function TaskListEditDialog({
             .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
             .tax-active { color: white; }
             .tax-inactive { color: rgba(255,255,255,0.3); }
-            .grand-total-label { text-align: right; font-weight: 900; font-size: 10px; text-transform: uppercase; }
+            .grand-total-label { text-align: left; font-weight: 900; font-size: 10px; text-transform: uppercase; white-space: nowrap; }
             .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
             
             /* 4. OFFICIAL SIGNATURE HIERARCHY */
-            .sig-hierarchy { margin-top: 48px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 80px; }
-            .sig-message { font-size: 9px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; }
+            .sig-hierarchy { margin-top: 40px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 20px; }
+            .sig-message { font-size: 9px; margin-bottom: 15px; font-weight: 500; line-height: 1.4; }
             .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
             .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
             .sig-line { border-bottom: 1px solid black; width: 256px; }
-            .sig-rep-box { width: 256px; height: 40px; display: flex; align-items: center; 
+            .sig-rep-box { width: 150px; height: 15px; display: flex; align-items: center; 
             justify-content: center; text-align: center; font-size: 8px; 
             font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
             }
@@ -1044,19 +1079,22 @@ export default function TaskListEditDialog({
         <div class="table-container">
         <table class="main-table">
         <tr class="summary-bar">
-        <td colspan="2"></td>
+        <td colspan="1" ></td>
         <td class="tax-label">Tax Type:</td>
-        <td style="width: 200px;">
-        <div class="tax-options">
+        <td style="width: 300px;">
+        <div class="tax-options" style="margin-left: 50px;">
         <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
         ${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
         </span>
         <span class="${payload.vatTypeLabel === "VAT Exe" ? 'tax-active' : 'tax-inactive'}">
         ${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
         </span>
+        <span class="${payload.vatTypeLabel === "Zero-Rated" ? 'tax-active' : 'tax-inactive'}">
+        ${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+        </span>
         </div>
         </td>
-        <td style="width: 80px; text-align:right;" class="grand-total-label">Grand Total:</td>
+        <td style="width: 120px; text-align:left;" class="grand-total-label">Grand Total:</td>
         <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
         </table>
@@ -1220,6 +1258,7 @@ export default function TaskListEditDialog({
         <div>
         
         <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
+        <img src="${payload.ManagerSignature || ''}" class="sig-rep-box" />
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">Sales-B2B</p>
@@ -1257,19 +1296,6 @@ export default function TaskListEditDialog({
             console.error("Critical Export Error:", error);
         }
     }
-
-    useEffect(() => {
-        if (!downloadAction) return;
-
-        const runDownload = async () => {
-            if (downloadAction === "pdf") await DownloadPDF();
-            if (downloadAction === "excel") await DownloadExcel();
-
-            onDownloadComplete?.(); // reset
-        };
-
-        runDownload();
-    }, [downloadAction]);
 
     const toggleDescription = (index: number) => {
         setOpenDescription(prev => ({
@@ -1836,6 +1862,8 @@ export default function TaskListEditDialog({
                                 <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
                             </Button>
+                            <Button type="button" onClick={DownloadPDF} className="rounded-xs p-6 bg-yellow-600"><FileText /> PDF</Button>
+                            <Button type="button" onClick={DownloadExcel} className="rounded-xs p-6 bg-green-600"><FileSpreadsheet /> Excel</Button>
                             <Button variant="outline" className="rounded-none p-6" onClick={onClose}>Cancel</Button>
                             <Button onClick={onClickSave} className="rounded-none p-6">Save</Button>
                         </div>

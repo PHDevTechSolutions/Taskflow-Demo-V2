@@ -56,9 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tsm_email_address: sig?.tsm_email_address || null, 
         manager_signature: sig?.manager_signature || null, 
         manager_contact_number: sig?.manager_contact_number || null, 
+        manager_email_address: sig?.manager_email_address || null, 
         tsm_approval_date: sig?.tsm_approval_date || null, 
         tsm_remarks: sig?.tsm_remarks || null, 
-        
+        manager_remarks: sig?.manager_remarks || null, 
       };
     });
 
