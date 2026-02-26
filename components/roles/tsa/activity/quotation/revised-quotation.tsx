@@ -491,7 +491,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             />
                                         </TableCell>
 
-                                        <TableCell className="text-center flex space-x-2 justify-center">
+                                        <TableCell className="text-center space-x-2 justify-center">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
@@ -593,7 +593,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             {displayValue(item.quotation_number)}
                                         </TableCell>
                                         <TableCell>
-                                            {displayValue(item.quotation_amount) !== "-"
+                                            ₱{displayValue(item.quotation_amount) !== "-"
                                                 ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(
                                                     undefined,
                                                     {
