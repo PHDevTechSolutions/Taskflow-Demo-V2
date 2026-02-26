@@ -3,16 +3,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, PenIcon, FileSpreadsheet, FileText, MoreVertical } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, FileSpreadsheet, FileText, MoreVertical, } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-
-import { TaskListDialog } from "../tasklist/dialog/filter";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import TaskListEditDialog from "./dialog/edit";
-import { AccountsActiveDeleteDialog } from "../planner/dialog/delete";
 
 interface SupervisorDetails {
     firstname: string;
@@ -54,9 +50,12 @@ interface Completed {
     tsm_approved_status: string;
 
     // Signatories
+    // Agent
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
+
+    // TSM
     tsm_signature: string;
     tsm_contact_number: string;
     tsm_email_address: string;
@@ -73,12 +72,12 @@ interface CompletedProps {
     contact?: string;
     tsmname?: string;
     managername?: string;
+    signature?: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-
 }
 
-export const RevisedQuotation: React.FC<CompletedProps> = ({
+export const ApprovalQuotation: React.FC<CompletedProps> = ({
     referenceid,
     target_quota,
     firstname,
@@ -87,29 +86,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     contact,
     tsmname,
     managername,
+    signature,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
     const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // Filters state
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
-    const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editOpen, setEditOpen] = useState(false);
 
-    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-    const [downloadAction, setDownloadAction] = useState<"pdf" | "excel" | null>(null);
-
-    // Delete dialog states
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [removeRemarks, setRemoveRemarks] = useState("");
-
-    // Fetch activities from API
+    // -----------------------------
+    // FETCH ACTIVITIES
+    // -----------------------------
     const fetchActivities = useCallback(() => {
         if (!referenceid) {
             setActivities([]);
@@ -126,7 +118,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
             : null;
 
-        const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
+        const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
         url.searchParams.append("referenceid", referenceid);
         if (from && to) {
             url.searchParams.append("from", from);
@@ -143,7 +135,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             .finally(() => setLoading(false));
     }, [referenceid, dateCreatedFilterRange]);
 
-    // Subscribe to real-time changes with Supabase
+    // -----------------------------
+    // REAL-TIME SUBSCRIPTION
+    // -----------------------------
     useEffect(() => {
         if (!referenceid) return;
 
@@ -157,7 +151,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     event: "*",
                     schema: "public",
                     table: "history",
-                    filter: `referenceid=eq.${referenceid}`,
+                    filter: `manager=eq.${referenceid}`,
                 },
                 () => {
                     fetchActivities();
@@ -170,68 +164,54 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         };
     }, [referenceid, fetchActivities]);
 
-    // Sort activities by latest date_updated or date_created
+    // -----------------------------
+    // SORT & FILTER
+    // -----------------------------
     const sortedActivities = useMemo(() => {
-        return activities.sort(
+        return [...activities].sort(
             (a, b) =>
                 new Date(b.date_updated ?? b.date_created).getTime() -
                 new Date(a.date_updated ?? a.date_created).getTime()
         );
     }, [activities]);
 
-    // Check if item has meaningful data
     const hasMeaningfulData = (item: Completed) => {
-        const columnsToCheck = [
-            "activity_reference_number",
-            "referenceid",
-            "quotation_number",
-            "quotation_amount",
-        ];
-
+        const columnsToCheck = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
         return columnsToCheck.some((col) => {
             const val = (item as any)[col];
             if (val === null || val === undefined) return false;
-
             if (typeof val === "string") return val.trim() !== "";
             if (typeof val === "number") return !isNaN(val);
-            if (val instanceof Date) return !isNaN(val.getTime());
-
-            if (typeof val === "object" && val !== null && val.toString) {
-                return val.toString().trim() !== "";
-            }
-
             return Boolean(val);
         });
     };
 
-    // Filtered and searched activities
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
 
         return sortedActivities
+            // 🔴 EXCLUDE declined quotations
             .filter((item) =>
-                ["Approved", "Approved By Sales Head", "Pending", "Decline", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
+                ["Approved By Sales Head", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
             )
+
+            // 🔍 search filter
             .filter((item) => {
                 if (!search) return true;
-                return Object.values(item).some((val) => {
-                    if (val === null || val === undefined) return false;
-                    return String(val).toLowerCase().includes(search);
-                });
+                return Object.values(item).some(
+                    (val) => val && String(val).toLowerCase().includes(search)
+                );
             })
+
+            // 📄 quotation only
+            .filter((item) => item.type_activity === "Quotation Preparation")
+
+            // 🧹 meaningful data only
+            .filter(hasMeaningfulData)
+
+            // 📅 date range filter
             .filter((item) => {
-                if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                // force filter type_activity to "Quotation Preparation"
-                if (item.type_activity !== "Quotation Preparation") return false;
-                return true;
-            })
-            .filter((item) => {
-                if (
-                    !dateCreatedFilterRange ||
-                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-                ) {
-                    return true;
-                }
+                if (!dateCreatedFilterRange) return true;
 
                 const updated = item.date_updated
                     ? new Date(item.date_updated)
@@ -242,6 +222,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 const from = dateCreatedFilterRange.from
                     ? new Date(dateCreatedFilterRange.from)
                     : null;
+
                 const to = dateCreatedFilterRange.to
                     ? new Date(dateCreatedFilterRange.to)
                     : null;
@@ -250,29 +231,72 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 if (to && updated > to) return false;
 
                 return true;
-            })
-            .filter(hasMeaningfulData);
-    }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+            });
+    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
 
-    // Extract unique status for filter dropdowns
-    const statusOptions = useMemo(() => {
-        const setStatus = new Set<string>();
-        sortedActivities.forEach((a) => {
-            if (a.status) setStatus.add(a.status);
+    // -----------------------------
+    // AGENT MAP
+    // -----------------------------
+    const [agents, setAgents] = useState<any[]>([]);
+    const userDetails = { referenceid }; // placeholder
+    useEffect(() => {
+        if (!userDetails.referenceid) return;
+
+        const fetchAgents = async () => {
+            try {
+                const response = await fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`);
+                if (!response.ok) throw new Error("Failed to fetch agents");
+                const data = await response.json();
+                setAgents(data);
+            } catch (err) {
+                console.error(err);
+                setError("Failed to load agents.");
+            }
+        };
+
+        fetchAgents();
+    }, [userDetails.referenceid]);
+
+    const agentMap = useMemo(() => {
+        const map: Record<string, { name: string; profilePicture: string }> = {};
+        agents.forEach((agent) => {
+            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
+                map[agent.ReferenceID.toLowerCase()] = {
+                    name: `${agent.Firstname} ${agent.Lastname}`,
+                    profilePicture: agent.profilePicture || "",
+                };
+            }
         });
-        return Array.from(setStatus).sort();
-    }, [sortedActivities]);
+        return map;
+    }, [agents]);
 
-    // Extract unique type_activity for filter dropdowns
-    const typeActivityOptions = useMemo(() => {
-        const setType = new Set<string>();
-        sortedActivities.forEach((a) => {
-            if (a.type_activity) setType.add(a.type_activity);
-        });
-        return Array.from(setType).sort();
-    }, [sortedActivities]);
+    // -----------------------------
+    // UTILS
+    // -----------------------------
+    const displayValue = (v: any) => (v === null || v === undefined || String(v).trim() === "" ? "-" : String(v));
 
-    // Handlers for Edit dialog
+    function formatDuration(start?: string, end?: string) {
+        if (!start || !end) return "-";
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
+        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000);
+        if (diff < 0) diff = 0;
+        const hours = Math.floor(diff / 3600);
+        diff %= 3600;
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+        const parts: string[] = [];
+        if (hours) parts.push(`${hours} hr${hours !== 1 ? "s" : ""}`);
+        if (minutes) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+        parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+        return parts.join(" ");
+    }
+
+    // -----------------------------
+    // SELECTION
+    // -----------------------------
+
     const openEditDialog = (item: Completed) => {
         setEditItem(item);
         setEditOpen(true);
@@ -288,140 +312,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         closeEditDialog();
     };
 
-    // Selection toggle for checkboxes
-    const toggleSelect = (id: number) => {
-        setSelectedIds((prev) => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id);
-            else newSet.add(id);
-            return newSet;
-        });
-    };
-
-    const clearSelection = () => {
-        setSelectedIds(new Set());
-    };
-
-    // Delete selected activities
-    const onConfirmRemove = async () => {
-        try {
-            const res = await fetch("/api/act-delete-history", {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ids: Array.from(selectedIds),
-                    remarks: removeRemarks,
-                }),
-            });
-
-            if (!res.ok) throw new Error("Failed to delete selected activities");
-
-            setDeleteDialogOpen(false);
-            clearSelection();
-            setRemoveRemarks("");
-            fetchActivities();
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    // Helper to display or fallback "-"
-    const displayValue = (v: any) =>
-        v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
-
-    function formatDuration(start?: string, end?: string) {
-        if (!start || !end) return "-";
-
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
-
-        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000); // seconds
-        if (diff < 0) diff = 0;
-
-        const hours = Math.floor(diff / 3600);
-        diff %= 3600;
-        const minutes = Math.floor(diff / 60);
-        const seconds = diff % 60;
-
-        const parts: string[] = [];
-
-        if (hours > 0) parts.push(`${hours} hr${hours !== 1 ? "s" : ""}`);
-        if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
-        if (seconds > 0 || parts.length === 0)
-            parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
-
-        return parts.join(" ");
-    }
-
-    const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(null);
-    const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(null);
-
-    useEffect(() => {
-        if (!referenceid) return;
-
-        const fetchHierarchy = async () => {
-            try {
-                const response = await fetch(`/api/user?id=${encodeURIComponent(referenceid)}`);
-
-                if (!response.ok) throw new Error("Failed to fetch hierarchy details");
-
-                const data = await response.json();
-
-                setTsmDetails(data.tsmDetails ?? null);
-                setManagerDetails(data.managerDetails ?? null);
-
-            } catch (error) {
-                console.error("Hierarchy fetch error:", error);
-            }
-        };
-
-        fetchHierarchy();
-    }, [referenceid]);
-
     return (
         <>
-
-            {/* Search + Filter */}
-            <div className="mb-4 flex items-center justify-between gap-4">
+            {/* Search */}
+            <div className="mb-4 flex items-center gap-4">
                 <Input
                     type="text"
-                    placeholder="Search company, reference ID, status, or activity..."
+                    placeholder="Search..."
                     className="input input-bordered input-sm flex-grow max-w-md rounded-none"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-label="Search activities"
                 />
-
-                <div className="flex items-center space-x-2">
-                    <TaskListDialog
-                        filterStatus={filterStatus}
-                        filterTypeActivity={filterTypeActivity}
-                        setFilterStatus={setFilterStatus}
-                        setFilterTypeActivity={setFilterTypeActivity}
-                        statusOptions={statusOptions}
-                        typeActivityOptions={typeActivityOptions}
-                    />
-
-                    {selectedIds.size > 0 && (
-                        <Button
-                            variant="destructive"
-                            onClick={() => setDeleteDialogOpen(true)}
-                            className="flex items-center space-x-1 cursor-pointer rounded-none"
-                        >
-                            <span>Delete Selected ({selectedIds.size})</span>
-                        </Button>
-                    )}
-                </div>
             </div>
 
             {/* Error */}
             {error && (
-                <Alert
-                    variant="destructive"
-                    className="flex flex-col space-y-4 p-4 text-xs"
-                >
+                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
                     <div className="flex items-center space-x-3">
                         <AlertCircleIcon className="h-6 w-6 text-red-600" />
                         <div>
@@ -431,7 +337,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             </AlertDescription>
                         </div>
                     </div>
-
                     <div className="flex items-center space-x-3">
                         <CheckCircle2Icon className="h-6 w-6 text-green-600" />
                         <div>
@@ -444,11 +349,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 </Alert>
             )}
 
-            {/* Total records */}
+            {/* Total Records */}
             {filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">
-                    Total Records: {filteredActivities.length}
-                </div>
+                <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
             )}
 
             {/* Table */}
@@ -457,8 +360,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     <Table className="text-xs">
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[40px]" />
                                 <TableHead className="w-[60px] text-center">Tools</TableHead>
+                                <TableHead>Agent</TableHead>
                                 <TableHead>Date Created</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
@@ -473,18 +376,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
                         <TableBody>
                             {filteredActivities.map((item) => {
-                                const isSelected = selectedIds.has(item.id);
-
+                                const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
                                 return (
                                     <TableRow key={item.id}>
-                                        <TableCell>
-                                            <Checkbox
-                                                className="w-6 h-6 hover:bg-gray-100 rounded cursor-pointer"
-                                                checked={isSelected}
-                                                onCheckedChange={() => toggleSelect(item.id)}
-                                            />
-                                        </TableCell>
-
                                         <TableCell className="text-center flex space-x-2 justify-center">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -502,39 +396,28 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                         onClick={() => openEditDialog(item)}
                                                         className="flex items-center gap-2 cursor-pointer"
                                                     >
-                                                        <PenIcon className="w-4 h-4" />
-                                                        Edit
+                                                        <Eye className="w-4 h-4" />
+                                                        View
                                                     </DropdownMenuItem>
-
-                                                    {/* PDF & Excel only if Approved */}
-                                                    {(item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head") && (
-                                                        <>
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    setDownloadAction("pdf");
-                                                                    openEditDialog(item);
-                                                                }}
-                                                                className="flex items-center gap-2 cursor-pointer"
-                                                            >
-                                                                <FileText className="w-4 h-4" />
-                                                                Download PDF
-                                                            </DropdownMenuItem>
-
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    setDownloadAction("excel");
-                                                                    openEditDialog(item);
-                                                                }}
-                                                                className="flex items-center gap-2 cursor-pointer"
-                                                            >
-                                                                <FileSpreadsheet className="w-4 h-4" />
-                                                                Download Excel
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
+                                        </TableCell>
 
+                                        <TableCell className="whitespace-nowrap">
+                                            <div className="flex items-center gap-2 capitalize">
+                                                {agent?.profilePicture ? (
+                                                    <img
+                                                        src={agent.profilePicture}
+                                                        alt={agent.name}
+                                                        className="w-6 h-6 rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                                                        N/A
+                                                    </div>
+                                                )}
+                                                <span>{agent?.name || "-"}</span>
+                                            </div>
                                         </TableCell>
 
                                         <TableCell>
@@ -542,16 +425,16 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 timeZone: "Asia/Manila",
                                             })}
                                         </TableCell>
+
                                         <TableCell className="whitespace-nowrap font-mono">
                                             {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
-                                        <TableCell className="font-semibold">
-                                            {item.company_name}
-                                        </TableCell>
-                                        <td className="p-2 font-semibold text-center">
+
+                                        <TableCell className="font-semibold">{item.company_name}<br /><span className="text-[10px] italic">{item.activity_reference_number}</span></TableCell>
+                                        <TableCell className="p-2 font-semibold text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
-                                                     ${item.tsm_approved_status === "Approved"
+                                                ${item.tsm_approved_status === "Approved"
                                                         ? "bg-green-100 text-green-700"
                                                         : item.tsm_approved_status === "Pending"
                                                             ? "bg-orange-100 text-orange-700"
@@ -562,7 +445,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             >
                                                 {item.tsm_approved_status}
                                             </span>
-                                        </td>
+                                        </TableCell>
+
                                         <TableCell>
                                             {item.tsm_approval_date
                                                 ? new Date(item.tsm_approval_date).toLocaleString("en-PH", {
@@ -579,25 +463,19 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             {displayValue(item.tsm_remarks)}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-                                        <TableCell className="uppercase">
-                                            {displayValue(item.quotation_number)}
-                                        </TableCell>
+                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
                                         <TableCell>
                                             {displayValue(item.quotation_amount) !== "-"
-                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(
-                                                    undefined,
-                                                    {
-                                                        minimumFractionDigits: 2,
-                                                        maximumFractionDigits: 2,
-                                                    }
-                                                )
+                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                })
                                                 : "-"}
                                         </TableCell>
-
                                         <TableCell className="text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
-                                                                                        ${item.quotation_type === "Ecoshift Corporation"
+                                                ${item.quotation_type === "Ecoshift Corporation"
                                                         ? "bg-green-100 text-green-700"
                                                         : item.quotation_type === "Disruptive Solutions Inc"
                                                             ? "bg-rose-100 text-rose-800"
@@ -627,6 +505,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     contact={contact}
                     tsmname={tsmname}
                     managername={managername}
+                    signature={signature}
                     company={{
                         company_name: editItem.company_name,
                         contact_number: editItem.contact_number,
@@ -634,25 +513,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
-                    downloadAction={downloadAction}
-                    onDownloadComplete={() => setDownloadAction(null)}
+                    // Signatories
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
-                    TsmSignature={editItem.tsm_signature}
-                    TsmEmailAddress={editItem.tsm_email_address}
-                    TsmContactNumber={editItem.tsm_contact_number}
+                    tsmSignature={editItem.tsm_signature}
+                    tsmContactNumber={editItem.tsm_contact_number}
+                    tsmEmailAddress={editItem.tsm_email_address}
                 />
             )}
-
-            {/* Delete confirmation dialog */}
-            <AccountsActiveDeleteDialog
-                open={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-                removeRemarks={removeRemarks}
-                setRemoveRemarks={setRemoveRemarks}
-                onConfirmRemove={onConfirmRemove}
-            />
         </>
     );
 };

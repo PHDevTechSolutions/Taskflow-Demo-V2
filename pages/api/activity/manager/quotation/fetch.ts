@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     // 1️⃣ Fetch history
     // -----------------------------
-    let historyQuery = supabase.from("history").select("*").eq("referenceid", referenceid);
+    let historyQuery = supabase.from("history").select("*").eq("manager", referenceid);
 
     if (fromDate && toDate) {
       historyQuery = historyQuery.gte("date_created", fromDate).lte("date_created", toDate);
@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     const activityRefs = historyData.map((h) => h.quotation_number).filter(Boolean);
 
-    let signatoriesQuery = supabase.from("signatories").select("*").eq("referenceid", referenceid);
+    let signatoriesQuery = supabase.from("signatories").select("*").eq("manager", referenceid);
     if (activityRefs.length > 0) {
       signatoriesQuery = signatoriesQuery.in("quotation_number", activityRefs);
     }
@@ -54,11 +54,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tsm_signature: sig?.tsm_signature || null, 
         tsm_contact_number: sig?.tsm_contact_number || null, 
         tsm_email_address: sig?.tsm_email_address || null, 
-        manager_signature: sig?.manager_signature || null, 
-        manager_contact_number: sig?.manager_contact_number || null, 
         tsm_approval_date: sig?.tsm_approval_date || null, 
         tsm_remarks: sig?.tsm_remarks || null, 
-        
       };
     });
 

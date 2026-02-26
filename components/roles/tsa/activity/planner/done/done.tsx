@@ -4,11 +4,9 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner"
-import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
-import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -338,8 +336,11 @@ export const Done: React.FC<NewTaskProps> = ({
                                         </Badge>
 
                                         {/* ACTIVITY ICON BADGES */}
-                                        {item.relatedHistoryItems.some((h: HistoryItem) =>
-                                            !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
+                                        {item.relatedHistoryItems.some(
+                                            (h: HistoryItem) =>
+                                                !!h.type_activity &&
+                                                h.type_activity !== "-" &&
+                                                h.type_activity.trim() !== ""
                                         ) &&
                                             Array.from(
                                                 new Set(
@@ -351,29 +352,38 @@ export const Done: React.FC<NewTaskProps> = ({
                                                 const getIcon = (act: string) => {
                                                     const lowerAct = act.toLowerCase();
                                                     if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
-                                                        return <PhoneOutgoing />;
+                                                        return <PhoneOutgoing size={14} />;
                                                     }
                                                     if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
-                                                        return <PackageCheck />;
+                                                        return <PackageCheck size={14} />;
                                                     }
                                                     if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
-                                                        return <ReceiptText />;
+                                                        return <ReceiptText size={14} />;
                                                     }
-                                                    return <Activity />;
+                                                    return <Activity size={14} />;
                                                 };
 
                                                 return (
-                                                    <Badge
-                                                        key={activity}
-                                                        variant="outline"
-                                                        className="flex items-center justify-center w-8 h-8 p-0"
-                                                        title={activity.toUpperCase()}
-                                                    >
-                                                        {getIcon(activity)}
-                                                    </Badge>
+                                                    <HoverCard key={activity}>
+                                                        <HoverCardTrigger asChild>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="flex items-center justify-center w-8 h-8 p-0 cursor-default"
+                                                            >
+                                                                {getIcon(activity)}
+                                                            </Badge>
+                                                        </HoverCardTrigger>
+
+                                                        <HoverCardContent
+                                                            side="top"
+                                                            align="center"
+                                                            className="text-xs font-medium px-3 py-2 w-auto"
+                                                        >
+                                                            {activity.toUpperCase()}
+                                                        </HoverCardContent>
+                                                    </HoverCard>
                                                 );
-                                            })
-                                        }
+                                            })}
                                     </div>
                                 </div>
 

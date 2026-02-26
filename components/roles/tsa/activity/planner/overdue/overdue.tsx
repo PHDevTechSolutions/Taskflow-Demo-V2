@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { Check, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Dot, MoreVertical, AlertCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { supabase } from "@/utils/supabase";
 import { CancelledDialog } from "../dialog/cancelled";
 import { DoneDialog } from "../dialog/done";
@@ -451,8 +452,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
 
                                     <div className="ml-1 flex flex-wrap gap-1 uppercase">
                                         {/* ACTIVITY ICON BADGES */}
-                                        {item.relatedHistoryItems.some((h: HistoryItem) =>
-                                            !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
+                                        {item.relatedHistoryItems.some(
+                                            (h: HistoryItem) =>
+                                                !!h.type_activity &&
+                                                h.type_activity !== "-" &&
+                                                h.type_activity.trim() !== ""
                                         ) &&
                                             Array.from(
                                                 new Set(
@@ -464,29 +468,38 @@ export const Overdue: React.FC<NewTaskProps> = ({
                                                 const getIcon = (act: string) => {
                                                     const lowerAct = act.toLowerCase();
                                                     if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
-                                                        return <PhoneOutgoing />;
+                                                        return <PhoneOutgoing size={14} />;
                                                     }
                                                     if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
-                                                        return <PackageCheck />;
+                                                        return <PackageCheck size={14} />;
                                                     }
                                                     if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
-                                                        return <ReceiptText />;
+                                                        return <ReceiptText size={14} />;
                                                     }
-                                                    return <Activity />;
+                                                    return <Activity size={14} />;
                                                 };
 
                                                 return (
-                                                    <Badge
-                                                        key={activity}
-                                                        variant="outline"
-                                                        className="flex items-center justify-center w-8 h-8 p-0"
-                                                        title={activity.toUpperCase()}
-                                                    >
-                                                        {getIcon(activity)}
-                                                    </Badge>
+                                                    <HoverCard key={activity}>
+                                                        <HoverCardTrigger asChild>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="flex items-center justify-center w-8 h-8 p-0 cursor-default"
+                                                            >
+                                                                {getIcon(activity)}
+                                                            </Badge>
+                                                        </HoverCardTrigger>
+
+                                                        <HoverCardContent
+                                                            side="top"
+                                                            align="center"
+                                                            className="text-xs font-medium px-3 py-2 w-auto"
+                                                        >
+                                                            {activity.toUpperCase()}
+                                                        </HoverCardContent>
+                                                    </HoverCard>
                                                 );
-                                            })
-                                        }
+                                            })}
                                     </div>
                                 </div>
 

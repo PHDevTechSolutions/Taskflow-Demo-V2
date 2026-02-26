@@ -1,12 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "PUT") {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { quotation_number, tsm_approved_status, contact, email, signature } = req.body;
+  const {
+    quotation_number,
+    tsm_approved_status,
+    tsm_remarks,
+    contact,
+    email,
+    signature,
+  } = req.body;
 
   // -----------------------------
   // 1️⃣ Validate input
@@ -15,66 +25,82 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing or invalid quotation_number" });
   }
 
-  if (!tsm_approved_status || !["Approved", "Decline"].includes(tsm_approved_status)) {
+  if (!["Approved", "Decline", "Endorsed to Sales Head"].includes(tsm_approved_status)) {
     return res.status(400).json({ message: "Invalid tsm_approved_status" });
   }
 
+  if (
+    tsm_approved_status === "Decline" &&
+    (!tsm_remarks || !tsm_remarks.trim())
+  ) {
+    return res
+      .status(400)
+      .json({ message: "TSM remarks is required when declining" });
+  }
+
   try {
+    const now = new Date().toISOString();
+
     // -----------------------------
-    // 2️⃣ Update history table by quotation_number
+    // 2️⃣ Update HISTORY (ONLY tsm_approved_status)
     // -----------------------------
     const { data: historyData, error: historyError } = await supabase
       .from("history")
-      .update({ tsm_approved_status })
+      .update({
+        tsm_approved_status, // only update status
+      })
       .eq("quotation_number", quotation_number)
       .select();
 
-    if (historyError) return res.status(500).json({ message: historyError.message });
+    if (historyError) {
+      return res.status(500).json({ message: historyError.message });
+    }
+
     if (!historyData || historyData.length === 0) {
       return res.status(404).json({ message: "No matching history record found" });
     }
 
-    const historyRow = historyData[0];
-
     // -----------------------------
-    // 3️⃣ Fetch signatory by quotation_number
+    // 3️⃣ Fetch SIGNATORY by quotation_number
     // -----------------------------
-    const { data: signatoryData, error: signatoryFetchError } = await supabase
+    const { data: signatory, error: signatoryFetchError } = await supabase
       .from("signatories")
-      .select("*")
-      .eq("quotation_number", quotation_number);
+      .select("id")
+      .eq("quotation_number", quotation_number)
+      .single();
 
-    if (signatoryFetchError) return res.status(500).json({ message: signatoryFetchError.message });
-    if (!signatoryData || signatoryData.length === 0) {
-      return res.status(404).json({ message: "No matching signatory record found" });
+    if (signatoryFetchError) {
+      return res.status(500).json({ message: signatoryFetchError.message });
     }
 
-    const signatoryRow = signatoryData[0];
+    // -----------------------------
+    // 4️⃣ Update SIGNATORIES (contact, email, signature, remarks & approval date)
+    // -----------------------------
+    const { data: updatedSignatory, error: signatoryUpdateError } =
+      await supabase
+        .from("signatories")
+        .update({
+          tsm_contact_number: contact ?? null,
+          tsm_email_address: email ?? null,
+          tsm_signature: signature ?? null,
+          tsm_remarks: tsm_approved_status === "Decline" ? tsm_remarks : tsm_remarks ?? null,
+          tsm_approval_date: now,
+        })
+        .eq("id", signatory.id)
+        .select();
+
+    if (signatoryUpdateError) {
+      return res.status(500).json({ message: signatoryUpdateError.message });
+    }
 
     // -----------------------------
-    // 4️⃣ Update signatory using primary key (id)
-    // -----------------------------
-    const { data: updatedSignatory, error: signatoryUpdateError } = await supabase
-      .from("signatories")
-      .update({
-        tsm_contact_number: contact ?? null,
-        tsm_email_address: email ?? null,
-        tsm_signature: signature ?? null,
-      })
-      .eq("id", signatoryRow.id)
-      .select();
-
-    if (signatoryUpdateError) return res.status(500).json({ message: signatoryUpdateError.message });
-
-    // -----------------------------
-    // 5️⃣ Return success
+    // 5️⃣ Success
     // -----------------------------
     return res.status(200).json({
       success: true,
-      history: historyRow,
-      signatory: updatedSignatory[0],
+      history: historyData[0], // status lang updated
+      signatory: updatedSignatory?.[0] ?? null, // remarks + date updated here
     });
-
   } catch (err) {
     console.error("Server error:", err);
     return res.status(500).json({ message: "Server error" });

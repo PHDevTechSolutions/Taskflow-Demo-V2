@@ -9,6 +9,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
@@ -574,10 +575,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           accountReferenceNumber={item.account_reference_number}
                           onCreated={() => {
                             fetchAllData();
-                          } } 
+                          }}
                           managerDetails={managerDetails ?? null}
                           tsmDetails={tsmDetails ?? null}
-                          signature={signature}                     
+                          signature={signature}
                         />
 
                         <DropdownMenu>
@@ -655,8 +656,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         </Badge>
                       )}
 
-                      {item.relatedHistoryItems.some((h: HistoryItem) =>
-                        !!h.type_activity && h.type_activity !== "-" && h.type_activity.trim() !== ""
+                      {item.relatedHistoryItems.some(
+                        (h: HistoryItem) =>
+                          !!h.type_activity &&
+                          h.type_activity !== "-" &&
+                          h.type_activity.trim() !== ""
                       ) &&
                         Array.from(
                           new Set(
@@ -668,60 +672,92 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           const getIcon = (act: string) => {
                             const lowerAct = act.toLowerCase();
                             if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
-                              return <PhoneOutgoing />;
+                              return <PhoneOutgoing size={14} />;
                             }
                             if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
-                              return <PackageCheck />;
+                              return <PackageCheck size={14} />;
                             }
                             if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
-                              return <ReceiptText />;
+                              return <ReceiptText size={14} />;
                             }
-                            return <Activity />;
+                            return <Activity size={14} />;
                           };
 
                           return (
-                            <Badge
-                              key={activity}
-                              variant="outline"
-                              className="flex items-center justify-center w-8 h-8 p-0 text-[10px]"
-                              title={activity.toUpperCase()}
-                            >
-                              {getIcon(activity)}
-                            </Badge>
+                            <HoverCard key={activity}>
+                              <HoverCardTrigger asChild>
+                                <Badge
+                                  variant="outline"
+                                  className="flex items-center justify-center w-8 h-8 p-0 cursor-default"
+                                >
+                                  {getIcon(activity)}
+                                </Badge>
+                              </HoverCardTrigger>
+
+                              <HoverCardContent
+                                side="top"
+                                align="center"
+                                className="text-xs font-medium px-3 py-2 w-auto"
+                              >
+                                {activity.toUpperCase()}
+                              </HoverCardContent>
+                            </HoverCard>
                           );
-                        })
-                      }
+                        })}
 
                       {item.relatedHistoryItems.some(
                         (h) =>
                           h.tsm_approved_status &&
-                          h.tsm_approved_status !== "-" &&
-                          h.tsm_approved_status.trim() !== ""
-                      ) && (() => {
-                        const statuses = Array.from(
-                          new Set(
-                            item.relatedHistoryItems
-                              .map((h) => h.tsm_approved_status?.trim() ?? "")
-                              .filter((v) => v && v !== "-")
-                          )
-                        );
+                          h.tsm_approved_status.trim() !== "" &&
+                          h.tsm_approved_status.trim() !== "-" &&
+                          h.tsm_approved_status.toLowerCase() !== "pending"
+                      ) &&
+                        (() => {
+                          const statuses = Array.from(
+                            new Set(
+                              item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status?.trim().toLowerCase() ?? "")
+                                .filter(
+                                  (v) =>
+                                    v &&
+                                    v !== "-" &&
+                                    v !== "pending" // ⬅️ dito talaga inaalis ang pending
+                                )
+                            )
+                          );
 
-                        const isDeclined = statuses.some(
-                          (status) => status.toLowerCase() === "decline"
-                        );
+                          // safety check: kung wala na talagang valid status, wag mag-render
+                          if (statuses.length === 0) return null;
 
-                        return (
-                          <Badge
-                            className={`font-mono text-[10px] flex items-center gap-1 ${isDeclined
-                              ? "bg-red-600 text-white"
-                              : "bg-blue-900 text-white"
-                              }`}
-                          >
-                            {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
+                          const isDeclined = statuses.some((status) => status === "decline");
 
-                          </Badge>
-                        );
-                      })()}
+                          const hoverText = isDeclined
+                            ? "Declined by TSM"
+                            : "Approved by TSM";
+
+                          return (
+                            <HoverCard>
+                              <HoverCardTrigger asChild>
+                                <Badge
+                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined
+                                    ? "bg-red-600 text-white"
+                                    : "bg-blue-900 text-white"
+                                    }`}
+                                >
+                                  {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
+                                </Badge>
+                              </HoverCardTrigger>
+
+                              <HoverCardContent
+                                side="top"
+                                align="center"
+                                className="text-xs font-medium px-3 py-2 w-auto"
+                              >
+                                {hoverText}
+                              </HoverCardContent>
+                            </HoverCard>
+                          );
+                        })()}
                     </div>
                   </div>
 

@@ -108,6 +108,10 @@ const data = {
         { name: "Follow Ups", url: "/roles/tsm/activity/planner", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation", icon: XCircle },
 
+        // Manager
+        { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
+        { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
+
         // Admin
         { name: "Activity Planner", url: "/roles/admin/activity/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/roles/admin/activity/tasklist", icon: ClipboardList },
@@ -276,53 +280,39 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   // Filter workspaces based on role
   const filteredWorkspaces = React.useMemo(() => {
     const role = userDetails.Role;
-
-    // ⛔ habang wala pang role → WALANG MENU
     if (!role) return [];
 
-    const baseWorkspaces =
-      role === "Manager"
-        ? data.workspaces.filter((w) => w.name !== "Work Management")
-        : data.workspaces;
-
-    return baseWorkspaces.map((workspace) => {
-      if (role === "Territory Sales Associate") {
-        return {
-          ...workspace,
-          pages: workspace.pages.filter(
-            (p) =>
-              !p.url?.includes("/tsm") &&
-              !p.url?.includes("/manager") &&
-              !p.url?.includes("/admin")
-          ),
-        };
+    // Manager sees all workspaces, TSA/TSM/Admin filtered accordingly
+    return data.workspaces.map((workspace) => {
+      switch (role) {
+        case "Territory Sales Associate":
+          return {
+            ...workspace,
+            pages: workspace.pages.filter(
+              (p) =>
+                p.url?.includes("/tsa") && !p.url?.includes("/tsm") && !p.url?.includes("/manager") && !p.url?.includes("/admin")
+            ),
+          };
+        case "Territory Sales Manager":
+          return {
+            ...workspace,
+            pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
+          };
+        case "Manager":
+          return {
+            ...workspace,
+            pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
+          };
+        case "Super Admin":
+          return {
+            ...workspace,
+            pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
+          };
+        default:
+          return { ...workspace, pages: [] };
       }
-
-      if (role === "Territory Sales Manager") {
-        return {
-          ...workspace,
-          pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
-        };
-      }
-
-      if (role === "Manager") {
-        return {
-          ...workspace,
-          pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
-        };
-      }
-
-      if (role === "Super Admin") {
-        return {
-          ...workspace,
-          pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
-        };
-      }
-
-      return { ...workspace, pages: [] };
     });
   }, [userDetails.Role]);
-
   // Filter favorites based on role
   const filteredFavorites = React.useMemo(() => {
     const role = userDetails.Role;

@@ -48,12 +48,14 @@ interface Completed {
     address: string;
     contact_person: string;
     tsm_approved_status: string;
-    tsm_approved_date: string;
 
     // Signatories
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
+
+    tsm_approval_date: string;
+    tsm_remarks: string;
 }
 
 interface CompletedProps {
@@ -184,21 +186,48 @@ export const Scheduled: React.FC<CompletedProps> = ({
 
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase();
+
         return sortedActivities
+            // 🔴 EXCLUDE declined quotations
+            .filter((item) =>
+                ["Approved", "Pending", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
+            )
+
+            // 🔍 search filter
             .filter((item) => {
                 if (!search) return true;
-                return Object.values(item).some((val) => val && String(val).toLowerCase().includes(search));
+                return Object.values(item).some(
+                    (val) => val && String(val).toLowerCase().includes(search)
+                );
             })
+
+            // 📄 quotation only
             .filter((item) => item.type_activity === "Quotation Preparation")
+
+            // 🧹 meaningful data only
             .filter(hasMeaningfulData)
+
+            // 📅 date range filter
             .filter((item) => {
                 if (!dateCreatedFilterRange) return true;
-                const updated = item.date_updated ? new Date(item.date_updated) : new Date(item.date_created);
+
+                const updated = item.date_updated
+                    ? new Date(item.date_updated)
+                    : new Date(item.date_created);
+
                 if (isNaN(updated.getTime())) return false;
-                const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-                const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+
+                const from = dateCreatedFilterRange.from
+                    ? new Date(dateCreatedFilterRange.from)
+                    : null;
+
+                const to = dateCreatedFilterRange.to
+                    ? new Date(dateCreatedFilterRange.to)
+                    : null;
+
                 if (from && updated < from) return false;
                 if (to && updated > to) return false;
+
                 return true;
             });
     }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
@@ -399,7 +428,7 @@ export const Scheduled: React.FC<CompletedProps> = ({
                                             {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
 
-                                        <TableCell className="font-semibold">{item.company_name}<br/>{item.activity_reference_number}</TableCell>
+                                        <TableCell className="font-semibold">{item.company_name}<br /><span className="text-[10px] italic">{item.activity_reference_number}</span></TableCell>
                                         <TableCell className="p-2 font-semibold text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
@@ -417,13 +446,20 @@ export const Scheduled: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>
-                                            {item.tsm_approved_date
-                                                ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                            {item.tsm_approval_date
+                                                ? new Date(item.tsm_approval_date).toLocaleString("en-PH", {
                                                     timeZone: "Asia/Manila",
+                                                    year: "numeric",
+                                                    month: "short",
+                                                    day: "2-digit",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                    second: "2-digit",
                                                 })
                                                 : "-"}
+                                            <br />
+                                            {displayValue(item.tsm_remarks)}
                                         </TableCell>
-
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
                                         <TableCell>

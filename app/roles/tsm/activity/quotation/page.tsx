@@ -13,7 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
-import { Scheduled } from "@/components/roles/tsm/activity/planner/scheduled";
+import { DeclineQuotation } from "@/components/roles/tsm/activity/quotation/decline-quotation";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
@@ -119,7 +119,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Follow Up Quotations</BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Decline Quotations</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
@@ -129,7 +129,7 @@ function DashboardContent() {
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                         <Card className="rounded-none">
                             <CardContent>
-                                <Scheduled
+                                <DeclineQuotation
                                     referenceid={userDetails.referenceid}
                                     email={userDetails.email}
                                     contact={userDetails.contact}

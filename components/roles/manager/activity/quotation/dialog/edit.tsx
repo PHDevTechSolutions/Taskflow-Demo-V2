@@ -117,6 +117,9 @@ interface TaskListEditDialogProps {
     agentSignature?: string;
     agentContactNumber?: string;
     agentEmailAddress?: string;
+    tsmSignature?: string;
+    tsmContactNumber?: string;
+    tsmEmailAddress?: string;
 
     signature?: string;
     email?: string;
@@ -141,7 +144,11 @@ export default function TaskListEditDialog({
     agentSignature,
     agentContactNumber,
     agentEmailAddress,
+    tsmSignature,
+    tsmContactNumber,
+    tsmEmailAddress,
 
+    // Sales Head Signature
     signature,
 
 }: TaskListEditDialogProps) {
@@ -160,7 +167,7 @@ export default function TaskListEditDialog({
     const [tsmRemarks, setTsmRemarks] = useState("");
     const [statusDialogTitle, setStatusDialogTitle] = useState("");
     const [statusDialogMessage, setStatusDialogMessage] = useState("");
-    const [selectedStatus, setSelectedStatus] = useState<"Approved" | "Endorsed to Sales Head" | null>(null);
+    const [selectedStatus, setSelectedStatus] = useState<"Approved By Sales Head" | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
 
@@ -308,31 +315,38 @@ export default function TaskListEditDialog({
 
             salesmanagername: managername ?? "",
 
+            // Signatories
+            // Agent
             agentSignature: agentSignature ?? null,
             agentContactNumber: agentContactNumber ?? null,
             agentEmailAddress: agentEmailAddress ?? null,
+            // TSM
+            tsmSignature: tsmSignature ?? null,
+            tsmContactNumber: tsmContactNumber ?? null,
+            tsmEmailAddress: tsmEmailAddress ?? null,
 
+            // Personal Signatories
             signature: signature ?? null,
-            tsmemail: email ?? null,
-            tsmcontact: contact ?? null,
+            salesheademail: email ?? null,
+            salesheadcontact: contact ?? null,
         };
     };
 
     // Open dialog para sa Approved / Endorsed
-    const openStatusDialog = (status: "Approved" | "Endorsed to Sales Head") => {
+    const openStatusDialog = (status: "Approved By Sales Head") => {
         setSelectedStatus(status);
         setTsmRemarks(""); // Reset remarks sa dialog
+
         const now = new Date().toISOString();
-        setStatusDialogTitle(
-            status === "Approved" ? "Approve Quotation" : "Endorsed to Sales Head"
-        );
-        setStatusDialogMessage(`TSM ${status} on ${now}`);
+
+        setStatusDialogTitle(`Quotation ${status}`); // Fixed title
+        setStatusDialogMessage(`${status} on ${now}`);
         setIsStatusDialogOpen(true);
     };
 
     // Updated handleUpdateStatus
     const handleUpdateStatus = async (
-        status: "Approved" | "Decline" | "Endorsed to Sales Head",
+        status: "Approved By Sales Head" | "Decline By Sales Head",
         remarks?: string
     ) => {
         if (!item.quotation_number) {
@@ -344,14 +358,14 @@ export default function TaskListEditDialog({
 
         setIsUpdating(true);
         try {
-            const res = await fetch("/api/activity/tsm/quotation/update", {
+            const res = await fetch("/api/activity/manager/quotation/update", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     quotation_number: item.quotation_number,
                     tsm_approved_status: status,
-                    tsm_remarks: remarks ?? null,
-                    tsm_approval_date: approvalDate,
+                    manager_remarks: remarks ?? null,
+                    manager_approval_date: approvalDate,
                     contact,
                     email,
                     signature: signature ?? agentSignature,
@@ -390,18 +404,11 @@ export default function TaskListEditDialog({
                     {/* Footer always visible */}
                     <DialogFooter className="flex justify-end gap-4 border-t p-4 bg-white">
                         <button
-                            onClick={() => openStatusDialog("Approved")}
+                            onClick={() => openStatusDialog("Approved By Sales Head")}
                             disabled={isUpdating}
                             className="p-4 bg-green-600 text-white font-bold rounded-none hover:bg-green-700 disabled:opacity-50"
                         >
                             Approve
-                        </button>
-                        <button
-                            onClick={() => openStatusDialog("Endorsed to Sales Head")}
-                            disabled={isUpdating}
-                            className="p-4 bg-yellow-600 text-white font-bold rounded-none hover:bg-yellow-700 disabled:opacity-50"
-                        >
-                            Endorsed to Sales Head
                         </button>
                         <button
                             onClick={() => setIsDeclineOpen(true)}
@@ -440,7 +447,7 @@ export default function TaskListEditDialog({
                         <button
                             disabled={!tsmRemarks.trim() || isUpdating}
                             onClick={() => {
-                                handleUpdateStatus("Decline", tsmRemarks);
+                                handleUpdateStatus("Decline By Sales Head", tsmRemarks);
                                 setIsDeclineOpen(false);
                             }}
                             className="px-4 py-2 bg-red-600 text-white font-bold disabled:opacity-50"
@@ -472,7 +479,7 @@ export default function TaskListEditDialog({
                         <button
                             disabled={!tsmRemarks.trim() || isUpdating}
                             onClick={() => {
-                                handleUpdateStatus("Decline", tsmRemarks);
+                                handleUpdateStatus("Decline By Sales Head", tsmRemarks);
                                 setIsDeclineOpen(false);
                             }}
                             className="px-4 py-2 bg-red-600 text-white font-bold disabled:opacity-50"
@@ -494,7 +501,7 @@ export default function TaskListEditDialog({
                     </DialogHeader>
 
                     {/* Optional Remarks for Endorsed */}
-                    {selectedStatus === "Endorsed to Sales Head" && (
+                    {selectedStatus === "Approved By Sales Head" && (
                         <textarea
                             value={tsmRemarks}
                             onChange={(e) => setTsmRemarks(e.target.value)}

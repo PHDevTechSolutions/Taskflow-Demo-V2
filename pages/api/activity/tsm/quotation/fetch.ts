@@ -28,11 +28,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     // 2️⃣ Fetch signatories for these activities
     // -----------------------------
-    const activityRefs = historyData.map((h) => h.activity_reference_number).filter(Boolean);
+    const activityRefs = historyData.map((h) => h.quotation_number).filter(Boolean);
 
     let signatoriesQuery = supabase.from("signatories").select("*").eq("tsm", referenceid);
     if (activityRefs.length > 0) {
-      signatoriesQuery = signatoriesQuery.in("activity_reference_number", activityRefs);
+      signatoriesQuery = signatoriesQuery.in("quotation_number", activityRefs);
     }
 
     const { data: signatoriesData, error: signatoriesError } = await signatoriesQuery;
@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // -----------------------------
     const mergedData = historyData.map((h) => {
       const sig = signatoriesData?.find(
-        (s) => s.activity_reference_number === h.activity_reference_number
+        (s) => s.quotation_number === h.quotation_number
       );
 
       return {
@@ -51,6 +51,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         agent_signature: sig?.agent_signature || null,
         agent_contact_number: sig?.agent_contact_number || null, 
         agent_email_address: sig?.agent_email_address || null, 
+        tsm_approval_date: sig?.tsm_approval_date || null, 
+        tsm_remarks: sig?.tsm_remarks || null, 
       };
     });
 
