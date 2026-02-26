@@ -140,6 +140,8 @@ interface TaskListEditDialogProps {
     ManagerContactNumber?: string;
     ManagerEmailAddress?: string;
 
+    ApprovedStatus?: string;
+
 }
 
 export default function TaskListEditDialog({
@@ -165,7 +167,9 @@ export default function TaskListEditDialog({
     TsmEmailAddress,
     ManagerSignature,
     ManagerContactNumber,
-    ManagerEmailAddress
+    ManagerEmailAddress,
+
+    ApprovedStatus
 
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -1638,7 +1642,7 @@ export default function TaskListEditDialog({
                                         <th className="border p-4 text-left w-45">Product</th>
                                         <th className="border p-4 text-center w-5">Quantity</th>
                                         <th className="border p-4 text-center w-15">Amount</th>
-                                        <th className="border p-4 text-center w-10">Discounted</th>
+                                        <th className="border p-4 text-center w-10">-</th>
                                         <th className="border p-4 text-center w-10">Subtotal</th>
                                         <th className="border p-4 text-center w-5">Action</th>
                                     </tr>
@@ -1841,19 +1845,25 @@ export default function TaskListEditDialog({
                         </div>
                     </div>
 
-                    <div className="flex justify-end font-semibold text-sm">
-                        Total: ₱
-                        {subtotal.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        })}
+                    <div className="flex justify-end">
+                        <div className="inline-block text-right font-semibold text-sm border border-yellow-500 p-4 bg-yellow-50">
+                            <div>
+                                Total: ₱
+                                {subtotal.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </div>
+                            <div>
+                                Actual Quotation Amount: ₱{quotationAmount.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter className="mt-4 flex justify-between items-center">
-                        <div className="font-semibold text-sm">
-                            Actual Quotation Amount: ₱
-                            {item.quotation_amount}
-                        </div>
                         <div className="flex space-x-2">
                             <Button
                                 className="bg-[#121212] rounded-none hover:bg-black text-white px-8 p-6 flex gap-2 items-center"
@@ -1862,8 +1872,28 @@ export default function TaskListEditDialog({
                                 <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
                             </Button>
-                            <Button type="button" onClick={DownloadPDF} className="rounded-xs p-6 bg-yellow-600"><FileText /> PDF</Button>
-                            <Button type="button" onClick={DownloadExcel} className="rounded-xs p-6 bg-green-600"><FileSpreadsheet /> Excel</Button>
+
+                            {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        onClick={DownloadPDF}
+                                        className="rounded-xs p-6 bg-yellow-600 flex items-center gap-2"
+                                    >
+                                        <FileText />
+                                        PDF
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        onClick={DownloadExcel}
+                                        className="rounded-xs p-6 bg-green-600 flex items-center gap-2"
+                                    >
+                                        <FileSpreadsheet />
+                                        Excel
+                                    </Button>
+                                </div>
+                            )}
                             <Button variant="outline" className="rounded-none p-6" onClick={onClose}>Cancel</Button>
                             <Button onClick={onClickSave} className="rounded-none p-6">Save</Button>
                         </div>

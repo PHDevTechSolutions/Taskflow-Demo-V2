@@ -21,16 +21,16 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 }) => {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent style={{ maxWidth: "30vw" }}>
+            <DialogContent style={{ maxWidth: "30vw" }} className="rounded-none">
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                 </DialogHeader>
                 <div className="text-sm p-4">{message}</div>
                 <DialogFooter className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={onClose}>
+                    <Button variant="outline" className="rounded-none p-6" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button onClick={onSave}>Proceed to Save Only</Button>
+                    <Button onClick={onSave} className="rounded-none p-6">Proceed to Save Only</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

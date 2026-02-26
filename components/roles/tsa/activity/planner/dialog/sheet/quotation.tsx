@@ -1922,7 +1922,7 @@ ${spec.value}
                         <th className="border p-4 text-left w-45">Product</th>
                         <th className="border p-4 text-center w-5">Quantity</th>
                         <th className="border p-4 text-center w-15">Price</th>
-                        <th className="border p-4 text-center w-10">Discounted</th>
+                        <th className="border p-4 text-center w-10">-</th>
                         <th className="border p-4 text-center w-10">Subtotal</th>
                         <th className="border p-4 text-center w-5">Action</th>
                       </tr>
@@ -2223,8 +2223,8 @@ ${spec.value}
           </div>
 
           {/* Description above the footer */}
-          <div className="text-xs text-red-600 text-right italic mb-2">
-            Note: Quotation Number is not included in the Preview Sample (only appears on the final downloaded quotation).
+          <div className="text-xs text-red-600 text-right italic border border-red-500 p-2 bg-red-100">
+            <p>Note: Quotation Number is not included in the Preview Sample (only appears on the final downloaded quotation).</p>
           </div>
 
           <DialogFooter className="flex items-center justify-between">
@@ -2305,7 +2305,7 @@ ${spec.value}
                   </div>
 
                   {/* CLIENT INFORMATION GRID */}
-                  <div className="mt-5 border-l border-r border-black">
+                  <div className="mt-5 border-l border-r border-black uppercase">
                     {[
                       { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
                       { label: "ADDRESS", value: payload.address },
@@ -2370,11 +2370,6 @@ ${spec.value}
                             </td>
                             <td className="p-4 text-right font-black align-top text-[#121212]">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              {item.discount > 0 && (
-                                <div className="text-[9px] text-red-600 font-bold mt-1">
-                                  -{item.discount}% Discount
-                                </div>
-                              )}
                             </td>
                           </tr>
                         ))}

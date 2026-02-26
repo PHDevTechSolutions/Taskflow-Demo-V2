@@ -55,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tsm_contact_number: sig?.tsm_contact_number || null, 
         tsm_email_address: sig?.tsm_email_address || null, 
         tsm_approval_date: sig?.tsm_approval_date || null, 
+        manager_approval_date: sig?.manager_approval_date || null, 
         tsm_remarks: sig?.tsm_remarks || null, 
       };
     });

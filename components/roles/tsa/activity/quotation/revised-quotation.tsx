@@ -65,6 +65,7 @@ interface Completed {
     manager_email_address: string;
 
     tsm_approval_date: string;
+    manager_approval_date: string;
     tsm_remarks: string;
     manager_remarks: string;
 }
@@ -332,7 +333,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
     // Helper to display or fallback "-"
     const displayValue = (v: any) =>
-        v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
+        v === null || v === undefined || String(v).trim() === "" ? "" : String(v);
 
     function formatDuration(start?: string, end?: string) {
         if (!start || !end) return "-";
@@ -542,19 +543,50 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                             </span>
                                         </td>
                                         <TableCell>
-                                            {item.tsm_approval_date
-                                                ? new Date(item.tsm_approval_date).toLocaleString("en-PH", {
-                                                    timeZone: "Asia/Manila",
-                                                    year: "numeric",
-                                                    month: "short",
-                                                    day: "2-digit",
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
-                                                    second: "2-digit",
-                                                })
-                                                : "-"}
-                                            <br />
-                                            {displayValue(item.tsm_remarks)} - {displayValue(item.manager_remarks)}
+                                            {item.tsm_approval_date && (
+                                                <>
+                                                    Approved:{" "}
+                                                    {new Date(item.tsm_approval_date).toLocaleString("en-PH", {
+                                                        timeZone: "Asia/Manila",
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                    })}
+                                                </>
+                                            )}
+
+                                            {item.manager_approval_date && (
+                                                <>
+                                                    <br />
+                                                    Sales Head Approved:{" "}
+                                                    {new Date(item.manager_approval_date).toLocaleString("en-PH", {
+                                                        timeZone: "Asia/Manila",
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                    })}
+                                                </>
+                                            )}
+
+                                            {item.tsm_remarks && displayValue(item.tsm_remarks) && (
+                                                <>
+                                                    <br />
+                                                    TSM: {displayValue(item.tsm_remarks)}
+                                                </>
+                                            )}
+
+                                            {item.manager_remarks && displayValue(item.manager_remarks) && (
+                                                <>
+                                                    <br />
+                                                    Sales Head: {displayValue(item.manager_remarks)}
+                                                </>
+                                            )}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         <TableCell className="uppercase">
@@ -612,7 +644,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
-                    
+
                     // Signatories
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
@@ -623,6 +655,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     ManagerSignature={editItem.manager_signature}
                     ManagerContactNumber={editItem.manager_contact_number}
                     ManagerEmailAddress={editItem.manager_email_address}
+
+                    ApprovedStatus={editItem.tsm_approved_status}
                 />
             )}
 

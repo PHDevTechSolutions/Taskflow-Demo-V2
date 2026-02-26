@@ -60,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tsm_approval_date: sig?.tsm_approval_date || null, 
         tsm_remarks: sig?.tsm_remarks || null, 
         manager_remarks: sig?.manager_remarks || null, 
+        manager_approval_date: sig?.manager_approval_date || null, 
       };
     });
 
