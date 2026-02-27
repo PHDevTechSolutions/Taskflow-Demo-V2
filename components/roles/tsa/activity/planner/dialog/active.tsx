@@ -358,9 +358,9 @@ export function AccountDialog({
         );
       case 1:
         return (
-          formData.address.trim() !== "" &&
-          formData.delivery_address.length > 0 &&
-          formData.region !== ""
+          (formData.address ?? "").trim() !== "" &&
+          (formData.delivery_address ?? "").trim().length > 0 &&
+          (formData.region ?? "").trim() !== ""
         );
       case 2:
         return (

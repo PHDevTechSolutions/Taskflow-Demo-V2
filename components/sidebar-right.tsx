@@ -10,7 +10,7 @@ import { type DateRange } from "react-day-picker";
 
 import { Meeting } from "@/components/roles/tsa/activity/meeting/meeting";
 import { BreachesDialog } from "@/components/popup/breaches";
-import { BreachesTSMDialog } from "@/components/popup/breaches-tsm";
+import { BreachesTSMDialog } from "@/components/popup/breaches-copy";
 import { BreachesManagerDialog } from "@/components/popup/breaches-manager";
 import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 

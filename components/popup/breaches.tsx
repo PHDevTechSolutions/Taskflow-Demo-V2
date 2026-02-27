@@ -16,6 +16,15 @@ import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
+interface Activity {
+  account_reference_number: string;
+  company_name?: string;
+  date_created?: string;
+  type_activity?: string;
+  type_client?: string;
+  [key: string]: any;
+}
+
 /* -------------------- Helpers -------------------- */
 const formatHoursToHMS = (hours: number) => {
   const totalSeconds = Math.round(hours * 3600);
@@ -79,9 +88,10 @@ export function BreachesDialog() {
   const [toDate, setToDate] = useState<string>(today);
 
   const [activities, setActivities] = useState<any[]>([]);
+  const [uniqueActivitiesList, setUniqueActivitiesList] = useState<Activity[]>([]);
   const [timeByActivity, setTimeByActivity] = useState<TimeByActivity>({});
   const [timeConsumedMs, setTimeConsumedMs] = useState(0);
-
+  const [clusterAccounts, setClusterAccounts] = useState<Activity[]>([]);
   const [totalSales, setTotalSales] = useState(0);
   const [newClientCount, setNewClientCount] = useState(0);
 
@@ -95,12 +105,18 @@ export function BreachesDialog() {
   const [clientSegments, setClientSegments] = useState({
     top50: 0,
     next30: 0,
-    bal20: 0,
+    balance20: 0,
     csrClient: 0,
     newClient: 0,
+    tsaClient: 0,
     inbound: 0,
     outbound: 0,
   });
+
+  const [companyActivities, setCompanyActivities] = useState<{ [type: string]: number }>({});
+  const [showCompanyActivities, setShowCompanyActivities] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [showVisitedDetails, setShowVisitedDetails] = useState(false);
 
   // Dynamic Denominators from Neon DB - UPDATED
   const [denominators, setDenominators] = useState({
@@ -108,6 +124,9 @@ export function BreachesDialog() {
     top50: 0,
     next30: 0,
     bal20: 0,
+    csrClient: 0,
+    newClient: 0,
+    tsaClient: 0,
   });
 
   const [pendingClientApprovalCount, setPendingClientApprovalCount] =
@@ -151,27 +170,55 @@ export function BreachesDialog() {
   /* -------------------- Fetch Cluster Denominators -------------------- */
   const fetchClusterData = async (refId: string) => {
     if (!refId) return;
+
     try {
-      const accRes = await fetch(
-        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`,
+      const res = await fetch(
+        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`
       );
-      if (accRes.ok) {
-        const accData = await accRes.json();
-        const activeOnly = (accData.data || []).filter(
-          (a: any) => a.status === "Active",
-        );
-        setDenominators({
-          total: activeOnly.length,
-          top50: activeOnly.filter((a: any) => a.type_client === "Top 50")
-            .length,
-          next30: activeOnly.filter((a: any) => a.type_client === "Next 30")
-            .length,
-          bal20: activeOnly.filter((a: any) => a.type_client === "Bal 20")
-            .length,
-        });
-      }
+      if (!res.ok) throw new Error("Failed to fetch cluster");
+
+      const data = await res.json();
+      const allAccounts = data.data || [];
+
+      // ✅ Filter only ACTIVE accounts first
+      const activeOnly = allAccounts.filter(
+        (a: any) => (a.status || "").toLowerCase() === "active"
+      );
+
+      // Denominators based only on ACTIVE accounts
+      setDenominators({
+        total: activeOnly.length,
+        top50: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "top 50"
+        ).length,
+        next30: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "next 30"
+        ).length,
+        bal20: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "balance 20"
+        ).length,
+        csrClient: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "csr client"
+        ).length,
+        newClient: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "new client"
+        ).length,
+        tsaClient: activeOnly.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === "tsa client"
+        ).length,
+      });
+
+      // Set cluster accounts with normalized type_client
+      setClusterAccounts(
+        activeOnly.map((a: any) => ({
+          account_reference_number: a.account_reference_number,
+          company_name: a.company_name,
+          type_client: (a.type_client || "").toLowerCase().replace(/\s+/g, ""), // remove spaces
+        }))
+      );
     } catch (err) {
       console.error(err);
+      toast.error("Failed to fetch cluster data.");
     }
   };
 
@@ -348,30 +395,19 @@ export function BreachesDialog() {
     setLoadingActivities(true);
 
     const selectedDate = new Date(fromDate);
-
-    // Monthly Start: 1st of current month
-    const startOfMonth = new Date(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth(),
-      1,
-    );
-
-    // Weekly Start: 7 days ago (to ensure we have enough data for a 6-day rolling window)
+    const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
     const sevenDaysAgo = new Date(selectedDate);
     sevenDaysAgo.setDate(selectedDate.getDate() - 7);
 
-    // Fetch from whichever date is earlier to satisfy both Monthly and Weekly requirements
-    const fetchFromDate = (
-      sevenDaysAgo < startOfMonth ? sevenDaysAgo : startOfMonth
-    )
+    const fetchFromDate = (sevenDaysAgo < startOfMonth ? sevenDaysAgo : startOfMonth)
       .toISOString()
       .split("T")[0];
 
     try {
       const res = await fetch(
         `/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(
-          userDetails.referenceid,
-        )}&from=${encodeURIComponent(fetchFromDate)}&to=${encodeURIComponent(fromDate)}`,
+          userDetails.referenceid
+        )}&from=${encodeURIComponent(fetchFromDate)}&to=${encodeURIComponent(fromDate)}`
       );
       if (!res.ok) throw new Error("Failed to fetch activities");
       const data = await res.json();
@@ -432,7 +468,6 @@ export function BreachesDialog() {
       setOutboundDaily(0);
       setOutboundWeekly(0);
       setOutboundMonthly(0);
-      setUniqueClientReach(0);
       setTimeByActivity({});
       setTimeConsumedMs(0);
       setTotalSales(0);
@@ -448,12 +483,13 @@ export function BreachesDialog() {
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
 
+      // --- Daily activities ---
       const dailyActivities = activities.filter((act) => {
         const actTime = new Date(act.date_created).getTime();
         return actTime >= startOfDay.getTime() && actTime <= endOfDay.getTime();
       });
 
-      // Time By Activity
+      // Time by activity
       const grouped = computeTimeByActivity(dailyActivities);
       setTimeByActivity(grouped);
       const totalTime = Object.values(grouped).reduce((sum, ms) => sum + ms, 0);
@@ -463,9 +499,7 @@ export function BreachesDialog() {
       let sales = 0;
       let newClients = 0;
       dailyActivities.forEach((act) => {
-        if (act.status === "Delivered") {
-          sales += Number(act.actual_sales) || 0;
-        }
+        if (act.status === "Delivered") sales += Number(act.actual_sales) || 0;
       });
       setTotalSales(sales);
       setNewClientCount(newClients);
@@ -474,16 +508,18 @@ export function BreachesDialog() {
       const daily = dailyActivities.filter(
         (a) => a.type_activity === "Outbound Calls" || a.source === "history",
       ).length;
+
       const sixDaysAgo = new Date(targetDate);
       sixDaysAgo.setDate(targetDate.getDate() - 6);
       const weekly = activities.filter((act) => {
-        const actDate = new Date(act.date_created).getTime();
+        const actTime = new Date(act.date_created).getTime();
         return (
-          actDate >= new Date(sixDaysAgo.toDateString()).getTime() &&
-          actDate <= new Date(targetDate.toDateString()).getTime() &&
+          actTime >= new Date(sixDaysAgo.toDateString()).getTime() &&
+          actTime <= new Date(targetDate.toDateString()).getTime() &&
           (act.type_activity === "Outbound Calls" || act.source === "history")
         );
       }).length;
+
       const monthly = activities.filter(
         (act) =>
           new Date(act.date_created).getMonth() === targetDate.getMonth() &&
@@ -495,26 +531,7 @@ export function BreachesDialog() {
       setOutboundWeekly(weekly);
       setOutboundMonthly(monthly);
 
-      // Territory Coverage
-      const uniqueMap = new Map();
-      activities.forEach((act) => {
-        const identifier = act.account_reference_number || act.company_name;
-        if (!uniqueMap.has(identifier)) uniqueMap.set(identifier, act);
-      });
-      const uniqueActivities = Array.from(uniqueMap.values());
-      setUniqueClientReach(uniqueActivities.length);
-
-      setClientSegments({
-        top50: uniqueActivities.filter((a) => a.type_client === "Top 50").length,
-        next30: uniqueActivities.filter((a) => a.type_client === "Next 30").length,
-        bal20: uniqueActivities.filter((a) => a.type_client === "Bal 20").length,
-        csrClient: uniqueActivities.filter((a) => a.type_client === "CSR Client").length,
-        newClient: uniqueActivities.filter((a) => a.type_client === "New Client").length,
-        inbound: activities.filter((a) => a.call_type === "Inbound" || a.type_activity?.includes("Inbound")).length,
-        outbound: activities.filter((a) => a.call_type === "Outbound" || a.type_activity?.includes("Outbound")).length,
-      });
-
-      // Quotation Pending Counts
+      // --- Quotation Pending Counts ---
       setPendingClientApprovalCount(
         activities.filter(
           (act) =>
@@ -546,10 +563,120 @@ export function BreachesDialog() {
             act.quotation_status === "Pending PD",
         ).length,
       );
+
     } finally {
       setLoadingTime(false);
     }
   }, [activities, fromDate]);
+
+  // TERRITORY COVERAGE (UNIQUE CLIENT REACH)
+  useEffect(() => {
+    if (!clusterAccounts.length) {
+      setUniqueClientReach(0);
+      setUniqueActivitiesList([]);
+      setClientSegments({
+        top50: 0,
+        next30: 0,
+        balance20: 0,
+        csrClient: 0,
+        newClient: 0,
+        tsaClient: 0,
+        inbound: 0,
+        outbound: 0,
+      });
+      return;
+    }
+
+    setLoadingTime(true);
+    try {
+      const fromDateObj = new Date(fromDate);
+      const selectedMonth = fromDateObj.getMonth();
+      const selectedYear = fromDateObj.getFullYear();
+
+      // Filter inbound/outbound calls in month
+      const filteredActivities = activities.filter(
+        (act) =>
+          act.account_reference_number &&
+          act.date_created &&
+          (act.type_activity === "Inbound Calls" || act.type_activity === "Outbound Calls") &&
+          new Date(act.date_created).getMonth() === selectedMonth &&
+          new Date(act.date_created).getFullYear() === selectedYear
+      );
+
+      // Map unique accounts
+      const uniqueMap = new Map<string, Activity>();
+      filteredActivities.forEach((act) => uniqueMap.set(act.account_reference_number, act));
+      const uniqueList = Array.from(uniqueMap.values());
+      setUniqueActivitiesList(uniqueList);
+
+      // Count inbound/outbound
+      let inboundCount = 0;
+      let outboundCount = 0;
+      uniqueList.forEach((act) => {
+        if (act.type_activity === "Inbound Calls") inboundCount += 1;
+        if (act.type_activity === "Outbound Calls") outboundCount += 1;
+      });
+
+      // Count per segment
+      const segmentCounts = {
+        top50: 0,
+        next30: 0,
+        balance20: 0,
+        csrClient: 0,
+        newClient: 0,
+        tsaClient: 0,
+      };
+
+      clusterAccounts.forEach((acc) => {
+        const hasActivity = uniqueMap.has(acc.account_reference_number);
+        const clientType = acc.type_client; // already normalized
+
+        switch (clientType) {
+          case "top50": segmentCounts.top50 += hasActivity ? 1 : 0; break;
+          case "next30": segmentCounts.next30 += hasActivity ? 1 : 0; break;
+          case "balance20": segmentCounts.balance20 += hasActivity ? 1 : 0; break;
+          case "csrclient": segmentCounts.csrClient += hasActivity ? 1 : 0; break;
+          case "newclient": segmentCounts.newClient += hasActivity ? 1 : 0; break;
+          case "tsaclient": segmentCounts.tsaClient += hasActivity ? 1 : 0; break;
+        }
+      });
+
+      setUniqueClientReach(uniqueList.length);
+      setClientSegments({ ...segmentCounts, inbound: inboundCount, outbound: outboundCount });
+    } finally {
+      setLoadingTime(false);
+    }
+  }, [activities, clusterAccounts, fromDate]);
+
+  const handleCompanyClick = (company: string) => {
+    if (!fromDate) return;
+
+    setSelectedCompany(company);
+
+    const fromDateObj = new Date(fromDate);
+    const selectedMonth = fromDateObj.getMonth();
+    const selectedYear = fromDateObj.getFullYear();
+
+    // Filter activities by company AND date_created within selected month/year
+    const filtered = activities.filter((a) => {
+      if (!a.account_reference_number || !a.date_created) return false;
+      if (!clusterAccounts.includes(a.account_reference_number)) return false;
+      if ((a.company_name || a.account_reference_number) !== company) return false;
+
+      const actDate = new Date(a.date_created);
+      return actDate.getMonth() === selectedMonth && actDate.getFullYear() === selectedYear;
+    });
+
+    // Count by type_activity
+    const counts: { [type: string]: number } = {};
+    filtered.forEach((act) => {
+      const type = act.type_activity || "Unknown";
+      counts[type] = (counts[type] || 0) + 1;
+    });
+
+    setCompanyActivities(counts);
+    setShowCompanyActivities(true);
+  };
 
   useEffect(() => {
     if (!activities.length || !fromDate) {
@@ -628,7 +755,7 @@ export function BreachesDialog() {
 
           {/* DEBUGGING PANEL */}
 
-          {/*<div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
+          <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
             <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
               Debugging Calibration
             </h4>
@@ -646,6 +773,7 @@ export function BreachesDialog() {
                       referenceid: e.target.value,
                     })
                   }
+                  disabled
                 />
               </div>
               <div>
@@ -671,9 +799,9 @@ export function BreachesDialog() {
                 size={12}
                 className={loadingActivities ? "animate-spin" : ""}
               />
-              Sync Debug Parameters
+              Sync Data
             </Button>
-          </div>*/}
+          </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm font-sans">
             <ul className="list-none space-y-4">
@@ -706,18 +834,19 @@ export function BreachesDialog() {
               </li>
 
               {/* LI 2: Dynamic Territory Coverage */}
-              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
+              <li
+                className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm cursor-pointer"
+                onClick={() => setShowVisitedDetails(true)}
+              >
                 <div className="mb-2">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight block">
-                    Territory Coverage (Unique Reach)
+                    Database Coverage
                   </strong>
                   <div className="flex items-center gap-2 mt-1">
                     <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                       <div
                         className="bg-blue-600 h-full"
-                        style={{
-                          width: `${(uniqueClientReach / (denominators.total || 1)) * 100}%`,
-                        }}
+                        style={{ width: `${(uniqueClientReach / denominators.total) * 100}%` }}
                       ></div>
                     </div>
                     <span className="text-xs font-bold text-blue-700 whitespace-nowrap">
@@ -730,52 +859,98 @@ export function BreachesDialog() {
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
                     <p className="text-[9px] text-gray-400 uppercase font-bold">Top 50</p>
                     <p className="text-xs font-bold">
-                      {clientSegments.top50}{" "}
-                      <span className="text-[10px] text-gray-400">/ {denominators.top50}</span>
+                      {clientSegments.top50} <span className="text-[10px] text-gray-400">/ {denominators.top50}</span>
                     </p>
                   </div>
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
                     <p className="text-[9px] text-gray-400 uppercase font-bold">Next 30</p>
                     <p className="text-xs font-bold">
-                      {clientSegments.next30}{" "}
-                      <span className="text-[10px] text-gray-400">/ {denominators.next30}</span>
+                      {clientSegments.next30} <span className="text-[10px] text-gray-400">/ {denominators.next30}</span>
                     </p>
                   </div>
                   <div className="bg-white p-1.5 border border-gray-100 rounded text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">Bal 20</p>
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Balance 20</p>
                     <p className="text-xs font-bold">
-                      {clientSegments.bal20}{" "}
-                      <span className="text-[10px] text-gray-400">/ {denominators.bal20}</span>
+                      {clientSegments.balance20} <span className="text-[10px] text-gray-400">/ {denominators.bal20}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
-                  <span>CSR Base: <strong>{clientSegments.csrClient}</strong></span>
-                  <span>New Leads: <strong>{clientSegments.newClient}</strong></span>
+                  <span>CSR Base: <strong>{clientSegments.csrClient} / {denominators.csrClient}</strong></span>
+                  <span>New Leads: <strong>{clientSegments.newClient} / {denominators.newClient}</strong></span>
+                  <span>TSA Leads: <strong>{clientSegments.tsaClient} / {denominators.tsaClient}</strong></span>
                   <span className="italic text-blue-600">
                     IN: {clientSegments.inbound} | OUT: {clientSegments.outbound}
                   </span>
                 </div>
               </li>
 
-              {/* OVERDUE ACTIVITIES */}
-              {/* <li className="pl-5 list-disc">
-                <strong className="text-red-500">
-                  Overdue Activities: {overdueCount}
-                </strong>
-                {loadingOverdue ? (
-                  <div className="text-xs text-gray-400">Loading...</div>
-                ) : (
-                  <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                    {Object.entries(overdueByCompany).map(([company, count]) => (
-                      <li key={company}>
-                        {company}: <strong>{count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li> */}
+              {/* VISITED DETAILS TABLE */}
+              {showVisitedDetails && (
+                <div className="p-3 bg-white border rounded mt-2 overflow-auto max-h-96">
+                  <h4 className="font-bold text-sm mb-2">Visited Accounts</h4>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Company Name</th>
+                        <th className="text-left p-2">Date Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {uniqueActivitiesList.map((act, idx) => (
+                        <tr key={idx} className="border-b hover:bg-gray-50 cursor-pointer">
+                          <td
+                            className="p-2 text-blue-600 underline"
+                            onClick={() => handleCompanyClick(act.company_name || act.account_reference_number)}
+                          >
+                            {act.company_name}
+                          </td>
+                          <td className="p-2">{act.date_created}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <Button
+                    variant="outline"
+                    className="rounded-none p-6 mt-2"
+                    onClick={() => setShowVisitedDetails(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              )}
+
+              {showCompanyActivities && selectedCompany && (
+                <div className="p-3 bg-white border rounded mt-4 overflow-auto max-h-64">
+                  <h4 className="font-bold text-sm mb-2">
+                    Activities for {selectedCompany}
+                  </h4>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Activity Type</th>
+                        <th className="text-left p-2">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(companyActivities).map(([type, count]) => (
+                        <tr key={type} className="border-b hover:bg-gray-50">
+                          <td className="p-2">{type}</td>
+                          <td className="p-2">{count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <Button
+                    variant="outline"
+                    className="rounded-none p-6 mt-2"
+                    onClick={() => setShowCompanyActivities(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              )}
 
               <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                 <div className="flex justify-between items-center mb-2">
@@ -815,20 +990,6 @@ export function BreachesDialog() {
                 )}
               </li>
 
-              {/* NEW ACCOUNT DEVT */}
-              {/* <li className="pl-5 list-disc">
-                <strong>New Account Devt: {newClientCount}</strong>
-                {Object.keys(newClientByCompany).length > 0 && (
-                  <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                    {Object.entries(newClientByCompany).map(([company, count]) => (
-                      <li key={company}>
-                        {company}: <strong>{count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li> */}
-
               <li className="p-3 bg-white border border-gray-200 rounded-md shadow-sm">
                 <div className="flex justify-between items-center mb-2">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight">
@@ -864,19 +1025,6 @@ export function BreachesDialog() {
                   </div>
                 )}
               </li>
-
-              {/* TIME CONSUMED */}
-              {/* <li className="pl-5 list-disc">
-                <strong>Time Consumed:</strong> {formatDuration(timeConsumedMs)}
-                <ul className="pl-4 list-disc text-xs mt-1 space-y-1">
-                  {!loadingTime &&
-                    Object.entries(timeByActivity).map(([type, ms]) => (
-                      <li key={type}>
-                        {type}: {formatDuration(ms)}
-                      </li>
-                    ))}
-                </ul>
-              </li> */}
             </ul>
 
             <ul className="list-none space-y-4">
@@ -897,12 +1045,6 @@ export function BreachesDialog() {
                 )}
               </li>
 
-              {/* TOTAL SALES */}
-              {/* <li className="pl-5 list-disc">
-                <strong>Total Sales Today:</strong> ₱
-                {totalSales.toLocaleString()}
-              </li> */}
-
               <li className="p-3 bg-[#121212] border border-[#121212] rounded-none shadow-md">
                 <div className="flex flex-col">
                   <strong className="text-gray-400 uppercase text-[10px] tracking-widest mb-1">Total Sales Today</strong>
@@ -912,21 +1054,6 @@ export function BreachesDialog() {
                   </div>
                 </div>
               </li>
-
-              {/* CSR METRICS */}
-              {/* <li className="pl-5 list-disc">
-                <strong>CSR Metrics Tickets</strong>
-                {loadingCsrMetrics ? (
-                  <div className="text-xs text-gray-400">Loading...</div>
-                ) : (
-                  <ul className="pl-4 text-xs">
-                    <li>TSA Response Time: {formatHoursToHMS(avgResponseTime)}</li>
-                    <li>Non-Quotation HT: {formatHoursToHMS(avgNonQuotationHT)}</li>
-                    <li>Quotation HT: {formatHoursToHMS(avgQuotationHT)}</li>
-                    <li>SPF Handling Duration: {formatHoursToHMS(avgSpfHT)}</li>
-                  </ul>
-                )}
-              </li> */}
 
               <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm">
                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2 border-b border-gray-100 pb-1">
@@ -955,17 +1082,6 @@ export function BreachesDialog() {
                   </div>
                 )}
               </li>
-
-              {/* CLOSING OF QUOTATION */}
-              {/* <li className="pl-5 list-disc font-bold">
-                Closing of Quotation
-                <ul className="pl-4 list-none font-normal text-xs mt-1 space-y-1">
-                  <li className="text-red-500">• Pending Client Approval: {pendingClientApprovalCount}</li>
-                  <li className="text-red-500">• SPF - Pending Client: {spfPendingClientApproval}</li>
-                  <li className="text-red-500">• SPF - Pending Procurement: {spfPendingProcurement}</li>
-                  <li className="text-red-500">• SPF - Pending PD: {spfPendingPD}</li>
-                </ul>
-              </li> */}
 
               <li className="p-3 bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-none shadow-sm">
                 <strong className="text-[#121212] uppercase text-[11px] tracking-tight block mb-2">Closing of Quotation</strong>
