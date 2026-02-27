@@ -1,15 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000; // Safe batch size
+const BATCH_SIZE = 1000;
 
-// -------------------- Helper: fetch all rows in batches --------------------
-async function fetchAllRows(
-  table: string,
-  manager: string,
-  fromDate?: string,
-  toDate?: string
-) {
+async function fetchAllRows(table: string, manager: string, fromDate?: string, toDate?: string) {
   let allData: any[] = [];
   let offset = 0;
 
@@ -18,60 +12,78 @@ async function fetchAllRows(
       .from(table)
       .select("*")
       .eq("manager", manager)
+      .order("date_created", { ascending: false })
+      .order("id", { ascending: false }) // secondary sort to avoid skipping
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate && toDate) {
-      // date_created is a date-only string (YYYY-MM-DD)
       query = query.gte("date_created", fromDate).lte("date_created", toDate);
     }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    allData.push(...(data || []));
+    if (!data || data.length === 0) break;
 
-    if (!data || data.length < BATCH_SIZE) break; // finished fetching
+    allData.push(...data);
+
+    if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
 
   return allData;
 }
 
-// -------------------- API Handler --------------------
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { manager, from, to } = req.query;
 
   if (!manager || typeof manager !== "string") {
-    return res.status(400).json({ message: "Missing or invalid manager" });
+    return res.status(400).json({ message: "Missing or invalid manager reference" });
   }
 
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
-
   try {
-    // 1️⃣ Fetch all tables
+    let fromDate: string | undefined = undefined;
+    let toDate: string | undefined = undefined;
+
+    if (typeof from === "string" && typeof to === "string") {
+      fromDate = from;
+      toDate = to;
+    }
+
+    /* -------------------- 1️⃣ HISTORY -------------------- */
     const historyData = await fetchAllRows("history", manager, fromDate, toDate);
+
+    /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
     const revisedData = await fetchAllRows("revised_quotations", manager, fromDate, toDate);
+
+    /* -------------------- 3️⃣ MEETINGS -------------------- */
     const meetingsData = await fetchAllRows("meetings", manager, fromDate, toDate);
+
+    /* -------------------- 4️⃣ DOCUMENTATION -------------------- */
     const documentationData = await fetchAllRows("documentation", manager, fromDate, toDate);
 
-    // 2️⃣ Merge and normalize with table source
+    /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
-      ...(historyData || []).map(item => ({ source: "history", ...item })),
-      ...(revisedData || []).map(item => ({ source: "revised_quotations", ...item })),
-      ...(meetingsData || []).map(item => ({ source: "meeting", ...item })),
-      ...(documentationData || []).map(item => ({ source: "documentation", ...item })),
-    ].sort((a, b) =>
-      // ✅ Sort by date only, newest first
-      b.date_created > a.date_created ? 1 : b.date_created < a.date_created ? -1 : 0
+      ...(historyData || []).map((item) => ({ source: "history", ...item })),
+      ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
+      ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
+      ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
+    ].sort(
+      (a, b) =>
+        new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
     );
 
-    return res.status(200).json({ activities });
+    // 🔹 Optional: filter only Outbound + Inbound Calls (kung gusto mo)
+    const filteredActivities = activities.filter(
+      (a) => a.type_activity === "Outbound Calls" || a.type_activity === "Inbound Calls"
+    );
+
+    return res.status(200).json({
+      total: filteredActivities.length,
+      activities: filteredActivities,
+    });
   } catch (err: any) {
-    console.error("Server error:", err);
+    console.error("API ERROR:", err);
     return res.status(500).json({ message: err.message || "Server error" });
   }
 }

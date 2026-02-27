@@ -760,7 +760,7 @@ export function BreachesTSMDialog() {
                 >
                     <DialogHeader>
                         <DialogTitle className="uppercase tracking-tight font-bold text-[#121212]">
-                            End of Day Report | SALES
+                            End of Day Report | TERRITORY SALES
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
                             {loadingUser

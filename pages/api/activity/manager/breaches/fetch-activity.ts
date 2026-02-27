@@ -1,8 +1,8 @@
+// /pages/api/activity/manager/breaches/fetch-activity.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
-const HISTORY_BATCH_SIZE = 1000;
 
 function formatDate(date: Date) {
   const y = date.getFullYear();
@@ -11,102 +11,143 @@ function formatDate(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-/* ------------------ Fetch all overdue activities in batches ------------------ */
+/* ------------------ Fetch overdue activities ------------------ */
 async function fetchOverdueActivities(manager: string, today: string) {
+  console.log("📌 fetchOverdueActivities:", { manager, today });
+
   let allActivities: any[] = [];
   let offset = 0;
 
   while (true) {
-    const { data, error } = await supabase
-      .from("activity")
-      .select("*")
-      .eq("manager", manager)
-      .lt("scheduled_date", today)
-      .neq("status", "Cancelled") // filter out Cancelled
-      .neq("status", "Done")      // filter out Done
-      .order("scheduled_date", { ascending: false }) // latest first
-      .range(offset, offset + BATCH_SIZE - 1);
+    try {
+      const { data, error } = await supabase
+        .from("activity")
+        .select("*")
+        .eq("manager", manager)
+        .lt("scheduled_date", today)
+        .range(offset, offset + BATCH_SIZE - 1);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    allActivities.push(...(data || []));
+      if (!data || data.length === 0) break;
 
-    if (!data || data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
+      const filtered = data.filter(
+        (a) => a.status !== "Cancelled" && a.status !== "Done"
+      );
+
+      const mapped = filtered.map((a) => ({ ...a, status: "Assisted" }));
+
+      allActivities.push(...mapped);
+
+      if (data.length < BATCH_SIZE) break;
+      offset += BATCH_SIZE;
+    } catch (err) {
+      console.error("❌ Error fetching overdue activities batch:", offset, err);
+      throw err;
+    }
   }
 
-  // Mark each activity as "Assisted"
-  return allActivities.map((a) => ({ ...a, status: "Assisted" }));
+  console.log("✅ Total overdue activities fetched:", allActivities.length);
+  return allActivities;
 }
 
-/* ------------------ Fetch all unsuccessful histories in batches ------------------ */
+/* ------------------ Fetch Unsuccessful history ------------------ */
 async function fetchUnsuccessfulHistory(activityIds: string[]) {
-  if (activityIds.length === 0) return [];
+  if (!activityIds.length) {
+    console.log("⚠️ No activity IDs for history fetch");
+    return [];
+  }
 
-  let allUnsuccessful: any[] = [];
-  let allSuccessful: any[] = [];
+  console.log("📌 fetchUnsuccessfulHistory:", { activityIdsLength: activityIds.length });
 
-  // Split activityIds into chunks of HISTORY_BATCH_SIZE (Supabase .in() limit)
-  for (let i = 0; i < activityIds.length; i += HISTORY_BATCH_SIZE) {
-    const batchIds = activityIds.slice(i, i + HISTORY_BATCH_SIZE);
+  let allData: any[] = [];
+  let offset = 0;
 
-    // Fetch Unsuccessful
-    const { data: unsuccessfulData, error: errUnsuccess } = await supabase
-      .from("history")
-      .select("*")
-      .in("activity_reference_number", batchIds)
-      .eq("call_status", "Unsuccessful")
-      .eq("type_activity", "Outbound Calls");
-    if (errUnsuccess) throw errUnsuccess;
-    allUnsuccessful.push(...(unsuccessfulData || []));
+  while (true) {
+    try {
+      const { data, error } = await supabase
+        .from("history")
+        .select("*")
+        .in("activity_reference_number", activityIds)
+        .eq("call_status", "Unsuccessful")
+        .eq("type_activity", "Outbound Calls")
+        .order("date_created", { ascending: false })
+        .range(offset, offset + BATCH_SIZE - 1);
 
-    // Fetch Successful
+      if (error) throw error;
+
+      if (!data || data.length === 0) break;
+
+      allData.push(...data);
+
+      if (data.length < BATCH_SIZE) break;
+      offset += BATCH_SIZE;
+    } catch (err) {
+      console.error("❌ Error fetching unsuccessful history batch:", offset, err);
+      throw err;
+    }
+  }
+
+  console.log("✅ Total unsuccessful history fetched:", allData.length);
+
+  // Fetch successful counterparts
+  try {
     const { data: successfulData, error: errSuccess } = await supabase
       .from("history")
       .select("activity_reference_number")
-      .in("activity_reference_number", batchIds)
+      .in("activity_reference_number", activityIds)
       .eq("call_status", "Successful")
       .eq("type_activity", "Outbound Calls");
+
     if (errSuccess) throw errSuccess;
-    allSuccessful.push(...(successfulData || []));
+
+    const successfulSet = new Set(successfulData?.map((h) => h.activity_reference_number));
+
+    const filtered = allData.filter((h) => !successfulSet.has(h.activity_reference_number));
+
+    console.log("✅ Unsuccessful history after removing successful counterparts:", filtered.length);
+    return filtered;
+  } catch (err) {
+    console.error("❌ Error fetching successful history counterparts:", err);
+    throw err;
   }
-
-  const successfulSet = new Set(allSuccessful.map((h) => h.activity_reference_number));
-
-  // Only include Unsuccessful histories that do NOT have a Successful counterpart
-  return allUnsuccessful.filter((h) => !successfulSet.has(h.activity_reference_number));
 }
 
 /* ------------------ API Handler ------------------ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log("📥 fetch-activity called with query:", req.query);
+
   const { manager } = req.query;
 
   if (!manager || typeof manager !== "string") {
+    console.warn("⚠️ Missing or invalid manager parameter");
     return res.status(400).json({ message: "Missing or invalid manager" });
   }
 
   const today = formatDate(new Date());
+  console.log("✅ manager:", manager, "today:", today);
 
   try {
-    // 1️⃣ Fetch all overdue activities
+    // 1️⃣ Fetch overdue activities
     const activities = await fetchOverdueActivities(manager, today);
-
     const activityIds = activities.map((a) => a.activity_reference_number);
 
-    // 2️⃣ Fetch all filtered unsuccessful history
+    // 2️⃣ Fetch filtered Unsuccessful history
     const unsuccessfulHistory = await fetchUnsuccessfulHistory(activityIds);
 
-    // 3️⃣ Only include activities that have at least 1 unmatched unsuccessful history
+    // 3️⃣ Include only activities that have at least 1 Unsuccessful history
     const overdueActivities = activities.filter((a) =>
       unsuccessfulHistory.some((h) => h.activity_reference_number === a.activity_reference_number)
     );
+
+    console.log("✅ Overdue activities to return:", overdueActivities.length);
 
     return res.status(200).json({
       activities: overdueActivities,
       history: unsuccessfulHistory,
     });
   } catch (err: any) {
-    console.error("Server error:", err);
+    console.error("🔥 fetch-activity handler error:", err);
     return res.status(500).json({ message: err.message || "Server error" });
   }
 }
