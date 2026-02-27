@@ -415,7 +415,7 @@ export function BreachesTSMDialog() {
             setLoadingActivities(false);
         }
     };
-    
+
     /* -------------------- Fetch Overdue -------------------- */
     const fetchOverdue = async () => {
         console.log("🚀 fetchOverdue called", { userDetails, fromDate, toDate });
@@ -612,7 +612,7 @@ export function BreachesTSMDialog() {
             const selectedMonth = fromDateObj.getMonth();
             const selectedYear = fromDateObj.getFullYear();
 
-            // 🔹 FILTER INBOUND / OUTBOUND ACTIVITIES SA SELECTED MONTH
+            // 🔹 Filter inbound/outbound activities in the selected month
             const filteredActivities = activities.filter(
                 (act) =>
                     act.account_reference_number &&
@@ -622,18 +622,28 @@ export function BreachesTSMDialog() {
                     new Date(act.date_created).getFullYear() === selectedYear
             );
 
-            setUniqueActivitiesList(filteredActivities);
+            // 🔹 Group by activity_reference_number (unique activities)
+            const activitiesByRef: Record<string, any> = {};
+            filteredActivities.forEach((act) => {
+                activitiesByRef[act.activity_reference_number] = act;
+            });
 
-            // 🔹 COUNT INBOUND / OUTBOUND
+            const uniqueActivities = Object.values(activitiesByRef);
+            setUniqueActivitiesList(uniqueActivities);
+
+            // 🔹 Count inbound/outbound
             let inboundCount = 0;
             let outboundCount = 0;
-            filteredActivities.forEach((act) => {
+            uniqueActivities.forEach((act) => {
                 if (act.type_activity === "Inbound Calls") inboundCount++;
                 if (act.type_activity === "Outbound Calls") outboundCount++;
             });
 
-            // 🔹 COUNT PER SEGMENT
-            const segmentCounts: Pick<ClientSegments, 'top50' | 'next30' | 'balance20' | 'csrClient' | 'newClient' | 'tsaClient'> = {
+            // 🔹 Count per segment (normalize type_client: lowercase + remove spaces)
+            const segmentCounts: Pick<
+                ClientSegments,
+                "top50" | "next30" | "balance20" | "csrClient" | "newClient" | "tsaClient"
+            > = {
                 top50: 0,
                 next30: 0,
                 balance20: 0,
@@ -642,13 +652,15 @@ export function BreachesTSMDialog() {
                 tsaClient: 0,
             };
 
-            filteredActivities.forEach((act) => {
+            uniqueActivities.forEach((act) => {
                 const account = clusterAccounts.find(
                     (acc) => acc.account_reference_number === act.account_reference_number
                 );
                 if (!account?.type_client) return;
 
-                switch (account.type_client.toLowerCase()) {
+                const type = account.type_client.toLowerCase().replace(/\s+/g, "");
+
+                switch (type) {
                     case "top50":
                         segmentCounts.top50++;
                         break;
@@ -670,20 +682,10 @@ export function BreachesTSMDialog() {
                 }
             });
 
-            // 🔹 MISSING CLIENTS (clients na wala sa activities)
-            const totalAccountsBySegment = {
-                top50: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "top50").length,
-                next30: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "next30").length,
-                balance20: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "balance20").length,
-                csrClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "csrclient").length,
-                newClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "newclient").length,
-                tsaClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "tsaclient").length,
-            };
-
-            // 🔹 SET STATE SAFELY
-            setUniqueClientReach(filteredActivities.length);
+            // 🔹 Set state
+            setUniqueClientReach(uniqueActivities.length);
             setClientSegments({
-                ...segmentCounts,      // top50, next30, balance20, csrClient, newClient, tsaClient
+                ...segmentCounts,
                 inbound: inboundCount,
                 outbound: outboundCount,
             });

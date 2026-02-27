@@ -148,17 +148,9 @@ export function BreachesDialog() {
   const [overdueCount, setOverdueCount] = useState(0);
 
   const [loadingCsrMetrics, setLoadingCsrMetrics] = useState(false);
-
-  const [avgTsaAck, setAvgTsaAck] = useState("-");
-  const [avgTsaHandle, setAvgTsaHandle] = useState("-");
-  const [avgTsmAck, setAvgTsmAck] = useState("-");
-  const [avgTsmHandle, setAvgTsmHandle] = useState("-");
   const [avgResponseTime, setAvgResponseTime] = useState(0);
-
   const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
-
   const [avgQuotationHT, setAvgQuotationHT] = useState(0);
-
   const [avgSpfHT, setAvgSpfHT] = useState(0);
 
   const searchParams = useSearchParams();
@@ -200,22 +192,22 @@ export function BreachesDialog() {
       setDenominators({
         total: activeOnly.length,
         top50: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "top 50"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "top50"
         ).length,
         next30: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "next 30"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "next30"
         ).length,
         bal20: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "balance 20"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "balance20"
         ).length,
         csrClient: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "csr client"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "csrclient"
         ).length,
         newClient: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "new client"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "newclient"
         ).length,
         tsaClient: activeOnly.filter(
-          (a: any) => (a.type_client || "").trim().toLowerCase() === "tsa client"
+          (a: any) => (a.type_client || "").toLowerCase().replace(/\s+/g, "") === "tsaclient"
         ).length,
       });
 
@@ -598,7 +590,7 @@ export function BreachesDialog() {
       const selectedMonth = fromDateObj.getMonth();
       const selectedYear = fromDateObj.getFullYear();
 
-      // 🔹 FILTER INBOUND / OUTBOUND ACTIVITIES SA SELECTED MONTH
+      // 🔹 Filter inbound/outbound activities in the selected month
       const filteredActivities = activities.filter(
         (act) =>
           act.account_reference_number &&
@@ -608,18 +600,28 @@ export function BreachesDialog() {
           new Date(act.date_created).getFullYear() === selectedYear
       );
 
-      setUniqueActivitiesList(filteredActivities);
+      // 🔹 Group by activity_reference_number (unique activities)
+      const activitiesByRef: Record<string, any> = {};
+      filteredActivities.forEach((act) => {
+        activitiesByRef[act.activity_reference_number] = act;
+      });
 
-      // 🔹 COUNT INBOUND / OUTBOUND
+      const uniqueActivities = Object.values(activitiesByRef);
+      setUniqueActivitiesList(uniqueActivities);
+
+      // 🔹 Count inbound/outbound
       let inboundCount = 0;
       let outboundCount = 0;
-      filteredActivities.forEach((act) => {
+      uniqueActivities.forEach((act) => {
         if (act.type_activity === "Inbound Calls") inboundCount++;
         if (act.type_activity === "Outbound Calls") outboundCount++;
       });
 
-      // 🔹 COUNT PER SEGMENT
-      const segmentCounts: Pick<ClientSegments, 'top50' | 'next30' | 'balance20' | 'csrClient' | 'newClient' | 'tsaClient'> = {
+      // 🔹 Count per segment (normalize type_client: lowercase + remove spaces)
+      const segmentCounts: Pick<
+        ClientSegments,
+        "top50" | "next30" | "balance20" | "csrClient" | "newClient" | "tsaClient"
+      > = {
         top50: 0,
         next30: 0,
         balance20: 0,
@@ -628,13 +630,15 @@ export function BreachesDialog() {
         tsaClient: 0,
       };
 
-      filteredActivities.forEach((act) => {
+      uniqueActivities.forEach((act) => {
         const account = clusterAccounts.find(
           (acc) => acc.account_reference_number === act.account_reference_number
         );
         if (!account?.type_client) return;
 
-        switch (account.type_client.toLowerCase()) {
+        const type = account.type_client.toLowerCase().replace(/\s+/g, "");
+
+        switch (type) {
           case "top50":
             segmentCounts.top50++;
             break;
@@ -656,10 +660,10 @@ export function BreachesDialog() {
         }
       });
 
-      // 🔹 SET STATE SAFELY
-      setUniqueClientReach(filteredActivities.length);
+      // 🔹 Set state
+      setUniqueClientReach(uniqueActivities.length);
       setClientSegments({
-        ...segmentCounts,      // top50, next30, balance20, csrClient, newClient, tsaClient
+        ...segmentCounts,
         inbound: inboundCount,
         outbound: outboundCount,
       });
@@ -668,35 +672,6 @@ export function BreachesDialog() {
     }
   }, [activities, clusterAccounts, fromDate]);
 
-  const handleCompanyClick = (company: string) => {
-    if (!fromDate) return;
-
-    setSelectedCompany(company);
-
-    const fromDateObj = new Date(fromDate);
-    const selectedMonth = fromDateObj.getMonth();
-    const selectedYear = fromDateObj.getFullYear();
-
-    // Filter activities by company AND date_created within selected month/year
-    const filtered = activities.filter((a) => {
-      if (!a.account_reference_number || !a.date_created) return false;
-      if (!clusterAccounts.includes(a.account_reference_number)) return false;
-      if ((a.company_name || a.account_reference_number) !== company) return false;
-
-      const actDate = new Date(a.date_created);
-      return actDate.getMonth() === selectedMonth && actDate.getFullYear() === selectedYear;
-    });
-
-    // Count by type_activity
-    const counts: { [type: string]: number } = {};
-    filtered.forEach((act) => {
-      const type = act.type_activity || "Unknown";
-      counts[type] = (counts[type] || 0) + 1;
-    });
-
-    setCompanyActivities(counts);
-    setShowCompanyActivities(true);
-  };
 
   useEffect(() => {
     if (!activities.length || !fromDate) {
@@ -793,7 +768,7 @@ export function BreachesDialog() {
                       referenceid: e.target.value,
                     })
                   }
-
+                  disabled
                 />
               </div>
               <div>
@@ -812,7 +787,7 @@ export function BreachesDialog() {
               </div>
             </div>
             <Button
-              className="w-full mt-3 h-8 bg-[#121212] text-[10px] uppercase gap-2 rounded-md"
+              className="w-full mt-3 bg-[#121212] text-[10px] uppercase gap-2 rounded-none p-6"
               onClick={handleManualSync}
             >
               <RefreshCcw
@@ -905,72 +880,6 @@ export function BreachesDialog() {
                   </span>
                 </div>
               </li>
-
-              {/* VISITED DETAILS TABLE */}
-              {showVisitedDetails && (
-                <div className="p-3 bg-white border rounded mt-2 overflow-auto max-h-96">
-                  <h4 className="font-bold text-sm mb-2">Visited Accounts</h4>
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Company Name</th>
-                        <th className="text-left p-2">Date Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {uniqueActivitiesList.map((act, idx) => (
-                        <tr key={idx} className="border-b hover:bg-gray-50 cursor-pointer">
-                          <td
-                            className="p-2 text-blue-600 underline"
-                            onClick={() => handleCompanyClick(act.company_name || act.account_reference_number)}
-                          >
-                            {act.company_name}
-                          </td>
-                          <td className="p-2">{act.date_created}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <Button
-                    variant="outline"
-                    className="rounded-none p-6 mt-2"
-                    onClick={() => setShowVisitedDetails(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              )}
-
-              {showCompanyActivities && selectedCompany && (
-                <div className="p-3 bg-white border rounded mt-4 overflow-auto max-h-64">
-                  <h4 className="font-bold text-sm mb-2">
-                    Activities for {selectedCompany}
-                  </h4>
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Activity Type</th>
-                        <th className="text-left p-2">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(companyActivities).map(([type, count]) => (
-                        <tr key={type} className="border-b hover:bg-gray-50">
-                          <td className="p-2">{type}</td>
-                          <td className="p-2">{count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <Button
-                    variant="outline"
-                    className="rounded-none p-6 mt-2"
-                    onClick={() => setShowCompanyActivities(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              )}
 
               <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                 <div className="flex justify-between items-center mb-2">
