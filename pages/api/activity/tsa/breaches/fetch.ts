@@ -1,14 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000; // safe batch size
+const BATCH_SIZE = 1000;
 
-async function fetchAllRows(
-  table: string,
-  referenceid: string,
-  fromDate?: string,
-  toDate?: string
-) {
+async function fetchAllRows(table: string, referenceid: string, fromDate?: string, toDate?: string) {
   let allData: any[] = [];
   let offset = 0;
 
@@ -17,6 +12,8 @@ async function fetchAllRows(
       .from(table)
       .select("*")
       .eq("referenceid", referenceid)
+      .order("date_created", { ascending: false })
+      .order("id", { ascending: false }) // secondary sort to avoid skipping
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate && toDate) {
@@ -26,9 +23,11 @@ async function fetchAllRows(
     const { data, error } = await query;
     if (error) throw error;
 
-    allData.push(...(data || []));
+    if (!data || data.length === 0) break;
 
-    if (!data || data.length < BATCH_SIZE) break; // tapos na
+    allData.push(...data);
+
+    if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
 

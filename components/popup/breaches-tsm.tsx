@@ -25,6 +25,17 @@ interface Activity {
     [key: string]: any;
 }
 
+interface ClientSegments {
+    top50: number;
+    next30: number;
+    balance20: number;
+    csrClient: number;
+    newClient: number;
+    tsaClient: number;
+    inbound: number;
+    outbound: number;
+}
+
 /* -------------------- Helpers -------------------- */
 const formatHoursToHMS = (hours: number) => {
     const totalSeconds = Math.round(hours * 3600);
@@ -137,17 +148,9 @@ export function BreachesTSMDialog() {
     const [overdueCount, setOverdueCount] = useState(0);
 
     const [loadingCsrMetrics, setLoadingCsrMetrics] = useState(false);
-
-    const [avgTsaAck, setAvgTsaAck] = useState("-");
-    const [avgTsaHandle, setAvgTsaHandle] = useState("-");
-    const [avgTsmAck, setAvgTsmAck] = useState("-");
-    const [avgTsmHandle, setAvgTsmHandle] = useState("-");
     const [avgResponseTime, setAvgResponseTime] = useState(0);
-
     const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
-
     const [avgQuotationHT, setAvgQuotationHT] = useState(0);
-
     const [avgSpfHT, setAvgSpfHT] = useState(0);
 
     const searchParams = useSearchParams();
@@ -391,25 +394,18 @@ export function BreachesTSMDialog() {
 
     /* -------------------- Fetch Activities (metrics) -------------------- */
     const fetchActivities = async () => {
-        if (!userDetails.referenceid || !fromDate) return;
+        if (!userDetails.referenceid) return;
         setLoadingActivities(true);
-
-        const selectedDate = new Date(fromDate);
-        const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-        const sevenDaysAgo = new Date(selectedDate);
-        sevenDaysAgo.setDate(selectedDate.getDate() - 7);
-
-        const fetchFromDate = (sevenDaysAgo < startOfMonth ? sevenDaysAgo : startOfMonth)
-            .toISOString()
-            .split("T")[0];
 
         try {
             const res = await fetch(
                 `/api/activity/tsm/breaches/fetch?tsm=${encodeURIComponent(
                     userDetails.referenceid
-                )}&from=${encodeURIComponent(fetchFromDate)}&to=${encodeURIComponent(fromDate)}`
+                )}`
             );
+
             if (!res.ok) throw new Error("Failed to fetch activities");
+
             const data = await res.json();
             setActivities(data.activities || []);
         } catch (err) {
@@ -419,21 +415,40 @@ export function BreachesTSMDialog() {
             setLoadingActivities(false);
         }
     };
-
+    
     /* -------------------- Fetch Overdue -------------------- */
     const fetchOverdue = async () => {
-        if (!userDetails.referenceid || !fromDate || !toDate) return;
+        console.log("🚀 fetchOverdue called", { userDetails, fromDate, toDate });
+
+        if (!userDetails.referenceid || !fromDate || !toDate) {
+            console.warn("⚠️ Missing required parameters for fetchOverdue");
+            return;
+        }
+
         setLoadingOverdue(true);
 
         try {
-            const res = await fetch(
-                `/api/activity/tsm/breaches/fetch-activity?tsm=${encodeURIComponent(
-                    userDetails.referenceid,
-                )}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
-            );
-            if (!res.ok) throw new Error("Failed to fetch overdue activities");
+            const url = `/api/activity/tsm/breaches/fetch-activity?tsm=${encodeURIComponent(
+                userDetails.referenceid,
+            )}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+
+            console.log("🌐 Fetching URL:", url);
+
+            const res = await fetch(url);
+
+            console.log("📦 Response status:", res.status, res.statusText);
+
+            if (!res.ok) {
+                const text = await res.text();
+                console.error("❌ API returned error response:", text);
+                throw new Error("Failed to fetch overdue activities");
+            }
+
             const data = await res.json();
+            console.log("✅ API returned data:", data);
+
             const activities = data.activities || [];
+            console.log("📊 Number of overdue activities:", activities.length);
 
             // Group by company_name
             const grouped: Record<string, number> = {};
@@ -441,10 +456,13 @@ export function BreachesTSMDialog() {
                 const company = act.company_name || "Unknown";
                 grouped[company] = (grouped[company] || 0) + 1;
             });
+
+            console.log("📌 Grouped overdue activities by company:", grouped);
+
             setOverdueByCompany(grouped);
             setOverdueCount(activities.length); // still keep total if needed
         } catch (err) {
-            console.error(err);
+            console.error("🔥 fetchOverdue error:", err);
             toast.error("Failed to fetch overdue activities.");
         } finally {
             setLoadingOverdue(false);
@@ -588,12 +606,13 @@ export function BreachesTSMDialog() {
         }
 
         setLoadingTime(true);
+
         try {
             const fromDateObj = new Date(fromDate);
             const selectedMonth = fromDateObj.getMonth();
             const selectedYear = fromDateObj.getFullYear();
 
-            // Filter inbound/outbound calls in month
+            // 🔹 FILTER INBOUND / OUTBOUND ACTIVITIES SA SELECTED MONTH
             const filteredActivities = activities.filter(
                 (act) =>
                     act.account_reference_number &&
@@ -603,22 +622,18 @@ export function BreachesTSMDialog() {
                     new Date(act.date_created).getFullYear() === selectedYear
             );
 
-            // Map unique accounts
-            const uniqueMap = new Map<string, Activity>();
-            filteredActivities.forEach((act) => uniqueMap.set(act.account_reference_number, act));
-            const uniqueList = Array.from(uniqueMap.values());
-            setUniqueActivitiesList(uniqueList);
+            setUniqueActivitiesList(filteredActivities);
 
-            // Count inbound/outbound
+            // 🔹 COUNT INBOUND / OUTBOUND
             let inboundCount = 0;
             let outboundCount = 0;
-            uniqueList.forEach((act) => {
-                if (act.type_activity === "Inbound Calls") inboundCount += 1;
-                if (act.type_activity === "Outbound Calls") outboundCount += 1;
+            filteredActivities.forEach((act) => {
+                if (act.type_activity === "Inbound Calls") inboundCount++;
+                if (act.type_activity === "Outbound Calls") outboundCount++;
             });
 
-            // Count per segment
-            const segmentCounts = {
+            // 🔹 COUNT PER SEGMENT
+            const segmentCounts: Pick<ClientSegments, 'top50' | 'next30' | 'balance20' | 'csrClient' | 'newClient' | 'tsaClient'> = {
                 top50: 0,
                 next30: 0,
                 balance20: 0,
@@ -627,56 +642,55 @@ export function BreachesTSMDialog() {
                 tsaClient: 0,
             };
 
-            clusterAccounts.forEach((acc) => {
-                const hasActivity = uniqueMap.has(acc.account_reference_number);
-                const clientType = acc.type_client; // already normalized
+            filteredActivities.forEach((act) => {
+                const account = clusterAccounts.find(
+                    (acc) => acc.account_reference_number === act.account_reference_number
+                );
+                if (!account?.type_client) return;
 
-                switch (clientType) {
-                    case "top50": segmentCounts.top50 += hasActivity ? 1 : 0; break;
-                    case "next30": segmentCounts.next30 += hasActivity ? 1 : 0; break;
-                    case "balance20": segmentCounts.balance20 += hasActivity ? 1 : 0; break;
-                    case "csrclient": segmentCounts.csrClient += hasActivity ? 1 : 0; break;
-                    case "newclient": segmentCounts.newClient += hasActivity ? 1 : 0; break;
-                    case "tsaclient": segmentCounts.tsaClient += hasActivity ? 1 : 0; break;
+                switch (account.type_client.toLowerCase()) {
+                    case "top50":
+                        segmentCounts.top50++;
+                        break;
+                    case "next30":
+                        segmentCounts.next30++;
+                        break;
+                    case "balance20":
+                        segmentCounts.balance20++;
+                        break;
+                    case "csrclient":
+                        segmentCounts.csrClient++;
+                        break;
+                    case "newclient":
+                        segmentCounts.newClient++;
+                        break;
+                    case "tsaclient":
+                        segmentCounts.tsaClient++;
+                        break;
                 }
             });
 
-            setUniqueClientReach(uniqueList.length);
-            setClientSegments({ ...segmentCounts, inbound: inboundCount, outbound: outboundCount });
+            // 🔹 MISSING CLIENTS (clients na wala sa activities)
+            const totalAccountsBySegment = {
+                top50: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "top50").length,
+                next30: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "next30").length,
+                balance20: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "balance20").length,
+                csrClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "csrclient").length,
+                newClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "newclient").length,
+                tsaClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "tsaclient").length,
+            };
+
+            // 🔹 SET STATE SAFELY
+            setUniqueClientReach(filteredActivities.length);
+            setClientSegments({
+                ...segmentCounts,      // top50, next30, balance20, csrClient, newClient, tsaClient
+                inbound: inboundCount,
+                outbound: outboundCount,
+            });
         } finally {
             setLoadingTime(false);
         }
     }, [activities, clusterAccounts, fromDate]);
-
-    const handleCompanyClick = (company: string) => {
-        if (!fromDate) return;
-
-        setSelectedCompany(company);
-
-        const fromDateObj = new Date(fromDate);
-        const selectedMonth = fromDateObj.getMonth();
-        const selectedYear = fromDateObj.getFullYear();
-
-        // Filter activities by company AND date_created within selected month/year
-        const filtered = activities.filter((a) => {
-            if (!a.account_reference_number || !a.date_created) return false;
-            if (!clusterAccounts.includes(a.account_reference_number)) return false;
-            if ((a.company_name || a.account_reference_number) !== company) return false;
-
-            const actDate = new Date(a.date_created);
-            return actDate.getMonth() === selectedMonth && actDate.getFullYear() === selectedYear;
-        });
-
-        // Count by type_activity
-        const counts: { [type: string]: number } = {};
-        filtered.forEach((act) => {
-            const type = act.type_activity || "Unknown";
-            counts[type] = (counts[type] || 0) + 1;
-        });
-
-        setCompanyActivities(counts);
-        setShowCompanyActivities(true);
-    };
 
     useEffect(() => {
         if (!activities.length || !fromDate) {
@@ -773,7 +787,7 @@ export function BreachesTSMDialog() {
                                             referenceid: e.target.value,
                                         })
                                     }
-
+                                    disabled
                                 />
                             </div>
                             <div>
@@ -885,72 +899,6 @@ export function BreachesTSMDialog() {
                                     </span>
                                 </div>
                             </li>
-
-                            {/* VISITED DETAILS TABLE */}
-                            {showVisitedDetails && (
-                                <div className="p-3 bg-white border rounded mt-2 overflow-auto max-h-96">
-                                    <h4 className="font-bold text-sm mb-2">Visited Accounts</h4>
-                                    <table className="w-full text-xs border-collapse">
-                                        <thead>
-                                            <tr className="border-b">
-                                                <th className="text-left p-2">Company Name</th>
-                                                <th className="text-left p-2">Date Created</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {uniqueActivitiesList.map((act, idx) => (
-                                                <tr key={idx} className="border-b hover:bg-gray-50 cursor-pointer">
-                                                    <td
-                                                        className="p-2 text-blue-600 underline"
-                                                        onClick={() => handleCompanyClick(act.company_name || act.account_reference_number)}
-                                                    >
-                                                        {act.company_name}
-                                                    </td>
-                                                    <td className="p-2">{act.date_created}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    <Button
-                                        variant="outline"
-                                        className="rounded-none p-6 mt-2"
-                                        onClick={() => setShowVisitedDetails(false)}
-                                    >
-                                        Close
-                                    </Button>
-                                </div>
-                            )}
-
-                            {showCompanyActivities && selectedCompany && (
-                                <div className="p-3 bg-white border rounded mt-4 overflow-auto max-h-64">
-                                    <h4 className="font-bold text-sm mb-2">
-                                        Activities for {selectedCompany}
-                                    </h4>
-                                    <table className="w-full text-xs border-collapse">
-                                        <thead>
-                                            <tr className="border-b">
-                                                <th className="text-left p-2">Activity Type</th>
-                                                <th className="text-left p-2">Count</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {Object.entries(companyActivities).map(([type, count]) => (
-                                                <tr key={type} className="border-b hover:bg-gray-50">
-                                                    <td className="p-2">{type}</td>
-                                                    <td className="p-2">{count}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    <Button
-                                        variant="outline"
-                                        className="rounded-none p-6 mt-2"
-                                        onClick={() => setShowCompanyActivities(false)}
-                                    >
-                                        Close
-                                    </Button>
-                                </div>
-                            )}
 
                             <li className="p-3 bg-white border border-gray-200 rounded-none shadow-sm">
                                 <div className="flex justify-between items-center mb-2">

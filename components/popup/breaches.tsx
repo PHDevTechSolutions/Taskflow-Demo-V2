@@ -25,6 +25,17 @@ interface Activity {
   [key: string]: any;
 }
 
+interface ClientSegments {
+  top50: number;
+  next30: number;
+  balance20: number;
+  csrClient: number;
+  newClient: number;
+  tsaClient: number;
+  inbound: number;
+  outbound: number;
+}
+
 /* -------------------- Helpers -------------------- */
 const formatHoursToHMS = (hours: number) => {
   const totalSeconds = Math.round(hours * 3600);
@@ -391,25 +402,18 @@ export function BreachesDialog() {
 
   /* -------------------- Fetch Activities (metrics) -------------------- */
   const fetchActivities = async () => {
-    if (!userDetails.referenceid || !fromDate) return;
+    if (!userDetails.referenceid) return;
     setLoadingActivities(true);
-
-    const selectedDate = new Date(fromDate);
-    const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-    const sevenDaysAgo = new Date(selectedDate);
-    sevenDaysAgo.setDate(selectedDate.getDate() - 7);
-
-    const fetchFromDate = (sevenDaysAgo < startOfMonth ? sevenDaysAgo : startOfMonth)
-      .toISOString()
-      .split("T")[0];
 
     try {
       const res = await fetch(
         `/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(
           userDetails.referenceid
-        )}&from=${encodeURIComponent(fetchFromDate)}&to=${encodeURIComponent(fromDate)}`
+        )}`
       );
+
       if (!res.ok) throw new Error("Failed to fetch activities");
+
       const data = await res.json();
       setActivities(data.activities || []);
     } catch (err) {
@@ -588,12 +592,13 @@ export function BreachesDialog() {
     }
 
     setLoadingTime(true);
+
     try {
       const fromDateObj = new Date(fromDate);
       const selectedMonth = fromDateObj.getMonth();
       const selectedYear = fromDateObj.getFullYear();
 
-      // Filter inbound/outbound calls in month
+      // 🔹 FILTER INBOUND / OUTBOUND ACTIVITIES SA SELECTED MONTH
       const filteredActivities = activities.filter(
         (act) =>
           act.account_reference_number &&
@@ -603,22 +608,18 @@ export function BreachesDialog() {
           new Date(act.date_created).getFullYear() === selectedYear
       );
 
-      // Map unique accounts
-      const uniqueMap = new Map<string, Activity>();
-      filteredActivities.forEach((act) => uniqueMap.set(act.account_reference_number, act));
-      const uniqueList = Array.from(uniqueMap.values());
-      setUniqueActivitiesList(uniqueList);
+      setUniqueActivitiesList(filteredActivities);
 
-      // Count inbound/outbound
+      // 🔹 COUNT INBOUND / OUTBOUND
       let inboundCount = 0;
       let outboundCount = 0;
-      uniqueList.forEach((act) => {
-        if (act.type_activity === "Inbound Calls") inboundCount += 1;
-        if (act.type_activity === "Outbound Calls") outboundCount += 1;
+      filteredActivities.forEach((act) => {
+        if (act.type_activity === "Inbound Calls") inboundCount++;
+        if (act.type_activity === "Outbound Calls") outboundCount++;
       });
 
-      // Count per segment
-      const segmentCounts = {
+      // 🔹 COUNT PER SEGMENT
+      const segmentCounts: Pick<ClientSegments, 'top50' | 'next30' | 'balance20' | 'csrClient' | 'newClient' | 'tsaClient'> = {
         top50: 0,
         next30: 0,
         balance20: 0,
@@ -627,22 +628,41 @@ export function BreachesDialog() {
         tsaClient: 0,
       };
 
-      clusterAccounts.forEach((acc) => {
-        const hasActivity = uniqueMap.has(acc.account_reference_number);
-        const clientType = acc.type_client; // already normalized
+      filteredActivities.forEach((act) => {
+        const account = clusterAccounts.find(
+          (acc) => acc.account_reference_number === act.account_reference_number
+        );
+        if (!account?.type_client) return;
 
-        switch (clientType) {
-          case "top50": segmentCounts.top50 += hasActivity ? 1 : 0; break;
-          case "next30": segmentCounts.next30 += hasActivity ? 1 : 0; break;
-          case "balance20": segmentCounts.balance20 += hasActivity ? 1 : 0; break;
-          case "csrclient": segmentCounts.csrClient += hasActivity ? 1 : 0; break;
-          case "newclient": segmentCounts.newClient += hasActivity ? 1 : 0; break;
-          case "tsaclient": segmentCounts.tsaClient += hasActivity ? 1 : 0; break;
+        switch (account.type_client.toLowerCase()) {
+          case "top50":
+            segmentCounts.top50++;
+            break;
+          case "next30":
+            segmentCounts.next30++;
+            break;
+          case "balance20":
+            segmentCounts.balance20++;
+            break;
+          case "csrclient":
+            segmentCounts.csrClient++;
+            break;
+          case "newclient":
+            segmentCounts.newClient++;
+            break;
+          case "tsaclient":
+            segmentCounts.tsaClient++;
+            break;
         }
       });
 
-      setUniqueClientReach(uniqueList.length);
-      setClientSegments({ ...segmentCounts, inbound: inboundCount, outbound: outboundCount });
+      // 🔹 SET STATE SAFELY
+      setUniqueClientReach(filteredActivities.length);
+      setClientSegments({
+        ...segmentCounts,      // top50, next30, balance20, csrClient, newClient, tsaClient
+        inbound: inboundCount,
+        outbound: outboundCount,
+      });
     } finally {
       setLoadingTime(false);
     }
@@ -773,7 +793,7 @@ export function BreachesDialog() {
                       referenceid: e.target.value,
                     })
                   }
-                  disabled
+
                 />
               </div>
               <div>

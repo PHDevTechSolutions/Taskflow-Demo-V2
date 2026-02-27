@@ -1,14 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000; // safe batch size
+const BATCH_SIZE = 1000;
 
-async function fetchAllRows(
-  table: string,
-  tsm: string,
-  fromDate?: string,
-  toDate?: string
-) {
+async function fetchAllRows(table: string, tsm: string, fromDate?: string, toDate?: string) {
   let allData: any[] = [];
   let offset = 0;
 
@@ -17,6 +12,8 @@ async function fetchAllRows(
       .from(table)
       .select("*")
       .eq("tsm", tsm)
+      .order("date_created", { ascending: false })
+      .order("id", { ascending: false }) // secondary sort to avoid skipping
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate && toDate) {
@@ -26,29 +23,33 @@ async function fetchAllRows(
     const { data, error } = await query;
     if (error) throw error;
 
-    allData.push(...(data || []));
+    if (!data || data.length === 0) break;
 
-    if (!data || data.length < BATCH_SIZE) break; // tapos na
+    allData.push(...data);
+
+    if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
 
   return allData;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { tsm, from, to } = req.query;
 
   if (!tsm || typeof tsm !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
+    return res.status(400).json({ message: "Missing or invalid tsm reference" });
   }
 
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
-
   try {
+    let fromDate: string | undefined = undefined;
+    let toDate: string | undefined = undefined;
+
+    if (typeof from === "string" && typeof to === "string") {
+      fromDate = from;
+      toDate = to;
+    }
+
     /* -------------------- 1️⃣ HISTORY -------------------- */
     const historyData = await fetchAllRows("history", tsm, fromDate, toDate);
 
@@ -58,9 +59,10 @@ export default async function handler(
     /* -------------------- 3️⃣ MEETINGS -------------------- */
     const meetingsData = await fetchAllRows("meetings", tsm, fromDate, toDate);
 
+    /* -------------------- 4️⃣ DOCUMENTATION -------------------- */
     const documentationData = await fetchAllRows("documentation", tsm, fromDate, toDate);
 
-    /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
+    /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
       ...(historyData || []).map((item) => ({ source: "history", ...item })),
       ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
@@ -71,9 +73,17 @@ export default async function handler(
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
     );
 
-    return res.status(200).json({ activities });
+    // 🔹 Optional: filter only Outbound + Inbound Calls (kung gusto mo)
+    const filteredActivities = activities.filter(
+      (a) => a.type_activity === "Outbound Calls" || a.type_activity === "Inbound Calls"
+    );
+
+    return res.status(200).json({
+      total: filteredActivities.length,
+      activities: filteredActivities,
+    });
   } catch (err: any) {
-    console.error("Server error:", err);
+    console.error("API ERROR:", err);
     return res.status(500).json({ message: err.message || "Server error" });
   }
 }

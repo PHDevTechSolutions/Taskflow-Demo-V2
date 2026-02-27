@@ -129,6 +129,7 @@ export function AccountsTable({
             "Balance 20",
             "TSA CLIENT",
             "CSR CLIENT",
+            "New Client"
         ];
         const normalizedAllowedTypes = allowedTypes.map((t) => t.toLowerCase());
 
@@ -287,6 +288,12 @@ export function AccountsTable({
     const totalPages = Math.ceil(filteredData.length / pageSize);
     const totalAccounts = filteredData.length;
 
+    const newCount = useMemo(() => {
+        return filteredData.filter(
+            (a) => a.type_client?.toLowerCase() === "new client"
+        ).length;
+    }, [filteredData]);
+
     const tsaCount = useMemo(() => {
         return filteredData.filter(
             (a) => a.type_client?.toLowerCase() === "tsa client"
@@ -373,6 +380,9 @@ export function AccountsTable({
                         </p>
                         <p>
                             CSR Client: <span className="font-bold">{csrCount}</span>
+                        </p>
+                        <p>
+                            New Client: <span className="font-bold">{newCount}</span>
                         </p>
                     </CardContent>
                 </Card>

@@ -102,9 +102,6 @@ export function BreachesTSMDialog() {
     tsaClient: 0,
   });
 
-  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const [companyActivities, setCompanyActivities] = useState<{ [type: string]: number }>({});
-
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
   const queryUserId = searchParams?.get("id") ?? "";
@@ -175,33 +172,29 @@ export function BreachesTSMDialog() {
   useEffect(() => {
     if (!userId) return;
 
-    const fetchUserAndCluster = async () => {
+    const fetchUser = async () => {
       setLoadingUser(true);
       try {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error("Failed to fetch user");
-
         const data = await res.json();
         const refId = data.ReferenceID || "";
         setUserDetails({
           referenceid: refId,
-          role: data.Role || "",
           firstname: data.Firstname || "",
           lastname: data.Lastname || "",
+          role: data.Role || "",
         });
-
-        if (refId) {
-          fetchClusterData(refId);
-        }
+        if (refId) fetchClusterData(refId);
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load territory cluster data.");
+        toast.error("Failed to load user");
       } finally {
         setLoadingUser(false);
       }
     };
 
-    fetchUserAndCluster();
+    fetchUser();
   }, [userId]);
 
   // -------------------- Fetch Activities --------------------
@@ -249,12 +242,13 @@ export function BreachesTSMDialog() {
     }
 
     setLoadingTime(true);
+
     try {
       const fromDateObj = new Date(fromDate);
       const selectedMonth = fromDateObj.getMonth();
       const selectedYear = fromDateObj.getFullYear();
 
-      // Filter inbound/outbound calls in month
+      // 🔹 FILTER INBOUND / OUTBOUND ACTIVITIES SA SELECTED MONTH
       const filteredActivities = activities.filter(
         (act) =>
           act.account_reference_number &&
@@ -264,22 +258,18 @@ export function BreachesTSMDialog() {
           new Date(act.date_created).getFullYear() === selectedYear
       );
 
-      // Map unique accounts
-      const uniqueMap = new Map<string, Activity>();
-      filteredActivities.forEach((act) => uniqueMap.set(act.account_reference_number, act));
-      const uniqueList = Array.from(uniqueMap.values());
-      setUniqueActivitiesList(uniqueList);
+      setUniqueActivitiesList(filteredActivities);
 
-      // Count inbound/outbound
+      // 🔹 COUNT INBOUND / OUTBOUND
       let inboundCount = 0;
       let outboundCount = 0;
-      uniqueList.forEach((act) => {
-        if (act.type_activity === "Inbound Calls") inboundCount += 1;
-        if (act.type_activity === "Outbound Calls") outboundCount += 1;
+      filteredActivities.forEach((act) => {
+        if (act.type_activity === "Inbound Calls") inboundCount++;
+        if (act.type_activity === "Outbound Calls") outboundCount++;
       });
 
-      // Count per segment
-      const segmentCounts = {
+      // 🔹 COUNT PER SEGMENT
+      const segmentCounts: Pick<ClientSegments, 'top50' | 'next30' | 'balance20' | 'csrClient' | 'newClient' | 'tsaClient'> = {
         top50: 0,
         next30: 0,
         balance20: 0,
@@ -288,71 +278,69 @@ export function BreachesTSMDialog() {
         tsaClient: 0,
       };
 
-      clusterAccounts.forEach((acc) => {
-        const hasActivity = uniqueMap.has(acc.account_reference_number);
-        const clientType = acc.type_client; // already normalized
+      filteredActivities.forEach((act) => {
+        const account = clusterAccounts.find(
+          (acc) => acc.account_reference_number === act.account_reference_number
+        );
+        if (!account?.type_client) return;
 
-        switch (clientType) {
-          case "top50": segmentCounts.top50 += hasActivity ? 1 : 0; break;
-          case "next30": segmentCounts.next30 += hasActivity ? 1 : 0; break;
-          case "balance20": segmentCounts.balance20 += hasActivity ? 1 : 0; break;
-          case "csrclient": segmentCounts.csrClient += hasActivity ? 1 : 0; break;
-          case "newclient": segmentCounts.newClient += hasActivity ? 1 : 0; break;
-          case "tsaclient": segmentCounts.tsaClient += hasActivity ? 1 : 0; break;
+        switch (account.type_client.toLowerCase()) {
+          case "top50":
+            segmentCounts.top50++;
+            break;
+          case "next30":
+            segmentCounts.next30++;
+            break;
+          case "balance20":
+            segmentCounts.balance20++;
+            break;
+          case "csrclient":
+            segmentCounts.csrClient++;
+            break;
+          case "newclient":
+            segmentCounts.newClient++;
+            break;
+          case "tsaclient":
+            segmentCounts.tsaClient++;
+            break;
         }
       });
 
-      setUniqueClientReach(uniqueList.length);
-      setClientSegments({ ...segmentCounts, inbound: inboundCount, outbound: outboundCount });
+      // 🔹 MISSING CLIENTS (clients na wala sa activities)
+      const totalAccountsBySegment = {
+        top50: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "top50").length,
+        next30: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "next30").length,
+        balance20: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "balance20").length,
+        csrClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "csrclient").length,
+        newClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "newclient").length,
+        tsaClient: clusterAccounts.filter((c) => c.type_client?.toLowerCase() === "tsaclient").length,
+      };
+
+      const missingClientsCount =
+        totalAccountsBySegment.top50 - segmentCounts.top50 +
+        totalAccountsBySegment.next30 - segmentCounts.next30 +
+        totalAccountsBySegment.balance20 - segmentCounts.balance20 +
+        totalAccountsBySegment.csrClient - segmentCounts.csrClient +
+        totalAccountsBySegment.newClient - segmentCounts.newClient +
+        totalAccountsBySegment.tsaClient - segmentCounts.tsaClient;
+
+      // 🔹 SET STATE SAFELY
+      setUniqueClientReach(filteredActivities.length);
+      setClientSegments({
+        ...segmentCounts,      // top50, next30, balance20, csrClient, newClient, tsaClient
+        inbound: inboundCount,
+        outbound: outboundCount,
+      });
     } finally {
       setLoadingTime(false);
     }
   }, [activities, clusterAccounts, fromDate]);
-
-  // -------------------- Handle Company Click --------------------
-  const handleCompanyClick = (accountRef: string) => {
-    if (!fromDate) return;
-    const fromDateObj = new Date(fromDate);
-    const selectedMonth = fromDateObj.getMonth();
-    const selectedYear = fromDateObj.getFullYear();
-
-    const filtered = activities.filter(
-      (a) =>
-        a.account_reference_number &&
-        a.date_created &&
-        a.account_reference_number === accountRef &&
-        new Date(a.date_created).getMonth() === selectedMonth &&
-        new Date(a.date_created).getFullYear() === selectedYear
-    );
-
-    const counts: { [type: string]: number } = {};
-    filtered.forEach((act) => {
-      const type = act.type_activity || "Unknown";
-      counts[type] = (counts[type] || 0) + 1;
-    });
-
-    setCompanyActivities(counts);
-    setSelectedCompany(
-      uniqueActivitiesList.find((a) => a.account_reference_number === accountRef)?.company_name || accountRef
-    );
-    setShowCompanyActivities(true);
-  };
-
   // -------------------- Manual Sync --------------------
   const handleManualSync = () => {
     fetchClusterData(userDetails.referenceid);
     fetchActivities();
-
-    toast.info(
-      `Debugging data for Ref: ${userDetails.referenceid} on ${fromDate}`,
-    );
+    toast.info(`Debugging data for Ref: ${userDetails.referenceid} on ${fromDate}`);
   };
-
-  const filteredActivities = uniqueActivitiesList.filter((act) =>
-    (act.company_name || "")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-  );
 
   // -------------------- UI --------------------
   return (
@@ -418,10 +406,7 @@ export function BreachesTSMDialog() {
           {/* Territory Coverage */}
           <div className="grid grid-cols-1 gap-4 text-sm font-sans">
             <ul className="list-none">
-              <li
-                className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm cursor-pointer"
-                onClick={() => setShowVisitedDetails(true)}
-              >
+              <li className="p-3 bg-[#F9FAFA] border border-gray-200 rounded-none shadow-sm cursor-pointer">
                 <div className="mb-2">
                   <strong className="text-[#121212] uppercase text-[11px] tracking-tight block">
                     Database Coverage
@@ -471,89 +456,6 @@ export function BreachesTSMDialog() {
               </li>
             </ul>
           </div>
-
-          {/* Visited Accounts Table */}
-          {showVisitedDetails && (
-            <div className="p-3 bg-white border rounded mt-2 overflow-auto max-h-96">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">
-                  Visited Accounts ({filteredActivities.length})
-                </h4>
-                <input
-                  type="text"
-                  placeholder="Search company..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="border rounded px-2 py-1 text-sm"
-                />
-              </div>
-
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Company Name</th>
-                    <th className="text-left p-2">Date Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredActivities.map((act, idx) => (
-                    <tr key={idx} className="border-b hover:bg-gray-50 cursor-pointer">
-                      <td
-                        className="p-2 text-blue-600 underline"
-                        onClick={() => handleCompanyClick(act.account_reference_number)}
-                      >
-                        {act.company_name || "-"}
-                      </td>
-                      <td className="p-2">{act.date_created || "-"}</td>
-                    </tr>
-                  ))}
-                  {filteredActivities.length === 0 && (
-                    <tr>
-                      <td colSpan={2} className="text-center p-2 text-gray-500">
-                        No results found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              <Button
-                variant="outline"
-                className="mt-2 rounded-none p-6"
-                onClick={() => setShowVisitedDetails(false)}
-              >
-                Close
-              </Button>
-            </div>
-          )}
-
-          {/* Company Activities */}
-          {showCompanyActivities && selectedCompany && (
-            <div className="p-3 bg-white border rounded mt-4 overflow-auto max-h-64">
-              <h4 className="font-bold text-sm mb-2">
-                Activities for {selectedCompany}
-              </h4>
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Activity Type</th>
-                    <th className="text-left p-2">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(companyActivities).map(([type, count]) => (
-                    <tr key={type} className="border-b hover:bg-gray-50">
-                      <td className="p-2">{type}</td>
-                      <td className="p-2">{count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Button variant="outline" className="mt-2 rounded-none p-6" onClick={() => setShowCompanyActivities(false)}>
-                Close
-              </Button>
-            </div>
-          )}
 
           <DialogFooter>
             <Button variant="outline" className="rounded-none p-6" onClick={() => setOpen(false)}>
