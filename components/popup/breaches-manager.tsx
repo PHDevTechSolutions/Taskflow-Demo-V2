@@ -789,7 +789,7 @@ export function BreachesManagerDialog() {
                                             referenceid: e.target.value,
                                         })
                                     }
-                                    
+                                    disabled
                                 />
                             </div>
                             <div>
@@ -808,7 +808,7 @@ export function BreachesManagerDialog() {
                             </div>
                         </div>
                         <Button
-                            className="w-full mt-3 h-8 bg-[#121212] text-[10px] uppercase gap-2 rounded-md"
+                            className="w-full mt-3 h-8 bg-[#121212] text-[10px] uppercase gap-2 rounded-none p-6"
                             onClick={handleManualSync}
                         >
                             <RefreshCcw
