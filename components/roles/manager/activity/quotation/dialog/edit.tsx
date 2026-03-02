@@ -194,7 +194,7 @@ export default function TaskListEditDialog({
     const productDescription = item.product_description || "";
     const address = company?.address || ""; // add if available
     const email_address = company?.email_address || ""; // add if available
-    const contact_person = company?.contact_number || ""; // add if available
+    const contact_person = company?.contact_person || ""; // add if available
     const quotation_number = quotationNumber;
     const activityRef = ""; // fallback if needed
     const formattedDate = new Date().toLocaleDateString();
@@ -310,7 +310,7 @@ export default function TaskListEditDialog({
             address: address ?? "",
             telNo: contact_number ?? "",
             email: email_address ?? "",
-            attention: contact_person ? `${contact_person}, ${address ?? ""}` : (address ?? ""),
+            attention: contact_person ?? "",
             subject: "For Quotation",
             items,
             vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
