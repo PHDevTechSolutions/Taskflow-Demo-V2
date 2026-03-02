@@ -163,7 +163,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                     </Button>
                   </AlertDialogTrigger>
 
-                  <AlertDialogContent >
+                  <AlertDialogContent className="rounded-none">
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
                       <AlertDialogDescription>
@@ -173,9 +173,9 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                     </AlertDialogHeader>
 
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel className="rounded-none p-6">Cancel</AlertDialogCancel>
                       <AlertDialogAction
-                        className="bg-red-600 hover:bg-red-700"
+                        className="bg-red-600 hover:bg-red-700 rounded-none p-6"
                         onClick={() => handleDeleteMeeting(meeting.id)}
                       >
                         Delete
@@ -216,7 +216,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
           <div className="flex flex-col gap-3 mt-2">
             {meetings.map((meeting) => (
-              <Card key={meeting.id} className="border">
+              <Card key={meeting.id} className="border rounded-none">
                 <CardHeader className="flex flex-row items-center justify-between py-3">
                   <CardTitle className="text-sm font-medium">
                     {meeting.type_activity}
@@ -225,15 +225,14 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
-                        size="sm"
                         variant="ghost"
-                        className="text-red-600 bg-red-100 rounded-full hover:text-red-800"
+                        className="text-red-600 bg-red-100 rounded-xs hover:text-red-800"
                       >
                         <Trash2 size={16} />
                       </Button>
                     </AlertDialogTrigger>
 
-                    <AlertDialogContent>
+                    <AlertDialogContent className="rounded-none">
                       <AlertDialogHeader>
                         <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -243,9 +242,9 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                       </AlertDialogHeader>
 
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel className="rounded-none p-6">Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          className="bg-red-600 hover:bg-red-700"
+                          className="bg-red-600 hover:bg-red-700 rounded-none p-6"
                           onClick={() => handleDeleteMeeting(meeting.id)}
                         >
                           Delete

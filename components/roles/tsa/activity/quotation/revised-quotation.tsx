@@ -214,9 +214,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         const search = searchTerm.toLowerCase();
 
         return sortedActivities
-            .filter((item) =>
-                ["Approved", "Approved By Sales Head", "Pending", "Decline", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
-            )
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some((val) => {
@@ -589,7 +586,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-                                        
+
                                         <TableCell className="uppercase">
                                             {displayValue(item.quotation_number)}
                                         </TableCell>

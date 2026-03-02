@@ -43,7 +43,27 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         {children}
         <OfflineDialog />
       </ThemeProvider>
-      <Toaster />
+
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          className: "toast-cyber",
+          style: {
+            borderRadius: "8px",
+            padding: "1.5rem",
+            color: "rgb(255, 255, 255)",
+            fontFamily: "'Fira Code', monospace",
+            fontWeight: 900,
+            textTransform: "uppercase",       // <-- Gawing uppercase
+            boxShadow: "0 0 8px #0ff, 0 0 16px #0ff55, 0 0 24px #0ff88",
+            transition: "all 0.2s ease-in-out",
+            backdropFilter: "blur(2px)",      // blur effect
+            background: "rgba(0,0,0,0.6)",    // semi-transparent black
+          },
+          duration: 5000,
+        }}
+      />
+      
     </>
   );
 }

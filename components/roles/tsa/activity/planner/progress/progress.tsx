@@ -297,14 +297,16 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     return (
         <>
-            <Input
-                type="search"
-                placeholder="Search company, ticket ref, quotation no, so no..."
-                className="text-xs flex-grow rounded-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                aria-label="Search accounts"
-            />
+            {filteredData.length > 0 && (
+                <Input
+                    type="search"
+                    placeholder="Search..."
+                    className="text-xs flex-grow rounded-none mb-2"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-label="Search accounts"
+                />
+            )}
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">

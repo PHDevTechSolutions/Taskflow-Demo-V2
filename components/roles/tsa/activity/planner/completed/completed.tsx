@@ -240,8 +240,8 @@ export const Completed: React.FC<CompletedProps> = ({
   );
 
   useEffect(() => {
-          onCountChange?.(deliveredData.length);
-        }, [deliveredData.length]);
+    onCountChange?.(deliveredData.length);
+  }, [deliveredData.length]);
 
   /* ================= UI ================= */
 
@@ -265,13 +265,16 @@ export const Completed: React.FC<CompletedProps> = ({
 
   return (
     <>
-      <Input
-        type="search"
-        placeholder="Search company, quotation no, SO no..."
-        className="text-xs mb-3 rounded-none"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-      />
+      {filteredData.length > 0 && (
+        <Input
+          type="search"
+          placeholder="Search..."
+          className="text-xs flex-grow rounded-none mb-2"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+      )}
 
       <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
         <Accordion type="single" collapsible>

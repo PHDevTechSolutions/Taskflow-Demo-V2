@@ -15,6 +15,9 @@ import { ChartArea, RefreshCcw } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import Lottie from "lottie-react";
+// Import the JSON animation (downloaded from your Lottie link)
+import buttonAnimation from "../../public/animation/breaches.json";
 
 interface Activity {
     account_reference_number: string;
@@ -1067,14 +1070,23 @@ export function BreachesManagerDialog() {
 
             {/* Floating Action Button */}
             <button
-                className="fixed bottom-15 right-5 z-50 w-16 h-16 bg-[#121212] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-all"
+                className="
+    fixed bottom-15 right-20 z-50 w-20 h-20 
+    rounded-full flex items-center justify-center shadow-xl
+    hover:scale-105 transition-all duration-300
+    border overflow-hidden bg-white
+  "
                 onClick={() => {
                     setOpen(true);
                     fetchActivities();
                     fetchOverdue();
                 }}
             >
-                <ChartArea size={28} />
+                <Lottie
+                    animationData={buttonAnimation}
+                    loop
+                    className="w-30 h-30"
+                />
             </button>
         </>
     );
