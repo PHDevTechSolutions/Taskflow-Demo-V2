@@ -1,15 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000; // safe batch size
+const BATCH_SIZE = 5000;
 
-async function fetchAllRows(
+async function* fetchRowsInBatches(
   table: string,
   referenceid: string,
   fromDate?: string,
   toDate?: string
 ) {
-  let allData: any[] = [];
   let offset = 0;
 
   while (true) {
@@ -17,6 +16,8 @@ async function fetchAllRows(
       .from(table)
       .select("*")
       .eq("referenceid", referenceid)
+      .order("date_created", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate && toDate) {
@@ -26,13 +27,13 @@ async function fetchAllRows(
     const { data, error } = await query;
     if (error) throw error;
 
-    allData.push(...(data || []));
+    if (!data || data.length === 0) break;
 
-    if (!data || data.length < BATCH_SIZE) break; // tapos na
+    yield data; // yield each batch instead of storing all in memory
+
+    if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
-
-  return allData;
 }
 
 export default async function handler(
@@ -49,29 +50,31 @@ export default async function handler(
   const toDate = typeof to === "string" ? to : undefined;
 
   try {
-    /* -------------------- 1️⃣ HISTORY -------------------- */
-    const historyData = await fetchAllRows("history", referenceid, fromDate, toDate);
+    // For multiple tables, we process sequentially to reduce memory usage
+    const tables = ["history", "revised_quotations", "meetings", "documentation"];
+    let totalCount = 0;
 
-    /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
-    const revisedData = await fetchAllRows("revised_quotations", referenceid, fromDate, toDate);
+    // Store merged activities in a temporary array if needed for sorting
+    const activities: any[] = [];
 
-    /* -------------------- 3️⃣ MEETINGS -------------------- */
-    const meetingsData = await fetchAllRows("meetings", referenceid, fromDate, toDate);
+    for (const table of tables) {
+      for await (const batch of fetchRowsInBatches(table, referenceid, fromDate, toDate)) {
+        const normalized = batch.map((item) => ({ source: table, ...item }));
+        totalCount += normalized.length;
+        activities.push(...normalized); // optional: process each batch immediately instead of pushing if needed
+      }
+    }
 
-    const documentationData = await fetchAllRows("documentation", referenceid, fromDate, toDate);
-
-    /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
-    const activities = [
-      ...(historyData || []).map((item) => ({ source: "history", ...item })),
-      ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
-      ...(meetingsData || []).map((item) => ({ source: "meetings", ...item })),
-      ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
-    ].sort(
-      (a, b) =>
-        new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
+    // Sort at the end by date_created
+    activities.sort(
+      (a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
     );
 
-    return res.status(200).json({ activities });
+    return res.status(200).json({
+      activities,
+      total: totalCount,
+      cached: false,
+    });
   } catch (err: any) {
     console.error("Server error:", err);
     return res.status(500).json({ message: err.message || "Server error" });

@@ -7,9 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const id = req.query.id;
-  if (!id) {
-    return res.status(400).json({ error: "Missing ID" });
-  }
+  if (!id) return res.status(400).json({ error: "Missing ID" });
 
   const body = req.body;
 
@@ -33,9 +31,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "email_address",
     "address",
     "start_date",
-    "end_date"
+    "end_date" // only goes to revised_quotations
   ];
 
+  // Filter out empty/null fields
   const filteredData: Record<string, any> = {};
   allowedFields.forEach((key) => {
     const value = body[key];
@@ -44,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   });
 
-  // Generate revised quotation number for inserting to revised_quotations version column
+  // Generate revised quotation number
   const activityReferenceNumber = body.activity_reference_number;
   const originalQuotationNumber = body.quotation_number || "";
 
@@ -61,38 +60,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const revisionCount = existingRevisions ? existingRevisions.length : 0;
-    const nextRevisionNumber = revisionCount + 1;
-    const revisionSuffix = nextRevisionNumber.toString().padStart(3, "0");
+    const revisionSuffix = String(revisionCount + 1).padStart(3, "0");
     revisedQuotationNumber = `Revised-Quotation-${revisionSuffix}-${originalQuotationNumber}`;
   }
 
-  // Prepare data to insert into revised_quotations
-  // Copy filteredData but override or add `version` column with revisedQuotationNumber
+  // Insert into revised_quotations
   const revisedInsertData = {
     ...filteredData,
-    version: revisedQuotationNumber || null, // insert version column here
+    version: revisedQuotationNumber || null,
   };
 
-  // Remove quotation_number from update payload for history so it remains original
-  // We'll update history with original quotation_number, not revised
-  const { quotation_number, ...historyUpdateData } = filteredData;
+  const { error: revisedError } = await supabase
+    .from("revised_quotations")
+    .insert(revisedInsertData);
 
-  // Insert into revised_quotations
-  if (Object.keys(filteredData).length > 0) {
-    const { error: revisedError } = await supabase
-      .from("revised_quotations")
-      .insert(revisedInsertData);
-
-    if (revisedError) {
-      console.error("Revised quotation insert failed:", revisedError);
-      return res.status(500).json({
-        error: "Failed to insert revised quotation.",
-        details: revisedError.message,
-      });
-    }
+  if (revisedError) {
+    console.error("Revised quotation insert failed:", revisedError);
+    return res.status(500).json({
+      error: "Failed to insert revised quotation.",
+      details: revisedError.message,
+    });
   }
 
-  // Update history table with original quotation_number and other filtered fields
+  // Prepare history update data: exclude start_date & end_date
+  const { quotation_number, start_date, end_date, ...historyUpdateData } = filteredData;
+
   const { error } = await supabase
     .from("history")
     .update(historyUpdateData)

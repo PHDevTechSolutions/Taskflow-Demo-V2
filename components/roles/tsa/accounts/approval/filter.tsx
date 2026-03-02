@@ -69,7 +69,7 @@ export function AccountsAllFilter({
 
             {/* Filter Dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="w-full max-w-md">
+                <DialogContent className="w-full max-w-md rounded-none">
                     <DialogHeader>
                         <DialogTitle>Filters</DialogTitle>
                     </DialogHeader>
@@ -79,7 +79,7 @@ export function AccountsAllFilter({
                         <div>
                             <label className="block mb-1 font-medium text-xs">Agent</label>
                             <Select value={agentFilter} onValueChange={setAgentFilterAction}>
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger className="w-full rounded-none">
                                     <SelectValue placeholder="Agent" />
                                 </SelectTrigger>
                                 <SelectContent className="uppercase">
@@ -96,7 +96,7 @@ export function AccountsAllFilter({
                         <div>
                             <label className="block mb-1 font-medium text-xs">Type Client</label>
                             <Select value={typeFilter} onValueChange={setTypeFilterAction}>
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger className="w-full rounded-none">
                                     <SelectValue placeholder="Type Client" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -106,23 +106,6 @@ export function AccountsAllFilter({
                                     <SelectItem value="BALANCE 20">Balance 20</SelectItem>
                                     <SelectItem value="CSR CLIENT">CSR Client</SelectItem>
                                     <SelectItem value="TSA CLIENT">TSA Client</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Status Filter */}
-                        <div>
-                            <label className="block mb-1 font-medium text-xs">Status</label>
-                            <Select value={statusFilter} onValueChange={setStatusFilterAction}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="Active">Active</SelectItem>
-                                    <SelectItem value="New Client">New Client</SelectItem>
-                                    <SelectItem value="Non-Buying">Non-Buying</SelectItem>
-                                    <SelectItem value="Inactive">Inactive</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -141,7 +124,7 @@ export function AccountsAllFilter({
                                             setAlphabeticalFilterAction(val === "none" ? null : val)
                                         }
                                     >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger className="w-full rounded-none">
                                             <SelectValue placeholder="Sort Alphabetically" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -154,7 +137,7 @@ export function AccountsAllFilter({
 
                                 <Button
                                     variant={dateCreatedFilter ? "default" : "outline"}
-                                    className="w-full justify-between"
+                                    className="w-full justify-between rounded-none"
                                     onClick={() =>
                                         setDateCreatedFilterAction(
                                             dateCreatedFilter === "asc" ? "desc" : "asc"
@@ -166,7 +149,7 @@ export function AccountsAllFilter({
 
                                 <Button
                                     variant="destructive"
-                                    className="w-full"
+                                    className="w-full rounded-none p-6"
                                     onClick={() => {
                                         setDateCreatedFilterAction(null);
                                         setIndustryFilterAction("all");
@@ -182,8 +165,8 @@ export function AccountsAllFilter({
                         </div>
                     </div>
 
-                    <DialogFooter className="mt-6 flex justify-end">
-                        <Button onClick={() => setOpen(false)}>Close</Button>
+                    <DialogFooter className="flex justify-end">
+                        <Button onClick={() => setOpen(false)} className="rounded-none p-6">Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

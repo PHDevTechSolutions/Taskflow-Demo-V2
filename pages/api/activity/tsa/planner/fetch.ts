@@ -1,7 +1,53 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 1000;
+const BATCH_SIZE = 5000;
+
+// Generator for streaming activity batches
+async function* fetchActivityBatches(referenceid: string, fromISO?: string, toISO?: string) {
+  let lastId: number | null = null;
+
+  while (true) {
+    let query = supabase
+      .from("activity")
+      .select("*")
+      .eq("referenceid", referenceid)
+      .order("id", { ascending: true })
+      .limit(BATCH_SIZE);
+
+    if (lastId) query = query.gt("id", lastId);
+    if (fromISO && toISO) query = query.gte("date_created", fromISO).lt("date_created", toISO);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    yield data;
+
+    lastId = data[data.length - 1].id;
+  }
+}
+
+// Generator for streaming history batches based on activity_reference_number
+async function* fetchHistoryBatches(activityIds: string[]) {
+  if (!activityIds.length) return;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("history")
+      .select("*")
+      .in("activity_reference_number", activityIds)
+      .range(offset, offset + BATCH_SIZE - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    yield data;
+
+    offset += BATCH_SIZE;
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { referenceid, from, to } = req.query;
@@ -10,71 +56,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
+  const fromDate = typeof from === "string" ? new Date(from).toISOString() : undefined;
+  let toISO: string | undefined = undefined;
+  if (typeof to === "string") {
+    const toDay = new Date(to);
+    toDay.setDate(toDay.getDate() + 1); // include full 'to' day
+    toISO = toDay.toISOString();
+  }
 
   try {
-    // Convert to ISO timestamps
-    const fromISO = fromDate ? new Date(fromDate).toISOString() : undefined;
-    let toISO: string | undefined = undefined;
-    if (toDate) {
-      const toDay = new Date(toDate);
-      toDay.setDate(toDay.getDate() + 1); // include the full 'to' day
-      toISO = toDay.toISOString();
-    }
+    res.setHeader("Content-Type", "application/json");
+    res.write(`{"activities":[`); // start JSON
+    let firstActivity = true;
+    const allActivityIds: string[] = [];
+    let totalActivities = 0;
 
-    // ---------------- Fetch all activities in batches ----------------
-    let allActivities: any[] = [];
-    let offset = 0;
-
-    while (true) {
-      let query = supabase
-        .from("activity")
-        .select("*")
-        .eq("referenceid", referenceid);
-
-      if (fromISO && toISO) {
-        query = query.gte("date_created", fromISO).lt("date_created", toISO);
+    // Stream activities
+    for await (const batch of fetchActivityBatches(referenceid, fromDate, toISO)) {
+      for (const row of batch) {
+        allActivityIds.push(row.activity_reference_number);
+        const json = JSON.stringify(row);
+        res.write(firstActivity ? json : `,${json}`);
+        firstActivity = false;
+        totalActivities++;
       }
+    }
+    res.write(`],"history":[`); // start history array
+    let firstHistory = true;
+    let totalHistory = 0;
 
-      query = query.range(offset, offset + BATCH_SIZE - 1);
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      allActivities.push(...(data || []));
-
-      if (!data || data.length < BATCH_SIZE) break;
-      offset += BATCH_SIZE;
+    // Stream history
+    for await (const batch of fetchHistoryBatches(allActivityIds)) {
+      for (const row of batch) {
+        const json = JSON.stringify(row);
+        res.write(firstHistory ? json : `,${json}`);
+        firstHistory = false;
+        totalHistory++;
+      }
     }
 
-    // ---------------- Fetch all related histories in batches ----------------
-    const activityIds = allActivities.map(a => a.activity_reference_number);
-    let allHistory: any[] = [];
-    offset = 0;
-
-    while (activityIds.length && true) {
-      const { data, error } = await supabase
-        .from("history")
-        .select("*")
-        .in("activity_reference_number", activityIds)
-        .range(offset, offset + BATCH_SIZE - 1);
-
-      if (error) throw error;
-
-      allHistory.push(...(data || []));
-
-      if (!data || data.length < BATCH_SIZE) break;
-      offset += BATCH_SIZE;
-    }
-
-    // ---------------- Return response ----------------
-    return res.status(200).json({
-      activities: allActivities,
-      history: allHistory,
-    });
+    res.write(`],"total_activities":${totalActivities},"total_history":${totalHistory}}`);
+    res.end();
   } catch (err: any) {
     console.error("Server error:", err);
-    return res.status(500).json({ message: err.message || "Server error" });
+    if (!res.writableEnded) res.status(500).json({ message: err.message || "Server error" });
   }
 }
