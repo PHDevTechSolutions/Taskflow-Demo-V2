@@ -81,7 +81,6 @@ interface CompletedProps {
     managername?: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-
 }
 
 export const RevisedQuotation: React.FC<CompletedProps> = ({

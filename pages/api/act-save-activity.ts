@@ -160,6 +160,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         call_status: safe(call_status),
         call_type: safe(call_type),
 
+        // Array Data Can Submit More Than 10k Characters
+        // No Extra Characters Input Like N/ and Other the Splitter is Comma or ""
         product_category: safe(product_category),
         product_quantity: safe(product_quantity),
         product_amount: safe(product_amount),

@@ -1918,8 +1918,26 @@ ${spec.value}
                   <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
-                        <th className="border p-4 text-center w-5">Vat Adjust</th>
-                        <th className="border p-4 text-left w-45">Product</th>
+                        <th className="border p-4 text-center w-5">
+                          <label className="flex items-center justify-start gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedProducts.every((p) => p.isDiscounted)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedProducts((prev) =>
+                                  prev.map((p) => ({
+                                    ...p,
+                                    isDiscounted: checked,
+                                    discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
+                                  }))
+                                );
+                              }}
+                            />
+                            <span className="text-xs font-medium">All</span>
+                          </label>
+                        </th>
+                        <th className="border p-4 text-left w-100">Product</th>
                         <th className="border p-4 text-center w-5">Quantity</th>
                         <th className="border p-4 text-center w-15">Price</th>
                         <th className="border p-4 text-center w-10">-</th>
@@ -1947,8 +1965,8 @@ ${spec.value}
                               className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "" : ""}`}
 
                             >
-                              <td className="border border-gray-300 p-2 text-center">
-                                <div className="flex items-center justify-center p-2 gap-2">
+                              <td className="border border-gray-300 p-4">
+                                <div className="flex items-center justify-start gap-2">
                                   {/* Styled Checkbox */}
                                   <input
                                     type="checkbox"
@@ -1960,16 +1978,11 @@ ${spec.value}
                                         copy[idx] = {
                                           ...copy[idx],
                                           isDiscounted: checked,
-                                          discount: checked
-                                            ? vatType === "vat_exe"
-                                              ? 12
-                                              : 0
-                                            : 0, // if unchecked, reset to 0
+                                          discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
                                         };
                                         return copy;
                                       });
                                     }}
-                                    className="cursor-pointer h-5 w-5 rounded border border-gray-300 bg-white checked:bg-blue-500 checked:border-blue-500 transition-colors"
                                   />
 
                                   {/* Discount Input */}
@@ -1988,9 +2001,8 @@ ${spec.value}
                                         });
                                       }}
                                       className="w-15 p-0 border-none rounded-none"
-                                    />
+                                    /> 
                                   )}
-                                  % Vat
                                 </div>
                               </td>
 

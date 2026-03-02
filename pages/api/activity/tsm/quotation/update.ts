@@ -29,10 +29,7 @@ export default async function handler(
     return res.status(400).json({ message: "Invalid tsm_approved_status" });
   }
 
-  if (
-    tsm_approved_status === "Decline" &&
-    (!tsm_remarks || !tsm_remarks.trim())
-  ) {
+  if (tsm_approved_status === "Decline" && (!tsm_remarks || !tsm_remarks.trim())) {
     return res
       .status(400)
       .json({ message: "TSM remarks is required when declining" });
@@ -47,7 +44,7 @@ export default async function handler(
     const { data: historyData, error: historyError } = await supabase
       .from("history")
       .update({
-        tsm_approved_status, // only update status
+        tsm_approved_status,
       })
       .eq("quotation_number", quotation_number)
       .select();
@@ -74,7 +71,8 @@ export default async function handler(
     }
 
     // -----------------------------
-    // 4️⃣ Update SIGNATORIES (contact, email, signature, remarks & approval date)
+    // 4️⃣ Update SIGNATORIES
+    //    ❌ signature is null if status is Decline
     // -----------------------------
     const { data: updatedSignatory, error: signatoryUpdateError } =
       await supabase
@@ -82,8 +80,8 @@ export default async function handler(
         .update({
           tsm_contact_number: contact ?? null,
           tsm_email_address: email ?? null,
-          tsm_signature: signature ?? null,
-          tsm_remarks: tsm_approved_status === "Decline" ? tsm_remarks : tsm_remarks ?? null,
+          tsm_signature: tsm_approved_status === "Decline" ? null : signature ?? null,
+          tsm_remarks: tsm_remarks ?? null,
           tsm_approval_date: now,
         })
         .eq("id", signatory.id)
@@ -98,8 +96,8 @@ export default async function handler(
     // -----------------------------
     return res.status(200).json({
       success: true,
-      history: historyData[0], // status lang updated
-      signatory: updatedSignatory?.[0] ?? null, // remarks + date updated here
+      history: historyData[0],
+      signatory: updatedSignatory?.[0] ?? null,
     });
   } catch (err) {
     console.error("Server error:", err);
