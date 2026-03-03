@@ -324,11 +324,8 @@ export function QuotationSheet(props: Props) {
     const quantities = selectedProducts.map((p) => p.quantity.toString());
     const amounts = selectedProducts.map((p) => p.price.toString());
 
-    // Extract only the first table block from description
-    const descriptions = selectedProducts
-      .map((p) => p.description || "")
-      .map((desc) => extractTable(desc))
-      .filter((tableHtml) => tableHtml.trim() !== "");
+    // Dito: I-save ang buong description, hindi lang table
+    const descriptions = selectedProducts.map((p) => p.description || "");
 
     const photos = selectedProducts.map((p) => p.images?.[0]?.src || "");
     const skus = selectedProducts.map((p) => (p.skus && p.skus.length > 0 ? p.skus[0] : ""));
@@ -337,7 +334,7 @@ export function QuotationSheet(props: Props) {
     setProductCat(ids.join(","));
     setProductQuantity(quantities.join(","));
     setProductAmount(amounts.join(","));
-    setProductDescription(descriptions.join("||")); // Only table HTML here
+    setProductDescription(descriptions.join(" || ")); // <-- buong description
     setProductPhoto(photos.join(","));
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
@@ -2001,7 +1998,7 @@ ${spec.value}
                                         });
                                       }}
                                       className="w-15 p-0 border-none rounded-none"
-                                    /> 
+                                    />
                                   )}
                                 </div>
                               </td>
@@ -2020,10 +2017,10 @@ ${spec.value}
                                   suppressContentEditableWarning
                                   className="flex-1 outline-none"
                                   onBlur={(e) => {
-                                    const text = e.currentTarget.innerText;
+                                    const html = e.currentTarget.innerHTML; // keep HTML
                                     setSelectedProducts((prev) => {
                                       const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], title: text };
+                                      copy[idx] = { ...copy[idx], description: html };
                                       return copy;
                                     });
                                   }}

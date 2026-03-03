@@ -93,12 +93,12 @@ interface Activity {
 }
 
 interface SupervisorDetails {
-  firstname: string | null;
-  lastname: string | null;
-  email: string | null;
-  profilePicture: string | null;
-  signatureImage: string | null;
-  contact: string | null;
+    firstname: string | null;
+    lastname: string | null;
+    email: string | null;
+    profilePicture: string | null;
+    signatureImage: string | null;
+    contact: string | null;
 }
 
 interface CreateActivityDialogProps {
