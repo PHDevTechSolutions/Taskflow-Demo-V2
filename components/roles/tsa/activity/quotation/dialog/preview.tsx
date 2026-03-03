@@ -33,7 +33,7 @@ type Payload = {
     salestsmemail?: string;
     items: Item[];
     totalPrice: number;
-    vatTypeLabel: string;
+    vatType?: string | null;
     salesManagerContact?: string;
     salesManagerEmail?: string;
 
@@ -180,14 +180,14 @@ export const Preview: React.FC<PreviewProps> = ({
                                 <td className="px-4 border-r border-white/20 font-black text-red-400 italic text-[9px] uppercase">Tax Type:</td>
                                 <td className="px-4 border-r border-white/20">
                                     <div className="flex gap-4 text-[9px] font-black uppercase tracking-tight">
-                                        <span className={payload.vatTypeLabel === "VAT Inc" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                                        <span className={payload.vatType === "vat_inc" ? "text-white" : "text-white/30"}>
+                                            {payload.vatType === "vat_inc" ? "●" : "○"} VAT Inc
                                         </span>
-                                        <span className={payload.vatTypeLabel === "VAT Exe" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+                                        <span className={payload.vatType === "vat_exe" ? "text-white" : "text-white/30"}>
+                                            {payload.vatType === "vat_exe" ? "●" : "○"} VAT Exe
                                         </span>
-                                        <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+                                        <span className={payload.vatType === "zero_rated" ? "text-white" : "text-white/30"}>
+                                            {payload.vatType === "zero_rated" ? "●" : "○"} Zero-Rated
                                         </span>
                                     </div>
                                 </td>

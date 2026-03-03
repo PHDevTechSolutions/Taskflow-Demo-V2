@@ -52,6 +52,7 @@ interface Completed {
     address: string;
     contact_person: string;
     tsm_approved_status: string;
+    vat_type: string;
 
     // Signatories
     agent_signature: string;
@@ -643,7 +644,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
-
+                    vatType={editItem.vat_type}
                     // Signatories
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}

@@ -68,6 +68,8 @@ interface Props {
   setTSM: (v: string) => void;
   typeClient: string;
   setTypeClient: (value: string) => void;
+  vatType: string;
+  setVatType: (value: string) => void;
   handleBack: () => void;
   handleNext: () => void;
   handleSave: () => void;
@@ -153,6 +155,7 @@ export function QuotationSheet(props: Props) {
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
     quotationStatus, setQuotationStatus,
+    vatType, setVatType,
     callType, setCallType,
     followUpDate, setFollowUpDate,
     remarks, setRemarks,
@@ -190,7 +193,7 @@ export function QuotationSheet(props: Props) {
   const [showConfirmFollowUp, setShowConfirmFollowUp] = useState(false);
   const [open, setOpen] = useState(false);
   const [discount, setDiscount] = React.useState(0);
-  const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
+
   const [useToday, setUseToday] = useState(false);
 
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
@@ -348,11 +351,6 @@ export function QuotationSheet(props: Props) {
     setProductSku,
     setProductTitle,
   ]);
-
-  function extractTable(html: string): string {
-    const match = html.match(/<table[\s\S]*?<\/table>/i);
-    return match ? match[0] : "";
-  }
 
   // Save handler with validation
   const saveWithSelectedProducts = () => {
@@ -1559,11 +1557,11 @@ export function QuotationSheet(props: Props) {
                   )}
 
                   <div className="flex justify-end gap-4 pt-10">
-                    <Button variant="outline" className="rounded-none" onClick={handleCancelFollowUp} disabled={isGenerating}>
+                    <Button variant="outline" className="rounded-none p-6" onClick={handleCancelFollowUp} disabled={isGenerating}>
                       Cancel
                     </Button>
 
-                    <Button onClick={handleConfirmFollowUp} className="rounded-none" disabled={!hasGenerated}>
+                    <Button onClick={handleConfirmFollowUp} className="rounded-none p-6" disabled={!hasGenerated}>
                       Submit
                     </Button>
                   </div>
@@ -1871,43 +1869,22 @@ ${spec.value}
                       <span className="text-xs font-bold">VAT Type:</span>
 
                       <RadioGroup
-                        value={vatType}
-                        onValueChange={(value) => {
-                          const newVatType = value as "vat_inc" | "vat_exe" | "zero_rated";
-                          setVatType(newVatType);
-
-                          // Update per-product discount for all selected products
-                          setSelectedProducts((prev) =>
-                            prev.map((p) => {
-                              const isDiscounted = p.isDiscounted ?? false;
-                              const newDiscount =
-                                newVatType === "vat_exe" && isDiscounted ? 12 : p.discount ?? 0;
-                              return { ...p, discount: newDiscount };
-                            })
-                          );
-                        }}
+                        value={vatType}       // direktang galing sa parent props
+                        onValueChange={setVatType} // direktang setter mula sa parent
                         className="flex items-center gap-3"
                       >
-                        <div className="flex items-center gap-1">
-                          <RadioGroupItem value="vat_inc" id="vat-inc" />
-                          <label htmlFor="vat-inc" className="text-xs cursor-pointer">
-                            VAT Inc
-                          </label>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <RadioGroupItem value="vat_exe" id="vat-exe" />
-                          <label htmlFor="vat-exe" className="text-xs cursor-pointer">
-                            VAT Exe <span className="text-[10px] text-red-600">(12%)</span>
-                          </label>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <RadioGroupItem value="zero_rated" id="zero-rated" />
-                          <label htmlFor="zero-rated" className="text-xs cursor-pointer">
-                            Zero Rated
-                          </label>
-                        </div>
+                        {[
+                          { label: "VAT Inc", value: "vat_inc" },
+                          { label: "VAT Exe", value: "vat_exe", description: "(12%)" },
+                          { label: "Zero Rated", value: "zero_rated" },
+                        ].map(({ label, value, description }) => (
+                          <div key={value} className="flex items-center gap-1">
+                            <RadioGroupItem value={value} id={value} />
+                            <label htmlFor={value} className="text-xs cursor-pointer">
+                              {label} {description && <span className="text-[10px] text-red-600">{description}</span>}
+                            </label>
+                          </div>
+                        ))}
                       </RadioGroup>
                     </div>
                   </div>

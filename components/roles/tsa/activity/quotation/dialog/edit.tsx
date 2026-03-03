@@ -128,6 +128,7 @@ interface TaskListEditDialogProps {
     email_address?: string;
     address?: string;
     quotation_number?: string;
+    vatType?: string;
 
     // Signatories
     agentSignature?: string;
@@ -157,6 +158,7 @@ export default function TaskListEditDialog({
     tsmemail,
     tsmcontact,
     managername,
+    vatType,
 
     // Signatories
     agentSignature,
@@ -184,7 +186,12 @@ export default function TaskListEditDialog({
 
     const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
     const [discount, setDiscount] = React.useState(0);
-    const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
+    const initialVatType: "vat_inc" | "vat_exe" | "zero_rated" =
+        vatType === "vat_inc" || vatType === "vat_exe" || vatType === "zero_rated"
+            ? vatType
+            : "zero_rated";
+
+    const [vatTypeState, setVatTypeState] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">(initialVatType);
     // Confirmation dialog state
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<RevisedQuotation | null>(null);
@@ -331,13 +338,7 @@ export default function TaskListEditDialog({
         });
     };
 
-    const extractTableDescription = (product_description: string): string => {
-        const match = product_description.match(/<table\b[^>]*>[\s\S]*?<\/table>/i);
-        if (match) {
-            return match[0];
-        }
-        return "";
-    };
+
 
     function serializeArrayFixed(arr: (string | undefined | null)[]): string {
         return arr.map(v => v ?? "").join(",");
@@ -371,7 +372,7 @@ export default function TaskListEditDialog({
                 products.map(p => p.product_sku)
             );
 
-            const bodyData: Completed = {
+            const bodyData: Completed & { vat_type?: "vat_inc" | "vat_exe" | "zero_rated" } = {
                 id: item.id,
                 product_quantity,
                 product_amount,
@@ -382,6 +383,7 @@ export default function TaskListEditDialog({
                 quotation_amount: quotationAmount,
                 quotation_type: item.quotation_type,
                 quotation_number: item.quotation_number,
+                vat_type: vatTypeState, // <-- dito natin isinama ang VAT type
                 // New Added
                 activity_reference_number: item.activity_reference_number,
                 referenceid: item.referenceid,
@@ -511,6 +513,7 @@ export default function TaskListEditDialog({
             salestsmcontact: tsmcontact ?? "",
 
             salesmanagername: managername ?? "",
+            vatType: vatType ?? null,
             // Signatories
             agentSignature: agentSignature ?? null,
             agentContactNumber: agentContactNumber ?? null,
@@ -640,15 +643,13 @@ export default function TaskListEditDialog({
     };
 
     const handleAddProduct = (product: Product) => {
-        const tableDescription = extractTableDescription(product.description || "");
-
         setProducts((prev) => [
             ...prev,
             {
                 product_quantity: "1",
                 product_amount: product.price || "0",
                 product_title: product.title,
-                product_description: tableDescription,
+                product_description: product.description || "", // direct assignment, no extraction
                 product_photo: product.images?.[0]?.src || "",
                 product_sku: product.skus?.[0] || "",
                 description: product.description || "",
@@ -660,6 +661,7 @@ export default function TaskListEditDialog({
                 quantity: 1,
             },
         ]);
+
         setSearchTerm("");
         setSearchResults([]);
         setIsManualEntry(true);
@@ -914,7 +916,7 @@ export default function TaskListEditDialog({
             .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
             
             /* 4. OFFICIAL SIGNATURE HIERARCHY */
-            .sig-hierarchy { margin-top: 40px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 20px; }
+            .sig-hierarchy { margin-top: 20px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
             .sig-message { font-size: 9px; margin-bottom: 15px; font-weight: 500; line-height: 1.4; }
             .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
@@ -966,10 +968,37 @@ export default function TaskListEditDialog({
             };
 
             const initiateNewPage = async () => {
-                const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
-                pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
+                const banner = await renderBlock(`
+    <div style="width:100%; display:block;">
 
-                // Draw number for the CURRENT page
+  <!-- HEADER IMAGE -->
+  <img 
+    src="${headerImagePath}" 
+    class="header-img"
+    style="width:100%; display:block; object-fit:contain;"
+  />
+
+  <!-- REFERENCE & DATE nasa ilalim ng image -->
+  <div style="
+    width:100%;
+    text-align:right;
+    font-weight:900;
+    font-size:10px;
+    margin-top:2px;
+    display:inline-block;       /* ensure block content fully captured */
+    padding-bottom:5px;        /* extra space para hindi maputol */
+    line-height:1.2;            /* proper spacing for line break */
+    box-sizing:border-box;      /* padding counted in width */
+    padding-right: 60px; 
+  ">
+    REFERENCE NO: ${payload.referenceNo}<br/>
+    DATE: ${payload.date}
+  </div>
+
+</div>
+  `);
+
+                pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
                 drawPageNumber(pageCount);
 
                 return banner.h;
@@ -980,10 +1009,8 @@ export default function TaskListEditDialog({
 
             // A. CLIENT INFO BLOCK
             const clientBlock = await renderBlock(`
-        <div class="content-area">
-        <div style="text-align:right; font-weight:900; font-size:10px; margin-bottom:10px;">
-        REFERENCE NO: ${payload.referenceNo}<br>DATE: ${payload.date}
-        </div>
+        <div class="content-area" style="padding-top:5;">
+       
         
         <div class="client-grid">
         <div class="grid-row border-t">
@@ -1021,7 +1048,7 @@ export default function TaskListEditDialog({
 
             // B. TABLE HEADER BLOCK
             const headerBlock = await renderBlock(`
-        <div class="content-area">
+        <div class="content-area" >
         <div class="table-container" style="border-bottom: 1.5px solid black;">
         <table class="main-table">
         <thead>
@@ -1598,12 +1625,12 @@ export default function TaskListEditDialog({
                             <div className="flex items-center gap-4 justify-end border rounded p-4">
                                 <span className="text-xs font-medium">VAT Type:</span>
                                 <RadioGroup
-                                    value={vatType}
+                                    value={vatTypeState} // use the state variable
                                     onValueChange={(value) => {
                                         const newVatType = value as "vat_inc" | "vat_exe" | "zero_rated";
-                                        setVatType(newVatType);
+                                        setVatTypeState(newVatType);
 
-                                        // If VAT Inc, set discount to 12%, else reset discount to 0 (or keep previous)
+                                        // Adjust discount based on VAT type
                                         if (newVatType === "vat_exe") {
                                             setDiscount(12);
                                         } else {
@@ -1614,23 +1641,17 @@ export default function TaskListEditDialog({
                                 >
                                     <div className="flex items-center gap-1">
                                         <RadioGroupItem value="vat_inc" id="vat-inc" />
-                                        <label htmlFor="vat-inc" className="text-xs cursor-pointer">
-                                            VAT Inc
-                                        </label>
+                                        <label htmlFor="vat-inc" className="text-xs cursor-pointer">VAT Inc</label>
                                     </div>
-
                                     <div className="flex items-center gap-1">
                                         <RadioGroupItem value="vat_exe" id="vat-exe" />
                                         <label htmlFor="vat-exe" className="text-xs cursor-pointer">
                                             VAT Exe <span className="text-red-600 text-[10px]">(12%)</span>
                                         </label>
                                     </div>
-
                                     <div className="flex items-center gap-1">
                                         <RadioGroupItem value="zero_rated" id="zero-rated" />
-                                        <label htmlFor="zero-rated" className="text-xs cursor-pointer">
-                                            Zero Rated
-                                        </label>
+                                        <label htmlFor="zero-rated" className="text-xs cursor-pointer">Zero Rated</label>
                                     </div>
                                 </RadioGroup>
                             </div>
@@ -1638,7 +1659,17 @@ export default function TaskListEditDialog({
                             <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                                 <thead>
                                     <tr className="bg-gray-100">
-                                        <th className="border p-4 text-center w-5">Vat Adjust</th>
+                                        <th className="border p-4 text-center w-5"><Input
+                                            type="checkbox"
+                                            className="w-4 h-4"
+                                            checked={Object.keys(checkedRows).length === products.length && products.length > 0}
+                                            onChange={(e) => {
+                                                const newChecked = e.target.checked
+                                                    ? products.reduce((acc, _, idx) => ({ ...acc, [idx]: true }), {})
+                                                    : {};
+                                                setCheckedRows(newChecked);
+                                            }}
+                                        /> Check All</th>
                                         <th className="border p-4 text-left w-45">Product</th>
                                         <th className="border p-4 text-center w-5">Quantity</th>
                                         <th className="border p-4 text-center w-15">Amount</th>
@@ -1670,36 +1701,31 @@ export default function TaskListEditDialog({
                                                     {/* Vat Adjust */}
                                                     <td className="border border-gray-300 p-2 text-center">
                                                         <div className="flex items-center justify-center gap-2">
-                                                            {(vatType === "vat_exe" ||
-                                                                vatType === "vat_inc" ||
-                                                                vatType === "zero_rated") && (
-                                                                    <Input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        max={100}
-                                                                        step={0.01}
-                                                                        value={
-                                                                            product.discount !== undefined
-                                                                                ? product.discount
-                                                                                : vatType === "vat_exe"
-                                                                                    ? 12
-                                                                                    : 0
-                                                                        }
-                                                                        onChange={(e) => {
-                                                                            const val = Math.max(
-                                                                                0,
-                                                                                Math.min(100, parseFloat(e.target.value) || 0)
-                                                                            );
-                                                                            setProducts((prev) => {
-                                                                                const copy = [...prev];
-                                                                                copy[index] = { ...copy[index], discount: val };
-                                                                                return copy;
-                                                                            });
-                                                                        }}
-                                                                        className="w-16 border-none p-0 text-xs text-center"
-                                                                    />
-                                                                )}
-                                                            % Vat
+                                                            <Input
+                                                                type="checkbox"
+                                                                className="w-4 h-4"
+                                                                checked={isChecked}
+                                                                onChange={(e) =>
+                                                                    setCheckedRows((prev) => ({ ...prev, [index]: e.target.checked }))
+                                                                }
+                                                            />
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                max={100}
+                                                                step={0.01}
+                                                                value={product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)}
+                                                                onChange={(e) => {
+                                                                    const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                                                                    setProducts((prev) => {
+                                                                        const copy = [...prev];
+                                                                        copy[index] = { ...copy[index], discount: val };
+                                                                        return copy;
+                                                                    });
+                                                                }}
+                                                                className="w-16 border-none p-0 text-xs text-center"
+                                                            />
+
                                                         </div>
                                                     </td>
 

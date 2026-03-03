@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       start_date,
       end_date,
       tsm_approved_status,
+      vat_type,
 
       // Signatories
       // Agent
@@ -188,7 +189,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         start_date: safe(start_date),
         end_date: safe(end_date),
         agent: safe(agent),
-        tsm_approved_status: safe(tsm_approved_status)
+        tsm_approved_status: safe(tsm_approved_status),
+        vat_type: safe(vat_type),
       })
       .select();
 

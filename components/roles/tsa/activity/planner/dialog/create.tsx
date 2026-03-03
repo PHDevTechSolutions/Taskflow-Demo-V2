@@ -65,6 +65,7 @@ interface Activity {
     product_photo?: string;
     product_sku?: string;
     product_title?: string;
+    vat_type: string;
 
     project_type?: string;
     project_name?: string;
@@ -198,6 +199,7 @@ export function CreateActivityDialog({
     const [productPhoto, setProductPhoto] = useState("");
     const [productSku, setProductSku] = useState("");
     const [productTitle, setProductTitle] = useState("");
+    const [vatType, setVatType] = useState("");
 
     const [projectType, setProjectType] = useState("");
     const [projectName, setProjectName] = useState("");
@@ -429,6 +431,7 @@ export function CreateActivityDialog({
             product_photo: productPhoto || undefined,
             product_sku: productSku || undefined,
             product_title: productTitle || undefined,
+            vat_type: vatType,
 
             project_type: projectType || undefined,
             project_name: projectName || undefined,
@@ -903,6 +906,10 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
+
+                                    // Pass vatType here
+                                    vatType={vatType}
+                                    setVatType={setVatType}
 
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
