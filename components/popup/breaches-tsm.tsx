@@ -776,7 +776,7 @@ export function BreachesTSMDialog() {
 
                     <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
                         <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">
-                            Debugging Calibration
+                            Synchronizing Calibration
                         </h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>

@@ -1032,7 +1032,6 @@ export default function TaskListEditDialog({
                     <DialogHeader>
                         <DialogTitle>{statusDialogTitle}</DialogTitle>
                         <DialogDescription>
-                            {statusDialogMessage}
                         </DialogDescription>
                     </DialogHeader>
 
