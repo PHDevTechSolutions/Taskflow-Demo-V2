@@ -326,7 +326,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                         }
 
                         return (
-                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none shadow-sm mt-2">
+                            <AccordionItem key={item.id} value={item.id} className="w-full border rounded-none bg-orange-100 shadow-sm mt-2">
                                 <div className="p-2 select-none">
                                     <div className="flex justify-between items-center">
                                         <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">

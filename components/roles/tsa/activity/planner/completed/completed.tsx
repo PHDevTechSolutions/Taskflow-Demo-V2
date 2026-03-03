@@ -291,7 +291,7 @@ export const Completed: React.FC<CompletedProps> = ({
             });
 
             return (
-              <AccordionItem key={item.id} value={item.id} className="border rounded-none shadow-sm mb-2">
+              <AccordionItem key={item.id} value={item.id} className="border rounded-none shadow-sm bg-green-100 mb-2">
                 <div className="p-2">
                   <div className="flex justify-between items-center">
                     <AccordionTrigger className="text-xs font-semibold font-mono uppercase cursor-pointer">
