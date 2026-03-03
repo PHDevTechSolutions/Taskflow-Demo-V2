@@ -3,7 +3,7 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 1000;
 
-async function fetchAllRows(table: string, manager: string, fromDate?: string, toDate?: string) {
+async function fetchAllRows(table: string, referenceid: string, fromDate?: string, toDate?: string) {
   let allData: any[] = [];
   let offset = 0;
 
@@ -11,7 +11,7 @@ async function fetchAllRows(table: string, manager: string, fromDate?: string, t
     let query = supabase
       .from(table)
       .select("*")
-      .eq("manager", manager)
+      .eq("manager", referenceid)
       .order("date_created", { ascending: false })
       .order("id", { ascending: false }) // secondary sort to avoid skipping
       .range(offset, offset + BATCH_SIZE - 1);
@@ -34,22 +34,20 @@ async function fetchAllRows(table: string, manager: string, fromDate?: string, t
   return allData;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   const { manager, from, to } = req.query;
 
   if (!manager || typeof manager !== "string") {
-    return res.status(400).json({ message: "Missing or invalid manager reference" });
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
+  const fromDate = typeof from === "string" ? from : undefined;
+  const toDate = typeof to === "string" ? to : undefined;
+
   try {
-    let fromDate: string | undefined = undefined;
-    let toDate: string | undefined = undefined;
-
-    if (typeof from === "string" && typeof to === "string") {
-      fromDate = from;
-      toDate = to;
-    }
-
     /* -------------------- 1️⃣ HISTORY -------------------- */
     const historyData = await fetchAllRows("history", manager, fromDate, toDate);
 
@@ -59,10 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     /* -------------------- 3️⃣ MEETINGS -------------------- */
     const meetingsData = await fetchAllRows("meetings", manager, fromDate, toDate);
 
-    /* -------------------- 4️⃣ DOCUMENTATION -------------------- */
     const documentationData = await fetchAllRows("documentation", manager, fromDate, toDate);
 
-    /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */
+    /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
       ...(historyData || []).map((item) => ({ source: "history", ...item })),
       ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
@@ -73,17 +70,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
     );
 
-    // 🔹 Optional: filter only Outbound + Inbound Calls (kung gusto mo)
-    const filteredActivities = activities.filter(
-      (a) => a.type_activity === "Outbound Calls" || a.type_activity === "Inbound Calls"
-    );
-
-    return res.status(200).json({
-      total: filteredActivities.length,
-      activities: filteredActivities,
-    });
+    return res.status(200).json({ activities });
   } catch (err: any) {
-    console.error("API ERROR:", err);
+    console.error("Server error:", err);
     return res.status(500).json({ message: err.message || "Server error" });
   }
 }

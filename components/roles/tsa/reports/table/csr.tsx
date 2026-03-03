@@ -228,6 +228,14 @@ export const CSRTable: React.FC<CSRProps> = ({
 
   return (
     <>
+      {!loading && !error && filteredActivities.length === 0 && (
+        <div className="flex justify-center items-center h-40">
+          <Alert variant="destructive" className="flex flex-col items-center space-y-2 p-4 text-center text-xs">
+            <AlertTitle>No Data Found</AlertTitle>
+            <AlertDescription>Please check your date range or try again later.</AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       {!loading && !error && groupedByTicket.length > 0 && (
         <div className="flex flex-col md:flex-row gap-2">
