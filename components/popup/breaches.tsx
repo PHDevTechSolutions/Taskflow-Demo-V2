@@ -876,8 +876,8 @@ export function BreachesDialog() {
 
                 <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
                   <span>CSR Base: <strong>{clientSegments.csrClient} / {denominators.csrClient}</strong></span>
-                  <span>New Leads: <strong>{clientSegments.newClient} / {denominators.newClient}</strong></span>
-                  <span>TSA Leads: <strong>{clientSegments.tsaClient} / {denominators.tsaClient}</strong></span>
+                  <span>New Client: <strong>{clientSegments.newClient} / {denominators.newClient}</strong></span>
+                  <span>TSA Client: <strong>{clientSegments.tsaClient} / {denominators.tsaClient}</strong></span>
                   <span className="italic text-blue-600">
                     IN: {clientSegments.inbound} | OUT: {clientSegments.outbound}
                   </span>

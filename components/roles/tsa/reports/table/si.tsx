@@ -55,7 +55,6 @@ export const SITable: React.FC<SIProps> = ({
     // Pagination state
     const [page, setPage] = useState(1);
 
-    // Fetch activities
     const fetchActivities = useCallback(() => {
         if (!referenceid) {
             setActivities([]);
@@ -65,26 +64,35 @@ export const SITable: React.FC<SIProps> = ({
         setLoading(true);
         setError(null);
 
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-            : null;
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-            : null;
+        // Prepare date filters (keep as "YYYY-MM-DD" for date-only comparison)
+        let from: string | null = null;
+        let to: string | null = null;
 
-        const url = new URL("/api/reports/tsa/fetch", window.location.origin);
-        url.searchParams.append("referenceid", referenceid);
-        if (from && to) {
-            url.searchParams.append("from", from);
-            url.searchParams.append("to", to);
+        if (dateCreatedFilterRange?.from) {
+            from = dateCreatedFilterRange.from; // e.g., "2026-03-01"
         }
 
+        if (dateCreatedFilterRange?.to) {
+            to = dateCreatedFilterRange.to; // e.g., "2026-03-03"
+        }
+
+        // Build API URL
+        const url = new URL("/api/reports/tsa/fetch", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+
+        if (from) url.searchParams.append("from", from);
+        if (to) url.searchParams.append("to", to);
+
+        // Fetch data
         fetch(url.toString())
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to fetch activities");
                 return res.json();
             })
-            .then((data) => setActivities(data.activities || []))
+            .then((data) => {
+                // Ensure activities array exists
+                setActivities(data.activities || []);
+            })
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false));
     }, [referenceid, dateCreatedFilterRange]);
@@ -253,18 +261,6 @@ export const SITable: React.FC<SIProps> = ({
 
     return (
         <>
-            {!loading && !error && filteredActivities.length === 0 && (
-                <div className="flex justify-center items-center h-40">
-                    <Alert
-                        variant="destructive"
-                        className="flex flex-col items-center space-y-2 p-4 text-center text-xs"
-                    >
-                        <AlertTitle>No Data Found</AlertTitle>
-                        <AlertDescription>Please check your date range or try again later.</AlertDescription>
-                    </Alert>
-                </div>
-            )}
-
             {!loading && !error && filteredActivities.length !== 0 && (
                 <div className={`flex flex-col md:flex-row gap-2`}>
                     {/* Left: Area Chart */}
