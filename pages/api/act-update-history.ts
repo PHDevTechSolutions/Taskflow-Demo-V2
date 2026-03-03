@@ -77,6 +77,7 @@ export default async function handler(
     "vat_type", 
   ];
 
+  // Filter out empty/null fields
   const filteredData: Record<string, any> = {};
   for (const key of allowedFields) {
     const value = body[key];
