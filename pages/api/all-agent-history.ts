@@ -37,9 +37,9 @@ function normalizeRecord(item: any, source: string) {
     case "documentation":
       return { ...item, type_activity: item.doc_type || "Documentation", start_date: item.start_date || null, end_date: item.end_date || null, source };
     case "revised_quotations":
-      return { ...item, type_activity: "Revised Quotation", start_date: item.start_date || null, end_date: item.end_date || item.created_at || null, source };
+      return { ...item, type_activity: "Revised Quotation", start_date: item.start_date || null, end_date: item.end_date || item.date_created || null, source };
     case "meetings":
-      return { ...item, type_activity: "Meeting", start_date: item.meeting_start || null, end_date: item.meeting_end || item.meeting_start || null, source };
+      return { ...item, type_activity: "Client Meeting", start_date: item.start_date || null, end_date: item.end_date || item.meeting_start || null, source };
     default:
       return { ...item, type_activity: "Unknown", start_date: null, end_date: null, source };
   }
