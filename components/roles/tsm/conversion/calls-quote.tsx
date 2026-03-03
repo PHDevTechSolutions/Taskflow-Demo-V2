@@ -304,7 +304,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                             <TableRow>
                                 <TableHead className="text-xs">Agent</TableHead>
                                 <TableHead className="text-xs text-right">Target Quota</TableHead>
-                                <TableHead className="text-xs text-right">No. of Calls</TableHead>
+                                <TableHead className="text-xs text-right">No. of Calls (Outbound - Touchbase)</TableHead>
                                 <TableHead className="text-xs text-right">Total Number of Quotes</TableHead>
                                 <TableHead className="text-xs text-right">Percentage of Calls to Quote</TableHead>
                             </TableRow>

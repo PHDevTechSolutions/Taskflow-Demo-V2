@@ -308,6 +308,32 @@ export const CallSI: React.FC<CallSIProps> = ({
                 </TableRow>
               ))}
             </TableBody>
+            <tfoot>
+              <TableRow className="font-semibold bg-gray-100">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">
+                  {rows
+                    .reduce((acc, row) => {
+                      const tq = parseFloat(row.target_quota);
+                      return !isNaN(tq) ? acc + tq : acc;
+                    }, 0)
+                    .toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right">
+                  {rows.reduce((acc, row) => acc + row.totalCalls, 0)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {rows.reduce((acc, row) => acc + row.totalSI, 0)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {(() => {
+                    const totalCalls = rows.reduce((acc, row) => acc + row.totalCalls, 0);
+                    const totalSI = rows.reduce((acc, row) => acc + row.totalSI, 0);
+                    return totalSI === 0 ? "0.00%" : ((totalCalls / totalSI) * 100).toFixed(2) + "%";
+                  })()}
+                </TableCell>
+              </TableRow>
+            </tfoot>
           </Table>
         </div>
       )}
