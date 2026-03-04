@@ -280,7 +280,7 @@ export const CallSI: React.FC<CallSIProps> = ({
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="text-xs text-right">Target Quota</TableHead>
-                <TableHead className="text-xs text-right">Total No. of Calls</TableHead>
+                <TableHead className="text-xs text-right">Total No. of Calls (Outbound Touchbase) </TableHead>
                 <TableHead className="text-xs text-right">Total No. of SI</TableHead>
                 <TableHead className="text-xs text-right">Percentage of Calls to SI</TableHead>
               </TableRow>
