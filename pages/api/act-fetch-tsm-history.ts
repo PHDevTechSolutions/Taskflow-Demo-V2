@@ -3,19 +3,21 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
 
-// Generic async generator to fetch any table in batches by TSM
-async function* fetchTableBatches(table: string, tsm: string) {
+// Fetch HISTORY in batches by TSM only
+async function* fetchHistoryBatches(tsm: string) {
   let lastId: number | null = null;
 
   while (true) {
     let query = supabase
-      .from(table)
+      .from("history")
       .select("*")
       .eq("tsm", tsm)
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (lastId) query = query.gt("id", lastId);
+    if (lastId) {
+      query = query.gt("id", lastId);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -26,43 +28,10 @@ async function* fetchTableBatches(table: string, tsm: string) {
   }
 }
 
-// Normalize each table to have type_activity, start_date, end_date
-function normalizeRecord(item: any, source: string) {
-  switch (source) {
-    case "history":
-      return item; // already has type_activity, start_date, end_date
-    case "documentation":
-      return {
-        ...item,
-        type_activity: item.doc_type || "Documentation",
-        start_date: item.start_date || null,
-        end_date: item.end_date || null,
-      };
-    case "revised_quotations":
-      return {
-        ...item,
-        type_activity: "Revised Quotation",
-        start_date: item.created_at || null,
-        end_date: item.updated_at || item.created_at || null,
-      };
-    case "meetings":
-      return {
-        ...item,
-        type_activity: "Meeting",
-        start_date: item.meeting_start || null,
-        end_date: item.meeting_end || item.meeting_start || null,
-      };
-    default:
-      return {
-        ...item,
-        type_activity: "Unknown",
-        start_date: null,
-        end_date: null,
-      };
-  }
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   const { tsm } = req.query;
 
   if (!tsm || typeof tsm !== "string") {
@@ -70,22 +39,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const tables = ["history", "documentation", "revised_quotations", "meetings"];
-    let allActivities: any[] = [];
+    const activities: any[] = [];
 
-    for (const table of tables) {
-      for await (const batch of fetchTableBatches(table, tsm)) {
-        const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
-        allActivities.push(...normalizedBatch);
-      }
+    for await (const batch of fetchHistoryBatches(tsm)) {
+      activities.push(...batch);
     }
 
-    // Sort by date_created descending
-    allActivities.sort((a, b) => new Date(b.date_created || b.start_date).getTime() - new Date(a.date_created || a.start_date).getTime());
+    // Sort by date_created (fallback to start_date if needed)
+    activities.sort(
+      (a, b) =>
+        new Date(b.date_created || b.start_date).getTime() -
+        new Date(a.date_created || a.start_date).getTime()
+    );
 
-    return res.status(200).json({ activities: allActivities });
+    return res.status(200).json({ activities });
   } catch (err: any) {
     console.error("Server error:", err);
-    return res.status(500).json({ message: err.message || "Server error" });
+    return res.status(500).json({
+      message: err.message || "Server error",
+    });
   }
 }
