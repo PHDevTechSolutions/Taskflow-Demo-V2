@@ -214,6 +214,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           manager,
           manager_name: managername,
           quotation_number,
+          activity_reference_number,
           date_created: new Date().toISOString(),
         })
         .select();
