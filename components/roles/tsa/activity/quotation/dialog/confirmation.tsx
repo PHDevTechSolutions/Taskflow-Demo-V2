@@ -17,7 +17,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
     onClose,
     onSave,
     title = "Confirm Save",
-    message = "Do you want to download the quotation or just proceed to save?",
+    message = "Once you save this quotation, all existing signatories associated with this quotation number will be cleared. The quotation status will be set back to Pending and will require re-approval from the TSM. Do you want to proceed?",
 }) => {
     return (
         <Dialog open={open} onOpenChange={onClose}>
