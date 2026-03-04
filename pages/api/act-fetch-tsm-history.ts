@@ -1,62 +1,66 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-
-const BATCH_SIZE = 5000;
-
-// Fetch HISTORY in batches by TSM only
-async function* fetchHistoryBatches(tsm: string) {
-  let lastId: number | null = null;
-
-  while (true) {
-    let query = supabase
-      .from("history")
-      .select("*")
-      .eq("tsm", tsm)
-      .order("id", { ascending: true })
-      .limit(BATCH_SIZE);
-
-    if (lastId) {
-      query = query.gt("id", lastId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    yield data;
-    lastId = data[data.length - 1].id;
-  }
-}
+import redis from "@/lib/redis";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { tsm } = req.query;
+  const { referenceid } = req.query;
 
-  if (!tsm || typeof tsm !== "string") {
-    return res.status(400).json({ message: "Missing or invalid TSM" });
+  // ✅ validate agent reference (stored in history.tsm)
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({
+      message: "referenceid (agent tsm) is required",
+    });
   }
 
-  try {
-    const activities: any[] = [];
+  /**
+   * IMPORTANT:
+   * - referenceid (query) = agent reference
+   * - history.tsm        = agent reference
+   */
+  const cacheKey = `history:tsm:${referenceid}`;
 
-    for await (const batch of fetchHistoryBatches(tsm)) {
-      activities.push(...batch);
+  try {
+    // ✅ Redis cache (per agent)
+    const cached = await redis.get(cacheKey);
+
+    if (cached && typeof cached === "string") {
+      return res.status(200).json({
+        activities: JSON.parse(cached),
+        cached: true,
+      });
     }
 
-    // Sort by date_created (fallback to start_date if needed)
-    activities.sort(
-      (a, b) =>
-        new Date(b.date_created || b.start_date).getTime() -
-        new Date(a.date_created || a.start_date).getTime()
-    );
+    // ✅ Fetch ALL history for this agent
+    const { data, error } = await supabase
+      .from("history")
+      .select("*")
+      .eq("tsm", referenceid)
+      .order("date_created", { ascending: false });
 
-    return res.status(200).json({ activities });
-  } catch (err: any) {
+    if (error) {
+      return res.status(500).json({
+        message: error.message,
+      });
+    }
+
+    // ✅ Cache results (5 minutes)
+    if (data) {
+      await redis.set(cacheKey, JSON.stringify(data), {
+        ex: 300,
+      });
+    }
+
+    return res.status(200).json({
+      activities: data ?? [],
+      cached: false,
+    });
+  } catch (err) {
     console.error("Server error:", err);
     return res.status(500).json({
-      message: err.message || "Server error",
+      message: "Server error",
     });
   }
 }
