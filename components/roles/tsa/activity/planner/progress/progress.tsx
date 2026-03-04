@@ -2,12 +2,18 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CheckCircle2Icon, Trash, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, MoreVertical } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
+import { DeleteDialog } from "./dialog/delete";
 import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
@@ -106,6 +112,10 @@ export const Progress: React.FC<NewTaskProps> = ({
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [activitiesLoading, setActivitiesLoading] = useState(false);
     const [historyLoading, setHistoryLoading] = useState(false);
+
+    // --- DELETE DIALOG STATE ---
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
@@ -295,9 +305,44 @@ export const Progress: React.FC<NewTaskProps> = ({
         );
     }
 
+    const openDeleteDialog = (id: string) => {
+        setSelectedDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!selectedDeleteId) return;
+
+        try {
+            setUpdatingId(selectedDeleteId);
+            setDeleteDialogOpen(false);
+
+            // Call your bulk delete API
+            const res = await fetch("/api/activity/tsa/planner/delete", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids: [Number(selectedDeleteId)] }),
+            });
+
+            const result = await res.json();
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || "Delete failed");
+            }
+
+            await fetchAllData();
+            toast.success("Activity deleted successfully.");
+        } catch (err: any) {
+            toast.error(err.message || "An error occurred while deleting.");
+        } finally {
+            setUpdatingId(null);
+            setSelectedDeleteId(null);
+        }
+    };
+
     return (
         <>
-            {filteredData.length > 0 && (
+           
                 <Input
                     type="search"
                     placeholder="Search..."
@@ -306,7 +351,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                     onChange={(e) => setSearchTerm(e.target.value)}
                     aria-label="Search accounts"
                 />
-            )}
+     
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
@@ -363,18 +408,36 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                 signature={signature}
                                             />
 
-                                            <Button
-                                                type="button"
-                                                variant="secondary"
-                                                disabled={updatingId === item.id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openDoneDialog(item.id);
-                                                }}
-                                                className="cursor-pointer rounded-none"
-                                            >
-                                                <Check /> {updatingId === item.id ? "Updating..." : "Done"}
-                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        disabled={updatingId === item.id}
+                                                        className="cursor-pointer rounded-none"
+                                                    >
+                                                        Actions <MoreVertical />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openDoneDialog(item.id);
+                                                        }}
+                                                    >
+                                                        <Check className="mr-2 text-green-500" /> Mark as Done
+                                                    </DropdownMenuItem>
+
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openDeleteDialog(item.id); // <-- open dialog instead of confirm()
+                                                        }}
+                                                    >
+                                                        <Trash className="mr-2 text-red-600" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </div>
 
@@ -605,6 +668,15 @@ export const Progress: React.FC<NewTaskProps> = ({
                     })}
                 </Accordion>
             </div>
+
+            <DeleteDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={handleConfirmDelete}
+                loading={updatingId !== null}
+                title="Delete Activity"
+                description="Are you sure you want to delete this activity? This action cannot be undone."
+            />
 
             <DoneDialog
                 open={dialogOpen}

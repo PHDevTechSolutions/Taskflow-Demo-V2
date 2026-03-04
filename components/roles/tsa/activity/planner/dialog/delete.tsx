@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ interface AccountsActiveDeleteDialogProps {
   onOpenChange: (open: boolean) => void;
   removeRemarks: string;
   setRemoveRemarks: (value: string) => void;
-  onConfirmRemove: () => Promise<void>; // should return a Promise
+  onConfirmRemove: () => Promise<void>;
 }
 
 export function AccountsActiveDeleteDialog({
@@ -28,30 +28,51 @@ export function AccountsActiveDeleteDialog({
 }: AccountsActiveDeleteDialogProps) {
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+  const intervalRef = useRef<number | null>(null);
+
+  // Clear interval when component unmounts
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  const startHold = () => {
+    if (loading || !removeRemarks.trim()) return;
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setProgress(0);
+
+    intervalRef.current = window.setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(intervalRef.current!);
+          handleConfirm();
+          return 100;
+        }
+        return prev + 1;
+      });
+    }, 20); // ~2 seconds to fill
+  };
+
+  const cancelHold = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setProgress(0);
+  };
 
   const handleConfirm = async () => {
     setLoading(true);
-    setProgress(0);
-
-    // Simulate progress
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const next = prev + Math.floor(Math.random() * 15 + 5); // increment 5-20%
-        return next >= 100 ? 100 : next;
-      });
-    }, 200);
-
     try {
-      await onConfirmRemove(); // wait for deletion
+      await onConfirmRemove();
+    } catch (err) {
+      console.error("Error removing accounts:", err);
     } finally {
-      clearInterval(interval);
-      setProgress(100);
       setTimeout(() => {
         setLoading(false);
         setProgress(0);
         onOpenChange(false);
         setRemoveRemarks("");
-      }, 500); // small delay so user sees 100%
+      }, 300); // brief delay to show full progress
     }
   };
 
@@ -74,17 +95,7 @@ export function AccountsActiveDeleteDialog({
           disabled={loading}
         />
 
-        {/* Progress bar */}
-        {loading && (
-          <div className="w-full bg-gray-200 h-3 rounded mb-4">
-            <div
-              className="bg-red-600 h-3 rounded"
-              style={{ width: `${progress}%`, transition: "width 0.2s" }}
-            ></div>
-          </div>
-        )}
-
-        <DialogFooter className="flex justify-end gap-2">
+        <DialogFooter className="flex flex-col gap-2">
           <Button
             variant="secondary"
             onClick={() => {
@@ -98,13 +109,23 @@ export function AccountsActiveDeleteDialog({
           >
             Cancel
           </Button>
+
+          {/* Hold-to-confirm button */}
           <Button
             variant="destructive"
-            className="rounded-none p-6"
-            disabled={!removeRemarks.trim() || loading}
-            onClick={handleConfirm}
+            className="rounded-none p-6 overflow-hidden relative"
+            onMouseDown={startHold}
+            onMouseUp={cancelHold}
+            onMouseLeave={cancelHold}
+            disabled={loading || !removeRemarks.trim()}
           >
-            {loading ? "Removing..." : "Confirm Remove"}
+            {loading ? "Deleting..." : "Hold to Delete"}
+
+            {/* Progress bar overlay */}
+            <div
+              className="absolute top-0 left-0 h-full bg-red-900/30 pointer-events-none transition-all"
+              style={{ width: `${progress}%` }}
+            />
           </Button>
         </DialogFooter>
       </DialogContent>

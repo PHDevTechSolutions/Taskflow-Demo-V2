@@ -12,7 +12,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/c
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
@@ -150,7 +150,7 @@ function DashboardContent() {
                     tsmname: data.TSMName || "",
                     managername: data.ManagerName || "",
                     signature: data.signatureImage || "",
-                    managerDetails: data.managerDetails || null, 
+                    managerDetails: data.managerDetails || null,
                     tsmDetails: data.tsmDetails || null
                 });
 
@@ -160,10 +160,40 @@ function DashboardContent() {
                     tsm: data.tsmDetails
                 });
 
-                toast.success("User data loaded successfully!");
+                sileo.success({
+                    title: "Success",
+                    description: "User data loaded successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+                sileo.warning({
+                    title: "Failed",
+                    description: "Error fetching user data:",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } finally {
                 setLoadingUser(false);
             }
@@ -205,12 +235,32 @@ function DashboardContent() {
 
             if (!response.ok) throw new Error("Failed to save account");
 
-            toast.success(`Account ${isEdit ? "updated" : "created"} successfully!`);
+            sileo.success({
+                title: "Success",
+                description: `Account ${isEdit ? "updated" : "created"} successfully!`,
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
 
             // Refresh accounts after save
             await refreshAccounts();
         } catch (error) {
-            toast.error((error as Error).message || "Failed to save account.");
+            sileo.error({
+                title: "Failed",
+                description: "Failed to save account.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     }
 
@@ -223,9 +273,29 @@ function DashboardContent() {
             if (!response.ok) throw new Error("Failed to fetch accounts");
             const data = await response.json();
             setPosts(data.data || []);
-            toast.success("Accounts loaded successfully!");
+            sileo.success({
+                title: "Success",
+                description: "Accounts loaded successfully!",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } catch (error) {
-            toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+            sileo.error({
+                title: "Failed",
+                description: "Failed to connect to server. Please try again later or refresh your network connection",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     }
 
@@ -342,8 +412,8 @@ function DashboardContent() {
                                         onCountChange={setProgressCount}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature} 
-                                                                           
+                                        signature={userDetails.signature}
+
                                     />
                                 </CardContent>
                             </Card>
@@ -392,7 +462,7 @@ function DashboardContent() {
                                         onCountChange={setScheduledCount}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature} 
+                                        signature={userDetails.signature}
                                     />
                                 </CardContent>
                             </Card>
@@ -432,7 +502,7 @@ function DashboardContent() {
                                         onCountChange={setCompletedCount}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature} 
+                                        signature={userDetails.signature}
                                     />
                                 </CardContent>
 
@@ -481,7 +551,7 @@ function DashboardContent() {
                                         onCountChange={setDoneCount}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature} 
+                                        signature={userDetails.signature}
                                     />
                                 </CardContent>
 
@@ -528,7 +598,7 @@ function DashboardContent() {
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         managerDetails={userDetails.managerDetails ?? null}
                                         tsmDetails={userDetails.tsmDetails ?? null}
-                                        signature={userDetails.signature} 
+                                        signature={userDetails.signature}
                                         onCountChange={setOverdueCount}
                                     />
                                 </CardContent>

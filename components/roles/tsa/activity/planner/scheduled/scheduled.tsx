@@ -486,16 +486,14 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 w-full">
           {/* Search Bar - humahaba */}
-          {filteredActivities.length > 0 && (
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="text-xs flex-grow rounded-none"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Search accounts"
-            />
-          )}
+          <Input
+            type="search"
+            placeholder="Search..."
+            className="text-xs flex-grow rounded-none mb-2"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search accounts"
+          />
 
           {/* Status Dropdown - nasa right */}
           <DropdownMenu>

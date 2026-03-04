@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"; // Added for debugging
 import { ChartArea, RefreshCcw } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import Lottie from "lottie-react";
 // Import the JSON animation (downloaded from your Lottie link)
 import buttonAnimation from "../../public/animation/breaches.json";
@@ -224,7 +224,12 @@ export function BreachesDialog() {
       );
     } catch (err) {
       console.error(err);
-      toast.error("Failed to fetch cluster data.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to fetch cluster data.",
+        duration: 4000,       // optional
+        position: "top-center" // optional
+      });
     }
   };
 
@@ -252,7 +257,12 @@ export function BreachesDialog() {
         }
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load territory cluster data.");
+        sileo.error({
+          title: "Failed",
+          description: "Failed to load territory cluster data.",
+          duration: 4000,       // optional
+          position: "top-center" // optional
+        });
       } finally {
         setLoadingUser(false);
       }
@@ -413,7 +423,12 @@ export function BreachesDialog() {
       setActivities(data.activities || []);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to fetch activities.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to fetch activities.",
+        duration: 4000,       // optional
+        position: "top-center" // optional
+      });
     } finally {
       setLoadingActivities(false);
     }
@@ -444,7 +459,12 @@ export function BreachesDialog() {
       setOverdueCount(activities.length); // still keep total if needed
     } catch (err) {
       console.error(err);
-      toast.error("Failed to fetch overdue activities.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to fetch overdue activities.",
+        duration: 4000,       // optional
+        position: "top-center" // optional
+      });
     } finally {
       setLoadingOverdue(false);
     }
@@ -455,9 +475,12 @@ export function BreachesDialog() {
     fetchClusterData(userDetails.referenceid);
     fetchActivities();
     fetchOverdue();
-    toast.info(
-      `Debugging data for Ref: ${userDetails.referenceid} on ${fromDate}`,
-    );
+    sileo.success({
+      title: "Success",
+      description: `Synching data for Ref: ${userDetails.referenceid} on ${fromDate}`,
+      duration: 4000,       // optional
+      position: "top-right" // optional
+    });
   };
 
   /* -------------------- Compute Time Consumed & Quotas -------------------- */

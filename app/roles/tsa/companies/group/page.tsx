@@ -14,7 +14,7 @@ import { Alert, AlertTitle } from "@/components/ui/alert"
 import { AlertCircleIcon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 import { AccountsTable } from "@/components/roles/tsa/accounts/group/table/group";
 import { type DateRange } from "react-day-picker";
@@ -91,10 +91,40 @@ function DashboardContent() {
           manager: data.Manager || "",
         });
 
-        toast.success("User data loaded successfully!");
+        sileo.success({
+          title: "Success",
+          description: "User data loaded successfully!",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } catch (err) {
-        console.error("Error fetching user data:", err);
-        toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+        sileo.warning({
+          title: "Failed",
+          description: "Error fetching user data:",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
+        sileo.error({
+          title: "Failed",
+          description: "Failed to connect to server. Please try again later or refresh your network connection",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } finally {
         setLoadingUser(false);
       }
@@ -120,10 +150,40 @@ function DashboardContent() {
         );
         const data = await response.json();
         setPosts(data.data || []);
-        toast.success("Accounts loaded successfully!");
+        sileo.success({
+          title: "Success",
+          description: "Accounts loaded successfully!",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } catch (err) {
-        console.error("Error fetching accounts:", err);
-        toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+        sileo.warning({
+          title: "Failed",
+          description: "Error fetching user data:",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
+        sileo.error({
+          title: "Failed",
+          description: "Failed to connect to server. Please try again later or refresh your network connection",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } finally {
         setLoadingAccounts(false);
       }
