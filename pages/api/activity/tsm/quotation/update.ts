@@ -18,29 +18,37 @@ export default async function handler(
     signature,
   } = req.body;
 
-  // -----------------------------
-  // 1️⃣ Validate input
-  // -----------------------------
+  /* =============================
+     1️⃣ VALIDATION
+  ============================= */
   if (!quotation_number || typeof quotation_number !== "string") {
-    return res.status(400).json({ message: "Missing or invalid quotation_number" });
+    return res.status(400).json({
+      message: "Missing or invalid quotation_number",
+    });
   }
 
-  if (!["Approved", "Decline", "Endorsed to Sales Head"].includes(tsm_approved_status)) {
-    return res.status(400).json({ message: "Invalid tsm_approved_status" });
+  const allowedStatuses = ["Approved", "Decline", "Endorsed to Sales Head"];
+  if (!allowedStatuses.includes(tsm_approved_status)) {
+    return res.status(400).json({
+      message: "Invalid tsm_approved_status",
+    });
   }
 
-  if (tsm_approved_status === "Decline" && (!tsm_remarks || !tsm_remarks.trim())) {
-    return res
-      .status(400)
-      .json({ message: "TSM remarks is required when declining" });
+  if (
+    tsm_approved_status === "Decline" &&
+    (!tsm_remarks || !tsm_remarks.trim())
+  ) {
+    return res.status(400).json({
+      message: "TSM remarks is required when declining",
+    });
   }
 
   try {
     const now = new Date().toISOString();
 
-    // -----------------------------
-    // 2️⃣ Update HISTORY (ONLY tsm_approved_status)
-    // -----------------------------
+    /* =============================
+       2️⃣ UPDATE HISTORY
+    ============================= */
     const { data: historyData, error: historyError } = await supabase
       .from("history")
       .update({
@@ -50,57 +58,76 @@ export default async function handler(
       .select();
 
     if (historyError) {
-      return res.status(500).json({ message: historyError.message });
+      return res.status(500).json({
+        message: historyError.message,
+      });
     }
 
     if (!historyData || historyData.length === 0) {
-      return res.status(404).json({ message: "No matching history record found" });
+      return res.status(404).json({
+        message: "No matching history record found",
+      });
     }
 
-    // -----------------------------
-    // 3️⃣ Fetch SIGNATORY by quotation_number
-    // -----------------------------
+    /* =============================
+       3️⃣ FETCH SIGNATORY (SAFE)
+    ============================= */
     const { data: signatory, error: signatoryFetchError } = await supabase
       .from("signatories")
       .select("id")
       .eq("quotation_number", quotation_number)
-      .single();
+      .maybeSingle(); // ✅ FIX HERE
 
     if (signatoryFetchError) {
-      return res.status(500).json({ message: signatoryFetchError.message });
+      return res.status(500).json({
+        message: signatoryFetchError.message,
+      });
     }
 
-    // -----------------------------
-    // 4️⃣ Update SIGNATORIES
-    //    ❌ signature is null if status is Decline
-    // -----------------------------
+    if (!signatory) {
+      return res.status(404).json({
+        message: "No matching signatory found",
+      });
+    }
+
+    /* =============================
+       4️⃣ UPDATE SIGNATORY
+    ============================= */
     const { data: updatedSignatory, error: signatoryUpdateError } =
       await supabase
         .from("signatories")
         .update({
           tsm_contact_number: contact ?? null,
           tsm_email_address: email ?? null,
-          tsm_signature: tsm_approved_status === "Decline" ? null : signature ?? null,
+          tsm_signature:
+            tsm_approved_status === "Decline"
+              ? null
+              : signature ?? null,
           tsm_remarks: tsm_remarks ?? null,
           tsm_approval_date: now,
         })
         .eq("id", signatory.id)
-        .select();
+        .select()
+        .single(); // safe now (ID-based)
 
     if (signatoryUpdateError) {
-      return res.status(500).json({ message: signatoryUpdateError.message });
+      return res.status(500).json({
+        message: signatoryUpdateError.message,
+      });
     }
 
-    // -----------------------------
-    // 5️⃣ Success
-    // -----------------------------
+    /* =============================
+       5️⃣ SUCCESS RESPONSE
+    ============================= */
     return res.status(200).json({
       success: true,
       history: historyData[0],
-      signatory: updatedSignatory?.[0] ?? null,
+      signatory: updatedSignatory,
     });
   } catch (err) {
     console.error("Server error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 }
