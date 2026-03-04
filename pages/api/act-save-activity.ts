@@ -200,24 +200,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Insert signature sa signatories table
-    if (signature) {
-      const { data: sigData, error: sigError } = await supabase
+    // Insert into SIGNATORIES
+    // ✅ ONLY if type_activity === "Quotation Preparation"
+    if (type_activity === "Quotation Preparation") {
+      const { error: sigError } = await supabase
         .from("signatories")
         .insert({
-          referenceid,
-          agent_contact_number: contact,
-          agent_email_address: email,
-          agent_signature: signature,
-          agent_name: agent_name,
-          tsm,
-          tsm_name: tsmname,
-          manager,
-          manager_name: managername,
-          quotation_number,
+          referenceid: safe(referenceid),
           activity_reference_number,
+          quotation_number: safe(quotation_number),
+
+          // Agent
+          agent_contact_number: safe(contact),
+          agent_email_address: safe(email),
+          agent_signature: safe(signature),
+          agent_name: safe(agent_name),
+
+          // TSM
+          tsm: safe(tsm),
+          tsm_name: safe(tsmname),
+
+          // Manager
+          manager: safe(manager),
+          manager_name: safe(managername),
+
           date_created: new Date().toISOString(),
-        })
-        .select();
+        });
 
       if (sigError) {
         console.error("Supabase Signatories Insert Error:", sigError);
