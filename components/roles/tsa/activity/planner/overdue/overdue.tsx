@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 interface SupervisorDetails {
     firstname: string | null;
@@ -267,7 +267,17 @@ export const Overdue: React.FC<NewTaskProps> = ({
         if (!selectedActivityId) return;
 
         if (!cancellationRemarks) {
-            toast.error("Cancellation remarks are required.");
+            sileo.error({
+                title: "Failed",
+                description: "Cancellation remarks are required.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             return;
         }
 
@@ -288,7 +298,17 @@ export const Overdue: React.FC<NewTaskProps> = ({
             const result = await res.json();
 
             if (!res.ok) {
-                toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+                sileo.error({
+                    title: "Failed",
+                    description: `Failed to update status: ${result.error || "Unknown error"}`,
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
                 setUpdatingId(null);
                 return;
             }
@@ -296,9 +316,29 @@ export const Overdue: React.FC<NewTaskProps> = ({
             await fetchAllData();
             window.location.reload();
 
-            toast.success("Transaction marked as Cancelled.");
+            sileo.success({
+                title: "Success",
+                description: "Transaction marked as Cancelled.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } catch {
-            toast.error("An error occurred while updating status.");
+            sileo.error({
+                title: "Failed",
+                description: "An error occurred while updating status.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } finally {
             setUpdatingId(null);
             setSelectedActivityId(null);
@@ -327,16 +367,46 @@ export const Overdue: React.FC<NewTaskProps> = ({
             const result = await res.json();
 
             if (!res.ok) {
-                toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+                sileo.error({
+                    title: "Failed",
+                    description: `Failed to update status: ${result.error || "Unknown error"}`,
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
                 setUpdatingId(null);
                 return;
             }
 
             await fetchAllData();
 
-            toast.success("Transaction marked as Done.");
+            sileo.success({
+                title: "Success",
+                description: "Transaction marked as Done.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } catch {
-            toast.error("An error occurred while updating status.");
+            sileo.error({
+                title: "Failed",
+                description: "An error occurred while updating status.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } finally {
             setUpdatingId(null);
             setSelectedActivityId(null);

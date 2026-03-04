@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
-import { SidebarRight } from "@/components/sidebar-right";
 
 import {
   Breadcrumb,
@@ -16,8 +15,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
-import { type DateRange } from "react-day-picker";
+import { sileo } from "sileo";
 
 import { NationalRanking } from "@/components/national-ranking";
 
@@ -79,12 +77,40 @@ function DashboardContent() {
           target_quota: data.TargetQuota || "",
         });
 
-        toast.success("User data loaded successfully!");
+        sileo.success({
+          title: "Success",
+          description: "User data loaded successfully!",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } catch (err) {
-        console.error("Error fetching user data:", err);
-        toast.error(
-          "Failed to connect to server. Please try again later or refresh your network connection"
-        );
+        sileo.warning({
+          title: "Failed",
+          description: "Error fetching user data:",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
+        sileo.error({
+          title: "Failed",
+          description: "Failed to connect to server. Please try again later or refresh your network connection",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } finally {
         setLoadingUser(false);
       }

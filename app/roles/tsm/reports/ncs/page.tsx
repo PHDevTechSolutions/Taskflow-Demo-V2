@@ -11,7 +11,7 @@ import { SidebarRight } from "@/components/sidebar-right";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 import { NCSTable } from "@/components/roles/tsm/reports/table/ncs";
 
@@ -102,10 +102,29 @@ function DashboardContent() {
                     profilePicture: data.profilePicture || ""
                 });
 
-                toast.success("User data loaded successfully!");
+                sileo.success({
+                    title: "Success",
+                    description: "User data loaded successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } finally {
                 setLoadingUser(false);
             }

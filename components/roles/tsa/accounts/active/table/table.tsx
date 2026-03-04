@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { MoreHorizontal, Edit } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { AccountDialog } from "../../../activity/planner/dialog/active";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Plus, Repeat, Archive, Users, Layers, Calendar } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
@@ -207,7 +207,17 @@ export function AccountsTable({
     function handleDownloadCSV() {
         const csv = convertToCSV(filteredData);
         if (!csv) {
-            toast.error("No data to download.");
+            sileo.error({
+                title: "Failed",
+                description: "No data to download.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             return;
         }
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -397,7 +407,17 @@ export function AccountsTable({
                 throw new Error(errorData?.error || "Failed to remove accounts");
             }
 
-            toast.success("Accounts removed successfully! Subject for approval on your Territory Sales Manager.");
+            sileo.info({
+                title: "Info",
+                description: "Accounts removed successfully! Subject for approval on your Territory Sales Manager.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
 
             await onRefreshAccountsAction();
 
@@ -406,7 +426,17 @@ export function AccountsTable({
             setIsRemoveDialogOpen(false);
             table.setPageIndex(0);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to remove accounts");
+            sileo.error({
+                title: "Failed",
+                description: "Failed to remove accounts",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     }
 
@@ -449,16 +479,34 @@ export function AccountsTable({
                 throw new Error(errorData?.error || "Failed to transfer accounts");
             }
 
-            toast.success(
-                "Accounts transferred successfully! Need approval from your Territory Sales Manager."
-            );
+            sileo.success({
+                title: "Success",
+                description: "Accounts transferred successfully! Need approval from your Territory Sales Manager.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
 
             await onRefreshAccountsAction();
 
             setRowSelection({});
             setIsTransferDialogOpen(false);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to transfer accounts");
+            sileo.error({
+                title: "Failed",
+                description: "Failed to transfer accounts",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     }
 

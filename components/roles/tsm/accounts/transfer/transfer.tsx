@@ -12,7 +12,7 @@ import { AccountsActiveSearch } from "../../../tsa/accounts/active/search";
 import { AccountsAllFilter } from "../../../tsa/accounts/approval/filter";
 import { AccountsApproveDialog } from "./dialog/transfer-approve";
 import { type DateRange } from "react-day-picker";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 interface Account {
     id: string;
@@ -261,21 +261,32 @@ export function AccountsTable({
                     )
                 );
 
-                toast.success(
-                    "Accounts transfer successfully! Subject for Approval on IT Department"
-                );
+                sileo.success({
+                    title: "Success",
+                    description: "Accounts transfer successfully! Subject for Approval on IT Department",
+                    duration: 4000,       // optional
+                    position: "top-center" // optional
+                });
 
                 await onRefreshAccountsAction();
 
                 setSelectedIds(new Set());
                 setIsTransferDialogOpen(false);
             } else {
-                toast.error("No accounts updated. IDs may not exist.");
+                sileo.error({
+                    title: "Failed",
+                    description: "No accounts updated. IDs may not exist.",
+                    duration: 4000,       // optional
+                    position: "top-center" // optional
+                });
             }
         } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to approve accounts"
-            );
+            sileo.error({
+                title: "Failed",
+                description: error instanceof Error ? error.message : "Failed to approve accounts",
+                duration: 4000,       // optional
+                position: "top-center" // optional
+            });
         }
     }
 

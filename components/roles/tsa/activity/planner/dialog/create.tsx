@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Plus, ArrowRight, User, Users } from "lucide-react";
 
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
@@ -338,7 +338,17 @@ export function CreateActivityDialog({
         switch (currentStep) {
             case 1:
                 if (!typeActivity.trim()) {
-                    toast.error("Please select Activity Type.");
+                    sileo.warning({
+                        title: "Warning",
+                        description: "Please select Activity Type.",
+                        duration: 4000,
+                        position: "top-right",
+                        fill: "black",
+                        styles: {
+                            title: "text-white!",
+                            description: "text-white",
+                        },
+                    });
                     return false;
                 }
                 return true;
@@ -346,7 +356,17 @@ export function CreateActivityDialog({
             case 2:
                 // Source required if Outbound Calls (quotation also requires source)
                 if (typeActivity === "Outbound Calls" && !source.trim()) {
-                    toast.error("Please select Source.");
+                    sileo.warning({
+                        title: "Warning",
+                        description: "Please select Source.",
+                        duration: 4000,
+                        position: "top-right",
+                        fill: "black",
+                        styles: {
+                            title: "text-white!",
+                            description: "text-white",
+                        },
+                    });
                     return false;
                 }
                 return true;
@@ -354,7 +374,17 @@ export function CreateActivityDialog({
             case 3:
                 // Call Status required if Outbound Calls
                 if (typeActivity === "Outbound Calls" && !callStatus.trim()) {
-                    toast.error("Please select Call Status.");
+                    sileo.warning({
+                        title: "Warning",
+                        description: "Please select Call Status.",
+                        duration: 4000,
+                        position: "top-right",
+                        fill: "black",
+                        styles: {
+                            title: "text-white!",
+                            description: "text-white",
+                        },
+                    });
                     return false;
                 }
                 return true;
@@ -467,7 +497,17 @@ export function CreateActivityDialog({
             const result = await res.json();
 
             if (!res.ok) {
-                toast.error(result.error || "Failed to save activity.");
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to save activity.",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
                 setLoading(false);
                 return;
             }
@@ -489,7 +529,18 @@ export function CreateActivityDialog({
             const statusResult = await statusRes.json();
 
             if (!statusRes.ok) {
-                toast.error(statusResult.error || "Failed to update activity status.");
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to update activity status.",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+
                 setLoading(false);
                 return;
             }
@@ -497,7 +548,17 @@ export function CreateActivityDialog({
             onCreated(newActivity);
 
             // Success save + status update toast
-            toast.success("Activity created and status updated successfully!");
+            sileo.success({
+                title: "Success",
+                description: "Activity created and status updated successfully!",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             resetForm();
             setStep(1);
             setSheetOpen(false);
@@ -505,7 +566,17 @@ export function CreateActivityDialog({
             window.location.reload();
 
         } catch (error) {
-            toast.error("Server error. Please try again.");
+            sileo.error({
+                title: "Failed",
+                description: "Server error. Please try again.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         } finally {
             setLoading(false);
         }
@@ -586,7 +657,17 @@ export function CreateActivityDialog({
                         <Button
                             onClick={() => {
                                 if (selectedContacts.length === 0) {
-                                    toast.error("Please select a contact.");
+                                    sileo.warning({
+                                        title: "Warning",
+                                        description: "Please select a contact.",
+                                        duration: 4000,
+                                        position: "top-right",
+                                        fill: "black",
+                                        styles: {
+                                            title: "text-white!",
+                                            description: "text-white",
+                                        },
+                                    });
                                     return;
                                 }
 

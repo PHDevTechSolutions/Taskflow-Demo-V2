@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/utils/supabase";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 interface MeetingItem {
   id: number;
@@ -74,8 +74,17 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
         setMeetings(data || []);
       } catch (error) {
-        console.error("Error loading meetings:", error);
-        toast.error("Failed to load meetings.");
+        sileo.error({
+          title: "Failed",
+          description: "Failed to load meetings.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } finally {
         setLoading(false);
       }
@@ -94,10 +103,29 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
       if (error) throw error;
 
       setMeetings((prev) => prev.filter((meeting) => meeting.id !== id));
-      toast.success("Meeting deleted successfully!");
+      sileo.success({
+        title: "Success",
+        description: "Meeting deleted successfully!",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } catch (error) {
-      console.error("Error deleting meeting:", error);
-      toast.error("Failed to delete meeting, try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to delete meeting, try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 

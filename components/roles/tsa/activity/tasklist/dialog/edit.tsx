@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -204,11 +204,30 @@ export default function TaskListEditDialog({
       });
 
       if (!res.ok) throw new Error("Failed to update activity");
-
-      toast.success("Activity updated successfully!");
+      sileo.success({
+        title: "Succeess",
+        description: "Activity updated successfully!",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       onSave();
     } catch (error) {
-      toast.error("Update failed! Please try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Update failed! Please try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 

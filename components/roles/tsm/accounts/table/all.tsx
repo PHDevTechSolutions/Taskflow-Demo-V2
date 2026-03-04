@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
 
 import { AccountsActiveSearch } from "../../../tsa/accounts/active/search";
@@ -260,7 +260,12 @@ export function AccountsTable({
     function handleDownloadCSV() {
         const csv = convertToCSV(filteredData); // use full filteredData to download all filtered records
         if (!csv) {
-            toast.error("No data to download.");
+            sileo.error({
+                title: "Failed",
+                description: "No data to download.",
+                duration: 4000,       // optional
+                position: "top-center" // optional
+            });
             return;
         }
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -427,7 +432,7 @@ export function AccountsTable({
                     />
 
                     <Button variant="outline" className="rounded-none" onClick={handleDownloadCSV}>
-                       <DownloadCloud /> Download
+                        <DownloadCloud /> Download
                     </Button>
                 </div>
             </div>

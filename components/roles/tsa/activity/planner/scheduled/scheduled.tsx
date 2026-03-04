@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 import { CreateActivityDialog } from "../dialog/create";
 import { CancelledDialog } from "../dialog/cancelled";
@@ -285,7 +285,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     if (!selectedActivityId) return;
 
     if (!cancellationRemarks) {
-      toast.error("Cancellation remarks are required.");
+      sileo.error({
+        title: "Failed",
+        description: "Cancellation remarks are required.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -306,7 +316,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         setUpdatingId(null);
         return;
       }
@@ -314,9 +334,29 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       await fetchAllData();
       window.location.reload();
 
-      toast.success("Transaction marked as Cancelled.");
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Cancelled.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } catch {
-      toast.error("An error occurred while updating status.");
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setUpdatingId(null);
       setSelectedActivityId(null);
@@ -379,16 +419,46 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         setUpdatingId(null);
         return;
       }
 
       await fetchAllData();
 
-      toast.success("Transaction marked as Done.");
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Done.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } catch {
-      toast.error("An error occurred while updating status.");
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setUpdatingId(null);
       setSelectedActivityId(null);
@@ -403,7 +473,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const handleConfirmTransfer = async (selectedUserReferenceID: string | undefined) => {
     if (!selectedActivityId) return;
     if (!selectedUserReferenceID) {
-      toast.error("Please select a user to transfer to.");
+      sileo.error({
+        title: "Failed",
+        description: "Please select a user to transfer to.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -424,16 +504,45 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error(`Failed to update status: ${result.error || "Unknown error"}`);
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         setUpdatingId(null);
         return;
       }
 
       await fetchAllData();
-
-      toast.success("Transaction marked as Transfer.");
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Transfer.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } catch {
-      toast.error("An error occurred while updating status.");
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setUpdatingId(null);
       setSelectedActivityId(null);

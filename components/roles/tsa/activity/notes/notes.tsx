@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/utils/supabase";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -103,8 +103,17 @@ const NoteDeleteDialog: React.FC<NoteDeleteDialogProps> = ({ open, onOpenChange,
     try {
       await onConfirmDelete();
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete note");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to delete note",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setTimeout(() => {
         setLoading(false);
@@ -183,8 +192,17 @@ export const Notes: React.FC<NotesProps> = ({
       if (error) throw error;
       setNotes(data ?? []);
     } catch (err: any) {
-      console.error("Error fetching notes:", err.message);
-      toast.error("Failed to fetch notes");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to fetch notes",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 
@@ -193,11 +211,35 @@ export const Notes: React.FC<NotesProps> = ({
   }, [referenceid, dateCreatedFilterRange]);
 
   const saveNote = async () => {
-    if (!startDate || !endDate) return toast.error("Start and End date required");
+    if (!startDate || !endDate)
+      return
+    sileo.error({
+      title: "Failed",
+      description: "Start and End date required",
+      duration: 4000,
+      position: "top-right",
+      fill: "black",
+      styles: {
+        title: "text-white!",
+        description: "text-white",
+      },
+    });
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (end < start) return toast.error("End date cannot be earlier than start date");
+    if (end < start)
+      return
+    sileo.error({
+      title: "Failed",
+      description: "End date cannot be earlier than start date",
+      duration: 4000,
+      position: "top-right",
+      fill: "black",
+      styles: {
+        title: "text-white!",
+        description: "text-white",
+      },
+    });
 
     setIsSubmitting(true);
 
@@ -217,7 +259,17 @@ export const Notes: React.FC<NotesProps> = ({
         : await supabase.from("documentation").insert(payload);
       if (error) throw error;
 
-      toast.success(selectedNote ? "Updated" : "Saved");
+      sileo.success({
+        title: "Success",
+        description: "Meeting save successfully!",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
 
       setSelectedNote(null);
       setRemarks("");
@@ -225,8 +277,17 @@ export const Notes: React.FC<NotesProps> = ({
       setEndDate("");
       await fetchNotes();
     } catch (err: any) {
-      console.error("Error saving note:", err.message);
-      toast.error(err.message || "Failed to save note");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to save note",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -236,12 +297,32 @@ export const Notes: React.FC<NotesProps> = ({
     if (!deleteNote) return;
     try {
       await supabase.from("documentation").delete().eq("id", deleteNote.id);
-      toast.success("Deleted successfully");
+      sileo.success({
+        title: "Success",
+        description: "Deleted successfully",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       if (selectedNote?.id === deleteNote.id) setSelectedNote(null);
       await fetchNotes();
     } catch (err: any) {
       console.error("Error deleting note:", err.message);
-      toast.error(err.message || "Failed to delete note");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to delete note",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 

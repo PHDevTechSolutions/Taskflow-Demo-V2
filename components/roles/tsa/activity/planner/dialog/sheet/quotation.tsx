@@ -10,7 +10,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Separator } from "@/components/ui/separator"
 import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
@@ -395,7 +395,17 @@ export function QuotationSheet(props: Props) {
 
   const handleDownloadQuotation = async () => {
     if (!productCat || productCat.trim() === "") {
-      toast.error("Cannot export quotation: Product Category is empty.");
+      sileo.error({
+        title: "Failed",
+        description: "Cannot export quotation: Product Category is empty.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -503,7 +513,17 @@ export function QuotationSheet(props: Props) {
 
       if (!resExport.ok) {
         const errorText = await resExport.text();
-        toast.error("Failed to download quotation: " + errorText);
+        sileo.error({
+          title: "Failed",
+          description: "Failed to download quotation: " + errorText,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         return;
       }
 
@@ -518,7 +538,17 @@ export function QuotationSheet(props: Props) {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error("Failed to download quotation. Please try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to download quotation. Please try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 

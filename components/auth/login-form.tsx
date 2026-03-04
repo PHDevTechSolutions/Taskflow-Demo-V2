@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,7 +86,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       if (error) throw error;
       setTicket(data ?? []);
     } catch (error: any) {
-      toast.error(error.message || "Error fetching tickets");
+      sileo.error({
+        title: "Failed",
+        description: error.message || "Error fetching tickets",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   }, []);
 
@@ -120,7 +130,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ---------------- Submit Ticket ----------------
   const submitTicketFromDialog = async () => {
     if (!remarks.trim()) {
-      toast.error("Remarks is required.");
+      sileo.error({
+        title: "Failed",
+        description: "Remarks is required.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -144,12 +164,32 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       if (error) throw error;
 
-      toast.success("Ticket submitted successfully.");
+      sileo.success({
+        title: "Success",
+        description: "Ticket submitted successfully.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       setRemarks("");
       fetchTicket();
       setShowTicketDialog(false);
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit ticket.");
+      sileo.error({
+        title: "Success",
+        description: err.message || "Failed to submit ticket.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setTicketSubmitting(false);
     }
@@ -160,7 +200,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!Email || !Password) {
-        toast.error("All fields are required!");
+        sileo.warning({
+          title: "Warning",
+          description: "All fields are required!",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         return;
       }
 
@@ -180,7 +230,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           if (result.locked) {
             setShowTicketDialog(true); // show the ticket submission dialog
           } else {
-            toast.error(result.message || "Login failed.");
+            sileo.error({
+              title: "Failed",
+              description: result.message || "Login failed.",
+              duration: 4000,
+              position: "top-right",
+              fill: "black",
+              styles: {
+                title: "text-white!",
+                description: "text-white",
+              },
+            });
           }
           setLoading(false);
           return;
@@ -190,7 +250,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         setShowLocationDialog(true);
       } catch (error) {
         console.error(error);
-        toast.error("Login error occurred.");
+        sileo.error({
+          title: "Failed",
+          description: "Login error occurred.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
       } finally {
         setLoading(false);
       }

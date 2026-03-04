@@ -11,7 +11,7 @@ import { SidebarRight } from "@/components/sidebar-right";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { type DateRange } from "react-day-picker";
 
 import { AgentList } from "@/components/roles/tsm/dashboard/list";
@@ -70,12 +70,40 @@ function DashboardContent() {
                     target_quota: data.TargetQuota || "",
                 });
 
-                toast.success("User data loaded successfully!");
+                sileo.success({
+                    title: "Success",
+                    description: "User data loaded successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error(
-                    "Failed to connect to server. Please try again later or refresh your network connection"
-                );
+                sileo.warning({
+                    title: "Failed",
+                    description: "Error fetching user data:",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } finally {
                 setLoadingUser(false);
             }

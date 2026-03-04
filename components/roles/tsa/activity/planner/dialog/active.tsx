@@ -9,7 +9,7 @@ import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertCircleIcon, PlusIcon, MinusIcon, CheckCircle2Icon, ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -386,14 +386,34 @@ export function AccountDialog({
     submitLock.current = true;
 
     if (companyError) {
-      toast.error(companyError);
+      sileo.error({
+        title: "Failed",
+        description: companyError,
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       submitLock.current = false;
       return;
     }
 
     for (const em of formData.email_address) {
       if (em.trim() && em.trim().toLowerCase() !== "n/a" && !isValidEmail(em)) {
-        toast.error(`Invalid email address: ${em}`);
+        sileo.error({
+          title: "Failed",
+          description: `Invalid email address: ${em}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         submitLock.current = false;
         return;
       }
@@ -413,7 +433,17 @@ export function AccountDialog({
 
     try {
       await onSaveAction(cleanData);  // wait for save to complete
-      toast.success("Saved successfully!");
+      sileo.success({
+        title: "Success",
+        description: "Saved successfully!",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
 
       onOpenChangeAction(false);
 
@@ -424,7 +454,17 @@ export function AccountDialog({
       }, 500);
 
     } catch (error) {
-      toast.error("Save failed. Please try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Save failed. Please try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       submitLock.current = false;
     }
   }

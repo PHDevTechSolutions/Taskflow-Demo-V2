@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
 import { Badge } from "@/components/ui/badge"
 import { AccountDialog } from "../dialog/active";
@@ -177,10 +177,29 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setAccounts((prev) => prev.filter((acc) => acc.id !== account.id));
       window.location.reload();
 
-      toast.success(`Successfully added and updated date for: ${account.company_name}`);
+      sileo.success({
+        title: "Success",
+        description: `Successfully added and updated date for: ${account.company_name}`,
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } catch (err) {
-      console.error(err);
-      toast.error("Error saving or updating account. Please try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Error saving or updating account. Please try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setLoading(false);  // <-- always stop loading at the end
     }
@@ -329,7 +348,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
     if (!selectedTicket) return;
 
     if (!userDetails) {
-      toast.error("User details not available.");
+      sileo.error({
+        title: "Failed",
+        description: "User details not available.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -369,7 +398,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data?.error || "Failed to use endorsed ticket");
+        sileo.error({
+          title: "Failed",
+          description: "Failed to use endorsed ticket",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         return;
       }
 
@@ -385,7 +424,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       const updateStatusData = await updateStatusRes.json();
       if (!updateStatusRes.ok) {
-        toast.error(updateStatusData?.error || "Failed to update ticket status");
+        sileo.error({
+          title: "Failed",
+          description: updateStatusData?.error || "Failed to update ticket status",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         return;
       }
 
@@ -403,14 +452,32 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       const updateCompanyRefData = await updateCompanyRefRes.json();
       if (!updateCompanyRefRes.ok) {
-        toast.error(
-          updateCompanyRefData?.error ||
-          "Ticket processed but company update failed. Please contact admin."
-        );
+        sileo.error({
+          title: "Failed",
+          description: updateCompanyRefData?.error ||
+            "Ticket processed but company update failed. Please contact admin.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: {
+            title: "text-white!",
+            description: "text-white",
+          },
+        });
         return;
       }
 
-      toast.success(`Ticket used successfully: ${ticket.company_name}`);
+      sileo.success({
+        title: "Success",
+        description: `Ticket used successfully: ${ticket.company_name}`,
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
 
       // Optimistic UI update
       setEndorsedTickets((prev) => {
@@ -424,7 +491,17 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setSelectedTicket(null);
     } catch (err) {
       console.error(err);
-      toast.error("Unexpected error while using endorsed ticket.");
+      sileo.success({
+        title: "Failed",
+        description: "Unexpected error while using endorsed ticket.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     } finally {
       setConfirmLoading(false);
     }

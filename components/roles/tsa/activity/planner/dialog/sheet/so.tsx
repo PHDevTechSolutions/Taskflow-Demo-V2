@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon } from "lucide-react";
 
 interface Props {
@@ -131,7 +131,17 @@ export function SOSheet(props: Props) {
     // Step 3 Next handler with validation
     const handleNextStep3 = () => {
         if (soAmount.trim() === "" || isNaN(Number(soAmount))) {
-            toast.error("Please enter valid SO Amount.");
+            sileo.warning({
+                title: "Warning",
+                description: "Please enter valid SO Amount.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             return;
         }
         handleNext();
@@ -140,7 +150,17 @@ export function SOSheet(props: Props) {
     // Step 4 Next handler with validation
     const handleNextStep4 = () => {
         if (callType.trim() === "") {
-            toast.error("Please select Call Type.");
+            sileo.warning({
+                title: "Warning",
+                description: "Please select Call Type.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             return;
         }
         handleNext();
@@ -226,7 +246,7 @@ export function SOSheet(props: Props) {
 
                     <div className="flex justify-between mt-4">
                         <Button variant="outline" className="rounded-none" onClick={handleBack}>
-                           <ArrowLeft /> Back 
+                            <ArrowLeft /> Back
                         </Button>
                         <Button className="rounded-none" onClick={handleNextStep3}>
                             Next <ArrowRight />
@@ -263,7 +283,7 @@ export function SOSheet(props: Props) {
                                                             className="rounded-none"
                                                             onClick={handleBack}
                                                         >
-                                                          <ArrowLeft /> Back
+                                                            <ArrowLeft /> Back
                                                         </Button>
 
                                                         <Button
@@ -273,7 +293,7 @@ export function SOSheet(props: Props) {
                                                             className="rounded-none"
                                                         >
                                                             Next <ArrowRight />
-                                                         </Button>
+                                                        </Button>
                                                     </div>
                                                 )}
                                             </FieldContent>
@@ -332,7 +352,7 @@ export function SOSheet(props: Props) {
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
                                                         <Button type="button" variant="outline" className="rounded-none" onClick={props.handleBack}>
-                                                           <ArrowLeft /> Back
+                                                            <ArrowLeft /> Back
                                                         </Button>
                                                         <Button type="button" className="rounded-none" onClick={handleSave}>
                                                             Save <CheckCircle2Icon />

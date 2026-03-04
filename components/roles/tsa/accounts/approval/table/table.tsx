@@ -11,7 +11,7 @@ import { AccountsAllFilter } from "../filter";
 import { AccountsActivePagination } from "../../active/pagination";
 import { AccountsApproveDialog } from "../dialog/approve";
 import { type DateRange } from "react-day-picker";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 interface Account {
     id: string;
@@ -323,7 +323,17 @@ export function AccountsTable({
                     )
                 );
 
-                toast.success("Accounts approved successfully!");
+                sileo.success({
+                    title: "Success",
+                    description: "Accounts approved successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
 
                 await onRefreshAccountsAction();
 
@@ -331,12 +341,30 @@ export function AccountsTable({
                 setIsRemoveDialogOpen(false);
                 table.setPageIndex(0);
             } else {
-                toast.error("No accounts updated. IDs may not exist.");
+                sileo.warning({
+                    title: "Warning",
+                    description: "No accounts updated. IDs may not exist.",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             }
         } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to approve accounts"
-            );
+            sileo.error({
+                title: "Failed",
+                description: "Failed to approve accounts",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     }
 

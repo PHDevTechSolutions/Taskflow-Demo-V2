@@ -5,7 +5,6 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@
 import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";

@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon } from "lucide-react";
 
 interface Props {
@@ -82,14 +82,16 @@ export function DRSheet(props: Props) {
         status === "Delivered";
 
     const handleNextStep2 = () => {
-        if (!drNumber.trim()) return toast.error("DR Number is required.");
-        if (!siAmount || isNaN(Number(siAmount))) return toast.error("Invalid SI Amount.");
+        if (!drNumber.trim())
+            return
+        if (!siAmount || isNaN(Number(siAmount)))
+            return
         handleNext();
     };
 
     const handleNextStep3 = () => {
-        if (!paymentTerms) return toast.error("Please select Payment Terms.");
-        if (!deliveryDate) return toast.error("Please select Delivery Date.");
+        if (!paymentTerms) return
+        if (!deliveryDate) return
         handleNext();
     };
 

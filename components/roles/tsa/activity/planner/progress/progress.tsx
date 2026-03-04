@@ -428,14 +428,14 @@ export const Progress: React.FC<NewTaskProps> = ({
                                                         <Check className="mr-2 text-green-500" /> Mark as Done
                                                     </DropdownMenuItem>
 
-                                                    {/*<DropdownMenuItem
+                                                    <DropdownMenuItem
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openDeleteDialog(item.id); // <-- open dialog instead of confirm()
                                                         }}
                                                     >
                                                         <Trash className="mr-2 text-red-600" /> Delete
-                                                    </DropdownMenuItem>*/}
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>

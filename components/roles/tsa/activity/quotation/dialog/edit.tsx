@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, } from "@/components/ui/item"
@@ -405,12 +405,31 @@ export default function TaskListEditDialog({
             });
 
             if (!res.ok) throw new Error("Failed to update activity");
-
-            toast.success("Activity updated successfully!");
+            sileo.success({
+                title: "Succeess",
+                description: "Activity updated successfully!",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             onSave();
             setShowConfirmDialog(false);
         } catch (error) {
-            toast.error("Update failed! Please try again.");
+            sileo.error({
+                title: "Failed",
+                description: "Update failed! Please try again.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
         }
     };
 
@@ -487,10 +506,29 @@ export default function TaskListEditDialog({
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(url);
-                toast.success("PDF Export Successful");
+                sileo.success({
+                    title: "Success",
+                    description: "PDF Export Successful",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } catch (error) {
-                console.error("PDF Protocol Error:", error);
-                toast.error("Failed to generate PDF.");
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to generate PDF.",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             }
         };
 
@@ -618,7 +656,17 @@ export default function TaskListEditDialog({
             });
 
             if (!resExport.ok) {
-                toast.error("Failed to export quotation.");
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to export quotation.",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
                 setShowConfirmDialog(false);
                 return;
             }
@@ -637,7 +685,17 @@ export default function TaskListEditDialog({
 
             setShowConfirmDialog(false);
         } catch (error) {
-            toast.error("Export failed. Please try again.");
+            sileo.error({
+                title: "Failed",
+                description: "Export failed. Please try again.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
             setShowConfirmDialog(false);
         }
     };

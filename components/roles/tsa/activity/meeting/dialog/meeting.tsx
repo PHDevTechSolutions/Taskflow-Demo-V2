@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 
 import { supabase } from "@/utils/supabase";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 
 interface MeetingDialogProps {
   referenceid: string;
@@ -61,7 +61,17 @@ export function MeetingDialog({
     e.preventDefault();
 
     if (!referenceid || !tsm || !manager || !startDate || !endDate) {
-      toast.error("Please fill in all required fields.");
+      sileo.warning({
+        title: "Warning",
+        description: "Please fill in all required fields.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       return;
     }
 
@@ -85,12 +95,31 @@ export function MeetingDialog({
 
       if (error) throw error;
 
-      toast.success("Meeting created successfully!");
+      sileo.success({
+        title: "Success",
+        description: "Meeting created successfully!",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
       onMeetingCreated?.(data);
       setOpen(false);
     } catch (err) {
-      console.error("Supabase insert error:", err);
-      toast.error("Failed to save meeting, try again.");
+      sileo.error({
+        title: "Failed",
+        description: "Failed to save meeting, try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
     }
   };
 
