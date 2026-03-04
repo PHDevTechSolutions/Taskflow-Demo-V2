@@ -49,6 +49,7 @@ interface Completed {
     contact_person: string;
     tsm_approved_status: string;
     tsm_approved_date: string;
+    delivery_fee: string;
 
     // Signatories
     agent_signature: string;
@@ -500,6 +501,7 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
+                    deliveryFee={editItem.delivery_fee}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}

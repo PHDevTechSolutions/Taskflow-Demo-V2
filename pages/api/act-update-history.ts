@@ -74,7 +74,7 @@ export default async function handler(
     "address",
     "start_date",
     "end_date",
-    "vat_type", 
+    "vat_type",
   ];
 
   // Filter out empty/null fields
@@ -162,8 +162,8 @@ export default async function handler(
   const { error: historyUpdateError } = await supabase
     .from("history")
     .update({
-      ...historyUpdateData,
       tsm_approved_status: "Pending",
+      delivery_fee: body.delivery_fee ?? null, // dito mo kukunin ang value mula sa body
     })
     .eq("id", id);
 

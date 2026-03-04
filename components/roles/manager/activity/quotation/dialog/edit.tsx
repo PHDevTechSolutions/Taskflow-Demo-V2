@@ -114,6 +114,7 @@ interface TaskListEditDialogProps {
     email_address?: string;
     address?: string;
     quotation_number?: string;
+    deliveryFee?: string;
 
     // Signatories
     agentName?: string;
@@ -145,6 +146,7 @@ export default function TaskListEditDialog({
     tsmemail,
     tsmcontact,
     managername,
+    deliveryFee,
 
     // Signatories
     agentName,
@@ -242,6 +244,7 @@ export default function TaskListEditDialog({
         setPreviewStates(products.map(() => true));
     }, [products]);
 
+    // ✅ Update the quotationAmount calculation to include delivery fee
     useEffect(() => {
         let total = 0;
         products.forEach((p, idx) => {
@@ -257,8 +260,12 @@ export default function TaskListEditDialog({
 
             total += lineTotal;
         });
-        setQuotationAmount(total);
-    }, [products, checkedRows, discount, vatType]);
+
+        const deliveryFeeNumber = parseFloat(deliveryFee ?? "0") || 0; // convert delivery fee to number
+        const totalWithDelivery = total + deliveryFeeNumber; // ✅ add delivery fee
+
+        setQuotationAmount(totalWithDelivery); // total including delivery fee
+    }, [products, checkedRows, discount, vatType, deliveryFee]);
 
     // Download handler with your given logic integrated
     const getQuotationPayload = () => {
@@ -315,6 +322,7 @@ export default function TaskListEditDialog({
             items,
             vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
             totalPrice: Number(quotationAmount ?? 0),
+            deliveryFee: deliveryFee ?? "0",
             salesRepresentative: salesRepresentativeName,
             salesemail,
             salescontact: contact ?? "",
@@ -668,6 +676,11 @@ export default function TaskListEditDialog({
         </span>
         </div>
         </td>
+        <td style="width: 120px; text-align:left;" class="grand-total-label">Delivery Fee:</td>
+        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.deliveryFee}</td>
+        </tr>
+        <tr class="summary-bar">
+        <td colspan="3" ></td>
         <td style="width: 120px; text-align:left;" class="grand-total-label">Grand Total:</td>
         <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>

@@ -69,6 +69,8 @@ interface Props {
   typeClient: string;
   setTypeClient: (value: string) => void;
   vatType: string;
+  setDeliveryFee: (value: string) => void;
+  deliveryFee: string;
   setVatType: (value: string) => void;
   handleBack: () => void;
   handleNext: () => void;
@@ -162,6 +164,7 @@ export function QuotationSheet(props: Props) {
     status, setStatus,
     tsm, setTSM,
     typeClient, setTypeClient,
+    deliveryFee, setDeliveryFee,
     handleBack,
     handleNext,
     handleSave,
@@ -305,18 +308,22 @@ export function QuotationSheet(props: Props) {
 
   useEffect(() => {
     // Calculate total quotation amount considering discount per product
-    const total = selectedProducts.reduce((acc, p) => {
+    const productTotal = selectedProducts.reduce((acc, p) => {
       const isDiscounted = p.isDiscounted ?? false;
       const baseAmount = p.price * p.quantity;
-      const rowDiscount = isDiscounted ? (p.discount ?? 0) : 0; // use per-product discount
+      const rowDiscount = isDiscounted ? (p.discount ?? 0) : 0; // per-product discount
       const discountedAmount = (baseAmount * rowDiscount) / 100;
       const totalAfterDiscount = baseAmount - discountedAmount;
 
       return acc + totalAfterDiscount;
     }, 0);
 
-    setQuotationAmount(total.toFixed(2)); // keeps it as string, or remove toFixed if number
-  }, [selectedProducts]);
+    // Add delivery fee (parse it to number safely)
+    const deliveryFeeNumber = parseFloat(deliveryFee) || 0;
+    const totalWithDelivery = productTotal + deliveryFeeNumber;
+
+    setQuotationAmount(totalWithDelivery.toFixed(2)); // keeps it as string
+  }, [selectedProducts, deliveryFee, discount]); // also watch deliveryFee and discount
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -603,6 +610,7 @@ export function QuotationSheet(props: Props) {
       items,
       vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
       totalPrice: Number(quotationAmount ?? 0),
+      deliveryFee: deliveryFee,
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
@@ -612,7 +620,7 @@ export function QuotationSheet(props: Props) {
       salesManagerEmail: salesManagerEmail ?? "",
       tsmDetails,
       managerDetails,
-      signature
+      signature,
     };
   };
 
@@ -2229,7 +2237,19 @@ ${spec.value}
                         </td>
 
                         {/* Action Column: leave empty */}
-                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-sm whitespace-nowrap">Delivery Fee:</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
+                              placeholder="0.00"
+                              value={deliveryFee}
+                              onChange={(e) => setDeliveryFee(e.target.value)}
+                            />
+                          </div>
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -2407,6 +2427,13 @@ ${spec.value}
                               </span>
                             </div>
                           </td>
+                          <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Delivery Fee:</td>
+                          <td className="px-4 text-right font-black text-lg">
+                            ₱{payload.deliveryFee}
+                          </td>
+                        </tr>
+                        <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
+                          <td colSpan={4} className="border-r border-white/20"></td>
                           <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
                           <td className="px-4 text-right font-black text-lg">
                             ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}

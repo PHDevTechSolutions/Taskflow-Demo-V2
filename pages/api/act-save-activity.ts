@@ -4,7 +4,10 @@ import redis from "../../lib/redis";
 
 const safe = (v: any) => (v === undefined || v === "" ? null : v);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
@@ -30,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       callback,
       call_status,
       call_type,
+
       product_category,
       product_quantity,
       product_amount,
@@ -37,12 +41,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       product_photo,
       product_sku,
       product_title,
+
       project_type,
       project_name,
       quotation_number,
       quotation_amount,
       quotation_type,
       quotation_status,
+
       so_number,
       so_amount,
       si_date,
@@ -52,34 +58,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       delivery_date,
       date_followup,
       remarks,
+
       agent,
       start_date,
       end_date,
       tsm_approved_status,
       vat_type,
+      delivery_fee,
 
       // Signatories
-      // Agent
       contact,
       email,
       signature,
       agent_name,
-      // TSM
       tsmname,
-      // Manager
       managername,
     } = req.body;
 
-    // Basic required field validation
+    /* ================= VALIDATION ================= */
+
     if (!activity_reference_number)
       return res.status(400).json({ error: "Missing activity_reference_number" });
+
     if (!account_reference_number)
       return res.status(400).json({ error: "Missing account_reference_number" });
-    if (!status) return res.status(400).json({ error: "Missing status" });
+
+    if (!status)
+      return res.status(400).json({ error: "Missing status" });
+
     if (!type_activity)
       return res.status(400).json({ error: "Missing type_activity" });
 
-    // Validate product fields if provided, all should be strings (likely CSV or JSON string)
+    // 🚨 REQUIRED for quotation prep
+    if (type_activity === "Quotation Preparation" && !quotation_number) {
+      return res.status(400).json({
+        error: "quotation_number is required for Quotation Preparation",
+      });
+    }
+
+    /* ================= PRODUCT VALIDATION ================= */
+
     const productFields = {
       product_category,
       product_quantity,
@@ -92,11 +110,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const [key, value] of Object.entries(productFields)) {
       if (value !== undefined && typeof value !== "string") {
-        return res.status(400).json({ error: `Invalid ${key} format, must be string` });
+        return res
+          .status(400)
+          .json({ error: `Invalid ${key}, must be string` });
       }
     }
 
-    // Validate lengths of product-related arrays if all present
     if (
       product_category &&
       product_quantity &&
@@ -106,38 +125,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       product_sku &&
       product_title
     ) {
-      const categories = product_category.split(",");
-      const quantities = product_quantity.split(",");
-      const amounts = product_amount.split(",");
-      const descriptions = product_description.split("||"); // assuming you joined descriptions with "||"
-      const photos = product_photo.split(",");
-      const skus = product_sku.split(",");
-      const titles = product_title.split(",");
-
-      const lengthSet = new Set([
-        categories.length,
-        quantities.length,
-        amounts.length,
-        descriptions.length,
-        photos.length,
-        skus.length,
-        titles.length,
+      const lengths = new Set([
+        product_category.split(",").length,
+        product_quantity.split(",").length,
+        product_amount.split(",").length,
+        product_description.split("||").length,
+        product_photo.split(",").length,
+        product_sku.split(",").length,
+        product_title.split(",").length,
       ]);
 
-      if (lengthSet.size !== 1) {
-        return res.status(400).json({ error: "Product arrays length mismatch" });
+      if (lengths.size !== 1) {
+        return res
+          .status(400)
+          .json({ error: "Product arrays length mismatch" });
       }
     }
 
-    // Check cache for existing entry
-    const cacheKey = `history:${activity_reference_number}`;
-    const cached = await redis.get(cacheKey);
+    /* ================= INSERT HISTORY ================= */
 
-    if (cached && typeof cached === "string") {
-      return res.status(200).json({ success: true, data: JSON.parse(cached), cached: true });
-    }
-
-    // Insert into Supabase "history" table
     const { data, error } = await supabase
       .from("history")
       .insert({
@@ -151,18 +157,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         contact_number: safe(contact_number),
         email_address: safe(email_address),
         address: safe(address),
+
         activity_reference_number,
         account_reference_number,
         ticket_reference_number,
         status,
         type_activity,
+
         source: safe(source),
         callback: safe(callback),
         call_status: safe(call_status),
         call_type: safe(call_type),
 
-        // Array Data Can Submit More Than 10k Characters
-        // No Extra Characters Input Like N/ and Other the Splitter is Comma or ""
         product_category: safe(product_category),
         product_quantity: safe(product_quantity),
         product_amount: safe(product_amount),
@@ -173,10 +179,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         project_type: safe(project_type),
         project_name: safe(project_name),
+
         quotation_number: safe(quotation_number),
         quotation_amount: safe(quotation_amount),
         quotation_type: safe(quotation_type),
         quotation_status: safe(quotation_status),
+
         so_number: safe(so_number),
         so_amount: safe(so_amount),
         si_date: safe(si_date),
@@ -185,59 +193,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         payment_terms: safe(payment_terms),
         delivery_date: safe(delivery_date),
         date_followup: safe(date_followup),
+
         remarks: safe(remarks),
         start_date: safe(start_date),
         end_date: safe(end_date),
         agent: safe(agent),
         tsm_approved_status: safe(tsm_approved_status),
         vat_type: safe(vat_type),
+        delivery_fee: safe(delivery_fee),
       })
       .select();
 
     if (error) {
-      console.error("Supabase Insert Error:", error);
+      console.error("History Insert Error:", error);
       return res.status(500).json({ error: error.message });
     }
 
-    // Insert signature sa signatories table
-    // Insert into SIGNATORIES
-    // ✅ ONLY if type_activity === "Quotation Preparation"
+    /* ================= SIGNATORIES (QUOTATION ONLY) ================= */
+
     if (type_activity === "Quotation Preparation") {
-      const { error: sigError } = await supabase
+      const { data: existing } = await supabase
         .from("signatories")
-        .insert({
-          referenceid: safe(referenceid),
-          activity_reference_number,
-          quotation_number: safe(quotation_number),
+        .select("id")
+        .eq("quotation_number", quotation_number)
+        .maybeSingle();
 
-          // Agent
-          agent_contact_number: safe(contact),
-          agent_email_address: safe(email),
-          agent_signature: safe(signature),
-          agent_name: safe(agent_name),
+      if (!existing) {
+        const { error: sigError } = await supabase
+          .from("signatories")
+          .insert({
+            referenceid: safe(referenceid),
+            activity_reference_number,
+            quotation_number: safe(quotation_number),
 
-          // TSM
-          tsm: safe(tsm),
-          tsm_name: safe(tsmname),
+            agent_contact_number: safe(contact),
+            agent_email_address: safe(email),
+            agent_signature: safe(signature),
+            agent_name: safe(agent_name),
 
-          // Manager
-          manager: safe(manager),
-          manager_name: safe(managername),
+            tsm: safe(tsm),
+            tsm_name: safe(tsmname),
 
-          date_created: new Date().toISOString(),
-        });
+            manager: safe(manager),
+            manager_name: safe(managername),
 
-      if (sigError) {
-        console.error("Supabase Signatories Insert Error:", sigError);
-        return res.status(500).json({ error: sigError.message });
+            date_created: new Date().toISOString(),
+          });
+
+        if (sigError) {
+          console.error("Signatories Insert Error:", sigError);
+          return res.status(500).json({ error: sigError.message });
+        }
       }
     }
 
-    // Cache inserted data for 5 minutes
-    await redis.set(cacheKey, JSON.stringify(data), { ex: 300 });
+    /* ================= SUCCESS ================= */
 
-    return res.status(200).json({ success: true, data, cached: false });
-  } catch (err: any) {
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (err) {
     console.error("Server Error:", err);
     return res.status(500).json({ error: "Server Error" });
   }

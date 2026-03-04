@@ -34,6 +34,7 @@ type Payload = {
     items: Item[];
     totalPrice: number;
     vatType?: string | null;
+    deliveryFee?: string;
     salesManagerContact?: string;
     salesManagerEmail?: string;
 
@@ -191,11 +192,20 @@ export const Preview: React.FC<PreviewProps> = ({
                                         </span>
                                     </div>
                                 </td>
+                                <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Delivery Fee:</td>
+                                <td className="px-4 text-right font-black text-lg">
+                                    ₱{payload.deliveryFee}
+                                </td>
+                            </tr>
+
+                            <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
+                                <td colSpan={4} className="border-r border-white/20"></td>
                                 <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
                                 <td className="px-4 text-right font-black text-lg">
                                     ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                             </tr>
+                            
                         </tbody>
                     </table>
                 </div>

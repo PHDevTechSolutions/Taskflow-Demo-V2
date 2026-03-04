@@ -43,6 +43,7 @@ interface Completed {
     email_address?: string;
     address?: string;
     region?: string;
+    delivery_fee?: string;
 }
 
 interface ProductItem {
@@ -129,6 +130,7 @@ interface TaskListEditDialogProps {
     address?: string;
     quotation_number?: string;
     vatType?: string;
+    deliveryFee?: string;
 
     // Signatories
     agentSignature?: string;
@@ -159,6 +161,7 @@ export default function TaskListEditDialog({
     tsmcontact,
     managername,
     vatType,
+    deliveryFee,
 
     // Signatories
     agentSignature,
@@ -192,11 +195,11 @@ export default function TaskListEditDialog({
             : "zero_rated";
 
     const [vatTypeState, setVatTypeState] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">(initialVatType);
+    const [deliveryFeeState, setDeliveryFeeState] = useState<string>(deliveryFee ?? "");
     // Confirmation dialog state
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<RevisedQuotation | null>(null);
     const [revisedQuotations, setRevisedQuotations] = useState<RevisedQuotation[]>([]);
-
 
     const activityReferenceNumber = item.activity_reference_number;
 
@@ -338,8 +341,6 @@ export default function TaskListEditDialog({
         });
     };
 
-
-
     function serializeArrayFixed(arr: (string | undefined | null)[]): string {
         return arr.map(v => v ?? "").join(",");
     }
@@ -372,6 +373,13 @@ export default function TaskListEditDialog({
                 products.map(p => p.product_sku)
             );
 
+            // Convert deliveryFee to number
+            const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+
+            // Add delivery fee to quotation amount
+            const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum;
+
+
             const bodyData: Completed & { vat_type?: "vat_inc" | "vat_exe" | "zero_rated" } = {
                 id: item.id,
                 product_quantity,
@@ -380,10 +388,11 @@ export default function TaskListEditDialog({
                 product_description,
                 product_photo,
                 product_sku,
-                quotation_amount: quotationAmount,
+                quotation_amount: totalQuotationAmount,
                 quotation_type: item.quotation_type,
                 quotation_number: item.quotation_number,
-                vat_type: vatTypeState, // <-- dito natin isinama ang VAT type
+                vat_type: vatTypeState,
+                delivery_fee: deliveryFeeState,
                 // New Added
                 activity_reference_number: item.activity_reference_number,
                 referenceid: item.referenceid,
@@ -395,7 +404,7 @@ export default function TaskListEditDialog({
                 email_address: item.email_address,
                 address: item.address,
                 start_date: startDate,
-                end_date: endDate
+                end_date: endDate,
             };
 
             const res = await fetch(`/api/act-update-history?id=${item.id}`, {
@@ -532,6 +541,10 @@ export default function TaskListEditDialog({
             }
         };
 
+        const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+        // Add delivery fee to totalPrice
+        const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum;
+
         return {
             referenceNo: quotationNumber ?? "DRAFT-XXXX", date: new Date().toLocaleDateString(),
             companyName: company_name ?? "",
@@ -542,7 +555,7 @@ export default function TaskListEditDialog({
             subject: "For Quotation",
             items,
             vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-            totalPrice: Number(quotationAmount ?? 0),
+            totalPrice: totalPriceWithDelivery,
             salesRepresentative: salesRepresentativeName,
             salesemail,
             salescontact: contact ?? "",
@@ -552,6 +565,7 @@ export default function TaskListEditDialog({
 
             salesmanagername: managername ?? "",
             vatType: vatType ?? null,
+            deliveryFee: deliveryFee ?? "",
             // Signatories
             agentSignature: agentSignature ?? null,
             agentContactNumber: agentContactNumber ?? null,
@@ -1183,6 +1197,11 @@ export default function TaskListEditDialog({
         </span>
         </div>
         </td>
+        <td style="width: 120px; text-align:left;" class="grand-total-label">Delivery Fee:</td>
+        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.deliveryFee}</td>
+        </tr>
+        <tr class="summary-bar">
+        <td colspan="3" ></td>
         <td style="width: 120px; text-align:left;" class="grand-total-label">Grand Total:</td>
         <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
@@ -1926,6 +1945,22 @@ export default function TaskListEditDialog({
                                     })}
                                 </tbody>
                             </table>
+                            <div className="border border-gray-300 p-2">
+                                <div className="flex items-center justify-end">
+                                    <span className="text-sm mr-2 whitespace-nowrap">Delivery Fee:</span>
+
+                                    <div className="flex items-center border border-gray-300 px-2 py-1">
+                                        <span className="text-sm mr-1">₱</span>
+                                        <input
+                                            type="text"
+                                            className="w-20 text-right outline-none bg-transparent"
+                                            placeholder="0.00"
+                                            value={deliveryFeeState}
+                                            onChange={(e) => setDeliveryFeeState(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

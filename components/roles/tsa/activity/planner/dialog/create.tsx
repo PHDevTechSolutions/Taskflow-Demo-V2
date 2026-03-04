@@ -66,6 +66,7 @@ interface Activity {
     product_sku?: string;
     product_title?: string;
     vat_type: string;
+    delivery_fee: string;
 
     project_type?: string;
     project_name?: string;
@@ -200,6 +201,7 @@ export function CreateActivityDialog({
     const [productSku, setProductSku] = useState("");
     const [productTitle, setProductTitle] = useState("");
     const [vatType, setVatType] = useState("");
+    const [deliveryFee, setDeliveryFee] = useState("");
 
     const [projectType, setProjectType] = useState("");
     const [projectName, setProjectName] = useState("");
@@ -462,6 +464,7 @@ export function CreateActivityDialog({
             product_sku: productSku || undefined,
             product_title: productTitle || undefined,
             vat_type: vatType,
+            delivery_fee: deliveryFee,
 
             project_type: projectType || undefined,
             project_name: projectName || undefined,
@@ -991,6 +994,9 @@ export function CreateActivityDialog({
                                     // Pass vatType here
                                     vatType={vatType}
                                     setVatType={setVatType}
+
+                                    deliveryFee={deliveryFee}
+                                    setDeliveryFee={setDeliveryFee}
 
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
