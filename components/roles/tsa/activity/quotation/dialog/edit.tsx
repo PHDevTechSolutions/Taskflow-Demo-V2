@@ -2028,7 +2028,7 @@ export default function TaskListEditDialog({
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
                             </Button>
 
-                            {(ApprovedStatus === "Pending" || ApprovedStatus === "Approved By Sales Head") && (
+                            {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
                                 <div className="flex gap-2">
                                     <Button
                                         type="button"
