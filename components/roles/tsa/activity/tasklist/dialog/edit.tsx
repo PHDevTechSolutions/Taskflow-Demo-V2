@@ -21,6 +21,7 @@ interface Completed {
   project_type?: string;
   source?: string;
   call_status?: string;
+  call_type?: string; 
   quotation_number?: string;
   quotation_amount?: number;
   quotation_status?: string;
@@ -61,6 +62,7 @@ const editableFields: (keyof Completed)[] = [
   "project_type",
   "source",
   "type_activity", // disabled input
+  "call_type",
   "call_status",
   "quotation_amount",
   "quotation_status",

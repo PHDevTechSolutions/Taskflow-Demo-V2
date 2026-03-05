@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "source",
     "type_activity",
     "call_status",
+    "call_type"
   ];
 
   const filteredData: Record<string, any> = {};
