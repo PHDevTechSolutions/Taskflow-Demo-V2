@@ -67,6 +67,7 @@ interface Activity {
     product_title?: string;
     vat_type: string;
     delivery_fee: string;
+    item_remarks?: string;
 
     project_type?: string;
     project_name?: string;
@@ -202,6 +203,7 @@ export function CreateActivityDialog({
     const [productTitle, setProductTitle] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
+    const [itemRemarks, setItemRemarks] = useState("");
 
     const [projectType, setProjectType] = useState("");
     const [projectName, setProjectName] = useState("");
@@ -261,6 +263,7 @@ export function CreateActivityDialog({
         quotationAmount: "",
         quotationType: "",
         quotationStatus: "",
+        itemRemarks: "",
         soNumber: "",
         soAmount: "",
         siDate: "",
@@ -285,6 +288,7 @@ export function CreateActivityDialog({
         setProductPhoto(initialState.productPhoto);
         setProductSku(initialState.productSku);
         setProductTitle(initialState.productTitle);
+        setItemRemarks(initialState.itemRemarks);
         setProjectType(initialState.projectType);
         setProjectName(initialState.projectName);
         setQuotationNumber(initialState.quotationNumber);
@@ -465,6 +469,7 @@ export function CreateActivityDialog({
             product_title: productTitle || undefined,
             vat_type: vatType,
             delivery_fee: deliveryFee,
+            item_remarks: itemRemarks || undefined,
 
             project_type: projectType || undefined,
             project_name: projectName || undefined,
@@ -997,6 +1002,8 @@ export function CreateActivityDialog({
 
                                     deliveryFee={deliveryFee}
                                     setDeliveryFee={setDeliveryFee}
+                                    itemRemarks={itemRemarks}
+                                    setItemRemarks={setItemRemarks}
 
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}

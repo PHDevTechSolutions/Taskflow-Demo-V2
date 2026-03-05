@@ -28,6 +28,7 @@ interface Completed {
     product_photo?: string;
     product_title?: string;
     product_sku?: string;
+    item_remarks?: string;
     quotation_number?: string;
     quotation_amount?: number | string;
     quotation_type: string;
@@ -60,6 +61,7 @@ interface ProductItem {
     product_photo?: string;
     product_title?: string;
     product_sku?: string;
+    item_remarks?: string;
     discount?: number;
 }
 
@@ -80,6 +82,7 @@ interface Product {
     images?: { src: string }[];
     skus?: string[];
     price?: string;
+    remarks?: string;
 }
 
 interface RevisedQuotation {
@@ -96,6 +99,7 @@ interface RevisedQuotation {
     product_amount: string;
     product_photo: string;
     product_sku: string;
+    item_remarks: string;
 }
 
 interface TaskListEditDialogProps {
@@ -248,6 +252,7 @@ export default function TaskListEditDialog({
     const productTitle = item.product_title || "";
     const productSku = item.product_sku || "";
     const productDescription = item.product_description || "";
+    const itemRemarks = item.item_remarks || "";
     const address = company?.address || ""; // add if available
     const email_address = company?.email_address || ""; // add if available
     const contact_person = company?.contact_person || ""; // add if available
@@ -262,6 +267,7 @@ export default function TaskListEditDialog({
         const descriptions = splitDescription(item.product_description);
         const photos = splitAndTrim(item.product_photo);
         const sku = splitAndTrim(item.product_sku);
+        const remarks = splitAndTrim(item.item_remarks);
 
         const maxLen = Math.max(
             quantities.length,
@@ -269,7 +275,8 @@ export default function TaskListEditDialog({
             titles.length,
             descriptions.length,
             photos.length,
-            sku.length
+            sku.length,
+            remarks.length,
         );
 
         const arr: ProductItem[] = [];
@@ -281,6 +288,7 @@ export default function TaskListEditDialog({
                 product_description: descriptions[i] ?? "",
                 product_photo: photos[i] ?? "",
                 product_sku: sku[i] ?? "",
+                item_remarks: remarks[i] ?? "",
                 quantity: 0,
                 description: "",
                 skus: undefined,
@@ -361,6 +369,10 @@ export default function TaskListEditDialog({
                 products.map(p => p.product_title)
             );
 
+            const item_remarks = serializeArrayFixed(
+                products.map(p => p.item_remarks)
+            );
+
             const product_description = products
                 .map(p => (p.description?.trim() ? p.description : p.product_description || ""))
                 .join(" || ");
@@ -388,6 +400,7 @@ export default function TaskListEditDialog({
                 product_description,
                 product_photo,
                 product_sku,
+                item_remarks,
                 quotation_amount: totalQuotationAmount,
                 quotation_type: item.quotation_type,
                 quotation_number: item.quotation_number,
@@ -481,6 +494,7 @@ export default function TaskListEditDialog({
                 photo: p.product_photo ?? "",
                 title: p.product_title ?? "",
                 sku: p.product_sku ?? "",
+                remarks: p.item_remarks ?? "",
                 product_description: p.description?.trim()
                     ? p.description
                     : p.product_description || "",
@@ -589,6 +603,7 @@ export default function TaskListEditDialog({
         const titles = productTitle ? productTitle.split(",") : [];
         const skus = productSku ? productSku.split(",") : [];
         const descriptions = productDescription ? productDescription.split("||") : [];
+        const remarks = itemRemarks ? itemRemarks.split(",") : [];
 
         const salesRepresentativeName = `${firstname} ${lastname}`;
 
@@ -725,6 +740,7 @@ export default function TaskListEditDialog({
                 product_photo: product.images?.[0]?.src || "",
                 product_sku: product.skus?.[0] || "",
                 description: product.description || "",
+                item_remarks: product.remarks || "",
                 skus: product.skus || [],
                 title: product.title || "",
                 images: product.images || [],
@@ -774,6 +790,7 @@ export default function TaskListEditDialog({
                 product_photo: p.images?.[0]?.src || "",
                 product_title: p.title,
                 product_sku: p.skus?.[0] || "",
+                item_remarks: p.remarks?.[0] || "",
             }));
 
             setProducts(mappedProducts);
@@ -795,6 +812,7 @@ export default function TaskListEditDialog({
             const descriptions = splitDescription(selectedRevisedQuotation.product_description);
             const photos = splitAndTrim(selectedRevisedQuotation.product_photo);
             const sku = splitAndTrim(selectedRevisedQuotation.product_sku);
+            const remarks = splitAndTrim(selectedRevisedQuotation.item_remarks);
 
             const maxLen = Math.max(
                 quantities.length,
@@ -802,7 +820,8 @@ export default function TaskListEditDialog({
                 titles.length,
                 descriptions.length,
                 photos.length,
-                sku.length
+                sku.length,
+                remarks.length
             );
 
             const arr: ProductItem[] = [];
@@ -814,6 +833,7 @@ export default function TaskListEditDialog({
                     product_description: descriptions[i] ?? "",
                     product_photo: photos[i] ?? "",
                     product_sku: sku[i] ?? "",
+                    item_remarks: remarks[i] ?? "",
                     quantity: 0,
                     description: "",
                     skus: [],
@@ -973,7 +993,7 @@ export default function TaskListEditDialog({
             .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
             .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
             .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
-            .terms-val { padding: 4px 12px;}
+            .terms-val { padding: 0px 4px;}
             .terms-highlight { background-color: #fef9c3; }
             .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             
@@ -994,7 +1014,7 @@ export default function TaskListEditDialog({
             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
             .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
             .sig-line { border-bottom: 1px solid black; width: 256px; }
-            .sig-rep-box { width: 150px; height: 15px; display: flex; align-items: center; 
+            .sig-rep-box { width: 150px; height: 25px; display: flex; align-items: center; 
             justify-content: center; text-align: center; font-size: 8px; 
             font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px;
             }
@@ -1146,7 +1166,7 @@ export default function TaskListEditDialog({
           <div class="content-area">
           <table class="main-table" style="border: 1.5px solid black; border-top: none;">
           <tr>
-          <td style="width: 40px;" class="item-no">${index + 1}</td>
+          <td style="width: 40px;" class="item-no">${index + 1}. ${item.remarks}</td>
           <td style="width: 40px;" class="qty-col">${item.qty}</td>
           <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
           <td style="width: 200px;">
@@ -1747,6 +1767,7 @@ export default function TaskListEditDialog({
                                                 setCheckedRows(newChecked);
                                             }}
                                         /> Check All</th>
+                                        {/*<th className="border p-4 text-left w-45">Item Remarks</th>*/}
                                         <th className="border p-4 text-left w-45">Product</th>
                                         <th className="border p-4 text-center w-5">Quantity</th>
                                         <th className="border p-4 text-center w-15">Amount</th>
@@ -1786,6 +1807,7 @@ export default function TaskListEditDialog({
                                                                     setCheckedRows((prev) => ({ ...prev, [index]: e.target.checked }))
                                                                 }
                                                             />
+                                                            
                                                             <Input
                                                                 type="number"
                                                                 min={0}
@@ -1805,6 +1827,20 @@ export default function TaskListEditDialog({
 
                                                         </div>
                                                     </td>
+
+                                                    {/*<td className="border border-gray-300 p-2 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <Input
+                                                                type="text"
+                                                                value={product.item_remarks ?? ""} // safe fallback
+                                                                onChange={(e) =>
+                                                                    handleProductChange(index, "item_remarks", e.target.value)
+                                                                }
+                                                                placeholder="Enter remarks"
+                                                                className="border-none rounded-none shadow-none text-xs w-full"
+                                                            />
+                                                        </div>
+                                                    </td>*/}
 
                                                     {/* Product Photo */}
                                                     <td className="p-2 align-top">
@@ -1992,7 +2028,7 @@ export default function TaskListEditDialog({
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
                             </Button>
 
-                            {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
+                            {(ApprovedStatus === "Pending" || ApprovedStatus === "Approved By Sales Head") && (
                                 <div className="flex gap-2">
                                     <Button
                                         type="button"

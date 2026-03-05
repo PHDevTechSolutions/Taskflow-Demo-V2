@@ -71,6 +71,8 @@ interface Props {
   vatType: string;
   setDeliveryFee: (value: string) => void;
   deliveryFee: string;
+  setItemRemarks: (value: string) => void;
+  itemRemarks: string;
   setVatType: (value: string) => void;
   handleBack: () => void;
   handleNext: () => void;
@@ -109,6 +111,7 @@ interface Product {
   id: string | number;
   title: string;
   description?: string;
+  itemRemarks?: string;
   brand?: string;
   images?: Array<{
     src: string;
@@ -165,6 +168,7 @@ export function QuotationSheet(props: Props) {
     tsm, setTSM,
     typeClient, setTypeClient,
     deliveryFee, setDeliveryFee,
+    itemRemarks, setItemRemarks,
     handleBack,
     handleNext,
     handleSave,
@@ -340,6 +344,7 @@ export function QuotationSheet(props: Props) {
     const photos = selectedProducts.map((p) => p.images?.[0]?.src || "");
     const skus = selectedProducts.map((p) => (p.skus && p.skus.length > 0 ? p.skus[0] : ""));
     const titles = selectedProducts.map((p) => p.title);
+    const remarks = selectedProducts.map((p) => p.itemRemarks || "");
 
     setProductCat(ids.join(","));
     setProductQuantity(quantities.join(","));
@@ -348,6 +353,7 @@ export function QuotationSheet(props: Props) {
     setProductPhoto(photos.join(","));
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
+    setItemRemarks(remarks.join(","));
   }, [
     selectedProducts,
     setProductCat,
@@ -357,6 +363,7 @@ export function QuotationSheet(props: Props) {
     setProductPhoto,
     setProductSku,
     setProductTitle,
+    setItemRemarks,
   ]);
 
   // Save handler with validation
@@ -592,6 +599,7 @@ export function QuotationSheet(props: Props) {
         title: p.title ?? "",
         sku: p.skus?.join(", ") ?? "",
         description: p.description ?? "",
+        itemRemarks: p.itemRemarks ?? "",
         unitPrice,
         discount,
         totalAmount,
@@ -1949,6 +1957,7 @@ ${spec.value}
                             <span className="text-xs font-medium">All</span>
                           </label>
                         </th>
+                        {/*<th className="border p-4 text-left w-5">Remarks</th>*/}
                         <th className="border p-4 text-left w-100">Product</th>
                         <th className="border p-4 text-center w-5">Quantity</th>
                         <th className="border p-4 text-center w-15">Price</th>
@@ -2017,6 +2026,23 @@ ${spec.value}
                                   )}
                                 </div>
                               </td>
+
+                              {/*<td>
+                                <Textarea
+                                  value={p.itemRemarks || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSelectedProducts((prev) => {
+                                      const copy = [...prev];
+                                      copy[idx] = { ...copy[idx], itemRemarks: val };
+                                      return copy;
+                                    });
+                                  }}
+                                  placeholder="Enter any remarks here..."
+                                  rows={3}
+                                  className="capitalize rounded-none text-[10px] w-full p-1"
+                                />
+                              </td>*/}
 
                               <td className="p-2 flex items-center gap-2">
                                 {/* Product Image */}
@@ -2196,8 +2222,9 @@ ${spec.value}
                       <tr>
                         {/* Vat Adjust Column */}
                         <td className="border border-gray-300 p-2 text-center">
-
                         </td>
+                        {/*<td className="border border-gray-300 p-2 text-center">
+                        </td>/*}
 
                         {/* Product Column: leave empty */}
                         <td className="border border-gray-300 p-2"></td>
@@ -2383,7 +2410,7 @@ ${spec.value}
                       <tbody className="divide-y divide-black">
                         {payload.items.map((item, idx) => (
                           <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
+                            <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400 capitalize"><span className="font-bold text-black">{item.itemNo}.</span> {item.itemRemarks}</td>
                             <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
                             <td className="p-3 border-r border-black align-top bg-white">
                               {item.photo ? (

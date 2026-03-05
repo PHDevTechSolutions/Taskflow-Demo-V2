@@ -13,6 +13,7 @@ type Item = {
     product_description: string;
     unitPrice: number;
     totalAmount: number;
+    remarks: string;
 };
 
 type Payload = {
@@ -149,7 +150,7 @@ export const Preview: React.FC<PreviewProps> = ({
                         <tbody className="divide-y divide-black">
                             {payload.items.map((item, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
+                                    <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}. {item.remarks}</td>
                                     <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
                                     <td className="p-3 border-r border-black align-top bg-white">
                                         {item.photo ? (

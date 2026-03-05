@@ -75,6 +75,7 @@ export default async function handler(
     "start_date",
     "end_date",
     "vat_type",
+    "item_remarks"
   ];
 
   // Filter out empty/null fields
@@ -163,7 +164,9 @@ export default async function handler(
     .from("history")
     .update({
       tsm_approved_status: "Pending",
-      delivery_fee: body.delivery_fee ?? null, // dito mo kukunin ang value mula sa body
+      delivery_fee: body.delivery_fee ?? null,
+      vat_type: body.vat_type ?? null,
+      item_remarks: body.item_remarks ?? null, // dito mo kukunin ang value mula sa body
     })
     .eq("id", id);
 

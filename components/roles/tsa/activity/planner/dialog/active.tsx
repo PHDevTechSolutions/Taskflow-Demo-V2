@@ -359,7 +359,7 @@ export function AccountDialog({
       case 1:
         return (
           formData.address.trim() !== "" &&
-          formData.delivery_address.length > 0 &&
+          (formData.delivery_address?.length ?? 0) > 0 &&
           formData.region !== ""
         );
       case 2:

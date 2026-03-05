@@ -41,6 +41,7 @@ export default async function handler(
       product_photo,
       product_sku,
       product_title,
+      item_remarks,
 
       project_type,
       project_name,
@@ -106,6 +107,7 @@ export default async function handler(
       product_photo,
       product_sku,
       product_title,
+      item_remarks,
     };
 
     for (const [key, value] of Object.entries(productFields)) {
@@ -123,7 +125,8 @@ export default async function handler(
       product_description &&
       product_photo &&
       product_sku &&
-      product_title
+      product_title &&
+      item_remarks
     ) {
       const lengths = new Set([
         product_category.split(",").length,
@@ -133,6 +136,7 @@ export default async function handler(
         product_photo.split(",").length,
         product_sku.split(",").length,
         product_title.split(",").length,
+        item_remarks.split(",").length,
       ]);
 
       if (lengths.size !== 1) {
@@ -176,6 +180,7 @@ export default async function handler(
         product_photo: safe(product_photo),
         product_sku: safe(product_sku),
         product_title: safe(product_title),
+        item_remarks: safe(item_remarks),
 
         project_type: safe(project_type),
         project_name: safe(project_name),
