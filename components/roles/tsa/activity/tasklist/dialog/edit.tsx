@@ -1,11 +1,24 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sileo } from "sileo";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
@@ -21,7 +34,7 @@ interface Completed {
   project_type?: string;
   source?: string;
   call_status?: string;
-  call_type?: string; 
+  call_type?: string;
   quotation_number?: string;
   quotation_amount?: number;
   quotation_status?: string;
@@ -61,7 +74,7 @@ const editableFields: (keyof Completed)[] = [
   "project_name",
   "project_type",
   "source",
-  "type_activity", // disabled input
+  "type_activity",
   "call_type",
   "call_status",
   "quotation_amount",
@@ -73,77 +86,6 @@ const editableFields: (keyof Completed)[] = [
   "dr_number",
   "remarks",
   "payment_terms",
-];
-
-const sourceOptions = [
-  {
-    label: "Existing Client",
-    description: "Clients with active accounts or previous transactions.",
-  },
-  {
-    label: "CSR Inquiry",
-    description: "Customer Service Representative inquiries.",
-  },
-  {
-    label: "Government",
-    description: "Calls coming from government agencies.",
-  },
-  {
-    label: "Philgeps Website",
-    description: "Inquiries from Philgeps online platform.",
-  },
-  {
-    label: "Philgeps",
-    description: "Other Philgeps related contacts.",
-  },
-  {
-    label: "Distributor",
-    description: "Calls from product distributors or resellers.",
-  },
-  {
-    label: "Modern Trade",
-    description: "Contacts from retail or modern trade partners.",
-  },
-  {
-    label: "Facebook Marketplace",
-    description: "Leads or inquiries from Facebook Marketplace.",
-  },
-  {
-    label: "Walk-in Showroom",
-    description: "Visitors physically coming to showroom.",
-  },
-];
-
-const paymentTermsOptions = [
-  {
-    label: "COD",
-    description: "Customer pays the full amount upon delivery of the items.",
-  },
-  {
-    label: "Check",
-    description:
-      "Payment will be made through dated or current check upon delivery or agreed schedule.",
-  },
-  {
-    label: "Cash",
-    description:
-      "Customer pays in cash either upon order confirmation or delivery.",
-  },
-  {
-    label: "Bank Deposit",
-    description:
-      "Payment is sent via bank transfer or direct deposit to the company account.",
-  },
-  {
-    label: "GCash",
-    description:
-      "Customer pays via GCash wallet transfer prior to or during delivery.",
-  },
-  {
-    label: "Terms",
-    description:
-      "Payment follows an agreed credit term (e.g., 30/45/60 days) after delivery.",
-  },
 ];
 
 const quotationStatusOptions = [
@@ -199,13 +141,17 @@ export default function TaskListEditDialog({
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`/api/activity/tsa/historical/update?id=${item.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+      const res = await fetch(
+        `/api/activity/tsa/historical/update?id=${item.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        }
+      );
 
       if (!res.ok) throw new Error("Failed to update activity");
+
       sileo.success({
         title: "Succeess",
         description: "Activity updated successfully!",
@@ -217,6 +163,7 @@ export default function TaskListEditDialog({
           description: "text-white",
         },
       });
+
       onSave();
     } catch (error) {
       sileo.error({
@@ -233,31 +180,58 @@ export default function TaskListEditDialog({
     }
   };
 
+  const getLabel = (key: string) => {
+    if (key === "call_type") return "Type";
+    return key.replace(/_/g, " ");
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-lg rounded-none">
         <DialogHeader>
-          <DialogTitle className="text-sm">Edit Activity: {item.activity_reference_number}</DialogTitle>
+          <DialogTitle className="text-sm">
+            Edit Activity: {item.activity_reference_number}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 max-h-[60vh] overflow-auto">
           {Object.entries(formData).map(([key, value]) => {
             if (key === "type_activity") {
-              return <Input key={key} type="hidden" className="rounded-none" value={value as any} disabled readOnly />;
+              return (
+                <Input
+                  key={key}
+                  type="hidden"
+                  className="rounded-none"
+                  value={value as any}
+                  disabled
+                  readOnly
+                />
+              );
             }
 
             if (key === "call_status") {
               return (
                 <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Select value={String(value ?? "")} onValueChange={(val) => handleChange(key as keyof Completed, val)}>
+                  <Label className="capitalize mb-2">
+                    {getLabel(key)}
+                  </Label>
+                  <Select
+                    value={String(value ?? "")}
+                    onValueChange={(val) =>
+                      handleChange(key as keyof Completed, val)
+                    }
+                  >
                     <SelectTrigger className="w-full text-left rounded-none">
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="Successful">Successful</SelectItem>
-                        <SelectItem value="Unsuccessful">Unsuccessful</SelectItem>
+                        <SelectItem value="Successful">
+                          Successful
+                        </SelectItem>
+                        <SelectItem value="Unsuccessful">
+                          Unsuccessful
+                        </SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -268,8 +242,15 @@ export default function TaskListEditDialog({
             if (key === "quotation_status") {
               return (
                 <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">Quotation Status</Label>
-                  <Select value={String(value ?? "")} onValueChange={(val) => handleChange("quotation_status", val)}>
+                  <Label className="capitalize mb-2">
+                    Quotation Status
+                  </Label>
+                  <Select
+                    value={String(value ?? "")}
+                    onValueChange={(val) =>
+                      handleChange("quotation_status", val)
+                    }
+                  >
                     <SelectTrigger className="w-full text-left rounded-none">
                       <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
@@ -290,23 +271,58 @@ export default function TaskListEditDialog({
             if (key === "remarks") {
               return (
                 <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                  <Textarea className="w-full rounded-none" value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+                  <Label className="capitalize mb-2">
+                    {getLabel(key)}
+                  </Label>
+                  <Textarea
+                    className="w-full rounded-none"
+                    value={value as any}
+                    onChange={(e) =>
+                      handleChange(
+                        key as keyof Completed,
+                        e.target.value
+                      )
+                    }
+                  />
                 </div>
               );
             }
 
             return (
               <div key={key} className="flex flex-col">
-                <Label className="capitalize mb-2">{key.replace(/_/g, " ")}</Label>
-                <Input className="w-full rounded-none" type={getInputType(key)} value={value as any} onChange={(e) => handleChange(key as keyof Completed, e.target.value)} />
+                <Label className="capitalize mb-2">
+                  {getLabel(key)}
+                </Label>
+                <Input
+                  className="w-full rounded-none"
+                  type={getInputType(key)}
+                  value={value as any}
+                  onChange={(e) =>
+                    handleChange(
+                      key as keyof Completed,
+                      e.target.value
+                    )
+                  }
+                />
               </div>
             );
           })}
         </div>
+
         <DialogFooter className="mt-4 flex justify-end">
-          <Button variant="outline" onClick={onClose} className="rounded-none p-6">Cancel</Button>
-          <Button onClick={handleSave} className="rounded-none p-6">Save</Button>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="rounded-none p-6"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="rounded-none p-6"
+          >
+            Save
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
