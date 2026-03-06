@@ -975,6 +975,7 @@ export default function TaskListEditDialog({
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
             .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
             .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
+            .desc-remarks { background-color: #f97316; padding: 0.50rem; text-transform: capitalize; color: #801313; display: inline-block; font-weight: bold; }
             .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
             
             /* LOGISTICS GRID */
@@ -1166,13 +1167,13 @@ export default function TaskListEditDialog({
           <div class="content-area">
           <table class="main-table" style="border: 1.5px solid black; border-top: none;">
           <tr>
-          <td style="width: 40px;" class="item-no">${index + 1}. ${item.remarks}</td>
+          <td style="width: 40px;" class="item-no">${index + 1}</td>
           <td style="width: 40px;" class="qty-col">${item.qty}</td>
           <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
           <td style="width: 200px;">
           <div class="product-title" style="font-size: 7px;">${item.title}</div>
           <div class="sku-text">${item.sku}</div>
-          <div class="desc-text">${item.product_description}</div>
+          <div class="desc-text">${item.product_description} <span class="desc-remarks">${item.remarks}</span></div>
           </td>
           <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
           <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
