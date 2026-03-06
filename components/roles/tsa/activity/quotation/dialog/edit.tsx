@@ -1838,7 +1838,7 @@ export default function TaskListEditDialog({
                                                 setCheckedRows(newChecked);
                                             }}
                                         /> Check All</th>
-                                        {/*<th className="border p-4 text-left w-45">Item Remarks</th>*/}
+                                        <th className="border p-4 text-left w-45">Item Remarks</th>
                                         <th className="border p-4 text-left w-45">Product</th>
                                         <th className="border p-4 text-center w-5">Quantity</th>
                                         <th className="border p-4 text-center w-15">Amount</th>
@@ -1899,7 +1899,7 @@ export default function TaskListEditDialog({
                                                         </div>
                                                     </td>
 
-                                                    {/*<td className="border border-gray-300 p-2 text-center">
+                                                    <td className="border border-gray-300 p-2 text-center">
                                                         <div className="flex items-center justify-center gap-2">
                                                             <Input
                                                                 type="text"
@@ -1911,7 +1911,7 @@ export default function TaskListEditDialog({
                                                                 className="border-none rounded-none shadow-none text-xs w-full"
                                                             />
                                                         </div>
-                                                    </td>*/}
+                                                    </td>
 
                                                     {/* Product Photo */}
                                                     <td className="p-2 align-top">

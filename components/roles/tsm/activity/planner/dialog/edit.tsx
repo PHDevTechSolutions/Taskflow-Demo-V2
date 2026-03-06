@@ -957,7 +957,7 @@ export default function TaskListEditDialog({
                             disabled={isUpdating}
                             className="rounded-xs p-6 bg-yellow-600 flex items-center gap-2"
                         >
-                            <ArrowRight /> Endorsed to Sales Head
+                            <ArrowRight /> Endorse to Sales Head
                         </Button>
                         <Button
                             onClick={() => setIsDeclineOpen(true)}

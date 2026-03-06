@@ -531,13 +531,23 @@ export function BreachesDialog() {
         (a) => a.type_activity === "Outbound Calls" || a.source === "history",
       ).length;
 
+      // first day of month
+      const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      // normal 7-day calculation
       const sixDaysAgo = new Date(targetDate);
       sixDaysAgo.setDate(targetDate.getDate() - 6);
+      sixDaysAgo.setHours(0, 0, 0, 0);
+
+      // prevent going to previous month
+      const weekStart = sixDaysAgo < monthStart ? monthStart : sixDaysAgo;
+
       const weekly = activities.filter((act) => {
         const actTime = new Date(act.date_created).getTime();
         return (
-          actTime >= new Date(sixDaysAgo.toDateString()).getTime() &&
-          actTime <= new Date(targetDate.toDateString()).getTime() &&
+          actTime >= weekStart.getTime() &&
+          actTime <= targetDate.getTime() &&
           (act.type_activity === "Outbound Calls" || act.source === "history")
         );
       }).length;
@@ -845,11 +855,11 @@ export function BreachesDialog() {
                   </div>
                   <div className="border-r border-gray-200">
                     <p className="text-[10px] text-gray-500 uppercase">Weekly</p>
-                    <p className="font-bold text-sm">{outboundWeekly} / 120</p>
+                    <p className="font-bold text-sm">{outboundWeekly} / 100</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 uppercase">Monthly</p>
-                    <p className="font-bold text-sm">{outboundMonthly} / 480</p>
+                    <p className="font-bold text-sm">{outboundMonthly} / 440</p>
                   </div>
                 </div>
               </li>
