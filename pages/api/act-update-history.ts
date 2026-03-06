@@ -163,10 +163,9 @@ export default async function handler(
   const { error: historyUpdateError } = await supabase
     .from("history")
     .update({
+      ...historyUpdateData,
       tsm_approved_status: "Pending",
       delivery_fee: body.delivery_fee ?? null,
-      vat_type: body.vat_type ?? null,
-      item_remarks: body.item_remarks ?? null, // dito mo kukunin ang value mula sa body
     })
     .eq("id", id);
 
