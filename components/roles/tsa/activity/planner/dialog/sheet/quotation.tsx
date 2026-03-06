@@ -334,6 +334,13 @@ export function QuotationSheet(props: Props) {
   }, [quotationNumber]);
 
   useEffect(() => {
+    // Ensure VAT Inc is selected by default
+    if (!vatType) {
+      setVatType("vat_inc");
+    }
+  }, [vatType, setVatType]);
+
+  useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
     const quantities = selectedProducts.map((p) => p.quantity.toString());
     const amounts = selectedProducts.map((p) => p.price.toString());
