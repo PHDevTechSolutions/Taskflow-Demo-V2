@@ -110,6 +110,7 @@ const data = {
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
 
         // Manager
+        { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
 

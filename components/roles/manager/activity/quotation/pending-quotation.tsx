@@ -83,7 +83,7 @@ interface CompletedProps {
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
-export const ApprovalQuotation: React.FC<CompletedProps> = ({
+export const PendingQuotation: React.FC<CompletedProps> = ({
     referenceid,
     target_quota,
     firstname,
@@ -198,7 +198,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
         return sortedActivities
             // 🔴 EXCLUDE declined quotations
             .filter((item) =>
-                ["Approved By Sales Head"].includes(item.tsm_approved_status)
+                ["Endorsed to Sales Head"].includes(item.tsm_approved_status)
             )
 
             // 🔍 search filter
