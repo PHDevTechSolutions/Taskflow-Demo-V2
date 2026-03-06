@@ -1364,32 +1364,102 @@ export default function TaskListEditDialog({
         
         <div class="sig-grid">
         <div class="sig-side-internal">
-        <div>
-        <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                   
-        <img src="${payload.agentSignature || ''}" class="sig-rep-box" />
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales Representative</p>
-        <p style="font-size: 10px; font-style: italic;">Mobile: ${payload.agentContactNumber || 'N/A'}</p>
-        <p style="font-size: 10px; font-style: italic;">Email: ${payload.agentEmailAddress || 'N/A'}</p>
+        <div style="position: relative;">
+            <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">
+                ${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}
+            </p>
+                                                
+            <img 
+                src="${payload.agentSignature || ''}" 
+                class="sig-rep-box"
+                style="
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    width: 125px;
+                    height: auto;
+                    object-fit: contain;
+                    z-index: 9999;
+                "
+            />
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; margin-top: 50px;">
+                ${payload.salesRepresentative}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">Sales Representative</p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Mobile: ${payload.agentContactNumber || 'N/A'}
+            </p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Email: ${payload.agentEmailAddress || 'N/A'}
+            </p>
         </div>
-        <div>
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
-        <img src="${payload.TsmSignature || ''}" class="sig-rep-box" />
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">SALES MANAGER</p>
-        <p style="font-size: 10px; font-style: italic;">Mobile: ${payload.TsmContactNumber || 'N/A'}</p>
-        <p style="font-size: 10px; font-style: italic;">Email: ${payload.TsmEmailAddress || 'N/A'}</p>
+
+        <div style="position: relative;">
+            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">
+                Approved By:
+            </p>
+
+            <img 
+                src="${payload.TsmSignature || ''}" 
+                class="sig-rep-box"
+                style="
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    width: 125px;
+                    height: auto;
+                    object-fit: contain;
+                    z-index: 9999;
+                "
+            />
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase;">
+                ${payload.salestsmname}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">SALES MANAGER</p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Mobile: ${payload.TsmContactNumber || 'N/A'}
+            </p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Email: ${payload.TsmEmailAddress || 'N/A'}
+            </p>
         </div>
-        <div>
-        
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
-        <img src="${payload.ManagerSignature || ''}" class="sig-rep-box" />
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales-B2B</p>
+
+
+        <div style="position: relative;">
+            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">
+                Noted By:
+            </p>
+
+            <img 
+                src="${payload.ManagerSignature || ''}" 
+                class="sig-rep-box"
+                style="
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    width: 125px;
+                    height: auto;
+                    object-fit: contain;
+                    z-index: 9999;
+                "
+            />
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase;">
+                ${payload.salesmanagername}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">Sales-B2B</p>
         </div>
         </div>
         
