@@ -2223,8 +2223,8 @@ ${spec.value}
                         {/* Vat Adjust Column */}
                         <td className="border border-gray-300 p-2 text-center">
                         </td>
-                        {/*<td className="border border-gray-300 p-2 text-center">
-                        </td>/*}
+                        <td className="border border-gray-300 p-2 text-center">
+                        </td>
 
                         {/* Product Column: leave empty */}
                         <td className="border border-gray-300 p-2"></td>
