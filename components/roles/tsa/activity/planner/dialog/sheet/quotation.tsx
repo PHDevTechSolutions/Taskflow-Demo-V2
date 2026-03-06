@@ -2403,7 +2403,7 @@ ${spec.value}
 
                   {/* ITEM SPECIFICATION TABLE */}
                   <div className="border border-black overflow-hidden shadow-sm">
-                    <table className="w-full text-[10px] border-collapse">
+                    <table className="w-full text-[12px] border-collapse">
                       <thead>
                         <tr className="bg-[#F9FAFA] border-b border-black font-black uppercase text-[#121212]">
                           <th className="p-3 border-r border-black w-16 text-center">ITEM NO</th>
@@ -2445,31 +2445,46 @@ ${spec.value}
                         ))}
 
                         {/* SUMMARY BAR */}
-                        <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
-                          <td colSpan={2} className="border-r border-white/20"></td>
-                          <td className="px-4 border-r border-white/20 font-black text-red-400 italic text-[9px] uppercase">Tax Type:</td>
-                          <td className="px-4 border-r border-white/20">
-                            <div className="flex gap-4 text-[9px] font-black uppercase tracking-tight">
-                              <span className={payload.vatTypeLabel === "VAT Inc" ? "text-white" : "text-white/30"}>
+                        <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                          <td colSpan={2} className="border-r border-gray-400"></td>
+
+                          <td className="px-4 border-r border-gray-400 font-bold text-red-600 italic text-[14px] uppercase">
+                            Tax Type:
+                          </td>
+
+                          <td className="px-4 border-r border-gray-400">
+                            <div className="flex gap-4 text-[12px] font-bold uppercase tracking-tight">
+                              <span className={payload.vatTypeLabel === "VAT Inc" ? "text-gray-900" : "text-gray-400"}>
                                 {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
                               </span>
-                              <span className={payload.vatTypeLabel === "VAT Exe" ? "text-white" : "text-white/30"}>
+
+                              <span className={payload.vatTypeLabel === "VAT Exe" ? "text-gray-900" : "text-gray-400"}>
                                 {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
                               </span>
-                              <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-white" : "text-white/30"}>
+
+                              <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-gray-900" : "text-gray-400"}>
                                 {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Delivery Fee:</td>
-                          <td className="px-4 text-right font-black text-lg">
+
+                          <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                            Delivery Fee:
+                          </td>
+
+                          <td className="px-4 text-right font-black text-lg text-gray-900">
                             ₱{payload.deliveryFee}
                           </td>
                         </tr>
-                        <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
-                          <td colSpan={4} className="border-r border-white/20"></td>
-                          <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
-                          <td className="px-4 text-right font-black text-lg">
+
+                        <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                          <td colSpan={4} className="border-r border-gray-400"></td>
+
+                          <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                            Grand Total:
+                          </td>
+
+                          <td className="px-4 text-right font-black text-lg text-green-700">
                             ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
