@@ -8,7 +8,6 @@ import { RefreshCcw } from "lucide-react";
 import { sileo } from "sileo";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface Activity {
     account_reference_number: string;
@@ -72,7 +71,7 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity => {
     }, {} as TimeByActivity);
 };
 
-export default function TSAReports() {
+export default function TSMReports() {
     const [agents, setAgents] = useState<Agent[]>([]);
     const [loadingAgents, setLoadingAgents] = useState(false);
 
@@ -220,7 +219,7 @@ export default function TSAReports() {
         const fetchAgents = async () => {
             setLoadingAgents(true);
             try {
-                const res = await fetch(`/api/activity/tsm/breaches/fetch-agent?id=${userDetails.referenceid}`);
+                const res = await fetch(`/api/activity/manager/breaches/fetch-agent?id=${userDetails.referenceid}`);
                 if (!res.ok) throw new Error("Failed to fetch agents");
 
                 const data: Agent[] = await res.json();
