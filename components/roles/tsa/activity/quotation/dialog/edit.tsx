@@ -1374,7 +1374,7 @@ export default function TaskListEditDialog({
                 class="sig-rep-box"
                 style="
                     position: absolute;
-                    top: 30px;
+                    top: 40px;
                     left: 0;
                     width: 125px;
                     height: auto;
@@ -1399,7 +1399,6 @@ export default function TaskListEditDialog({
             </p>
         </div>
 
-
         <div style="position: relative;">
             <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">
                 Approved By:
@@ -1410,7 +1409,7 @@ export default function TaskListEditDialog({
                 class="sig-rep-box"
                 style="
                     position: absolute;
-                    top: 25px;
+                    top: 40px;
                     left: 0;
                     width: 125px;
                     height: auto;
@@ -1446,7 +1445,7 @@ export default function TaskListEditDialog({
                 class="sig-rep-box"
                 style="
                     position: absolute;
-                    top: 25px;
+                    top: 40px;
                     left: 0;
                     width: 125px;
                     height: auto;

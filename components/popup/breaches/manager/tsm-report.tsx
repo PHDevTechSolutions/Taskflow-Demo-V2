@@ -8,7 +8,6 @@ import { RefreshCcw } from "lucide-react";
 import { sileo } from "sileo";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface Activity {
     account_reference_number: string;
