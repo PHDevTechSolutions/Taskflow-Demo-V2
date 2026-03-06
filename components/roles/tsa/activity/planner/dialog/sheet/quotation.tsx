@@ -1957,7 +1957,7 @@ ${spec.value}
                             <span className="text-xs font-medium">All</span>
                           </label>
                         </th>
-                        <th className="border p-4 text-left w-5">Remarks</th>
+                        {/*<th className="border p-4 text-left w-5">Remarks</th>*/}
                         <th className="border p-4 text-left w-100">Product</th>
                         <th className="border p-4 text-center w-5">Quantity</th>
                         <th className="border p-4 text-center w-15">Price</th>
@@ -2027,7 +2027,7 @@ ${spec.value}
                                 </div>
                               </td>
 
-                              <td>
+                              {/*<td>
                                 <Textarea
                                   value={p.itemRemarks || ""}
                                   onChange={(e) => {
@@ -2042,7 +2042,7 @@ ${spec.value}
                                   rows={3}
                                   className="capitalize rounded-none text-[10px] w-full p-1"
                                 />
-                              </td>
+                              </td>*/}
 
                               <td className="p-2 flex items-center gap-2">
                                 {/* Product Image */}
@@ -2223,8 +2223,8 @@ ${spec.value}
                         {/* Vat Adjust Column */}
                         <td className="border border-gray-300 p-2 text-center">
                         </td>
-                        <td className="border border-gray-300 p-2 text-center">
-                        </td>
+                        {/*<td className="border border-gray-300 p-2 text-center">
+                        </td>/*}
 
                         {/* Product Column: leave empty */}
                         <td className="border border-gray-300 p-2"></td>
