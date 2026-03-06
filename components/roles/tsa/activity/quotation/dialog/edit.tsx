@@ -957,9 +957,9 @@ export default function TaskListEditDialog({
             margin: 0;
             }
             
-            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black;}
+            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px; solid black;}
             .main-table th { 
-            padding: 5px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
+            padding: 5px 8px; font-size: 9.5px; font-weight: 800; color: ${PRIMARY_CHARCOAL}; 
             text-transform: uppercase; border-right: 1px solid black;
             }
             
@@ -968,14 +968,14 @@ export default function TaskListEditDialog({
             border-bottom: 1px solid black; font-size: 10px; 
             }
             
-            .main-table td:last-child, .main-table th:last-child { border-right: none; }
+            .main-table td:last-child, .main-table th:last-child { border-right: none;}
             .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
             .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
             .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
             .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
             .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
-            .desc-remarks { background-color: #f97316; padding: 0.50rem; text-transform: capitalize; color: #801313; display: inline-block; font-weight: bold; }
+            .desc-remarks { background-color: #f97316; padding: 0.50rem; text-transform: uppercase; color: #801313; display: inline-block; font-weight: bold; }
             .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
             
             /* LOGISTICS GRID */
@@ -999,14 +999,64 @@ export default function TaskListEditDialog({
             .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             
             /* SUMMARY BAR */
-            .summary-bar { background: ${PRIMARY_CHARCOAL}; color: white; height: 45px; }
-            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
-            .tax-label { color: #f87171; font-style: italic; font-weight: 900; font-size: 9px; text-transform: uppercase; }
-            .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
-            .tax-active { color: white; }
-            .tax-inactive { color: rgba(255,255,255,0.3); }
-            .grand-total-label { text-align: left; font-weight: 900; font-size: 10px; text-transform: uppercase; white-space: nowrap; }
-            .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
+            .summary-bar {
+            background-color: #e5e7eb;
+            color: white;
+            height: 35px;
+            }
+
+            /* Table cell styles within the summary bar or similar container */
+            .summary-bar td {
+            border: none;
+            vertical-align: middle;
+            padding: 0 15px;
+            }
+
+            /* Tax type label styling */
+            .tax-label {
+            color: #e60b0d;
+            font-style: italic;
+            font-weight: 900;
+            font-size: 22px;
+            text-transform: uppercase;
+            padding-left: 4px; 
+            }
+
+            /* Tax options container */
+            .tax-options {
+            display: flex;
+            gap: 15px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            }
+
+            /* Active tax selection (highlighted) */
+            .tax-active {
+            color: black;
+            }
+
+            /* Inactive tax options (dimmed) */
+            .tax-inactive {
+            color: #a0a5b3;
+            }
+
+            /* Grand total label styles */
+            .grand-total-label {
+            text-align: left;
+            font-weight: 500;
+            font-size: 8px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            color: black;
+            }
+
+            /* Grand total value styles */
+            .grand-total-value {
+            text-align: right;
+            font-weight: 900;
+            color: #058236;
+            }
             
             /* 4. OFFICIAL SIGNATURE HIERARCHY */
             .sig-hierarchy { margin-top: 20px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
@@ -1202,9 +1252,9 @@ export default function TaskListEditDialog({
         <div class="content-area" style="padding-top:0; padding-bottom:0;">
         <div class="table-container">
         <table class="main-table">
-        <tr class="summary-bar">
+        <tr class="summary-bar" >
         <td colspan="1" ></td>
-        <td class="tax-label">Tax Type:</td>
+        <td class="tax-label" style="font-size: 12px; text-align:left; width: 150px">Tax Type:</td>
         <td style="width: 300px;">
         <div class="tax-options" style="margin-left: 50px;">
         <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
@@ -1218,13 +1268,13 @@ export default function TaskListEditDialog({
         </span>
         </div>
         </td>
-        <td style="width: 120px; text-align:left;" class="grand-total-label">Delivery Fee:</td>
-        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.deliveryFee}</td>
+        <td style="width: 70px; border-left: 1px solid black; text-align:left; font-size: 9px" class="grand-total-label">Delivery Fee:</td>
+        <td style="width: 130px; font-size: 15px;" class="grand-total-value">₱${payload.deliveryFee}</td>
         </tr>
-        <tr class="summary-bar">
+        <tr class="summary-bar" style="border-bottom: 1px solid black; font-size: 10px; border-top: 1px solid black; font-size: 10px;">
         <td colspan="3" ></td>
-        <td style="width: 120px; text-align:left;" class="grand-total-label">Grand Total:</td>
-        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="width: 70px; border-left: 1px solid black; text-align:left; font-size: 9px" class="grand-total-label">Grand Total:</td>
+        <td style="width: 130px; font-size: 15px;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
         </table>
         </div>
@@ -1838,7 +1888,7 @@ export default function TaskListEditDialog({
                                                 setCheckedRows(newChecked);
                                             }}
                                         /> Check All</th>
-                                        <th className="border p-4 text-left w-45">Item Remarks</th>
+                                        {/*<th className="border p-4 text-left w-45">Item Remarks</th>*/}
                                         <th className="border p-4 text-left w-45">Product</th>
                                         <th className="border p-4 text-center w-5">Quantity</th>
                                         <th className="border p-4 text-center w-15">Amount</th>
@@ -1878,7 +1928,7 @@ export default function TaskListEditDialog({
                                                                     setCheckedRows((prev) => ({ ...prev, [index]: e.target.checked }))
                                                                 }
                                                             />
-
+                                                            
                                                             <Input
                                                                 type="number"
                                                                 min={0}
@@ -1899,7 +1949,7 @@ export default function TaskListEditDialog({
                                                         </div>
                                                     </td>
 
-                                                    <td className="border border-gray-300 p-2 text-center">
+                                                    {/*<td className="border border-gray-300 p-2 text-center">
                                                         <div className="flex items-center justify-center gap-2">
                                                             <Input
                                                                 type="text"
@@ -1911,7 +1961,7 @@ export default function TaskListEditDialog({
                                                                 className="border-none rounded-none shadow-none text-xs w-full"
                                                             />
                                                         </div>
-                                                    </td>
+                                                    </td>*/}
 
                                                     {/* Product Photo */}
                                                     <td className="p-2 align-top">
