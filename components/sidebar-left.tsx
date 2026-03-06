@@ -105,8 +105,9 @@ const data = {
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
 
         // TSM
-        { name: "Follow Ups", url: "/roles/tsm/activity/planner", icon: CalendarDays },
-        { name: "Decline Quotations", url: "/roles/tsm/activity/quotation", icon: XCircle },
+        { name: "Pending Approval", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
+        { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
+        { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
 
         // Manager
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },

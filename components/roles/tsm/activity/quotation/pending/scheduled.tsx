@@ -8,7 +8,7 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import TaskListEditDialog from "./dialog/edit";
+import TaskListEditDialog from "../../planner/dialog/edit";
 
 interface SupervisorDetails {
     firstname: string;
@@ -193,7 +193,7 @@ export const Scheduled: React.FC<CompletedProps> = ({
         return sortedActivities
             // 🔴 EXCLUDE declined quotations
             .filter((item) =>
-                ["Approved", "Pending", "Endorsed to Sales Head", "Approved By Sales Head"].includes(item.tsm_approved_status)
+                ["Pending", "Endorsed to Sales Head"].includes(item.tsm_approved_status)
             )
 
             // 🔍 search filter
