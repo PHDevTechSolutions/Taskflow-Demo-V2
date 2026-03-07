@@ -33,6 +33,7 @@ type Payload = {
     items: Item[];
     totalPrice: number;
     vatTypeLabel: string;
+    vatType: string;
     deliveryFee: string;
     salesManagerContact?: string;
     salesManagerEmail?: string;
@@ -149,7 +150,7 @@ export const Preview: React.FC<PreviewProps> = ({
                         <tbody className="divide-y divide-black">
                             {payload.items.map((item, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}. {item.remarks}</td>
+                                    <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
                                     <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
                                     <td className="p-3 border-r border-black align-top bg-white">
                                         {item.photo ? (
@@ -165,6 +166,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                             className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
                                             dangerouslySetInnerHTML={{ __html: item.product_description }}
                                         />
+                                        <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
                                         ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -176,32 +178,46 @@ export const Preview: React.FC<PreviewProps> = ({
                             ))}
 
                             {/* SUMMARY BAR */}
-                            <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
-                                <td colSpan={2} className="border-r border-white/20"></td>
-                                <td className="px-4 border-r border-white/20 font-black text-red-400 italic text-[9px] uppercase">Tax Type:</td>
-                                <td className="px-4 border-r border-white/20">
-                                    <div className="flex gap-4 text-[9px] font-black uppercase tracking-tight">
-                                        <span className={payload.vatTypeLabel === "VAT Inc" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                            <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                                <td colSpan={2} className="border-r border-gray-400"></td>
+
+                                <td className="px-4 border-r border-gray-400 font-bold text-red-600 italic text-[14px] uppercase">
+                                    Tax Type:
+                                </td>
+
+                                <td className="px-4 border-r border-gray-400">
+                                    <div className="flex gap-4 text-[12px] font-bold uppercase tracking-tight">
+                                        <span className={payload.vatType === "vat_inc" ? "text-gray-900" : "text-gray-400"}>
+                                            {payload.vatType === "vat_inc" ? "●" : "○"} VAT Inc
                                         </span>
-                                        <span className={payload.vatTypeLabel === "VAT Exe" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+
+                                        <span className={payload.vatType === "vat_exe" ? "text-gray-900" : "text-gray-400"}>
+                                            {payload.vatType === "vat_exe" ? "●" : "○"} VAT Exe
                                         </span>
-                                        <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-white" : "text-white/30"}>
-                                            {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+
+                                        <span className={payload.vatType === "zero_rated" ? "text-gray-900" : "text-gray-400"}>
+                                            {payload.vatType === "zero_rated" ? "●" : "○"} Zero-Rated
                                         </span>
                                     </div>
                                 </td>
-                                <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Delivery Fee:</td>
-                                <td className="px-4 text-right font-black text-lg">
+
+                                <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                                    Delivery Fee:
+                                </td>
+
+                                <td className="px-4 text-right font-black text-sm text-gray-900">
                                     ₱{payload.deliveryFee}
                                 </td>
                             </tr>
 
-                            <tr className="border-t-2 border-black bg-[#121212] text-white h-[45px]">
-                                <td colSpan={4} className="border-r border-white/20"></td>
-                                <td className="px-4 text-right border-r border-white/20 font-black text-[10px] uppercase">Grand Total:</td>
-                                <td className="px-4 text-right font-black text-lg">
+                            <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                                <td colSpan={4} className="border-r border-gray-400"></td>
+
+                                <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                                    Grand Total:
+                                </td>
+
+                                <td className="px-4 text-right font-black text-sm text-green-700">
                                     ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                             </tr>

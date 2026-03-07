@@ -130,6 +130,7 @@ interface TaskListEditDialogProps {
     signature?: string;
     email?: string;
     contact?: string;
+    VatTypeLabel?: string;
 }
 
 export default function TaskListEditDialog({
@@ -155,6 +156,8 @@ export default function TaskListEditDialog({
     tsmName,
 
     signature,
+
+    VatTypeLabel,
 
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -281,6 +284,8 @@ export default function TaskListEditDialog({
 
         const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
 
+        const vatTypeLabel = vatType;
+
         const items = products.map((p: ProductItem, index: number) => {
             // Use the 'product_xxx' fields which are updated by handleProductChange
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
@@ -320,6 +325,7 @@ export default function TaskListEditDialog({
             subject: "For Quotation",
             items,
             vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+            vatType: vatType,
             totalPrice: Number(quotationAmount ?? 0),
             deliveryFee: deliveryFee ?? "0",
             salesRepresentative: salesRepresentativeName,
@@ -950,7 +956,7 @@ export default function TaskListEditDialog({
                             disabled={isUpdating}
                             className="rounded-xs p-6 bg-green-600 flex items-center gap-2"
                         >
-                            <Check /> Approve
+                            <Check /> Approve {payload.vatType}
                         </Button>
                         <Button
                             onClick={() => openStatusDialog("Endorsed to Sales Head")}

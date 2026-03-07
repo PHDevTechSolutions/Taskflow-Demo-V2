@@ -23,9 +23,9 @@ interface Props {
 }
 
 export function OutboundTouchbaseCard({ activities, loading, error }: Props) {
-  const totalSuccessful = activities.filter((a) => a.call_status === "Successful").length;
-  const totalUnsuccessful = activities.filter((a) => a.call_status && a.call_status !== "Successful").length;
-  const totalOutboundTouchbase = activities.filter((a) => a.source === "Outbound - Touchbase").length;
+  const totalSuccessful = activities.filter((a) => a.call_status === "Successful" && a.source === "Outbound - Touchbase").length;
+  const totalUnsuccessful = activities.filter((a) => a.call_status === "Unsuccessful" && a.source === "Outbound - Touchbase").length;
+  const totalOutboundTouchbase = activities.filter((a) => a.source === "Outbound - Touchbase" && (a.call_status === "Successful" || a.call_status === "Unsuccessful")).length;
   const totalFollowUp = activities.filter((a) => a.source === "Outbound - Follow-up").length;
 
   const searchParams = useSearchParams();
