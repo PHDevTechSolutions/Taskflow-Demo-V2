@@ -20,6 +20,9 @@ interface SupervisorDetails {
 }
 
 interface Completed {
+    tsm_name: string | undefined;
+    agent_name: string | undefined;
+    vat_type: string | undefined;
     id: number;
     activity_reference_number: string;
     referenceid: string;
@@ -504,9 +507,12 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     deliveryFee={editItem.delivery_fee}
+                    agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
+                    tsmName={editItem.tsm_name}
+                    vatType={editItem.vat_type}
                 />
             )}
         </>
