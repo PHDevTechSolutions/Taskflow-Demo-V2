@@ -131,6 +131,8 @@ interface TaskListEditDialogProps {
     email?: string;
     contact?: string;
     VatTypeLabel?: string;
+    
+    vatType?: string;
 }
 
 export default function TaskListEditDialog({
@@ -157,7 +159,7 @@ export default function TaskListEditDialog({
 
     signature,
 
-    VatTypeLabel,
+    vatType: initialVatType,
 
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
@@ -166,7 +168,12 @@ export default function TaskListEditDialog({
 
     const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
     const [discount, setDiscount] = React.useState(0);
-    const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
+    // const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">("zero_rated");
+    const [vatType, setVatType] = React.useState<"vat_inc" | "vat_exe" | "zero_rated">(
+        (initialVatType as "vat_inc" | "vat_exe" | "zero_rated") || "zero_rated"
+    );
+
+    const [deliveryFeeState, setDeliveryFeeState] = useState<string>(deliveryFee ?? "");
     // Confirmation dialog state
 
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -313,6 +320,10 @@ export default function TaskListEditDialog({
                 totalAmount,
             };
         });
+        
+        const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+        // Add delivery fee to totalPrice
+        const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum;
 
         return {
             referenceNo: quotationNumber ?? "DRAFT-XXXX",
@@ -393,7 +404,7 @@ export default function TaskListEditDialog({
             if (!iframeDoc) throw new Error("Initialization Failed");
 
             iframeDoc.open();
-            iframeDoc.write(`
+             iframeDoc.write(`
           <html>
             <head>
             <style>
@@ -438,9 +449,9 @@ export default function TaskListEditDialog({
             margin: 0;
             }
             
-            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px solid black;}
+            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px; solid black;}
             .main-table th { 
-            padding: 5px 8px; font-size: 9px; font-weight: 900; color: ${PRIMARY_CHARCOAL}; 
+            padding: 5px 8px; font-size: 9.5px; font-weight: 800; color: ${PRIMARY_CHARCOAL}; 
             text-transform: uppercase; border-right: 1px solid black;
             }
             
@@ -449,13 +460,14 @@ export default function TaskListEditDialog({
             border-bottom: 1px solid black; font-size: 10px; 
             }
             
-            .main-table td:last-child, .main-table th:last-child { border-right: none; }
+            .main-table td:last-child, .main-table th:last-child { border-right: none;}
             .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
             .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
             .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
             .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
             .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
+            .desc-remarks { background-color: #f97316; padding: 0.50rem; text-transform: uppercase; color: #801313; display: inline-block; font-weight: bold; }
             .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
             
             /* LOGISTICS GRID */
@@ -479,17 +491,67 @@ export default function TaskListEditDialog({
             .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             
             /* SUMMARY BAR */
-            .summary-bar { background: ${PRIMARY_CHARCOAL}; color: white; height: 45px; }
-            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
-            .tax-label { color: #f87171; font-style: italic; font-weight: 900; font-size: 9px; text-transform: uppercase; }
-            .tax-options { display: flex; gap: 15px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
-            .tax-active { color: white; }
-            .tax-inactive { color: rgba(255,255,255,0.3); }
-            .grand-total-label { text-align: left; font-weight: 900; font-size: 10px; text-transform: uppercase; white-space: nowrap; }
-            .grand-total-value { text-align: right; font-weight: 900; font-size: 18px; }
+            .summary-bar {
+            background-color: #e5e7eb;
+            color: white;
+            height: 35px;
+            }
+
+            /* Table cell styles within the summary bar or similar container */
+            .summary-bar td {
+            border: none;
+            vertical-align: middle;
+            padding: 0 15px;
+            }
+
+            /* Tax type label styling */
+            .tax-label {
+            color: #e60b0d;
+            font-style: italic;
+            font-weight: 900;
+            font-size: 22px;
+            text-transform: uppercase;
+            padding-left: 4px; 
+            }
+
+            /* Tax options container */
+            .tax-options {
+            display: flex;
+            gap: 15px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            }
+
+            /* Active tax selection (highlighted) */
+            .tax-active {
+            color: black;
+            }
+
+            /* Inactive tax options (dimmed) */
+            .tax-inactive {
+            color: #a0a5b3;
+            }
+
+            /* Grand total label styles */
+            .grand-total-label {
+            text-align: left;
+            font-weight: 500;
+            font-size: 8px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            color: black;
+            }
+
+            /* Grand total value styles */
+            .grand-total-value {
+            text-align: right;
+            font-weight: 900;
+            color: #058236;
+            }
             
             /* 4. OFFICIAL SIGNATURE HIERARCHY */
-            .sig-hierarchy { margin-top: 40px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 20px; }
+            .sig-hierarchy { margin-top: 20px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
             .sig-message { font-size: 9px; margin-bottom: 15px; font-weight: 500; line-height: 1.4; }
             .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
             .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
@@ -541,10 +603,37 @@ export default function TaskListEditDialog({
             };
 
             const initiateNewPage = async () => {
-                const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
-                pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
+                const banner = await renderBlock(`
+    <div style="width:100%; display:block;">
 
-                // Draw number for the CURRENT page
+  <!-- HEADER IMAGE -->
+  <img 
+    src="${headerImagePath}" 
+    class="header-img"
+    style="width:100%; display:block; object-fit:contain;"
+  />
+
+  <!-- REFERENCE & DATE nasa ilalim ng image -->
+  <div style="
+    width:100%;
+    text-align:right;
+    font-weight:900;
+    font-size:10px;
+    margin-top:2px;
+    display:inline-block;       /* ensure block content fully captured */
+    padding-bottom:5px;        /* extra space para hindi maputol */
+    line-height:1.2;            /* proper spacing for line break */
+    box-sizing:border-box;      /* padding counted in width */
+    padding-right: 60px; 
+  ">
+    REFERENCE NO: ${payload.referenceNo}<br/>
+    DATE: ${payload.date}
+  </div>
+
+</div>
+  `);
+
+                pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
                 drawPageNumber(pageCount);
 
                 return banner.h;
@@ -555,10 +644,8 @@ export default function TaskListEditDialog({
 
             // A. CLIENT INFO BLOCK
             const clientBlock = await renderBlock(`
-        <div class="content-area">
-        <div style="text-align:right; font-weight:900; font-size:10px; margin-bottom:10px;">
-        REFERENCE NO: ${payload.referenceNo}<br>DATE: ${payload.date}
-        </div>
+        <div class="content-area" style="padding-top:5;">
+       
         
         <div class="client-grid">
         <div class="grid-row border-t">
@@ -596,7 +683,7 @@ export default function TaskListEditDialog({
 
             // B. TABLE HEADER BLOCK
             const headerBlock = await renderBlock(`
-        <div class="content-area">
+        <div class="content-area" >
         <div class="table-container" style="border-bottom: 1.5px solid black;">
         <table class="main-table">
         <thead>
@@ -622,13 +709,13 @@ export default function TaskListEditDialog({
           <div class="content-area">
           <table class="main-table" style="border: 1.5px solid black; border-top: none;">
           <tr>
-          <td style="width: 40px;" class="item-no">${index + 1}. ${item.remarks}</td>
+          <td style="width: 40px;" class="item-no">${index + 1}</td>
           <td style="width: 40px;" class="qty-col">${item.qty}</td>
           <td style="width: 120px;"><img src="${item.photo}" class="ref-photo"></td>
           <td style="width: 200px;">
           <div class="product-title" style="font-size: 7px;">${item.title}</div>
           <div class="sku-text">${item.sku}</div>
-          <div class="desc-text">${item.product_description}</div>
+          <div class="desc-text">${item.product_description} <span class="desc-remarks">${item.remarks}</span></div>
           </td>
           <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
           <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
@@ -657,9 +744,9 @@ export default function TaskListEditDialog({
         <div class="content-area" style="padding-top:0; padding-bottom:0;">
         <div class="table-container">
         <table class="main-table">
-        <tr class="summary-bar">
+        <tr class="summary-bar" >
         <td colspan="1" ></td>
-        <td class="tax-label">Tax Type:</td>
+        <td class="tax-label" style="font-size: 12px; text-align:left; width: 150px">Tax Type:</td>
         <td style="width: 300px;">
         <div class="tax-options" style="margin-left: 50px;">
         <span class="${payload.vatTypeLabel === "VAT Inc" ? 'tax-active' : 'tax-inactive'}">
@@ -673,13 +760,13 @@ export default function TaskListEditDialog({
         </span>
         </div>
         </td>
-        <td style="width: 120px; text-align:left;" class="grand-total-label">Delivery Fee:</td>
-        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.deliveryFee}</td>
+        <td style="width: 70px; border-left: 1px solid black; text-align:left; font-size: 9px" class="grand-total-label">Delivery Fee:</td>
+        <td style="width: 130px; font-size: 15px;" class="grand-total-value">₱${payload.deliveryFee}</td>
         </tr>
-        <tr class="summary-bar">
+        <tr class="summary-bar" style="border-bottom: 1px solid black; font-size: 10px; border-top: 1px solid black; font-size: 10px;">
         <td colspan="3" ></td>
-        <td style="width: 120px; text-align:left;" class="grand-total-label">Grand Total:</td>
-        <td style="width: 80px; text-align:right;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="width: 70px; border-left: 1px solid black; text-align:left; font-size: 9px" class="grand-total-label">Grand Total:</td>
+        <td style="width: 130px; font-size: 15px;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
         </table>
         </div>
@@ -820,31 +907,88 @@ export default function TaskListEditDialog({
         
         <div class="sig-grid">
         <div class="sig-side-internal">
-        <div>
-        <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                   
-        <img src="${payload.agentSignature || ''}" class="sig-rep-box" />
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.agentName}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales Representative</p>
-        <p style="font-size: 10px; font-style: italic;">Mobile: ${payload.agentContactNumber || 'N/A'}</p>
-        <p style="font-size: 10px; font-style: italic;">Email: ${payload.agentEmailAddress || 'N/A'}</p>
+        <div style="position: relative;">
+            <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">
+                ${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}
+            </p>
+                                                
+            <img 
+                src="${payload.agentSignature || ''}" 
+                class="sig-rep-box"
+                style="
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    width: 125px;
+                    height: auto;
+                    object-fit: contain;
+                    z-index: 9999;
+                "
+            />
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; margin-top: 50px;">
+                ${payload.agentName}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">Sales Representative</p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Mobile: ${payload.agentContactNumber || 'N/A'}
+            </p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Email: ${payload.agentEmailAddress || 'N/A'}
+            </p>
         </div>
-        <div>
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
-        <img src="${payload.signature || ''}" class="sig-rep-box" />
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.tsmName}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">SALES MANAGER</p>
-        <p style="font-size: 10px; font-style: italic;">Mobile: </p>
-        <p style="font-size: 10px; font-style: italic;">Email: ${payload.email || 'N/A'}</p>
+
+        <div style="position: relative;">
+            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">
+                Approved By:
+            </p>
+
+            <img 
+                src="${payload.signature || ''}" 
+                class="sig-rep-box"
+                style="
+                    position: absolute;
+                    top: 40px;
+                    left: 0;
+                    width: 125px;
+                    height: auto;
+                    object-fit: contain;
+                    z-index: 9999;
+                "
+            />
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase;">
+                ${payload.tsmName}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">SALES MANAGER</p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Mobile: ${payload.tsmcontact || 'N/A'}
+            </p>
+
+            <p style="font-size: 10px; font-style: italic;">
+                Email: ${payload.tsmemail || 'N/A'}
+            </p>
         </div>
-        <div>
-        
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales-B2B</p>
+
+
+        <div style="position: relative;">
+            <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">
+                Noted By:
+            </p>
+
+            <p style="font-size: 10px; font-weight: 900; text-transform: uppercase;">
+                ${payload.salesmanagername}
+            </p>
+
+            <div class="sig-line"></div>
+            <p class="sig-sub-label">Sales-B2B</p>
         </div>
         </div>
         
@@ -956,7 +1100,7 @@ export default function TaskListEditDialog({
                             disabled={isUpdating}
                             className="rounded-xs p-6 bg-green-600 flex items-center gap-2"
                         >
-                            <Check /> Approve {payload.vatType}
+                            <Check /> Approve
                         </Button>
                         <Button
                             onClick={() => openStatusDialog("Endorsed to Sales Head")}

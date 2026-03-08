@@ -59,6 +59,8 @@ interface Completed {
     tsm_name: string;
     tsm_approval_date: string;
     tsm_remarks: string;
+
+    vat_type: string;
 }
 
 interface CompletedProps {
@@ -520,6 +522,7 @@ export const Scheduled: React.FC<CompletedProps> = ({
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
                     tsmName={editItem.tsm_name}
+                    vatType={editItem.vat_type}
                 />
             )}
         </>
