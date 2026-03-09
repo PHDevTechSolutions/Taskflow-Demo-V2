@@ -376,7 +376,7 @@ export function QuotationSheet(props: Props) {
   // Save handler with validation
   const saveWithSelectedProducts = () => {
     setShowQuotationAlert(true);  // Show the Shadcn alert
-    handleDownloadQuotationPDF(); // Generate PDF before saving
+    //handleDownloadQuotationPDF(); // Generate PDF before saving
     handleSave();
   };
 

@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 
-import { AccountsTable } from "@/components/roles/tsa/accounts/approval/table/table";
+import { RequestTable } from "@/components/roles/tsa/accounts/approval/table/table";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
@@ -310,7 +310,7 @@ function DashboardContent() {
                                     </Alert>
                                 )}
 
-                                <AccountsTable
+                                <RequestTable
                                     posts={filteredData}
                                     dateCreatedFilterRange={dateCreatedFilterRange}
                                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}

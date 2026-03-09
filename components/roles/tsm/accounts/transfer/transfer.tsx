@@ -1,18 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
-
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-
 import { AccountsActiveSearch } from "../../../tsa/accounts/active/search";
 import { AccountsAllFilter } from "../../../tsa/accounts/approval/filter";
 import { AccountsApproveDialog } from "./dialog/transfer-approve";
 import { type DateRange } from "react-day-picker";
 import { sileo } from "sileo";
+import { ArrowRight } from "lucide-react";
 
 interface Account {
     id: string;
@@ -41,22 +38,15 @@ interface UserDetails {
     manager: string;
 }
 
-interface AccountsTableProps {
+interface AccountsCardsProps {
     posts: Account[];
     userDetails: UserDetails;
     dateCreatedFilterRange: DateRange | undefined;
-    setDateCreatedFilterRangeAction: React.Dispatch<
-        React.SetStateAction<DateRange | undefined>
-    >;
+    setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
     onRefreshAccountsAction: () => Promise<void>;
 }
 
-export function AccountsTable({
-    posts = [],
-    userDetails,
-    setDateCreatedFilterRangeAction,
-    onRefreshAccountsAction,
-}: AccountsTableProps) {
+export function AccountsCards({ posts = [], userDetails, setDateCreatedFilterRangeAction, onRefreshAccountsAction }: AccountsCardsProps) {
     const [localPosts, setLocalPosts] = useState<Account[]>(posts);
     const [agents, setAgents] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -64,166 +54,96 @@ export function AccountsTable({
     const [agentFilter, setAgentFilter] = useState("all");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // Filters states
     const [globalFilter, setGlobalFilter] = useState("");
     const [isFiltering, setIsFiltering] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string>("all");
     const [industryFilter, setIndustryFilter] = useState<string>("all");
-    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(
-        null
-    );
-    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(
-        null
-    );
+    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
+    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
 
-    // Transfer dialog
     const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
 
-    // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
     useEffect(() => {
         setLocalPosts(posts);
-        setCurrentPage(1); // reset page when posts change
+        setCurrentPage(1);
     }, [posts]);
 
     useEffect(() => {
         if (!userDetails.referenceid) return;
-
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch(
-                    `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
-                );
-                if (!response.ok) throw new Error("Failed to fetch agents");
-
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
-                setError("Failed to load agents.");
-            }
-        };
-
-        fetchAgents();
+        fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
+            .then(res => res.json())
+            .then(data => setAgents(data))
+            .catch(() => setError("Failed to load agents."));
     }, [userDetails.referenceid]);
 
-    // Map ReferenceID -> agent fullname
     const agentMap = useMemo(() => {
         const map: Record<string, string> = {};
-        agents.forEach((agent) => {
+        agents.forEach(agent => {
             map[agent.ReferenceID] = `${agent.Firstname} ${agent.Lastname}`;
         });
         return map;
     }, [agents]);
 
-    // Filtering data
     const filteredData = useMemo(() => {
-        let data = localPosts.filter((item) => item.status !== "Removed");
+        let data = localPosts.filter(a => a.status !== "Removed");
 
-        data = data.filter((item) => {
-            const matchesSearch =
-                !globalFilter ||
-                Object.values(item).some(
-                    (val) =>
-                        val != null &&
-                        String(val).toLowerCase().includes(globalFilter.toLowerCase())
-                );
-
+        data = data.filter(item => {
+            const matchesSearch = !globalFilter || Object.values(item).some(val => val && String(val).toLowerCase().includes(globalFilter.toLowerCase()));
             const matchesType = typeFilter === "all" || item.type_client === typeFilter;
-
             const matchesStatus = item.status === "Subject for Transfer";
-
-            const matchesIndustry =
-                industryFilter === "all" || item.industry === industryFilter;
-
+            const matchesIndustry = industryFilter === "all" || item.industry === industryFilter;
             const agentFullname = agentMap[item.referenceid] || "";
-
             const matchesAgent = agentFilter === "all" || agentFullname === agentFilter;
 
-            return (
-                matchesSearch &&
-                matchesType &&
-                matchesStatus &&
-                matchesIndustry &&
-                matchesAgent
-            );
+            return matchesSearch && matchesType && matchesStatus && matchesIndustry && matchesAgent;
         });
 
-        // Sorting
         data = data.sort((a, b) => {
-            if (alphabeticalFilter === "asc") {
-                return a.company_name.localeCompare(b.company_name);
-            } else if (alphabeticalFilter === "desc") {
-                return b.company_name.localeCompare(a.company_name);
-            }
-
-            if (dateCreatedFilter === "asc") {
-                return (
-                    new Date(a.date_created).getTime() - new Date(b.date_created).getTime()
-                );
-            } else if (dateCreatedFilter === "desc") {
-                return (
-                    new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
-                );
-            }
-
+            if (alphabeticalFilter === "asc") return a.company_name.localeCompare(b.company_name);
+            if (alphabeticalFilter === "desc") return b.company_name.localeCompare(a.company_name);
+            if (dateCreatedFilter === "asc") return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
+            if (dateCreatedFilter === "desc") return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
             return 0;
         });
 
         return data;
-    }, [
-        localPosts,
-        globalFilter,
-        typeFilter,
-        industryFilter,
-        alphabeticalFilter,
-        dateCreatedFilter,
-        agentFilter,
-        agentMap,
-    ]);
+    }, [localPosts, globalFilter, typeFilter, industryFilter, alphabeticalFilter, dateCreatedFilter, agentFilter, agentMap]);
 
-    // Calculate pagination values
     const totalItems = filteredData.length;
     const totalPages = Math.ceil(totalItems / pageSize);
 
-    // Ensure current page is not out of range after filters change
     useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(totalPages || 1);
-        }
+        if (currentPage > totalPages) setCurrentPage(totalPages || 1);
     }, [currentPage, totalPages]);
 
-    // Paginate filtered data
     const paginatedData = useMemo(() => {
         const startIndex = (currentPage - 1) * pageSize;
         return filteredData.slice(startIndex, startIndex + pageSize);
     }, [filteredData, currentPage, pageSize]);
 
-    // Selection handlers
-    const isAllSelected = paginatedData.length > 0 && paginatedData.every((a) => selectedIds.has(a.id));
+    const isAllSelected = paginatedData.length > 0 && paginatedData.every(a => selectedIds.has(a.id));
 
     const toggleSelectAll = () => {
         if (isAllSelected) {
-            // Remove all ids on current page
-            setSelectedIds((prev) => {
+            setSelectedIds(prev => {
                 const copy = new Set(prev);
-                paginatedData.forEach((a) => copy.delete(a.id));
+                paginatedData.forEach(a => copy.delete(a.id));
                 return copy;
             });
         } else {
-            // Add all ids on current page
-            setSelectedIds((prev) => {
+            setSelectedIds(prev => {
                 const copy = new Set(prev);
-                paginatedData.forEach((a) => copy.add(a.id));
+                paginatedData.forEach(a => copy.add(a.id));
                 return copy;
             });
         }
     };
 
     const toggleSelectOne = (id: string) => {
-        setSelectedIds((prev) => {
+        setSelectedIds(prev => {
             const copy = new Set(prev);
             if (copy.has(id)) copy.delete(id);
             else copy.add(id);
@@ -231,70 +151,34 @@ export function AccountsTable({
         });
     };
 
-    // Bulk approve transfer
     async function handleBulkTransfer() {
         if (selectedIds.size === 0) return;
-
         try {
             const res = await fetch("/api/com-bulk-approve-account", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ids: Array.from(selectedIds),
-                    status: "Approval for Transfer",
-                }),
+                body: JSON.stringify({ ids: Array.from(selectedIds), status: "Approval for Transfer" }),
             });
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData?.error || "Failed to approve accounts");
-            }
+            if (!res.ok) throw new Error("Failed to approve accounts");
 
             const result = await res.json();
-
             if (result.success && result.updatedCount > 0) {
-                setLocalPosts((prev) =>
-                    prev.map((item) =>
-                        selectedIds.has(item.id)
-                            ? { ...item, status: "Approval for Transfer" }
-                            : item
-                    )
-                );
-
-                sileo.success({
-                    title: "Success",
-                    description: "Accounts transfer successfully! Subject for Approval on IT Department",
-                    duration: 4000,       // optional
-                    position: "top-center" // optional
-                });
-
+                setLocalPosts(prev => prev.map(item => selectedIds.has(item.id) ? { ...item, status: "Approval for Transfer" } : item));
+                sileo.success({ title: "Success", description: "Accounts transfer successfully!", duration: 4000, position: "top-center" });
                 await onRefreshAccountsAction();
-
                 setSelectedIds(new Set());
                 setIsTransferDialogOpen(false);
             } else {
-                sileo.error({
-                    title: "Failed",
-                    description: "No accounts updated. IDs may not exist.",
-                    duration: 4000,       // optional
-                    position: "top-center" // optional
-                });
+                sileo.error({ title: "Failed", description: "No accounts updated.", duration: 4000, position: "top-center" });
             }
         } catch (error) {
-            sileo.error({
-                title: "Failed",
-                description: error instanceof Error ? error.message : "Failed to approve accounts",
-                duration: 4000,       // optional
-                position: "top-center" // optional
-            });
+            sileo.error({ title: "Failed", description: error instanceof Error ? error.message : "Failed to approve accounts", duration: 4000, position: "top-center" });
         }
     }
 
     useEffect(() => {
-        if (!globalFilter) {
-            setIsFiltering(false);
-            return;
-        }
+        if (!globalFilter) { setIsFiltering(false); return; }
         setIsFiltering(true);
         const timeout = setTimeout(() => setIsFiltering(false), 300);
         return () => clearTimeout(timeout);
@@ -305,18 +189,14 @@ export function AccountsTable({
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex-grow max-w-lg">
-                    <AccountsActiveSearch
-                        globalFilter={globalFilter}
-                        setGlobalFilterAction={setGlobalFilter}
-                        isFiltering={isFiltering}
-                    />
+                    <AccountsActiveSearch globalFilter={globalFilter} setGlobalFilterAction={setGlobalFilter} isFiltering={isFiltering} />
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
-                        statusFilter={"Subject for Transfer"} // fixed filter as in original logic
+                        statusFilter="Subject for Transfer"
                         setStatusFilterAction={() => { }}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
@@ -329,161 +209,127 @@ export function AccountsTable({
                         agents={agents}
                     />
                     {selectedIds.size > 0 && (
-                        <Button onClick={() => setIsTransferDialogOpen(true)}>
-                            Approved Selected
-                        </Button>
+                        <Button className="rounded-none p-4 text-xs" onClick={() => setIsTransferDialogOpen(true)}>Approved Selected</Button>
                     )}
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-md border p-4 space-y-2">
-                {error && (
-                    <div className="text-red-600 font-semibold mb-2">{error}</div>
-                )}
-                <Badge
-                    className="h-5 min-w-5 rounded-full px-2 font-mono tabular-nums"
-                    variant="outline"
-                >
-                    Total: {filteredData.length}
-                </Badge>
+            {filteredData.length > 0 && (
+                <div className="text-xs font-bold">Total Records: {filteredData.length}</div>
+            )}
 
-                <Table>
-                    <TableHeader>
-                        <TableRow className="whitespace-nowrap">
-                            <TableHead>
-                                <Checkbox
-                                    checked={isAllSelected}
-                                    onCheckedChange={toggleSelectAll}
-                                    aria-label="Select all accounts on current page"
-                                />
-                            </TableHead>
-                            <TableHead>Transferred From</TableHead>
-                            <TableHead>Transferred To</TableHead>
-                            <TableHead>Company Name</TableHead>
-                            <TableHead>Contact Person</TableHead>
-                            <TableHead>Email Address</TableHead>
-                            <TableHead>Address</TableHead>
-                            <TableHead>Type of Client</TableHead>
-                            <TableHead>Industry</TableHead>
-                            <TableHead>Remarks</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Date Transferred</TableHead>
-                        </TableRow>
-                    </TableHeader>
+            {/* Cards */}
+            <div className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                {paginatedData.length === 0 ? (
+                    <div className="col-span-full text-center text-gray-500 py-8">No accounts found.</div>
+                ) : (
+                    paginatedData.map(account => {
+                        const agentFrom = agents.find(a => a.ReferenceID === account.referenceid);
+                        const agentTo = agents.find(a => a.ReferenceID === account.transfer_to);
+                        const isSelected = selectedIds.has(account.id);
 
-                    <TableBody>
-                        {paginatedData.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={12} className="text-center py-4">
-                                    No accounts found.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            paginatedData.map((account) => {
-                                const agentFrom = agents.find(
-                                    (a) => a.ReferenceID === account.referenceid
-                                );
-                                const agentTo = agents.find(
-                                    (a) => a.ReferenceID === account.transfer_to
-                                );
+                        return (
+                            <div
+                                key={account.id}
+                                className="border rounded-md p-4 shadow-sm bg-white text-xs flex flex-col gap-3 hover:shadow-md transition"
+                            >
+                                {/* HEADER */}
+                                <div className="flex items-start justify-between">
 
-                                return (
-                                    <TableRow key={account.id} className="whitespace-nowrap">
-                                        <TableCell>
-                                            <Checkbox
-                                                checked={selectedIds.has(account.id)}
-                                                onCheckedChange={() => toggleSelectOne(account.id)}
-                                                aria-label={`Select account ${account.company_name}`}
-                                            />
-                                        </TableCell>
+                                    {/* Left */}
+                                    <div className="flex items-start gap-3">
+                                        <Checkbox
+                                            checked={isSelected}
+                                            className="h-6 w-6 mt-1"
+                                            onCheckedChange={() => toggleSelectOne(account.id)}
+                                        />
 
-                                        <TableCell className="capitalize">
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold text-sm uppercase">
+                                                {account.company_name}
+                                            </span>
+
+                                            <span className="text-gray-500 text-[11px]">
+                                                Contact: {account.contact_person}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right */}
+                                    <Badge
+                                        variant="outline"
+                                        className="rounded-none"
+                                    >
+                                        {account.status ?? "-"}
+                                    </Badge>
+                                </div>
+
+                                {/* AGENTS */}
+                                <div className="grid grid-cols-3 items-center gap-2 text-[11px]">
+
+                                    {/* Transferred From */}
+                                    <div>
+                                        <span className="text-gray-500">Transferred From</span>
+                                        <div className="font-medium">
                                             {agentFrom
                                                 ? `${agentFrom.Firstname} ${agentFrom.Lastname}`
                                                 : "-"}
-                                        </TableCell>
+                                        </div>
+                                    </div>
 
-                                        <TableCell className="capitalize">
+                                    {/* Arrow */}
+                                    <div className="flex justify-center text-blue-900 font-bold">
+                                        -------<ArrowRight className="h-4 w-4" />
+                                    </div>
+
+                                    {/* Transferred To */}
+                                    <div className="text-right">
+                                        <span className="text-gray-500">Transferred To</span>
+                                        <div className="text-blue-900 font-bold">
                                             {agentTo
                                                 ? `${agentTo.Firstname} ${agentTo.Lastname}`
                                                 : "-"}
-                                        </TableCell>
+                                        </div>
+                                    </div>
 
-                                        <TableCell>{account.company_name}</TableCell>
-                                        <TableCell className="capitalize">{account.contact_person}</TableCell>
-                                        <TableCell>{account.email_address}</TableCell>
-                                        <TableCell className="capitalize">{account.address}</TableCell>
-                                        <TableCell>{account.type_client}</TableCell>
-                                        <TableCell>{account.industry}</TableCell>
-                                        <TableCell>{account.status ?? "-"}</TableCell>
+                                </div>
 
-                                        <TableCell>
-                                            <Badge
-                                                variant={
-                                                    account.status === "Active"
-                                                        ? "default"
-                                                        : account.status === "Pending"
-                                                            ? "secondary"
-                                                            : account.status === "Inactive"
-                                                                ? "destructive"
-                                                                : "outline"
-                                                }
-                                            >
-                                                {account.status ?? "-"}
-                                            </Badge>
-                                        </TableCell>
+                                {/* DETAILS */}
+                                <div className="flex flex-col gap-1 text-[11px]">
+                                    <div>
+                                        <span className="text-gray-500">Email:</span> {account.email_address}
+                                    </div>
 
-                                        <TableCell>
-                                            {new Date(account.date_transferred).toLocaleDateString()}
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                </Table>
+                                    <div>
+                                        <span className="text-gray-500">Address:</span> {account.address}
+                                    </div>
+                                </div>
+
+                                {/* FOOTER */}
+                                <div className="flex items-center justify-between pt-2 border-t">
+
+                                    <div className="flex gap-2">
+                                        <Badge variant="secondary" className="rounded-none text-[10px]">
+                                            {account.industry}
+                                        </Badge>
+
+                                        <Badge variant="outline" className="rounded-none text-[10px]">
+                                            {account.type_client}
+                                        </Badge>
+                                    </div>
+
+                                    <span className="text-[10px] text-gray-500">
+                                        Date: {new Date(account.date_transferred).toLocaleDateString()}
+                                    </span>
+
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
             </div>
 
-            {/* Pagination controls */}
-            <Pagination>
-                <PaginationContent className="flex items-center space-x-4">
-                    <PaginationItem>
-                        <PaginationPrevious
-                            href="#"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                if (currentPage > 1) setCurrentPage(currentPage - 1);
-                            }}
-                            aria-disabled={currentPage <= 1}
-                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                        />
-                    </PaginationItem>
-
-                    {/* Current page / total pages */}
-                    <div className="px-4 font-medium">
-                        {totalPages === 0 ? "0 / 0" : `${currentPage} / ${totalPages}`}
-                    </div>
-
-                    <PaginationItem>
-                        <PaginationNext
-                            href="#"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                            }}
-                            aria-disabled={currentPage >= totalPages}
-                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                        />
-                    </PaginationItem>
-                </PaginationContent>
-            </Pagination>
-
-            <AccountsApproveDialog
-                open={isTransferDialogOpen}
-                onOpenChange={setIsTransferDialogOpen}
-                onConfirmApprove={handleBulkTransfer}
-            />
+            <AccountsApproveDialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen} onConfirmApprove={handleBulkTransfer} />
         </div>
     );
 }

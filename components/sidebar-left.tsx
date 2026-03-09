@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   TrendingUp,
   PhoneCall,
+  GitGraph,
   CreditCard,
   Rocket,
   ClipboardList,
@@ -80,8 +81,8 @@ const data = {
 
         // TSM
         { name: "All", url: "/roles/tsm/companies/all", icon: BookOpen },
-        { name: "Pending Transferred", url: "/roles/tsm/companies/transfer", icon: BookOpen },
-        { name: "Account Deletion", url: "/roles/tsm/companies/approval", icon: Trash2 },
+        //{ name: "Pending Transferred", url: "/roles/tsm/companies/transfer", icon: BookOpen },
+        //{ name: "Account Deletion", url: "/roles/tsm/companies/approval", icon: Trash2 },
 
         // Manager
         { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
@@ -105,7 +106,8 @@ const data = {
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
 
         // TSM
-        { name: "Pending Approval", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
+        { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
+        //{ name: "Pending Approval", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
 
@@ -172,6 +174,7 @@ const data = {
         { name: "Calls to SI", url: "/roles/tsa/conversion/calls-to-si", icon: Rocket },
 
         // TSM
+        { name: "Summary", url: "/roles/tsm/conversion/summary", icon: GitGraph },
         { name: "Call to Quotes", url: "/roles/tsm/conversion/calls-to-quote", icon: PhoneCall },
         { name: "Quotes To SO", url: "/roles/tsm/conversion/quote-to-so", icon: FileText },
         { name: "SO's To SI", url: "/roles/tsm/conversion/so-to-si", icon: CreditCard },

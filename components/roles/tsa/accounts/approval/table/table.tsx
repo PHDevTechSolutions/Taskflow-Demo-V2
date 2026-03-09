@@ -1,14 +1,11 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
-import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, ColumnDef, flexRender, } from "@tanstack/react-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AccountsActiveSearch } from "../../active/search";
 import { AccountsAllFilter } from "../filter";
-import { AccountsActivePagination } from "../../active/pagination";
 import { AccountsApproveDialog } from "../dialog/approve";
 import { type DateRange } from "react-day-picker";
 import { sileo } from "sileo";
@@ -39,7 +36,7 @@ interface UserDetails {
     manager: string;
 }
 
-interface AccountsTableProps {
+interface RequestTableProps {
     posts: Account[];
     userDetails: UserDetails;
     dateCreatedFilterRange: DateRange | undefined;
@@ -49,48 +46,45 @@ interface AccountsTableProps {
     onRefreshAccountsAction: () => Promise<void>;
 }
 
-export function AccountsTable({
+export function RequestTable({
     posts = [],
     userDetails,
     setDateCreatedFilterRangeAction,
     onRefreshAccountsAction,
-}: AccountsTableProps) {
+}: RequestTableProps) {
     const [localPosts, setLocalPosts] = useState<Account[]>(posts);
     const [agents, setAgents] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [agentFilter, setAgentFilter] = useState("all");
-
-    // For bulk remove
-    const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
     const [rowSelection, setRowSelection] = useState<{ [key: string]: boolean }>({});
+    const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
+    const [globalFilter, setGlobalFilter] = useState("");
+    const [isFiltering, setIsFiltering] = useState(false);
+    const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [industryFilter, setIndustryFilter] = useState<string>("all");
+    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
+    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
 
-    useEffect(() => {
-        setLocalPosts(posts);
-    }, [posts]);
+    useEffect(() => setLocalPosts(posts), [posts]);
 
-    // FETCH AGENTS based on userDetails.referenceid (TSM)
+    // Fetch agents
     useEffect(() => {
         if (!userDetails.referenceid) return;
-
         const fetchAgents = async () => {
             try {
-                const response = await fetch(
+                const res = await fetch(
                     `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
                 );
-                if (!response.ok) throw new Error("Failed to fetch agents");
-
-                const data = await response.json();
+                if (!res.ok) throw new Error("Failed to fetch agents");
+                const data = await res.json();
                 setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
+            } catch {
                 setError("Failed to load agents.");
             }
         };
-
         fetchAgents();
     }, [userDetails.referenceid]);
 
-    // Map ReferenceID -> agent fullname for display and filtering
     const agentMap = useMemo(() => {
         const map: Record<string, string> = {};
         agents.forEach((agent) => {
@@ -99,20 +93,8 @@ export function AccountsTable({
         return map;
     }, [agents]);
 
-    const [globalFilter, setGlobalFilter] = useState("");
-    const [isFiltering, setIsFiltering] = useState(false);
-    const [typeFilter, setTypeFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [industryFilter, setIndustryFilter] = useState<string>("all");
-    const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(
-        null
-    );
-    const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(
-        null
-    );
-
     const filteredData = useMemo(() => {
-        let data = localPosts.filter((item) => item.status == "Removed");
+        let data = localPosts.filter((item) => item.status === "Removed");
 
         data = data.filter((item) => {
             const matchesSearch =
@@ -124,46 +106,21 @@ export function AccountsTable({
                 );
 
             const matchesType = typeFilter === "all" || item.type_client === typeFilter;
+            const matchesAgent =
+                agentFilter === "all" || agentMap[item.referenceid] === agentFilter;
+            const matchesIndustry = industryFilter === "all" || item.industry === industryFilter;
 
-            // Force status === "Pending" filter
-            const matchesStatus = item.status === "Removed";
-
-            const matchesIndustry =
-                industryFilter === "all" || item.industry === industryFilter;
-
-            // Get agent fullname from map using account referenceid
-            const agentFullname = agentMap[item.referenceid] || "";
-
-            // Match agent filter (all or exact fullname)
-            const matchesAgent = agentFilter === "all" || agentFullname === agentFilter;
-
-            return (
-                matchesSearch &&
-                matchesType &&
-                matchesStatus &&
-                matchesIndustry &&
-                matchesAgent
-            );
+            return matchesSearch && matchesType && matchesAgent && matchesIndustry;
         });
 
-        // Sorting logic
-        data = data.sort((a, b) => {
-            if (alphabeticalFilter === "asc") {
-                return a.company_name.localeCompare(b.company_name);
-            } else if (alphabeticalFilter === "desc") {
-                return b.company_name.localeCompare(a.company_name);
-            }
-
-            if (dateCreatedFilter === "asc") {
-                return (
-                    new Date(a.date_created).getTime() - new Date(b.date_created).getTime()
-                );
-            } else if (dateCreatedFilter === "desc") {
-                return (
-                    new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
-                );
-            }
-
+        // Sorting
+        data.sort((a, b) => {
+            if (alphabeticalFilter === "asc") return a.company_name.localeCompare(b.company_name);
+            if (alphabeticalFilter === "desc") return b.company_name.localeCompare(a.company_name);
+            if (dateCreatedFilter === "asc")
+                return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
+            if (dateCreatedFilter === "desc")
+                return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
             return 0;
         });
 
@@ -179,142 +136,23 @@ export function AccountsTable({
         agentMap,
     ]);
 
-    const columns = useMemo<ColumnDef<Account>[]>(
-        () => [
-            {
-                id: "select",
-                header: ({ table }) => (
-                    <Checkbox
-                        checked={table.getIsAllPageRowsSelected()}
-                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                        aria-label="Select all accounts"
-                    />
-                ),
-                cell: ({ row }) => (
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label={`Select account ${row.original.company_name}`}
-                    />
-                ),
-                enableSorting: false,
-                enableHiding: false,
-            },
-            {
-                accessorKey: "agent_name",
-                header: "Agent Name",
-                cell: ({ row }) => {
-                    const accountRefId = row.original.referenceid;
-                    const agent = agents.find((a) => a.ReferenceID === accountRefId);
-                    if (!agent) return "-";
-                    return `${agent.Firstname} ${agent.Lastname}`;
-                },
-            },
-            {
-                accessorKey: "company_name",
-                header: "Company Name",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "contact_person",
-                header: "Contact Person",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "email_address",
-                header: "Email Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "address",
-                header: "Address",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "type_client",
-                header: "Type of Client",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "industry",
-                header: "Industry",
-                cell: (info) => info.getValue(),
-            },
-            {
-                accessorKey: "status",
-                header: "Status",
-                cell: (info) => {
-                    const value = info.getValue() as string;
-                    let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
-                    if (value === "Active") variant = "default";
-                    else if (value === "Pending") variant = "secondary";
-                    else if (value === "Inactive") variant = "destructive";
-                    return <Badge variant={variant}>{value ?? "-"}</Badge>;
-                },
-            },
-            {
-                accessorKey: "date_removed",
-                header: "Date Removed",
-                cell: (info) =>
-                    new Date(info.getValue() as string).toLocaleDateString(),
-            },
-        ],
-        [agents]
-    );
+    const selectedAccountIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
-    useEffect(() => {
-        if (!globalFilter) {
-            setIsFiltering(false);
-            return;
-        }
-        setIsFiltering(true);
-        const timeout = setTimeout(() => setIsFiltering(false), 300);
-        return () => clearTimeout(timeout);
-    }, [globalFilter]);
-
-    const table = useReactTable({
-        data: filteredData,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-
-        state: {
-            rowSelection,
-        },
-        onRowSelectionChange: setRowSelection,
-    });
-
-    // Extract selected account IDs for bulk removal
-    const selectedAccountIds = table
-        .getSelectedRowModel()
-        .rows
-        .map(row => row.original.id);
-
-
-    // Handle bulk remove action
-    async function handleBulkRemove() {
+    // Bulk approve
+    const handleBulkRemove = async () => {
         if (selectedAccountIds.length === 0) return;
 
         try {
             const res = await fetch("/api/com-bulk-approve-account", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ids: selectedAccountIds,
-                    status: "Approved for Deletion",
-                }),
+                body: JSON.stringify({ ids: selectedAccountIds, status: "Approved for Deletion" }),
             });
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData?.error || "Failed to approve accounts");
-            }
+            if (!res.ok) throw new Error("Failed to approve accounts");
 
             const result = await res.json();
-
             if (result.success && result.updatedCount > 0) {
-                // Update localPosts to reflect the change
                 setLocalPosts((prev) =>
                     prev.map((item) =>
                         selectedAccountIds.includes(item.id)
@@ -323,56 +161,22 @@ export function AccountsTable({
                     )
                 );
 
-                sileo.success({
-                    title: "Success",
-                    description: "Accounts approved successfully!",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
-
+                sileo.success({ title: "Success", description: "Accounts approved!", duration: 4000, position: "top-right", fill: "black" });
                 await onRefreshAccountsAction();
-
                 setRowSelection({});
                 setIsRemoveDialogOpen(false);
-                table.setPageIndex(0);
             } else {
-                sileo.warning({
-                    title: "Warning",
-                    description: "No accounts updated. IDs may not exist.",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
+                sileo.warning({ title: "Warning", description: "No accounts updated.", duration: 4000, position: "top-right", fill: "black" });
             }
-        } catch (error) {
-            sileo.error({
-                title: "Failed",
-                description: "Failed to approve accounts",
-                duration: 4000,
-                position: "top-right",
-                fill: "black",
-                styles: {
-                    title: "text-white!",
-                    description: "text-white",
-                },
-            });
+        } catch {
+            sileo.error({ title: "Failed", description: "Failed to approve accounts", duration: 4000, position: "top-right", fill: "black" });
         }
-    }
+    };
 
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-
                 <div className="flex-grow max-w-lg">
                     <AccountsActiveSearch
                         globalFilter={globalFilter}
@@ -380,13 +184,12 @@ export function AccountsTable({
                         isFiltering={isFiltering}
                     />
                 </div>
-
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <AccountsAllFilter
                         typeFilter={typeFilter}
                         setTypeFilterAction={setTypeFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilterAction={setStatusFilter}
+                        statusFilter="Removed"
+                        setStatusFilterAction={() => { }}
                         dateCreatedFilter={dateCreatedFilter}
                         setDateCreatedFilterAction={setDateCreatedFilter}
                         industryFilter={industryFilter}
@@ -398,66 +201,94 @@ export function AccountsTable({
                         agents={agents}
                     />
                     {selectedAccountIds.length > 0 && (
-                        <Button
-                            onClick={() => setIsRemoveDialogOpen(true)}
-                        >
-                            Approved Selected
-                        </Button>
+                        <Button onClick={() => setIsRemoveDialogOpen(true)} className="rounded-none text-xs">Approve Selected</Button>
                     )}
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-md border p-4 space-y-2">
-                {error && (
-                    <div className="text-red-600 font-semibold mb-2">{error}</div>
+            {/* Cards */}
+            <div className="h-[500px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                {error && <div className="col-span-full text-red-600 font-semibold">{error}</div>}
+
+                {filteredData.length > 0 && (
+                    <div className="text-xs font-bold">Total Records: {filteredData.length}</div>
                 )}
-                <Badge
-                    className="h-5 min-w-5 rounded-full px-2 font-mono tabular-nums"
-                    variant="outline"
-                >
-                    Total: {filteredData.length}
-                </Badge>
+                
+                {filteredData.length === 0 ? (
+                    <div className="col-span-full text-center text-gray-500 py-8">
+                        No accounts found.
+                    </div>
+                ) : (
+                    filteredData.map((account) => {
+                        const agentName = agentMap[account.referenceid] || "-";
+                        const isSelected = !!rowSelection[account.id];
 
-                <Table>
-                    <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => (
-                                    <TableHead key={header.id}>
-                                        {flexRender(
-                                            header.column.columnDef.header,
-                                            header.getContext()
-                                        )}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        ))}
-                    </TableHeader>
+                        return (
+                            <div
+                                key={account.id}
+                                className="border rounded-md p-4 shadow-sm bg-white flex flex-col gap-3 hover:shadow-md transition"
+                            >
+                                {/* HEADER */}
+                                <div className="flex items-start justify-between">
+                                    {/* Left: Checkbox + Company Name */}
+                                    <div className="flex items-start gap-3">
+                                        <Checkbox
+                                            checked={!!rowSelection[account.id]}
+                                            className="h-6 w-6 mt-1"
+                                            onCheckedChange={(checked) =>
+                                                setRowSelection((prev) => ({ ...prev, [account.id]: !!checked }))
+                                            }
+                                        />
 
-                    <TableBody>
-                        {table.getRowModel().rows.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={columns.length} className="text-center py-4">
-                                    No accounts found.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            table.getRowModel().rows.map((row) => (
-                                <TableRow key={row.id}>
-                                    {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id} className="whitespace-nowrap">
-                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold text-xs uppercase">
+                                                {account.company_name}
+                                            </span>
+                                            <span className="text-gray-500 text-[11px]">
+                                                Contact: {account.contact_person} | {account.contact_number}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Status Badge */}
+                                    <Badge variant="outline" className="rounded-none">
+                                        {account.status ?? "-"}
+                                    </Badge>
+                                </div>
+
+                                {/* DETAILS */}
+                                <div className="flex flex-col gap-1 text-[11px]">
+                                    <div>
+                                        <span className="text-gray-500">Agent:</span> {agentMap[account.referenceid] || "-"}
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Email:</span> {account.email_address}
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Address:</span> {account.address}
+                                    </div>
+                                </div>
+
+                                {/* FOOTER */}
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                    <div className="flex gap-2 flex-wrap">
+                                        <Badge variant="secondary" className="rounded-none text-[10px]">
+                                            {account.industry}
+                                        </Badge>
+                                        <Badge variant="outline" className="rounded-none text-[10px]">
+                                            {account.type_client}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="text-[10px] text-gray-500">
+                                        Date Removed: {new Date(account.date_removed).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
             </div>
-
-            <AccountsActivePagination table={table} />
 
             <AccountsApproveDialog
                 open={isRemoveDialogOpen}

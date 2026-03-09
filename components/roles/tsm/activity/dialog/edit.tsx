@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, } from "@/components/ui/dialog";
-import { Preview } from "./preview";
+import { Preview } from "../dialog/preview";
 import { Button } from "@/components/ui/button";
 import { Check, ArrowRight, XIcon, FileText } from "lucide-react";
 

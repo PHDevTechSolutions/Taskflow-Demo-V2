@@ -214,7 +214,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
         return {
             agentName: `${agent.Firstname} ${agent.Lastname}`,
             profilePicture: agent.profilePicture || "/Taskflow.png",
-            target_quota,
+            target_quota: agent.TargetQuota || "0",
             totalCalls,
             totalQuotes,
             percentageCallsToQuote,
@@ -303,7 +303,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="text-xs">Agent</TableHead>
-                                <TableHead className="text-xs text-right">Target Quota</TableHead>
+                                <TableHead className="text-xs text-right border-r">Target Quota</TableHead>
                                 <TableHead className="text-xs text-right">No. of Calls (Outbound - Touchbase)</TableHead>
                                 <TableHead className="text-xs text-right">Total Number of Quotes</TableHead>
                                 <TableHead className="text-xs text-right">Percentage of Calls to Quote</TableHead>
@@ -311,7 +311,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                         </TableHeader>
                         <TableBody>
                             {rows.map((row, idx) => (
-                                <TableRow key={idx}>
+                                <TableRow key={idx} className="text-xs">
                                     <TableCell>
                                         <div className="flex items-center gap-2">
                                             <img
@@ -322,10 +322,14 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                                                     (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
                                                 }}
                                             />
-                                            <span className="capitalize text-sm">{row.agentName}</span>
+                                            <span className="capitalize">{row.agentName}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
+                                    <TableCell className="text-right border-r">
+                                        {row.target_quota && row.target_quota !== "0"
+                                            ? Number(row.target_quota).toLocaleString()
+                                            : "-"}
+                                    </TableCell>
                                     <TableCell className="text-right">{row.totalCalls}</TableCell>
                                     <TableCell className="text-right">{row.totalQuotes}</TableCell>
                                     <TableCell className="text-right">{row.percentageCallsToQuote.toFixed(2)}%</TableCell>
@@ -335,7 +339,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                         <tfoot>
                             <TableRow className="font-semibold bg-gray-100">
                                 <TableCell>Total</TableCell>
-                                <TableCell className="text-right">{totals.targetQuota.toLocaleString()}</TableCell>
+                                <TableCell className="text-right border-r">{totals.targetQuota.toLocaleString()}</TableCell>
                                 <TableCell className="text-right">{totals.totalCalls}</TableCell>
                                 <TableCell className="text-right">{totals.totalQuotes}</TableCell>
                                 <TableCell className="text-right">{overallPercentage.toFixed(2)}%</TableCell>

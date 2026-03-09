@@ -5,22 +5,38 @@ import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
-
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
-import { Alert, AlertTitle } from "@/components/ui/alert"
-import { AlertCircleIcon } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
-
-import { AccountsCards } from "@/components/roles/tsm/accounts/transfer/transfer";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { AlertCircleIcon } from "lucide-react";
+
+import { Scheduled } from "@/components/roles/tsm/activity/quotation/pending/pending-quotation";
+import { EndorsedQuotation } from "@/components/roles/tsm/activity/quotation/endorsed/endorsed-quotation";
+import { AccountsCards } from "@/components/roles/tsm/accounts/transfer/transfer";
+import { RequestTable } from "@/components/roles/tsa/accounts/approval/table/table";
+
+interface UserDetails {
+    referenceid: string;
+    tsm: string;
+    manager: string;
+    target_quota: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    contact: string;
+    tsmname: string;
+    managername: string;
+    profilePicture: string;
+    signature: string;
+}
 
 interface Account {
     id: string;
@@ -39,14 +55,7 @@ interface Account {
     status?: string;
     transfer_to: string;
     date_transferred: string;
-}
-
-interface UserDetails {
-    referenceid: string;
-    firstname: string;
-    lastname: string;
-    tsm: string;
-    manager: string;
+    date_removed: string;
 }
 
 function DashboardContent() {
@@ -55,32 +64,37 @@ function DashboardContent() {
 
     const [userDetails, setUserDetails] = useState<UserDetails>({
         referenceid: "",
-        firstname: "",
-        lastname: "",
         tsm: "",
         manager: "",
+        target_quota: "",
+        firstname: "",
+        lastname: "",
+        email: "",
+        contact: "",
+        tsmname: "",
+        managername: "",
+        profilePicture: "",
+        signature: "",
     });
 
-    const [agents, setAgents] = useState<any[]>([]);
-    const [posts, setPosts] = useState<Account[]>([]);
-
     const [loadingUser, setLoadingUser] = useState(true);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [posts, setPosts] = useState<Account[]>([]);
+    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [agentFilter, setAgentFilter] = useState<string>("all");
 
-    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
-        useState<DateRange | undefined>(undefined);
+    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
-    // Sync URL ?id=123 with context userId
+    // Sync URL query param with userId context
     useEffect(() => {
         if (queryUserId && queryUserId !== userId) {
             setUserId(queryUserId);
         }
     }, [queryUserId, userId, setUserId]);
 
+    // Fetch user details when userId changes
     useEffect(() => {
         if (!userId) {
             setLoadingUser(false);
@@ -93,15 +107,21 @@ function DashboardContent() {
             try {
                 const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
                 if (!response.ok) throw new Error("Failed to fetch user data");
-
                 const data = await response.json();
 
                 setUserDetails({
                     referenceid: data.ReferenceID || "",
-                    firstname: data.FirstName || "",
-                    lastname: data.LastName || "",
                     tsm: data.TSM || "",
                     manager: data.Manager || "",
+                    target_quota: data.TargetQuota || "",
+                    firstname: data.Firstname || "",
+                    lastname: data.Lastname || "",
+                    email: data.Email || "",
+                    contact: data.ContactNumber || "",
+                    tsmname: data.TSMName || "",
+                    managername: data.ManagerName || "",
+                    profilePicture: data.profilePicture || "",
+                    signature: data.signatureImage || "",
                 });
 
                 sileo.success({
@@ -269,13 +289,11 @@ function DashboardContent() {
                     <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
                         <div className="flex flex-1 items-center gap-2 px-3">
                             <SidebarTrigger />
-                            <Separator orientation="vertical" className="mr-2 h-4" />
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">
-                                            Customer Database - Pending Accounts for Transfer
-                                        </BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Activity Planner</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
@@ -283,41 +301,100 @@ function DashboardContent() {
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        {loadingUser ? (
-                            <div className="flex items-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px]" />
-                                    <Skeleton className="h-4 w-[200px]" />
-                                </div>
-                            </div>
+                        {/* 4-card grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+                            {/* Card 1 */}
+                            <Card className="rounded-none border">
+                                <CardHeader className="flex flex-col space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircleIcon className="w-5 h-5 text-red-500" />
+                                        <CardTitle className="text-sm font-semibold">Pending Approval of Quotations</CardTitle>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        These are the quotations that are awaiting manager or TSM approval.
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <Scheduled
+                                        referenceid={userDetails.referenceid}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        signature={userDetails.signature}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                    />
+                                </CardContent>
+                            </Card>
 
-                        ) : loadingAccounts ? (
-                            <div className="flex items-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px]" />
-                                    <Skeleton className="h-4 w-[200px]" />
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                {error && (
-                                    <Alert variant="destructive">
-                                        <AlertCircleIcon />
-                                        <AlertTitle>{error}</AlertTitle>
-                                    </Alert>
-                                )}
+                            {/* Card 2 */}
+                            <Card className="rounded-none border">
+                                <CardHeader className="flex flex-col space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircleIcon className="w-5 h-5 text-red-500" />
+                                        <CardTitle className="text-sm font-semibold">Pending Endorsed Quotation</CardTitle>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Quotations that are awaiting manager approval
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <EndorsedQuotation
+                                        referenceid={userDetails.referenceid}
+                                        email={userDetails.email}
+                                        contact={userDetails.contact}
+                                        signature={userDetails.signature}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                    />
+                                </CardContent>
+                            </Card>
 
-                                <AccountsCards
-                                    posts={filteredData}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                    userDetails={userDetails}
-                                    onRefreshAccountsAction={refreshAccounts}
-                                />
-                            </>
-                        )}
+                            {/* Card 3 */}
+                            <Card className="rounded-none border">
+                                <CardHeader className="flex flex-col space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircleIcon className="w-5 h-5 text-red-500" />
+                                        <CardTitle className="text-sm font-semibold">Pending Transfer</CardTitle>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Accounts that are currently marked as subject for transfer and waiting for approval.
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <AccountsCards
+                                        posts={filteredData}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        userDetails={userDetails}
+                                        onRefreshAccountsAction={refreshAccounts}
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            {/* Card 4 */}
+                            <Card className="rounded-none border">
+                                <CardHeader className="flex flex-col space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircleIcon className="w-5 h-5 text-red-500" />
+                                        <CardTitle className="text-sm font-semibold">Pending Request Account Deletion</CardTitle>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Below is the list of accounts pending deletion requests. You can review and approve the selected accounts.
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <RequestTable
+                                        posts={filteredData}
+                                        dateCreatedFilterRange={dateCreatedFilterRange}
+                                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                        userDetails={userDetails}
+                                        onRefreshAccountsAction={refreshAccounts}
+                                    />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Existing content or other cards can go below */}
                     </main>
                 </SidebarInset>
 

@@ -9,14 +9,32 @@ import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
-import { Scheduled } from "@/components/roles/tsm/activity/quotation/pending/pending-quotation";
-import { type DateRange } from "react-day-picker";
 
+import { Summary } from "@/components/roles/tsm/conversion/summary";
+
+import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
+interface Account {
+    id: string;
+    referenceid: string;
+    company_name: string;
+    type_client: string;
+    date_created: string;
+    date_updated: string;
+    contact_person: string;
+    contact_number: string;
+    email_address: string;
+    address: string;
+    delivery_address: string;
+    region: string;
+    industry: string;
+    status?: string;
+    company_group?: string;
+}
 
 interface UserDetails {
     referenceid: string;
@@ -25,12 +43,7 @@ interface UserDetails {
     target_quota: string;
     firstname: string;
     lastname: string;
-    email: string;
-    contact: string;
-    tsmname: string;
-    managername: string;
     profilePicture: string;
-    signature: string;
 }
 
 function DashboardContent() {
@@ -44,17 +57,16 @@ function DashboardContent() {
         target_quota: "",
         firstname: "",
         lastname: "",
-        email: "",
-        contact: "",
-        tsmname: "",
-        managername: "",
         profilePicture: "",
-        signature: "",
     });
 
+    const [posts, setPosts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
+    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
+    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
+        DateRange | undefined
+    >(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
@@ -87,12 +99,7 @@ function DashboardContent() {
                     target_quota: data.TargetQuota || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
-                    email: data.Email || "",
-                    contact: data.ContactNumber || "",
-                    tsmname: data.TSMName || "",
-                    managername: data.ManagerName || "",
-                    profilePicture: data.profilePicture || "",
-                    signature: data.signatureImage || "",
+                    profilePicture: data.profilePicture || ""
                 });
 
                 sileo.success({
@@ -107,17 +114,6 @@ function DashboardContent() {
                     },
                 });
             } catch (err) {
-                sileo.warning({
-                    title: "Failed",
-                    description: "Error fetching user data:",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
                 sileo.error({
                     title: "Failed",
                     description: "Failed to connect to server. Please try again later or refresh your network connection",
@@ -137,6 +133,8 @@ function DashboardContent() {
         fetchUserData();
     }, [userId]);
 
+    const loading = loadingUser || loadingAccounts;
+
     return (
         <>
             <ProtectedPageWrapper>
@@ -149,26 +147,22 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Pending Approval for Quotations</BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Conversion Rates</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
                         </div>
                     </header>
 
-                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        <Card className="rounded-none">
-                            <CardContent>
-                                <Scheduled
-                                    referenceid={userDetails.referenceid}
-                                    email={userDetails.email}
-                                    contact={userDetails.contact}
-                                    signature={userDetails.signature}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                />
-                            </CardContent>
-                        </Card>
+                    <main className="grid grid-cols-1 gap-4 p-4 overflow-auto">
+                        <div>
+                            <Summary
+                                referenceid={userDetails.referenceid}
+                                dateCreatedFilterRange={dateCreatedFilterRange}
+                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                userDetails={userDetails}
+                            />
+                        </div>
                     </main>
                 </SidebarInset>
 

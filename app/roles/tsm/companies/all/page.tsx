@@ -9,11 +9,11 @@ import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertTitle } from "@/components/ui/alert"
-import { AlertCircleIcon } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 
@@ -47,44 +47,27 @@ interface UserDetails {
     lastname: string;
     tsm: string;
     manager: string;
+    profilepicture: string;
 }
 
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
 
-    const [userDetails, setUserDetails] = useState<UserDetails>({
-        referenceid: "",
-        firstname: "",
-        lastname: "",
-        tsm: "",
-        manager: "",
-    });
-
+    const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "", firstname: "", lastname: "", tsm: "", manager: "", profilepicture: "" });
     const [posts, setPosts] = useState<Account[]>([]);
-
     const [loadingUser, setLoadingUser] = useState(true);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [agentFilter, setAgentFilter] = useState<string>("all");
-
-    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
-        useState<DateRange | undefined>(undefined);
+    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
-    // Sync URL ?id=123 with context userId
-    useEffect(() => {
-        if (queryUserId && queryUserId !== userId) {
-            setUserId(queryUserId);
-        }
-    }, [queryUserId, userId, setUserId]);
+    useEffect(() => { if (queryUserId && queryUserId !== userId) setUserId(queryUserId); }, [queryUserId, userId, setUserId]);
 
     useEffect(() => {
-        if (!userId) {
-            setLoadingUser(false);
-            return;
-        }
+        if (!userId) { setLoadingUser(false); return; }
 
         const fetchUserData = async () => {
             setError(null);
@@ -92,105 +75,35 @@ function DashboardContent() {
             try {
                 const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
                 if (!response.ok) throw new Error("Failed to fetch user data");
-
                 const data = await response.json();
-
-                setUserDetails({
-                    referenceid: data.ReferenceID || "",
-                    firstname: data.FirstName || "",
-                    lastname: data.LastName || "",
-                    tsm: data.TSM || "",
-                    manager: data.Manager || "",
-                });
-
-                sileo.success({
-                    title: "Success",
-                    description: "User data loaded successfully!",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
+                setUserDetails({ referenceid: data.ReferenceID || "", firstname: data.FirstName || "", lastname: data.LastName || "", tsm: data.TSM || "", manager: data.Manager || "", profilepicture: data.profilePicture || "" });
+                sileo.success({ title: "Success", description: "User data loaded successfully!", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
             } catch (err) {
-                sileo.warning({
-                    title: "Failed",
-                    description: "Error fetching user data:",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
-                sileo.error({
-                    title: "Failed",
-                    description: "Failed to connect to server. Please try again later or refresh your network connection",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
-            } finally {
-                setLoadingUser(false);
-            }
+                sileo.warning({ title: "Failed", description: "Error fetching user data:", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+                sileo.error({ title: "Failed", description: "Failed to connect to server. Please try again later or refresh your network connection", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+            } finally { setLoadingUser(false); }
         };
 
         fetchUserData();
     }, [userId]);
 
     useEffect(() => {
-        if (!userDetails.referenceid) {
-            setPosts([]);
-            return;
-        }
+        if (!userDetails.referenceid) { setPosts([]); return; }
 
         const fetchAccounts = async () => {
             setError(null);
             setLoadingAccounts(true);
             try {
-                const response = await fetch(
-                    `/api/com-fetch-approval-account?tsm=${encodeURIComponent(
-                        userDetails.referenceid
-                    )}`
-                );
-
+                const response = await fetch(`/api/com-fetch-approval-account?tsm=${encodeURIComponent(userDetails.referenceid)}`);
                 if (!response.ok) throw new Error("Failed to fetch accounts");
-
                 const data = await response.json();
-                setPosts(data.data || []);
-                sileo.success({
-                    title: "Success",
-                    description: "Accounts loaded successfully!",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
+                // Only keep accounts with status === 'Active'
+                const activeAccounts = (data.data || []).filter((item: Account) => item.status === "Active");
+                setPosts(activeAccounts);
+                sileo.success({ title: "Success", description: "Accounts loaded successfully!", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
             } catch (err) {
-                sileo.error({
-                    title: "Failed",
-                    description: "Failed to connect to server. Please try again later or refresh your network connection",
-                    duration: 4000,
-                    position: "top-right",
-                    fill: "black",
-                    styles: {
-                        title: "text-white!",
-                        description: "text-white",
-                    },
-                });
-            } finally {
-                setLoadingAccounts(false);
-            }
+                sileo.error({ title: "Failed", description: "Failed to connect to server. Please try again later or refresh your network connection", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+            } finally { setLoadingAccounts(false); }
         };
 
         fetchAccounts();
@@ -198,97 +111,62 @@ function DashboardContent() {
 
     const filteredData = useMemo(() => {
         let filteredPosts = posts;
-
-        // Filter by date range
-        if (
-            dateCreatedFilterRange &&
-            dateCreatedFilterRange.from &&
-            dateCreatedFilterRange.to
-        ) {
+        if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
             const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
             const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
-
-            filteredPosts = filteredPosts.filter((item) => {
+            filteredPosts = filteredPosts.filter(item => {
                 const createdDate = new Date(item.date_created).getTime();
                 return createdDate >= fromTime && createdDate <= toTime;
             });
         }
-
-        // Filter by agent
-        if (agentFilter !== "all") {
-            filteredPosts = filteredPosts.filter((item) => item.tsm === agentFilter);
-        }
-
+        if (agentFilter !== "all") filteredPosts = filteredPosts.filter(item => item.tsm === agentFilter);
         return filteredPosts;
     }, [posts, dateCreatedFilterRange, agentFilter]);
 
     return (
-        <>
-            <ProtectedPageWrapper>
-                <SidebarLeft />
-                <SidebarInset className="overflow-hidden">
-                    <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-                        <div className="flex flex-1 items-center gap-2 px-3">
-                            <SidebarTrigger />
-                            <Separator orientation="vertical" className="mr-2 h-4" />
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                    <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">
-                                            Customer Database - All
-                                        </BreadcrumbPage>
-                                    </BreadcrumbItem>
-                                </BreadcrumbList>
-                            </Breadcrumb>
+        <ProtectedPageWrapper>
+            <SidebarLeft />
+            <SidebarInset className="overflow-hidden">
+                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+                    <div className="flex flex-1 items-center gap-2 px-3">
+                        <SidebarTrigger />
+                        <Separator orientation="vertical" className="mr-2 h-4" />
+                        <Breadcrumb>
+                            <BreadcrumbList>
+                                <BreadcrumbItem>
+                                    <BreadcrumbPage className="line-clamp-1">Customer Database - All</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </BreadcrumbList>
+                        </Breadcrumb>
+                    </div>
+                </header>
+
+                <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+                    {(loadingUser || loadingAccounts) ? (
+                        <div className="flex items-center space-x-4">
+                            <Skeleton className="h-12 w-12 rounded-full" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-[250px]" />
+                                <Skeleton className="h-4 w-[200px]" />
+                            </div>
                         </div>
-                    </header>
+                    ) : (
+                        <>
+                            {error && (
+                                <Alert variant="destructive">
+                                    <AlertCircleIcon />
+                                    <AlertTitle>{error}</AlertTitle>
+                                </Alert>
+                            )}
 
-                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        {loadingUser ? (
-                            <div className="flex items-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px]" />
-                                    <Skeleton className="h-4 w-[200px]" />
-                                </div>
-                            </div>
+                            <AccountsTable posts={filteredData} userDetails={userDetails} />
+                        </>
+                    )}
+                </main>
+            </SidebarInset>
 
-                        ) : loadingAccounts ? (
-                            <div className="flex items-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px]" />
-                                    <Skeleton className="h-4 w-[200px]" />
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                {error && (
-                                    <Alert variant="destructive">
-                                        <AlertCircleIcon />
-                                        <AlertTitle>{error}</AlertTitle>
-                                    </Alert>
-                                )}
-
-                                <AccountsTable
-                                    posts={filteredData}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                    userDetails={userDetails}
-
-                                />
-                            </>
-                        )}
-                    </main>
-                </SidebarInset>
-
-                <SidebarRight
-                    userId={userId ?? undefined}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                />
-            </ProtectedPageWrapper>
-        </>
+            <SidebarRight userId={userId ?? undefined} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+        </ProtectedPageWrapper>
     );
 }
 

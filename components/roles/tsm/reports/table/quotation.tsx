@@ -347,7 +347,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="w-[120px] text-xs">Date Created</TableHead>
+                <TableHead className="w-[120px] text-xs text-right">Date Created</TableHead>
                 <TableHead className="text-xs">Quotation Number</TableHead>
                 <TableHead className="text-right text-xs">Quotation Amount</TableHead>
                 <TableHead className="text-xs">Company Name</TableHead>
@@ -373,7 +373,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                       )}
                       <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                     </TableCell>
-                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">{new Date(item.date_created).toLocaleDateString()}</TableCell>
                     <TableCell className="uppercase">{item.quotation_number || "-"}</TableCell>
                     <TableCell className="text-right">
                       {item.quotation_amount !== undefined && item.quotation_amount !== null

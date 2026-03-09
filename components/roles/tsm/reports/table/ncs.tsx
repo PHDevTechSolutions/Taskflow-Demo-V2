@@ -363,8 +363,8 @@ export const NCSTable: React.FC<NCSProps> = ({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                <TableHead className="text-xs">Quotation Amount</TableHead>
+                <TableHead className="w-[120px] text-xs text-right">Date Created</TableHead>
+                <TableHead className="text-xs text-right">Quotation Amount</TableHead>
                 <TableHead className="text-xs">Quotation Number</TableHead>
                 <TableHead className="text-xs">Company Name</TableHead>
                 <TableHead className="text-xs">Contact Person</TableHead>
@@ -390,7 +390,7 @@ export const NCSTable: React.FC<NCSProps> = ({
                       )}
                       <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                     </TableCell>
-                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">{new Date(item.date_created).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       {item.quotation_amount !== undefined && item.quotation_amount !== null
                         ? item.quotation_amount.toLocaleString(undefined, {
@@ -401,7 +401,7 @@ export const NCSTable: React.FC<NCSProps> = ({
                     </TableCell>
                     <TableCell className="uppercase">{item.quotation_number || "-"}</TableCell>
                     <TableCell>{item.company_name}</TableCell>
-                    <TableCell>{item.contact_person}</TableCell>
+                    <TableCell className="capitalize">{item.contact_person}</TableCell>
                     <TableCell>{item.contact_number}</TableCell>
                     <TableCell className="capitalize">{item.type_client || "-"}</TableCell>
                   </TableRow>

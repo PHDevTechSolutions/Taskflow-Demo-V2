@@ -357,7 +357,7 @@ export const SOTable: React.FC<SOProps> = ({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="w-[120px] text-xs">Date Created</TableHead>
+                <TableHead className="w-[120px] text-xs text-right">Date Created</TableHead>
                 <TableHead className="text-right text-xs">SO Amount</TableHead>
                 <TableHead className="text-xs">Company Name</TableHead>
                 <TableHead className="text-xs">Contact Person</TableHead>
@@ -382,7 +382,7 @@ export const SOTable: React.FC<SOProps> = ({
                     )}
                     <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                   </TableCell>
-                  <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">{new Date(item.date_created).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     {item.so_amount !== undefined && item.so_amount !== null
                       ? item.so_amount.toLocaleString(undefined, {
@@ -400,7 +400,7 @@ export const SOTable: React.FC<SOProps> = ({
             </TableBody>
             <tfoot>
               <TableRow className="bg-muted font-semibold text-xs">
-                <TableCell colSpan={3} className="text-right pr-4"></TableCell>
+                <TableCell colSpan={2} className="text-right pr-4"></TableCell>
                 <TableCell className="text-right">
                   Totals:{" "}
                   {totalSOAmount.toLocaleString(undefined, {

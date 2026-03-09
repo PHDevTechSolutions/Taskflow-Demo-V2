@@ -8,7 +8,7 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import TaskListEditDialog from "../../planner/dialog/edit";
+import TaskListEditDialog from "../../dialog/edit";
 
 interface SupervisorDetails {
     firstname: string;

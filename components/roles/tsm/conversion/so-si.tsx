@@ -205,7 +205,7 @@ export const SOSI: React.FC<SOSIProps> = ({
     return {
       agentName: `${agent.Firstname} ${agent.Lastname}`,
       profilePicture: agent.profilePicture || "/Taskflow.png",
-      target_quota,
+      target_quota: agent.TargetQuota || "0",
       totalSO,
       totalSI,
       percentageSOToSI,
@@ -294,7 +294,7 @@ export const SOSI: React.FC<SOSIProps> = ({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="text-xs text-right">Target Quota</TableHead>
+                <TableHead className="text-xs text-right border-r">Target Quota</TableHead>
                 <TableHead className="text-xs text-right">Total No. of SO</TableHead>
                 <TableHead className="text-xs text-right">Total No. of SI</TableHead>
                 <TableHead className="text-xs text-right">Percentage of SO to SI</TableHead>
@@ -302,7 +302,7 @@ export const SOSI: React.FC<SOSIProps> = ({
             </TableHeader>
             <TableBody>
               {rows.map((row, idx) => (
-                <TableRow key={idx}>
+                <TableRow key={idx} className="text-xs">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <img
@@ -313,10 +313,14 @@ export const SOSI: React.FC<SOSIProps> = ({
                           (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
                         }}
                       />
-                      <span className="capitalize text-sm">{row.agentName}</span>
+                      <span className="capitalize">{row.agentName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
+                  <TableCell className="text-right border-r">
+                    {row.target_quota && row.target_quota !== "0"
+                      ? Number(row.target_quota).toLocaleString()
+                      : "-"}
+                  </TableCell>
                   <TableCell className="text-right">{row.totalSO}</TableCell>
                   <TableCell className="text-right">{row.totalSI}</TableCell>
                   <TableCell className="text-right">{row.percentageSOToSI.toFixed(2)}%</TableCell>
@@ -326,7 +330,7 @@ export const SOSI: React.FC<SOSIProps> = ({
             <tfoot>
               <TableRow className="font-semibold bg-gray-100">
                 <TableCell>Total</TableCell>
-                <TableCell className="text-right">{totalQuota.toFixed(0)}</TableCell>
+                <TableCell className="text-right border-r">{totalQuota.toFixed(0)}</TableCell>
                 <TableCell className="text-right">{totalSOAll}</TableCell>
                 <TableCell className="text-right">{totalSIAll}</TableCell>
                 <TableCell className="text-right">{totalPercentageAll.toFixed(2)}%</TableCell>

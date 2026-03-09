@@ -357,7 +357,7 @@ export const CSRTable: React.FC<CSRProps> = ({
                 <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="w-[120px] text-xs">Date Created</TableHead>
                 <TableHead className="text-xs">Ticket Reference Number</TableHead>
-                <TableHead className="text-xs">Quotation Amount</TableHead>
+                <TableHead className="text-xs text-right">Quotation Amount</TableHead>
                 <TableHead className="text-xs">Company Name</TableHead>
                 <TableHead className="text-xs">Contact Person</TableHead>
                 <TableHead className="text-xs">Contact Number</TableHead>
@@ -382,7 +382,7 @@ export const CSRTable: React.FC<CSRProps> = ({
                       )}
                       <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
                     </TableCell>
-                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">{new Date(item.date_created).toLocaleDateString()}</TableCell>
                     <TableCell className="uppercase">{item.ticket_reference_number || "-"}</TableCell>
                     <TableCell className="text-right">
                       {item.quotation_amount !== undefined && item.quotation_amount !== null
