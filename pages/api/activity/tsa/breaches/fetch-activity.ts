@@ -4,19 +4,15 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
 
-function formatDate(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 /* ------------------ Fetch overdue activities ------------------ */
-async function fetchOverdueActivities(referenceid: string, today: string) {
-  console.log("📌 fetchOverdueActivities:", { referenceid, today });
+async function fetchOverdueActivities(referenceid: string) {
+  console.log("📌 fetchOverdueActivities:", { referenceid });
 
   let allActivities: any[] = [];
   let offset = 0;
+
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0); // midnight today
 
   while (true) {
     try {
@@ -24,19 +20,19 @@ async function fetchOverdueActivities(referenceid: string, today: string) {
         .from("activity")
         .select("*")
         .eq("referenceid", referenceid)
-        .lt("scheduled_date", today)
         .range(offset, offset + BATCH_SIZE - 1);
 
       if (error) throw error;
-
       if (!data || data.length === 0) break;
 
-      const filtered = data.filter(
-        (a) => a.status !== "Cancelled" && a.status !== "Done"
-      );
+      // Only past dates, exclude today/future
+      const filtered = data.filter((a) => {
+        const scheduled = new Date(a.scheduled_date);
+        scheduled.setHours(0, 0, 0, 0);
+        return scheduled < todayDate && a.status !== "Cancelled" && a.status !== "Done";
+      });
 
       const mapped = filtered.map((a) => ({ ...a, status: "Assisted" }));
-
       allActivities.push(...mapped);
 
       if (data.length < BATCH_SIZE) break;
@@ -75,7 +71,6 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
         .range(offset, offset + BATCH_SIZE - 1);
 
       if (error) throw error;
-
       if (!data || data.length === 0) break;
 
       allData.push(...data);
@@ -90,7 +85,7 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
 
   console.log("✅ Total unsuccessful history fetched:", allData.length);
 
-  // Fetch successful counterparts
+  // Remove any with a successful counterpart
   try {
     const { data: successfulData, error: errSuccess } = await supabase
       .from("history")
@@ -124,18 +119,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  const today = formatDate(new Date());
-  console.log("✅ referenceid:", referenceid, "today:", today);
-
   try {
-    // 1️⃣ Fetch overdue activities
-    const activities = await fetchOverdueActivities(referenceid, today);
+    // 1️⃣ Fetch overdue activities (past days only)
+    const activities = await fetchOverdueActivities(referenceid);
     const activityIds = activities.map((a) => a.activity_reference_number);
 
     // 2️⃣ Fetch filtered Unsuccessful history
     const unsuccessfulHistory = await fetchUnsuccessfulHistory(activityIds);
 
-    // 3️⃣ Include only activities that have at least 1 Unsuccessful history
+    // 3️⃣ Only include activities that have at least 1 Unsuccessful history
     const overdueActivities = activities.filter((a) =>
       unsuccessfulHistory.some((h) => h.activity_reference_number === a.activity_reference_number)
     );

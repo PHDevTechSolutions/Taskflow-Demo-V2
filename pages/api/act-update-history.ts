@@ -141,6 +141,10 @@ export default async function handler(
     .update({
       tsm_signature: null,
       manager_signature: null,
+      tsm_approval_date: null,
+      tsm_remarks: null,
+      manager_remarks: null,
+      manager_approval_date: null,
     })
     .eq("quotation_number", originalQuotationNumber);
 
