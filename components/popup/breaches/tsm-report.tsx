@@ -179,7 +179,7 @@ export default function TSMReports() {
                 const data = await res.json();
                 const refId = data.ReferenceID || "";
                 setUserDetails({
-                    //referenceid: "MF-PH-840897",
+                    //referenceid: "AB-NCR-288130",
                     referenceid: refId,
                     role: data.Role || "",
                     firstname: data.Firstname || "",
@@ -513,17 +513,22 @@ export default function TSMReports() {
             const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
             monthStart.setHours(0, 0, 0, 0);
 
-            // 6-day week
-            const sixDaysAgo = new Date(targetDate);
-            sixDaysAgo.setDate(targetDate.getDate() - 6);
-            sixDaysAgo.setHours(0, 0, 0, 0);
-            const weekStart = sixDaysAgo < monthStart ? monthStart : sixDaysAgo;
+            // --- Weekly activities based on calendar week ---
+            const day = targetDate.getDay(); // Sunday = 0, Monday = 1, ... Saturday = 6
+            const diffToMonday = day === 0 ? 6 : day - 1; // Make Monday start of week
+            const weekStart = new Date(targetDate);
+            weekStart.setDate(targetDate.getDate() - diffToMonday);
+            weekStart.setHours(0, 0, 0, 0);
+
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
 
             const weeklyCount = activities.filter((act) => {
                 const actTime = new Date(act.date_created).getTime();
                 return (
                     actTime >= weekStart.getTime() &&
-                    actTime <= targetDate.getTime() &&
+                    actTime <= weekEnd.getTime() &&
                     (act.type_activity === "Outbound Calls" || act.source === "history")
                 );
             }).length;
