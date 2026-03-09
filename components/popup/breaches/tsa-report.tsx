@@ -907,7 +907,7 @@ export default function TSMReports() {
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="border-r border-gray-200">
-                                <p className="text-[10px] text-gray-500 uppercase">Daily</p>
+                                <p className="text-[10px] text-gray-500 uppercase">Daily (Current)</p>
                                 <p className="font-bold text-sm">{outboundDaily} / 20</p>
                             </div>
                             <div className="border-r border-gray-200">
