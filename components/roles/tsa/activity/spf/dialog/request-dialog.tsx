@@ -54,6 +54,7 @@ export function RequestDialog({
         { label: "Delivery Address", key: "delivery_address" },
         { label: "Billing Address", key: "billing_address" },
         { label: "Collection Address", key: "collection_address" },
+        { label: "Tin Number", key: "tin_no" },
     ];
 
     const rightFields = [
@@ -61,6 +62,8 @@ export function RequestDialog({
         { label: "Payment Terms", key: "payment_terms" },
         { label: "Warranty", key: "warranty" },
         { label: "Delivery Date", key: "delivery_date", type: "date" },
+        { label: "Special Instructions", key: "special_instructions" },
+        { label: "Sales Person", key: "sales_person" },
         { label: "Prepared By", key: "prepared_by" },
         { label: "Approved By", key: "approved_by" },
     ];
@@ -119,14 +122,25 @@ export function RequestDialog({
                                         <label className="text-xs font-medium text-muted-foreground mb-1">
                                             {field.label}
                                         </label>
-                                        <Input
-                                            type={field.type || "text"}
-                                            className="rounded-none"
-                                            value={currentSPF?.[field.key] || ""}
-                                            onChange={(e) =>
-                                                setCurrentSPF({ ...currentSPF, [field.key]: e.target.value })
-                                            }
-                                        />
+
+                                        {field.key === "special_instructions" ? (
+                                            <textarea
+                                                className="border rounded-none p-2 text-sm min-h-[200px]"
+                                                value={currentSPF?.[field.key] || ""}
+                                                onChange={(e) =>
+                                                    setCurrentSPF({ ...currentSPF, [field.key]: e.target.value })
+                                                }
+                                            />
+                                        ) : (
+                                            <Input
+                                                type={field.type || "text"}
+                                                className="rounded-none"
+                                                value={currentSPF?.[field.key] || ""}
+                                                onChange={(e) =>
+                                                    setCurrentSPF({ ...currentSPF, [field.key]: e.target.value })
+                                                }
+                                            />
+                                        )}
                                     </div>
                                 ))}
                         </div>
@@ -155,9 +169,7 @@ export function RequestDialog({
                                     type="text"
                                     className="rounded-none"
                                     value={currentSPF?.approved_by || ""}
-                                    onChange={(e) =>
-                                        setCurrentSPF({ ...currentSPF, approved_by: e.target.value })
-                                    }
+                                    disabled
                                 />
                             </div>
                         </div>

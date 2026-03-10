@@ -27,13 +27,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             payment_terms: data.payment_terms ?? null,
             warranty: data.warranty ?? null,
             delivery_date: data.delivery_date ?? null,
+            special_instructions: data.special_instructions ?? null,
             prepared_by: data.prepared_by ?? null,
             approved_by: data.approved_by ?? null,
+            status: "Pending",
+            tin_no: data.tin_no ?? null,
+            sales_person: data.sales_person ?? null,
             referenceid: data.referenceid,
             tsm: data.tsm ?? null,
             manager: data.manager ?? null,
             start_date: data.start_date ? new Date(data.start_date) : null, // <-- convert to Date
-    end_date: data.end_date ? new Date(data.end_date) : null,
+            end_date: data.end_date ? new Date(data.end_date) : null,
             date_created: new Date().toISOString(),
         };
 

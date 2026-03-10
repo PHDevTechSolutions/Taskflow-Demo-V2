@@ -191,8 +191,8 @@ export default function TSMReports() {
                 const data = await res.json();
                 const refId = data.ReferenceID || "";
                 setUserDetails({
-                    referenceid: "RT-NCR-815758",
-                    //referenceid: refId,
+                    //referenceid: "AB-NCR-288130",
+                    referenceid: refId,
                     role: data.Role || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",

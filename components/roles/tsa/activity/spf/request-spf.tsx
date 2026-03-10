@@ -34,8 +34,11 @@ interface SPF {
     delivery_date?: string;
     prepared_by?: string;
     approved_by?: string;
+    sales_person?: string;
     start_date?: string;
     end_date?: string;
+    special_instructions?: string;
+    status?: string;
 }
 
 interface SPFProps {
@@ -172,32 +175,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     };
 
-
-    const openCreateDialogWithAccount = (acc: Account) => {
-        setIsEditMode(false);
-
-        const nowISO = new Date().toISOString();
-
-        setCurrentSPF({
-            start_date: nowISO,
-            end_date: nowISO,
-            prepared_by: prepared_by || "",
-            customer_name: acc.company_name,
-            contact_person: acc.contact_person,
-            contact_number: acc.contact_number,
-            registered_address: acc.address,
-        });
-
-        setEndTime(nowISO);
-        setDialogOpen(true);
-
-        endTimerRef.current = window.setInterval(() => {
-            const isoNow = new Date().toISOString();
-            setEndTime(isoNow);
-            setCurrentSPF((prev) => ({ ...prev, end_date: isoNow }));
-        }, 1000);
-    };
-
     const openEditDialog = (spf: SPF) => {
         setIsEditMode(true);
         setCurrentSPF(spf);
@@ -220,6 +197,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             customer_name: acc.company_name,
             registered_address: acc.address,
             prepared_by: prepared_by || "",
+            sales_person: prepared_by || "",
             start_date: new Date().toISOString(),
             end_date: new Date().toISOString(),
         });
@@ -274,6 +252,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         try {
             const payload = {
                 ...currentSPF,
+                sales_person: currentSPF.prepared_by,
                 start_date: finalStartDate,
                 end_date: finalEndDate,
                 referenceid,
@@ -457,6 +436,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="text-xs">Actions</TableHead>
+                                <TableHead className="text-xs">Status</TableHead>
                                 <TableHead className="text-xs">SPF Number</TableHead>
                                 <TableHead className="text-xs">Customer Name</TableHead>
                                 <TableHead className="text-xs">Contact Person</TableHead>
@@ -488,6 +468,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
+                                    <TableCell>{item.status}</TableCell>
                                     <TableCell>{item.spf_number}</TableCell>
                                     <TableCell>{item.customer_name}</TableCell>
                                     <TableCell>{item.contact_person}</TableCell>
