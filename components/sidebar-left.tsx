@@ -102,6 +102,7 @@ const data = {
         { name: "Activity Planner", url: "/roles/tsa/activity/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/roles/tsa/activity/tasklist", icon: ClipboardList },
         { name: "Quotations", url: "/roles/tsa/activity/revised-quotation", icon: Compass },
+        { name: "SPF Request", url: "/roles/tsa/activity/spf", icon: Mail },
         { name: "Daily Admin Task", url: "/roles/tsa/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
 

@@ -191,8 +191,8 @@ export default function TSMReports() {
                 const data = await res.json();
                 const refId = data.ReferenceID || "";
                 setUserDetails({
-                    //referenceid: "MF-PH-840897",
-                    referenceid: refId,
+                    referenceid: "RT-NCR-815758",
+                    //referenceid: refId,
                     role: data.Role || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
@@ -498,37 +498,37 @@ export default function TSMReports() {
             setTotalSales(sales);
             setNewClientCount(newClients);
 
-            // Outbound Daily / Weekly / Monthly
+            // Outbound Daily
             const daily = dailyActivities.filter(
-                (a) => a.type_activity === "Outbound Calls" || a.source === "history",
+                (a) => a.type_activity === "Outbound Calls" || a.source === "history"
             ).length;
 
-            // first day of month
-            const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-            monthStart.setHours(0, 0, 0, 0);
+            // --- Weekly activities based on calendar week ---
+            const day = targetDate.getDay(); // Sunday = 0, Monday = 1, ... Saturday = 6
+            const diffToMonday = day === 0 ? 6 : day - 1; // Make Monday start of week
+            const weekStart = new Date(targetDate);
+            weekStart.setDate(targetDate.getDate() - diffToMonday);
+            weekStart.setHours(0, 0, 0, 0);
 
-            // normal 7-day calculation
-            const sixDaysAgo = new Date(targetDate);
-            sixDaysAgo.setDate(targetDate.getDate() - 6);
-            sixDaysAgo.setHours(0, 0, 0, 0);
-
-            // prevent going to previous month
-            const weekStart = sixDaysAgo < monthStart ? monthStart : sixDaysAgo;
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
 
             const weekly = activities.filter((act) => {
                 const actTime = new Date(act.date_created).getTime();
                 return (
                     actTime >= weekStart.getTime() &&
-                    actTime <= targetDate.getTime() &&
+                    actTime <= weekEnd.getTime() &&
                     (act.type_activity === "Outbound Calls" || act.source === "history")
                 );
             }).length;
 
+            // Monthly
             const monthly = activities.filter(
                 (act) =>
                     new Date(act.date_created).getMonth() === targetDate.getMonth() &&
                     new Date(act.date_created).getFullYear() === targetDate.getFullYear() &&
-                    (act.type_activity === "Outbound Calls" || act.source === "history"),
+                    (act.type_activity === "Outbound Calls" || act.source === "history")
             ).length;
 
             setOutboundDaily(daily);
@@ -540,34 +540,33 @@ export default function TSMReports() {
                 activities.filter(
                     (act) =>
                         act.status === "Quote-Done" &&
-                        act.quotation_status === "Pending Client Approval",
-                ).length,
+                        act.quotation_status === "Pending Client Approval"
+                ).length
             );
 
             setSpfPendingClientApproval(
                 activities.filter(
                     (act) =>
                         act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending Client Approval",
-                ).length,
+                        act.quotation_status === "Pending Client Approval"
+                ).length
             );
 
             setSpfPendingProcurement(
                 activities.filter(
                     (act) =>
                         act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending Procurement",
-                ).length,
+                        act.quotation_status === "Pending Procurement"
+                ).length
             );
 
             setSpfPendingPD(
                 activities.filter(
                     (act) =>
                         act.call_type === "Quotation with SPF Preparation" &&
-                        act.quotation_status === "Pending PD",
-                ).length,
+                        act.quotation_status === "Pending PD"
+                ).length
             );
-
         } finally {
             setLoadingTime(false);
         }
@@ -908,7 +907,7 @@ export default function TSMReports() {
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="border-r border-gray-200">
-                                <p className="text-[10px] text-gray-500 uppercase">Daily</p>
+                                <p className="text-[10px] text-gray-500 uppercase">Daily (Current)</p>
                                 <p className="font-bold text-sm">{outboundDaily} / 20</p>
                             </div>
                             <div className="border-r border-gray-200">
