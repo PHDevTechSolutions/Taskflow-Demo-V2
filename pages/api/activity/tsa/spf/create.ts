@@ -51,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 referenceid: data.referenceid,
                 tsm: data.tsm ?? null,
                 manager: data.manager ?? null,
+                item_description: data.item_description ?? null,
                 start_date: data.start_date ? new Date(data.start_date) : null,
                 end_date: data.end_date ? new Date(data.end_date) : null,
                 date_created: new Date().toISOString(),

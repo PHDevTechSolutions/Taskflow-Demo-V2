@@ -39,6 +39,7 @@ interface SPF {
     end_date?: string;
     special_instructions?: string;
     status?: string;
+    item_description?: string;
 }
 
 interface SPFProps {
@@ -247,8 +248,10 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         setCurrentSPF({});
     };
 
-    const handleCreateSPF = async () => {
-        if (!currentSPF.spf_number || !currentSPF.customer_name) {
+    const handleCreateSPF = async (payload?: Partial<SPF>) => {
+        const finalSPF = payload || currentSPF;
+
+        if (!finalSPF.spf_number || !finalSPF.customer_name) {
             alert("SPF Number and Customer Name are required");
             return;
         }
@@ -259,13 +262,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
 
         const nowISO = new Date().toISOString();
-        const finalStartDate = currentSPF.start_date ? new Date(currentSPF.start_date).toISOString() : new Date().toISOString();
-        const finalEndDate = currentSPF.end_date ? new Date(currentSPF.end_date).toISOString() : new Date().toISOString();
+        const finalStartDate = finalSPF.start_date ? new Date(finalSPF.start_date).toISOString() : nowISO;
+        const finalEndDate = finalSPF.end_date ? new Date(finalSPF.end_date).toISOString() : nowISO;
 
         try {
-            const payload = {
-                ...currentSPF,
-                sales_person: currentSPF.prepared_by,
+            const dataToSend = {
+                ...finalSPF,
+                sales_person: finalSPF.prepared_by,
                 start_date: finalStartDate,
                 end_date: finalEndDate,
                 referenceid,
@@ -276,7 +279,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             const res = await fetch("/api/activity/tsa/spf/create", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(dataToSend),
             });
 
             if (!res.ok) throw new Error("Failed to create SPF");
@@ -288,15 +291,18 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     };
 
-    const handleEditSPF = async () => {
-        if (!currentSPF.id) return;
+    const handleEditSPF = async (payload?: Partial<SPF>) => {
+        const finalSPF = payload || currentSPF;
+        if (!finalSPF.id) return;
+
         try {
-            const payload = { ...currentSPF, referenceid, tsm, manager };
+            const dataToSend = { ...finalSPF, referenceid, tsm, manager };
             const res = await fetch("/api/activity/tsa/spf/update", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(dataToSend),
             });
+
             if (!res.ok) throw new Error("Failed to update SPF");
 
             closeDialog();

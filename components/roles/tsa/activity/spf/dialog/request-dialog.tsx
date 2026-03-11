@@ -1,15 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import imageCompression from "browser-image-compression";
 
 interface Props {
     open: boolean;
@@ -18,8 +13,8 @@ interface Props {
     prepared_by?: string;
     currentSPF: any;
     setCurrentSPF: (data: any) => void;
-    handleCreateSPF: () => void;
-    handleEditSPF: () => void;
+    handleCreateSPF: (payload?: any) => void;
+    handleEditSPF: (payload?: any) => void;
     referenceid: string;
 }
 
@@ -34,6 +29,8 @@ function formatDuration(startISO: string, endISO: string) {
     return `${hours}h ${minutes}m ${seconds}s`;
 }
 
+type ItemDescription = { type: "text" | "file"; value: string };
+
 export function RequestDialog({
     open,
     onClose,
@@ -45,8 +42,21 @@ export function RequestDialog({
     referenceid,
 }: Props) {
     const [loadingSPF, setLoadingSPF] = useState(false);
-    const [instructionType, setInstructionType] = useState<"text" | "attachment">("text");
-    const [uploadingAttachment, setUploadingAttachment] = useState(false);
+    const [uploadingItem, setUploadingItem] = useState<number | null>(null);
+    const [itemDescriptions, setItemDescriptions] = useState<ItemDescription[]>([]);
+
+    // Initialize itemDescriptions when dialog opens or currentSPF changes
+    useEffect(() => {
+        if (open) {
+            if (currentSPF?.item_description) {
+                // Support comma-separated text for backward compatibility
+                const items = currentSPF.item_description.split(",").map((v: string) => ({ type: "text", value: v }));
+                setItemDescriptions(items);
+            } else {
+                setItemDescriptions([]);
+            }
+        }
+    }, [open]);
 
     const leftFields = [
         { label: "Customer Name", key: "customer_name" },
@@ -65,55 +75,83 @@ export function RequestDialog({
         { label: "Warranty", key: "warranty" },
         { label: "Delivery Date", key: "delivery_date", type: "date" },
         { label: "Special Instructions", key: "special_instructions" },
+        { label: "Item Description", key: "item_description" },
         { label: "Sales Person", key: "sales_person" },
         { label: "Prepared By", key: "prepared_by" },
         { label: "Approved By", key: "approved_by" },
     ];
 
-    const handleAttachmentUpload = async (file: File) => {
-        setUploadingAttachment(true);
+    const compressImage = async (file: File) => {
+        const options = {
+            maxSizeMB: 0.5, // target <= 0.5 MB
+            maxWidthOrHeight: 1920, // maintain reasonable resolution
+            useWebWorker: true,
+        };
+        return await imageCompression(file, options);
+    };
+
+
+    const compressFile = async (file: File) => {
+        if (file.type.startsWith("image/")) {
+            return await compressImage(file);
+        }
+        if (file.type === "application/pdf") {
+            // For PDF, we just let Cloudinary handle optimization
+            return file;
+        }
+        return file;
+    };
+
+    // Only upload if it's a new File
+    const handleItemUpload = async (file: File, index: number) => {
+        setUploadingItem(index);
 
         try {
+            const compressedFile = await compressFile(file);
 
-            // ✅ DELETE PREVIOUS FILE FIRST
-            if (currentSPF?.special_instructions_public_id) {
+            // Delete previous file if URL
+            const prev = itemDescriptions[index];
+            if (prev?.type === "file" && prev.value.startsWith("http")) {
                 await fetch("/api/cloudinary/delete", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        public_id: currentSPF.special_instructions_public_id,
-                    }),
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ public_id: prev.value.split("/").pop()?.split(".")[0] }),
                 });
             }
 
             const data = new FormData();
-            data.append("file", file);
+            data.append("file", compressedFile);
             data.append("upload_preset", "Xchire");
-            data.append("folder", "spf_attachments");
+            data.append("folder", "spf_items");
 
-            const res = await fetch(
-                "https://api.cloudinary.com/v1_1/dhczsyzcz/auto/upload",
-                {
-                    method: "POST",
-                    body: data,
-                }
-            );
-
+            const res = await fetch("https://api.cloudinary.com/v1_1/dhczsyzcz/auto/upload", {
+                method: "POST",
+                body: data,
+            });
             const uploaded = await res.json();
 
-            setCurrentSPF({
-                ...currentSPF,
-                special_instructions: uploaded.secure_url,
-                special_instructions_public_id: uploaded.public_id,
-            });
-
+            const updated = [...itemDescriptions];
+            updated[index] = { type: "file", value: uploaded.secure_url };
+            setItemDescriptions(updated);
         } catch (err) {
-            console.error("Upload failed", err);
+            console.error(err);
         } finally {
-            setUploadingAttachment(false);
+            setUploadingItem(null);
         }
+    };
+
+    const handleSubmit = () => {
+        const updatedSPF = {
+            ...currentSPF,
+            item_description: itemDescriptions.map(i => i.value).join(","), // store only values
+        };
+        setCurrentSPF(updatedSPF);
+        setLoadingSPF(true);
+
+        if (isEditMode) handleEditSPF(updatedSPF);
+        else handleCreateSPF(updatedSPF);
+
+        setLoadingSPF(false);
     };
 
     return (
@@ -163,7 +201,7 @@ export function RequestDialog({
                         {/* Middle fields */}
                         <div className="mt-12 space-y-4">
                             {rightFields
-                                .filter(f => f.key !== "spf_number" && f.key !== "prepared_by" && f.key !== "approved_by")
+                                .filter((f) => f.key !== "spf_number" && f.key !== "prepared_by" && f.key !== "approved_by")
                                 .map((field) => (
                                     <div key={field.key} className="flex flex-col">
                                         <label className="text-xs font-medium text-muted-foreground mb-1">
@@ -171,61 +209,80 @@ export function RequestDialog({
                                         </label>
 
                                         {field.key === "special_instructions" ? (
-                                            <div className="flex flex-col gap-2">
-
-                                                {/* TYPE DROPDOWN */}
-                                                <select
-                                                    className="border p-2 text-sm rounded-none"
-                                                    value={instructionType}
-                                                    onChange={(e) => setInstructionType(e.target.value as "text" | "attachment")}
-                                                >
-                                                    <option value="text">Text</option>
-                                                    <option value="attachment">Attachment (PDF / Image)</option>
-                                                </select>
-
-                                                {/* TEXT MODE */}
-                                                {instructionType === "text" && (
-                                                    <textarea
-                                                        className="border rounded-none p-2 text-sm min-h-[200px]"
-                                                        value={currentSPF?.special_instructions || ""}
-                                                        onChange={(e) =>
-                                                            setCurrentSPF({
-                                                                ...currentSPF,
-                                                                special_instructions: e.target.value,
-                                                            })
-                                                        }
-                                                    />
-                                                )}
-
-                                                {/* ATTACHMENT MODE */}
-                                                {instructionType === "attachment" && (
-                                                    <div className="flex flex-col gap-2">
-
-                                                        <Input
-                                                            type="file"
-                                                            accept="image/*,.pdf"
+                                            <textarea
+                                                className="border rounded-none p-2 text-sm min-h-[120px]"
+                                                value={currentSPF?.special_instructions || ""}
+                                                onChange={(e) =>
+                                                    setCurrentSPF({
+                                                        ...currentSPF,
+                                                        special_instructions: e.target.value,
+                                                    })
+                                                }
+                                            />
+                                        ) : field.key === "item_description" ? (
+                                            <div className="flex flex-col gap-3">
+                                                {itemDescriptions.map((item, index) => (
+                                                    <div key={index} className="flex gap-2 items-center">
+                                                        <select
+                                                            className="border rounded-none px-2 py-2 text-xs"
+                                                            value={item.type}
                                                             onChange={(e) => {
-                                                                const file = e.target.files?.[0];
-                                                                if (file) handleAttachmentUpload(file);
+                                                                const updated = [...itemDescriptions];
+                                                                updated[index] = { type: e.target.value as "text" | "file", value: "" };
+                                                                setItemDescriptions(updated);
                                                             }}
-                                                        />
+                                                        >
+                                                            <option value="text">Text</option>
+                                                            <option value="file">File</option>
+                                                        </select>
 
-                                                        {uploadingAttachment && (
-                                                            <p className="text-xs text-muted-foreground">Uploading...</p>
+                                                        {item.type === "text" ? (
+                                                            <Input
+                                                                placeholder="Item text"
+                                                                className="rounded-none"
+                                                                value={item.value}
+                                                                onChange={(e) => {
+                                                                    const updated = [...itemDescriptions];
+                                                                    updated[index] = { ...updated[index], value: e.target.value };
+                                                                    setItemDescriptions(updated);
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Input
+                                                                type="file"
+                                                                className="rounded-none"
+                                                                accept="image/*,application/pdf"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) handleItemUpload(file, index);
+                                                                }}
+                                                            />
                                                         )}
 
-                                                        {currentSPF?.special_instructions && (
-                                                            <a
-                                                                href={currentSPF.special_instructions}
-                                                                target="_blank"
-                                                                className="text-xs text-blue-600 underline"
-                                                            >
-                                                                View Uploaded File
-                                                            </a>
+                                                        {uploadingItem === index && <span className="text-xs text-muted-foreground">Uploading...</span>}
+
+                                                        {item.type === "file" && item.value && (
+                                                            <a href={item.value} target="_blank" className="text-xs text-blue-600 underline">View</a>
                                                         )}
+
+                                                        <Button
+                                                            variant="destructive"
+                                                            className="rounded-none p-4"
+                                                            onClick={() => setItemDescriptions(itemDescriptions.filter((_, i) => i !== index))}
+                                                        >
+                                                            Remove
+                                                        </Button>
                                                     </div>
-                                                )}
+                                                ))}
 
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="rounded-none p-6"
+                                                    onClick={() => setItemDescriptions([...itemDescriptions, { type: "text", value: "" }])}
+                                                >
+                                                    + Add Item
+                                                </Button>
                                             </div>
                                         ) : (
                                             <Input
@@ -273,19 +330,21 @@ export function RequestDialog({
                 </div>
 
                 {/* Duration display */}
-                {!isEditMode &&
-                    currentSPF?.start_date &&
-                    currentSPF?.end_date && (
-                        <div className="text-sm font-mono mt-4">
-                            Request Time: {formatDuration(currentSPF.start_date, currentSPF.end_date)}
-                        </div>
-                    )}
+                {!isEditMode && currentSPF?.start_date && currentSPF?.end_date && (
+                    <div className="text-sm font-mono mt-4">
+                        Request Time: {formatDuration(currentSPF.start_date, currentSPF.end_date)}
+                    </div>
+                )}
 
                 <DialogFooter className="mt-6 flex justify-end gap-2">
                     <Button variant="outline" className="rounded-none p-6" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button onClick={isEditMode ? handleEditSPF : handleCreateSPF} className="rounded-none p-6" disabled={loadingSPF}>
+                    <Button
+                        onClick={handleSubmit}
+                        className="rounded-none p-6"
+                        disabled={loadingSPF}
+                    >
                         {isEditMode ? "Update" : "Submit"}
                     </Button>
                 </DialogFooter>
