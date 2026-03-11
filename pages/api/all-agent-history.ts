@@ -1,11 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-import redis from "@/lib/redis";
 
 const BATCH_SIZE = 5000;
 
 // Async generator to fetch any table in batches
-async function* fetchTableBatches(table: string, tsm: string, from?: string, to?: string) {
+async function* fetchTableBatches(
+  table: string,
+  tsm: string,
+  from?: string,
+  to?: string
+) {
   let lastId: number | null = null;
 
   while (true) {
@@ -54,15 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
-  const cacheKey = `activities:tsm:${referenceid}:${fromDate || "all"}:${toDate || "all"}`;
 
   try {
-    // ✅ Check Redis cache
-    const cached = await redis.get(cacheKey);
-    if (cached && typeof cached === "string") {
-      return res.status(200).json({ activities: JSON.parse(cached), cached: true });
-    }
-
     // Tables to fetch
     const tables = ["history", "documentation", "revised_quotations", "meetings"];
     const allActivities: any[] = [];
@@ -81,10 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         new Date(a.date_created || a.start_date).getTime()
     );
 
-    // Cache the merged result for 5 minutes
-    await redis.set(cacheKey, JSON.stringify(allActivities), { ex: 300 });
-
-    return res.status(200).json({ activities: allActivities, cached: false });
+    return res.status(200).json({ activities: allActivities });
   } catch (err: any) {
     console.error("Server error:", err);
     return res.status(500).json({ message: err.message || "Server error" });

@@ -45,6 +45,8 @@ export function RequestDialog({
     referenceid,
 }: Props) {
     const [loadingSPF, setLoadingSPF] = useState(false);
+    const [instructionType, setInstructionType] = useState<"text" | "attachment">("text");
+    const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
     const leftFields = [
         { label: "Customer Name", key: "customer_name" },
@@ -68,6 +70,51 @@ export function RequestDialog({
         { label: "Approved By", key: "approved_by" },
     ];
 
+    const handleAttachmentUpload = async (file: File) => {
+        setUploadingAttachment(true);
+
+        try {
+
+            // ✅ DELETE PREVIOUS FILE FIRST
+            if (currentSPF?.special_instructions_public_id) {
+                await fetch("/api/cloudinary/delete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        public_id: currentSPF.special_instructions_public_id,
+                    }),
+                });
+            }
+
+            const data = new FormData();
+            data.append("file", file);
+            data.append("upload_preset", "Xchire");
+            data.append("folder", "spf_attachments");
+
+            const res = await fetch(
+                "https://api.cloudinary.com/v1_1/dhczsyzcz/auto/upload",
+                {
+                    method: "POST",
+                    body: data,
+                }
+            );
+
+            const uploaded = await res.json();
+
+            setCurrentSPF({
+                ...currentSPF,
+                special_instructions: uploaded.secure_url,
+                special_instructions_public_id: uploaded.public_id,
+            });
+
+        } catch (err) {
+            console.error("Upload failed", err);
+        } finally {
+            setUploadingAttachment(false);
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
@@ -124,13 +171,62 @@ export function RequestDialog({
                                         </label>
 
                                         {field.key === "special_instructions" ? (
-                                            <textarea
-                                                className="border rounded-none p-2 text-sm min-h-[200px]"
-                                                value={currentSPF?.[field.key] || ""}
-                                                onChange={(e) =>
-                                                    setCurrentSPF({ ...currentSPF, [field.key]: e.target.value })
-                                                }
-                                            />
+                                            <div className="flex flex-col gap-2">
+
+                                                {/* TYPE DROPDOWN */}
+                                                <select
+                                                    className="border p-2 text-sm rounded-none"
+                                                    value={instructionType}
+                                                    onChange={(e) => setInstructionType(e.target.value as "text" | "attachment")}
+                                                >
+                                                    <option value="text">Text</option>
+                                                    <option value="attachment">Attachment (PDF / Image)</option>
+                                                </select>
+
+                                                {/* TEXT MODE */}
+                                                {instructionType === "text" && (
+                                                    <textarea
+                                                        className="border rounded-none p-2 text-sm min-h-[200px]"
+                                                        value={currentSPF?.special_instructions || ""}
+                                                        onChange={(e) =>
+                                                            setCurrentSPF({
+                                                                ...currentSPF,
+                                                                special_instructions: e.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                )}
+
+                                                {/* ATTACHMENT MODE */}
+                                                {instructionType === "attachment" && (
+                                                    <div className="flex flex-col gap-2">
+
+                                                        <Input
+                                                            type="file"
+                                                            accept="image/*,.pdf"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) handleAttachmentUpload(file);
+                                                            }}
+                                                        />
+
+                                                        {uploadingAttachment && (
+                                                            <p className="text-xs text-muted-foreground">Uploading...</p>
+                                                        )}
+
+                                                        {currentSPF?.special_instructions && (
+                                                            <a
+                                                                href={currentSPF.special_instructions}
+                                                                target="_blank"
+                                                                className="text-xs text-blue-600 underline"
+                                                            >
+                                                                View Uploaded File
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                            </div>
                                         ) : (
                                             <Input
                                                 type={field.type || "text"}

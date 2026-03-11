@@ -153,21 +153,34 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const generateNextSPF = async () => {
         try {
             setLoadingSPF(true);
+
             const res = await fetch(`/api/activity/tsa/spf/generate`);
             const data = await res.json();
-            const existingSPFs: string[] = data.activities?.map((a: any) => a.spf_number) || [];
+
+            const existingSPFs: string[] =
+                data.activities?.map((a: any) => a.spf_number) || [];
+
             const prefix = "SPF-DSI-";
-            const year = new Date().getFullYear();
+
+            // ✅ get last 2 digits of year (2026 -> 26)
+            const year = new Date().getFullYear().toString().slice(-2);
 
             const yearSPFs = existingSPFs
-                .filter(spf => spf.startsWith(`${prefix}${year}-`))
-                .map(spf => parseInt(spf.replace(`${prefix}${year}-`, ""), 10))
-                .filter(num => !isNaN(num));
+                .filter((spf) => spf.startsWith(`${prefix}${year}-`))
+                .map((spf) =>
+                    parseInt(spf.replace(`${prefix}${year}-`, ""), 10)
+                )
+                .filter((num) => !isNaN(num));
 
             const maxNumber = yearSPFs.length ? Math.max(...yearSPFs) : 0;
             const nextNumber = maxNumber + 1;
+
             const nextSPF = `${prefix}${year}-${String(nextNumber).padStart(3, "0")}`;
-            setCurrentSPF((prev: any) => ({ ...prev, spf_number: nextSPF }));
+
+            setCurrentSPF((prev: any) => ({
+                ...prev,
+                spf_number: nextSPF,
+            }));
         } catch (err) {
             console.error("Failed to generate SPF Number:", err);
         } finally {
