@@ -24,7 +24,7 @@ import {
 interface Sales {
   id: number;
   actual_sales?: number;
-  si_date?: string;
+  delivery_date?: string;
   target_quota: string;
   referenceid: string;
   agentName?: string;
@@ -191,8 +191,8 @@ export const SalesTable: React.FC<SalesProps> = ({
     const toTime = toDate.getTime();
 
     return activities.filter((activity) => {
-      if (!activity.si_date) return false;
-      const activityDate = new Date(activity.si_date);
+      if (!activity.delivery_date) return false;
+      const activityDate = new Date(activity.delivery_date);
       const activityTime = activityDate.getTime();
       return activityTime >= fromTime && activityTime <= toTime;
     });
