@@ -71,7 +71,7 @@ const INDUSTRY_OPTIONS = [
   "OTHER",
 ];
 
-const TYPECLIENT_OPTIONS = ["TSA CLIENT", "New Client"];
+const TYPECLIENT_OPTIONS = ["New Client"];
 
 // Simple email validation helper
 function isValidEmail(email: string): boolean {
@@ -985,9 +985,6 @@ export function AccountDialog({
                           <FieldContent>
                             <FieldTitle>{typeClient}</FieldTitle>
                             <FieldDescription>
-                              {typeClient === "TSA CLIENT" &&
-                                "Client was assisted and provided with the needed information or support."}
-
                               {typeClient === "New Client" &&
                                 "Client is new and is receiving assistance or information for the first time."}
                             </FieldDescription>
