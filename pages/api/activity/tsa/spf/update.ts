@@ -28,7 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tsm,
             manager,
             item_description,
-            item_photo
+            item_photo,
+            item_code
         } = req.body;
 
         if (!id) return res.status(400).json({ error: "Missing SPF id" });
@@ -56,7 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 tsm,
                 manager,
                 item_description,
-                item_photo
+                item_photo,
+                item_code
             })
             .eq("id", id)
             .select()

@@ -29,6 +29,7 @@ type ItemRow = {
     descType: "text" | "file";
     item_photo: string;
     item_description: string;
+    item_code: string;
 };
 
 function formatDuration(startISO: string, endISO: string) {
@@ -67,10 +68,12 @@ export function RequestDialog({
 
         const descParts = currentSPF?.item_description?.split(",") || [];
         const photoParts = currentSPF?.item_photo?.split(",") || [];
+        const codeParts = currentSPF?.item_code?.split(",") || [];
 
         const rows: ItemRow[] = descParts.map((desc: string, i: number) => ({
             item_description: desc || "",
             item_photo: photoParts[i] || "",
+            item_code: codeParts[i] || "",
             descType: desc?.startsWith("http") ? "file" : "text",
         }));
 
@@ -137,22 +140,21 @@ export function RequestDialog({
        SUBMIT
     --------------------------- */
     const handleSubmit = () => {
-
-        // check if may items
         if (items.length === 0) {
             alert("Please add at least one item.");
             return;
         }
 
-        // validate each row
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-
             if (!item.item_photo) {
                 alert(`Item ${i + 1}: Photo is required.`);
                 return;
             }
-
+            if (!item.item_code || item.item_code.trim() === "") {
+                alert(`Item ${i + 1}: Item Code is required.`);
+                return;
+            }
             if (!item.item_description || item.item_description.trim() === "") {
                 alert(`Item ${i + 1}: Description is required.`);
                 return;
@@ -161,21 +163,20 @@ export function RequestDialog({
 
         const descriptions = items.map((i) => i.item_description);
         const photos = items.map((i) => i.item_photo);
+        const codes = items.map((i) => i.item_code);
 
         const updatedSPF = {
             ...currentSPF,
             item_description: descriptions.join(","),
             item_photo: photos.join(","),
+            item_code: codes.join(","),
         };
 
         setCurrentSPF(updatedSPF);
         setLoadingSPF(true);
 
-        if (isEditMode) {
-            handleEditSPF(updatedSPF);
-        } else {
-            handleCreateSPF(updatedSPF);
-        }
+        if (isEditMode) handleEditSPF(updatedSPF);
+        else handleCreateSPF(updatedSPF);
 
         setLoadingSPF(false);
     };
@@ -187,7 +188,7 @@ export function RequestDialog({
     const addRow = () => {
         setItems([
             ...items,
-            { item_photo: "", item_description: "", descType: "text" },
+            { item_photo: "", item_description: "", item_code: "", descType: "text" },
         ]);
     };
 
@@ -208,16 +209,6 @@ export function RequestDialog({
         { label: "Billing Address", key: "billing_address" },
         { label: "Collection Address", key: "collection_address" },
         { label: "Tin Number", key: "tin_no" },
-    ];
-
-    const rightFields = [
-        { label: "Payment Terms", key: "payment_terms" },
-        { label: "Warranty", key: "warranty" },
-        { label: "Delivery Date", key: "delivery_date", type: "date" },
-        { label: "Special Instructions", key: "special_instructions" },
-        { label: "Sales Person", key: "sales_person" },
-        { label: "Prepared By", key: "prepared_by" },
-        { label: "Approved By", key: "approved_by" },
     ];
 
     return (
@@ -379,6 +370,23 @@ export function RequestDialog({
                                                 className="w-24 h-24 object-contain border"
                                             />
                                         )}
+                                    </div>
+
+                                    {/* ITEM CODE */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-muted-foreground">
+                                            Item Code <span className="text-red-600">(*Required)</span>
+                                        </label>
+
+                                        <Input
+                                            className="rounded-none"
+                                            value={row.item_code}
+                                            onChange={(e) => {
+                                                const updated = [...items];
+                                                updated[index].item_code = e.target.value;
+                                                setItems(updated);
+                                            }}
+                                        />
                                     </div>
 
                                     {/* DESCRIPTION */}
