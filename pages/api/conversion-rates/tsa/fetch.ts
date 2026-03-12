@@ -24,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id,
           source,
           status,
+          call_status,
           date_created,
           dr_number,
           si_date,
