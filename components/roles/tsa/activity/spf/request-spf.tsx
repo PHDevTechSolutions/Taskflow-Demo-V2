@@ -41,7 +41,6 @@ interface SPF {
     status?: string;
     item_description?: string;
     item_photo?: string;
-    item_code?: string;
 }
 
 interface SPFProps {

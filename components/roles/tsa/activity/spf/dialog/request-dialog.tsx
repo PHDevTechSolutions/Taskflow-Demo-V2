@@ -29,7 +29,6 @@ type ItemRow = {
     descType: "text" | "file";
     item_photo: string;
     item_description: string;
-    item_code: string;
 };
 
 function formatDuration(startISO: string, endISO: string) {
@@ -68,12 +67,10 @@ export function RequestDialog({
 
         const descParts = currentSPF?.item_description?.split(",") || [];
         const photoParts = currentSPF?.item_photo?.split(",") || [];
-        const codeParts = currentSPF?.item_code?.split(",") || [];
 
         const rows: ItemRow[] = descParts.map((desc: string, i: number) => ({
             item_description: desc || "",
             item_photo: photoParts[i] || "",
-            item_code: codeParts[i] || "",
             descType: desc?.startsWith("http") ? "file" : "text",
         }));
 
@@ -151,10 +148,7 @@ export function RequestDialog({
                 alert(`Item ${i + 1}: Photo is required.`);
                 return;
             }
-            if (!item.item_code || item.item_code.trim() === "") {
-                alert(`Item ${i + 1}: Item Code is required.`);
-                return;
-            }
+            
             if (!item.item_description || item.item_description.trim() === "") {
                 alert(`Item ${i + 1}: Description is required.`);
                 return;
@@ -163,13 +157,11 @@ export function RequestDialog({
 
         const descriptions = items.map((i) => i.item_description);
         const photos = items.map((i) => i.item_photo);
-        const codes = items.map((i) => i.item_code);
 
         const updatedSPF = {
             ...currentSPF,
             item_description: descriptions.join(","),
             item_photo: photos.join(","),
-            item_code: codes.join(","),
         };
 
         setCurrentSPF(updatedSPF);
@@ -188,7 +180,7 @@ export function RequestDialog({
     const addRow = () => {
         setItems([
             ...items,
-            { item_photo: "", item_description: "", item_code: "", descType: "text" },
+            { item_photo: "", item_description: "", descType: "text" },
         ]);
     };
 
@@ -370,23 +362,6 @@ export function RequestDialog({
                                                 className="w-24 h-24 object-contain border"
                                             />
                                         )}
-                                    </div>
-
-                                    {/* ITEM CODE */}
-                                    <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">
-                                            Item Code <span className="text-red-600">(*Required)</span>
-                                        </label>
-
-                                        <Input
-                                            className="rounded-none"
-                                            value={row.item_code}
-                                            onChange={(e) => {
-                                                const updated = [...items];
-                                                updated[index].item_code = e.target.value;
-                                                setItems(updated);
-                                            }}
-                                        />
                                     </div>
 
                                     {/* DESCRIPTION */}
