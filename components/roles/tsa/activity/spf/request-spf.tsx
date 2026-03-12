@@ -40,6 +40,7 @@ interface SPF {
     special_instructions?: string;
     status?: string;
     item_description?: string;
+    item_photo?: string;
 }
 
 interface SPFProps {
