@@ -5,13 +5,26 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CallSIHistory {
   id: number;
   source?: string;
-  status?: string;
+  call_status?: string;
   date_created?: string;
   dr_number?: string;
   si_date?: string;
@@ -49,7 +62,6 @@ export const CallSI: React.FC<CallSIProps> = ({
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-  // Function to get "YYYY-MM" string from Date
   const getYearMonth = (dateStr?: string) => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -57,7 +69,6 @@ export const CallSI: React.FC<CallSIProps> = ({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
 
-  // Derive selectedMonth from dateCreatedFilterRange.from (if exists)
   const selectedMonth = useMemo(() => {
     if (!dateCreatedFilterRange?.from) {
       const now = new Date();
@@ -68,7 +79,6 @@ export const CallSI: React.FC<CallSIProps> = ({
     ).padStart(2, "0")}`;
   }, [dateCreatedFilterRange]);
 
-  // Generate last 12 months for dropdown
   const monthOptions = useMemo(() => {
     const options = [];
     const now = new Date();
@@ -82,7 +92,6 @@ export const CallSI: React.FC<CallSIProps> = ({
     return options;
   }, []);
 
-  // Fetch activities from API
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
@@ -148,13 +157,14 @@ export const CallSI: React.FC<CallSIProps> = ({
     };
   }, [referenceid, fetchActivities]);
 
-  // Fetch agents data
   useEffect(() => {
     if (!userDetails.referenceid) return;
 
     const fetchAgents = async () => {
       try {
-        const response = await fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`);
+        const response = await fetch(
+          `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
+        );
         if (!response.ok) throw new Error("Failed to fetch agents");
         const data = await response.json();
         setAgents(data);
@@ -167,58 +177,58 @@ export const CallSI: React.FC<CallSIProps> = ({
     fetchAgents();
   }, [userDetails.referenceid]);
 
-  // Filter activities by selected month
   const activitiesFilteredByMonth = useMemo(() => {
     return activities.filter((a) => getYearMonth(a.date_created) === selectedMonth);
   }, [activities, selectedMonth]);
 
-  // Filter agents by selected agent value
   const filteredAgents = useMemo(() => {
     return selectedAgent === "all"
       ? agents
       : agents.filter((agent) => agent.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
   }, [agents, selectedAgent]);
 
-  // Prepare rows for the table
   const rows = filteredAgents.map((agent) => {
     const agentRef = agent.ReferenceID.toLowerCase();
-
     const agentActivities = activitiesFilteredByMonth.filter(
       (a) => a.referenceid.toLowerCase() === agentRef
     );
 
-    // Get latest target_quota from activities or default "-"
     const sortedByDate = [...agentActivities].sort((a, b) => {
       const da = a.date_created ? new Date(a.date_created).getTime() : 0;
       const db = b.date_created ? new Date(b.date_created).getTime() : 0;
       return db - da;
     });
+
     const target_quota = sortedByDate.length > 0 ? sortedByDate[0].target_quota : "-";
 
-    // Number of calls (Outbound - Touchbase) for this agent
+    // Only successful Outbound - Touchbase calls
     const totalCalls = agentActivities.filter(
-      (a) => a.source === "Outbound - Touchbase"
+      (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
     ).length;
 
-    // Number of SI unique si_date with actual_sales > 0
+    // SI count (unique si_date with actual_sales > 0)
     const filteredSI = agentActivities.filter(
       (a) => a.si_date && Number(a.actual_sales) > 0 && getYearMonth(a.si_date) === selectedMonth
     );
     const uniqueSIDates = new Set(filteredSI.map((a) => a.si_date));
     const totalSI = uniqueSIDates.size;
 
-    // Percentage of Calls to SI
-    const percentageCallsToSI = totalSI === 0 ? 0 : (totalCalls / totalSI) * 100;
+    const percentageCallsToSI = totalCalls === 0 ? 0 : (totalSI / totalCalls) * 100;
 
     return {
       agentName: `${agent.Firstname} ${agent.Lastname}`,
       profilePicture: agent.profilePicture || "/Taskflow.png",
-      target_quota,
+      target_quota: agent.TargetQuota || "0",
       totalCalls,
       totalSI,
       percentageCallsToSI,
     };
   });
+
+  // Compute total row for footer
+  const totalCallsAll = rows.reduce((acc, r) => acc + r.totalCalls, 0);
+  const totalSIAll = rows.reduce((acc, r) => acc + r.totalSI, 0);
+  const totalPercentage = totalCallsAll === 0 ? 0 : (totalSIAll / totalCallsAll) * 100;
 
   if (loadingActivities) {
     return (
@@ -251,11 +261,7 @@ export const CallSI: React.FC<CallSIProps> = ({
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
             {agents.map((agent) => (
-              <SelectItem
-                className="capitalize"
-                key={agent.ReferenceID}
-                value={agent.ReferenceID}
-              >
+              <SelectItem className="capitalize" key={agent.ReferenceID} value={agent.ReferenceID}>
                 {agent.Firstname} {agent.Lastname}
               </SelectItem>
             ))}
@@ -270,7 +276,7 @@ export const CallSI: React.FC<CallSIProps> = ({
         </div>
       </div>
 
-      {/* Table or No Agents Message */}
+      {/* Table */}
       {filteredAgents.length === 0 ? (
         <div className="text-center text-xs text-gray-500">No agents found.</div>
       ) : (
@@ -280,14 +286,14 @@ export const CallSI: React.FC<CallSIProps> = ({
               <TableRow>
                 <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="text-xs text-right">Target Quota</TableHead>
-                <TableHead className="text-xs text-right">Total No. of Calls (Outbound Touchbase) </TableHead>
-                <TableHead className="text-xs text-right">Total No. of SI</TableHead>
-                <TableHead className="text-xs text-right">Percentage of Calls to SI</TableHead>
+                <TableHead className="text-xs text-right">Total No. Calls (Outbound - Touchbase)</TableHead>
+                <TableHead className="text-xs text-right">Total SI</TableHead>
+                <TableHead className="text-xs text-right">Percentage of SI to Calls</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row, idx) => (
-                <TableRow key={idx}>
+                <TableRow key={idx} className="text-xs">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <img
@@ -298,10 +304,14 @@ export const CallSI: React.FC<CallSIProps> = ({
                           (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
                         }}
                       />
-                      <span className="capitalize text-sm">{row.agentName}</span>
+                      <span className="capitalize">{row.agentName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{row.target_quota}</TableCell>
+                  <TableCell className="text-right">
+                    {row.target_quota && row.target_quota !== "0"
+                      ? Number(row.target_quota).toLocaleString()
+                      : "-"}
+                  </TableCell>
                   <TableCell className="text-right">{row.totalCalls}</TableCell>
                   <TableCell className="text-right">{row.totalSI}</TableCell>
                   <TableCell className="text-right">{row.percentageCallsToSI.toFixed(2)}%</TableCell>
@@ -319,19 +329,9 @@ export const CallSI: React.FC<CallSIProps> = ({
                     }, 0)
                     .toLocaleString()}
                 </TableCell>
-                <TableCell className="text-right">
-                  {rows.reduce((acc, row) => acc + row.totalCalls, 0)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {rows.reduce((acc, row) => acc + row.totalSI, 0)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {(() => {
-                    const totalCalls = rows.reduce((acc, row) => acc + row.totalCalls, 0);
-                    const totalSI = rows.reduce((acc, row) => acc + row.totalSI, 0);
-                    return totalSI === 0 ? "0.00%" : ((totalCalls / totalSI) * 100).toFixed(2) + "%";
-                  })()}
-                </TableCell>
+                <TableCell className="text-right">{totalCallsAll}</TableCell>
+                <TableCell className="text-right">{totalSIAll}</TableCell>
+                <TableCell className="text-right">{totalPercentage.toFixed(2)}%</TableCell>
               </TableRow>
             </tfoot>
           </Table>
@@ -341,13 +341,13 @@ export const CallSI: React.FC<CallSIProps> = ({
       {/* Computation Explanation */}
       <div className="mt-4 text-xs text-gray-700 font-mono">
         <p>
-          <strong>Number of Calls:</strong> Counted where <code>source === "Outbound - Touchbase"</code>.
+          <strong>Number of Calls:</strong> Counted where <code>source === "Outbound - Touchbase"</code> and <code>call_status === "Successful"</code>.
         </p>
         <p>
           <strong>Number of SI:</strong> Counted unique <code>si_date</code> where <code>actual_sales</code> &gt; 0.
         </p>
         <p className="bg-gray-100 p-2 rounded">
-          Percentage of Calls to SI = (Number of Calls ÷ Number of SI) × 100
+          Percentage of SI to Calls = (Number of SI ÷ Number of Calls) × 100
         </p>
       </div>
     </div>
