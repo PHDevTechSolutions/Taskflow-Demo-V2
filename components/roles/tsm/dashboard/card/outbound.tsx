@@ -1,12 +1,27 @@
+"use client";
+
 import React, { useMemo } from "react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 interface HistoryItem {
   referenceid: string;
-  source: string;
-  call_status: string;
+  source: string; // "Outbound - Touchbase" | "Outbound - Follow-up"
+  call_status: string; // "Successful" | "Unsuccessful"
   type_activity: string;
   start_date: string;
   end_date: string;
@@ -27,22 +42,18 @@ interface OutboundCardProps {
 
 function formatDurationMs(ms: number) {
   if (ms <= 0) return "-";
-
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-
   const parts = [];
   if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
   if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
   if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
-
   return parts.join(" ") || "0 sec";
 }
 
 export function OutboundCard({ history, agents }: OutboundCardProps) {
-  // Map agent ReferenceID to fullname
   const agentMap = useMemo(() => {
     const map = new Map<string, string>();
     agents.forEach((a) => {
@@ -59,14 +70,15 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return map;
   }, [agents]);
 
-  // Aggregate stats per agent (counts only)
   const statsByAgent = useMemo(() => {
     type AgentStats = {
       agentID: string;
       touchbaseCount: number;
+      touchbaseSuccessful: number;
+      touchbaseUnsuccessful: number;
       followupCount: number;
-      successfulCount: number;
-      unsuccessfulCount: number;
+      followupSuccessful: number;
+      followupUnsuccessful: number;
     };
 
     const map = new Map<string, AgentStats>();
@@ -77,80 +89,93 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
         map.set(agentID, {
           agentID,
           touchbaseCount: 0,
+          touchbaseSuccessful: 0,
+          touchbaseUnsuccessful: 0,
           followupCount: 0,
-          successfulCount: 0,
-          unsuccessfulCount: 0,
+          followupSuccessful: 0,
+          followupUnsuccessful: 0,
         });
       }
       const stat = map.get(agentID)!;
 
       if (item.source === "Outbound - Touchbase") {
         stat.touchbaseCount++;
+        if (item.call_status === "Successful") stat.touchbaseSuccessful++;
+        else stat.touchbaseUnsuccessful++;
       } else if (item.source === "Outbound - Follow-up") {
         stat.followupCount++;
-      }
-
-      if (item.call_status === "Successful") {
-        stat.successfulCount++;
-      } else if (item.call_status === "Unsuccessful") {
-        stat.unsuccessfulCount++;
+        if (item.call_status === "Successful") stat.followupSuccessful++;
+        else stat.followupUnsuccessful++;
       }
     });
 
     return Array.from(map.values());
   }, [history]);
 
-  // Count all Outbound Calls based on type_activity
-  const outboundCalls = useMemo(() => {
-    return history.filter((item) => item.type_activity === "Outbound Calls");
-  }, [history]);
+  const outboundCalls = useMemo(
+    () => history.filter((item) => item.type_activity === "Outbound Calls"),
+    [history]
+  );
 
-  // Count all Outbound Calls
-  const totalOutboundCalls = outboundCalls.length;
-
-  // Compute total duration (ms) of all outbound calls (end_date - start_date)
   const totalOutboundDurationMs = useMemo(() => {
     return outboundCalls.reduce((total, item) => {
-      // parse date safely, replacing space with T for ISO format
-      const startDateStr = item.start_date;
-      const endDateStr = item.end_date;
-
-      if (typeof startDateStr === "string" && typeof endDateStr === "string") {
-        const start = new Date(startDateStr.replace(" ", "T")).getTime();
-        const end = new Date(endDateStr.replace(" ", "T")).getTime();
-
-        if (!isNaN(start) && !isNaN(end) && end > start) {
-          return total + (end - start);
-        }
-      }
+      const start = new Date(item.start_date.replace(" ", "T")).getTime();
+      const end = new Date(item.end_date.replace(" ", "T")).getTime();
+      if (!isNaN(start) && !isNaN(end) && end > start) return total + (end - start);
       return total;
-
     }, 0);
   }, [outboundCalls]);
 
+  const grandTotals = useMemo(() => {
+    const totals = {
+      touchbaseCount: 0,
+      touchbaseSuccessful: 0,
+      touchbaseUnsuccessful: 0,
+      followupCount: 0,
+      followupSuccessful: 0,
+      followupUnsuccessful: 0,
+      totalOutbound: 0,
+    };
+
+    statsByAgent.forEach((s) => {
+      totals.touchbaseCount += s.touchbaseCount;
+      totals.touchbaseSuccessful += s.touchbaseSuccessful;
+      totals.touchbaseUnsuccessful += s.touchbaseUnsuccessful;
+      totals.followupCount += s.followupCount;
+      totals.followupSuccessful += s.followupSuccessful;
+      totals.followupUnsuccessful += s.followupUnsuccessful;
+    });
+
+    totals.totalOutbound =
+      totals.touchbaseCount + totals.followupCount;
+
+    return totals;
+  }, [statsByAgent]);
+
   return (
     <>
-      {totalOutboundCalls > 0 && (
+      {outboundCalls.length > 0 && (
         <Card className="flex flex-col h-full bg-white text-black rounded-none">
           <CardHeader>
             <CardTitle>Outbound History</CardTitle>
-            <CardDescription>Summary of outbound call activities per agent.</CardDescription>
           </CardHeader>
 
           <CardContent className="flex-1 overflow-auto">
             {statsByAgent.length === 0 ? (
               <p className="text-center text-sm italic text-gray-500">
-                No records found. Coordinate with your TSA to create activities.
+                No records found.
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="font-mono">
                     <TableHead className="text-xs">Agent</TableHead>
-                    <TableHead className="text-xs text-center">Touchbase Count</TableHead>
-                    <TableHead className="text-xs text-center">Follow-up Count</TableHead>
-                    <TableHead className="text-xs text-center">Successful Count</TableHead>
-                    <TableHead className="text-xs text-center">Unsuccessful Count</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-l border-r bg-yellow-100">Outbound - Touchbase</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-r bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-r bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-r bg-blue-100">Outbound - Follow-up</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-r bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center font-bold border-r bg-red-200">Unsuccess</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -176,21 +201,12 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                           {agentName}
                         </TableCell>
 
-                        <TableCell className="text-center">
-                          {stat.touchbaseCount}
-                        </TableCell>
-
-                        <TableCell className="text-center">
-                          {stat.followupCount}
-                        </TableCell>
-
-                        <TableCell className="text-center">
-                          {stat.successfulCount}
-                        </TableCell>
-
-                        <TableCell className="text-center">
-                          {stat.unsuccessfulCount}
-                        </TableCell>
+                        <TableCell className="text-center font-bold border-r bg-yellow-100">{stat.touchbaseCount}</TableCell>
+                        <TableCell className="text-center font-bold border-r bg-green-100">{stat.touchbaseSuccessful}</TableCell>
+                        <TableCell className="text-center font-bold border-r bg-red-200">{stat.touchbaseUnsuccessful}</TableCell>
+                        <TableCell className="text-center font-bold border-r bg-blue-100">{stat.followupCount}</TableCell>
+                        <TableCell className="text-center font-bold border-r bg-green-100">{stat.followupSuccessful}</TableCell>
+                        <TableCell className="text-center font-bold border-r bg-red-200">{stat.followupUnsuccessful}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -198,39 +214,27 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
 
                 <tfoot>
                   <TableRow className="text-xs font-semibold border-t">
-                    <TableCell className="font-mono">Total</TableCell>
-
-                    <TableCell className="text-center font-bold">
-                      {statsByAgent.reduce((acc, stat) => acc + stat.touchbaseCount, 0)}
-                    </TableCell>
-
-                    <TableCell className="text-center font-bold">
-                      {statsByAgent.reduce((acc, stat) => acc + stat.followupCount, 0)}
-                    </TableCell>
-
-                    <TableCell className="text-center font-bold">
-                      {statsByAgent.reduce((acc, stat) => acc + stat.successfulCount, 0)}
-                    </TableCell>
-
-                    <TableCell className="text-center font-bold">
-                      {statsByAgent.reduce((acc, stat) => acc + stat.unsuccessfulCount, 0)}
-                    </TableCell>
+                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="text-center font-bold border-r border-l bg-yellow-200">{grandTotals.touchbaseCount}</TableCell>
+                    <TableCell className="text-center font-bold border-r bg-green-200">{grandTotals.touchbaseSuccessful}</TableCell>
+                    <TableCell className="text-center font-bold border-r bg-red-300">{grandTotals.touchbaseUnsuccessful}</TableCell>
+                    <TableCell className="text-center font-bold border-r bg-blue-200">{grandTotals.followupCount}</TableCell>
+                    <TableCell className="text-center font-bold border-r bg-green-200">{grandTotals.followupSuccessful}</TableCell>
+                    <TableCell className="text-center font-bold border-r bg-red-300">{grandTotals.followupUnsuccessful}</TableCell>
                   </TableRow>
                 </tfoot>
               </Table>
             )}
           </CardContent>
 
-          {totalOutboundCalls > 0 && (
-            <CardFooter className="flex justify-between border-t bg-white">
-              <p className="text-xs italic">
-                Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
-              </p>
-              <Badge className="rounded-none px-6 py-4 font-mono">
-                Total Outbound Calls: {totalOutboundCalls}
-              </Badge>
-            </CardFooter>
-          )}
+          <CardFooter className="flex justify-between border-t bg-white">
+            <p className="text-xs italic">
+              Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
+            </p>
+            <Badge className="rounded-none px-6 py-4 font-mono">
+              Total Outbound Calls: {grandTotals.totalOutbound}
+            </Badge>
+          </CardFooter>
         </Card>
       )}
     </>
