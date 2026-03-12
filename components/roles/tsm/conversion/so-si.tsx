@@ -200,12 +200,12 @@ export const SOSI: React.FC<SOSIProps> = ({
     const uniqueSIDates = new Set(filteredSI.map((a) => a.si_date));
     const totalSI = uniqueSIDates.size;
 
-    const percentageSOToSI = totalSI === 0 ? 0 : (totalSO / totalSI) * 100;
+    const percentageSOToSI = totalSI === 0 ? 0 : (totalSI / totalSO) * 100;
 
     return {
       agentName: `${agent.Firstname} ${agent.Lastname}`,
       profilePicture: agent.profilePicture || "/Taskflow.png",
-      target_quota,
+      target_quota: agent.TargetQuota || "0",
       totalSO,
       totalSI,
       percentageSOToSI,
@@ -302,7 +302,7 @@ export const SOSI: React.FC<SOSIProps> = ({
             </TableHeader>
             <TableBody>
               {rows.map((row, idx) => (
-                <TableRow key={idx}>
+                <TableRow key={idx} className="text-xs">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <img
@@ -313,10 +313,14 @@ export const SOSI: React.FC<SOSIProps> = ({
                           (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
                         }}
                       />
-                      <span className="capitalize text-sm">{row.agentName}</span>
+                      <span className="capitalize">{row.agentName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    {row.target_quota && row.target_quota !== "0"
+                      ? Number(row.target_quota).toLocaleString()
+                      : "-"}
+                  </TableCell>
                   <TableCell className="text-right">{row.totalSO}</TableCell>
                   <TableCell className="text-right">{row.totalSI}</TableCell>
                   <TableCell className="text-right">{row.percentageSOToSI.toFixed(2)}%</TableCell>
@@ -348,7 +352,7 @@ export const SOSI: React.FC<SOSIProps> = ({
           <strong>Number of SI:</strong> Counts unique <code>si_date</code> where <code>actual_sales</code> is &gt; 0.
         </p>
         <p className="bg-gray-100 p-2 rounded">
-          Percentage of SO to SI: Calculated as (Number of SO ÷ Number of SI) × 100.
+          Percentage of SO to SI: Calculated as (Number of SI ÷ Number of SO) × 100.
         </p>
         <p>Data is filtered based on the selected month.</p>
       </div>
