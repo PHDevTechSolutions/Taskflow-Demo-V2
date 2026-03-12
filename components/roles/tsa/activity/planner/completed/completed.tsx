@@ -268,7 +268,7 @@ export const Completed: React.FC<CompletedProps> = ({
       <Input
         type="search"
         placeholder="Search..."
-        className="text-xs flex-grow rounded-none mb-2"
+        className="text-xs grow rounded-none mb-2"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         aria-label="Search accounts"

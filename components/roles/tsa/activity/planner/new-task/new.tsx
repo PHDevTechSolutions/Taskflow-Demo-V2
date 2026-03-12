@@ -1,17 +1,44 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { CheckCircle2Icon, AlertCircleIcon, Plus, TicketIcon, CalendarCheck2 } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, } from "@/components/ui/accordion";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
+import {
+  CheckCircle2Icon,
+  AlertCircleIcon,
+  Plus,
+  TicketIcon,
+  CalendarCheck2,
+  Lock,
+} from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge";
 import { AccountDialog } from "../dialog/active";
+import {
+  checkCompanyBlocked,
+  BLOCK_NEW_TASK,
+} from "@/utils/activityBlockUtils";
 
 interface Account {
   id: string;
@@ -62,17 +89,38 @@ interface EndorsedTicket {
   date_updated: string;
 }
 
+// ─── Minimal shapes needed for the block-check utility ──────────────────────
+interface ActivityForCheck {
+  id: string;
+  account_reference_number: string;
+  activity_reference_number: string;
+  status: string;
+  scheduled_date?: string;
+  date_created: string;
+}
+
+interface HistoryForCheck {
+  activity_reference_number: string;
+  status?: string;
+}
+
 export const NewTask: React.FC<NewTaskProps> = ({
   referenceid,
   onEmptyStatusChange,
   userDetails,
   onSaveAccountAction,
-  onRefreshAccountsAction
+  onRefreshAccountsAction,
 }) => {
   // State for Accounts
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ─── Activity/History state for the block check ──────────────────────────
+  const [existingActivities, setExistingActivities] = useState<
+    ActivityForCheck[]
+  >([]);
+  const [existingHistory, setExistingHistory] = useState<HistoryForCheck[]>([]);
 
   // State for Endorsed Tickets
   const [endorsedTickets, setEndorsedTickets] = useState<EndorsedTicket[]>([]);
@@ -82,7 +130,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // Search Term for filtering accounts
   const [searchTerm, setSearchTerm] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<EndorsedTicket | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<EndorsedTicket | null>(
+    null,
+  );
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   // 🔔 sound refs
@@ -108,17 +158,67 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return `${firstInitial}${lastInitial}-${region}-${uniqueNumber}`;
   };
 
+  // ─── Fetch existing activities & history for the block check ────────────
+  const fetchExistingActivities = useCallback(async () => {
+    if (!referenceid) return;
+    try {
+      const url = new URL(
+        "/api/activity/tsa/planner/fetch",
+        window.location.origin,
+      );
+      url.searchParams.append("referenceid", referenceid);
+      const res = await fetch(url.toString());
+      if (!res.ok) return;
+      const data = await res.json();
+      setExistingActivities(data.activities || []);
+      setExistingHistory(data.history || []);
+    } catch {
+      // non-critical; silently ignore
+    }
+  }, [referenceid]);
+
+  useEffect(() => {
+    fetchExistingActivities();
+  }, [fetchExistingActivities]);
+
   // Add Account Handler
   const handleAdd = async (account: Account) => {
-    setLoading(true);  // <-- start loading
+    // ─── Block check before proceeding ────────────────────────────────────
+    // Block if company is already in-progress or scheduled
+    const blockCheck = checkCompanyBlocked(
+      account.account_reference_number,
+      existingActivities,
+      existingHistory,
+      BLOCK_NEW_TASK.statuses,
+      BLOCK_NEW_TASK.checkScheduled,
+    );
+
+    if (blockCheck.blocked) {
+      sileo.error({
+        title: "Cannot Add Activity",
+        description: blockCheck.reason,
+        duration: 6000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
+      return;
+    }
+
+    setLoading(true); // <-- start loading
 
     const region = account.region || "NCR";
     const tsm = account.tsm;
     const manager = account.manager;
 
     if (!tsm || !manager) {
-      alert("TSM or Manager information is missing. Please check the account data.");
-      setLoading(false); // stop loading if early return
+      alert(
+        "TSM or Manager information is missing. Please check the account data.",
+      );
+      setLoading(false);
       return;
     }
 
@@ -134,7 +234,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
       email_address: account.email_address,
       address: account.address,
       type_client: account.type_client,
-      activity_reference_number: generateActivityRef(account.company_name, region),
+      activity_reference_number: generateActivityRef(
+        account.company_name,
+        region,
+      ),
     };
 
     try {
@@ -175,6 +278,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
       // Remove added account from state
       setAccounts((prev) => prev.filter((acc) => acc.id !== account.id));
+      // Refresh the activities list so subsequent checks are accurate
+      await fetchExistingActivities();
       window.location.reload();
 
       sileo.success({
@@ -201,10 +306,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
         },
       });
     } finally {
-      setLoading(false);  // <-- always stop loading at the end
+      setLoading(false);
     }
   };
-
 
   // Normalize date string or return null
   const normalizeDate = (dateStr?: string | null): string | null => {
@@ -222,7 +326,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // Group accounts by cluster with a date filter condition
   const groupByCluster = (
     accounts: Account[],
-    dateCondition: (date: string | null) => boolean
+    dateCondition: (date: string | null) => boolean,
   ) => {
     const grouped: Record<string, Account[]> = {};
     for (const cluster of clusterOrder) {
@@ -230,7 +334,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         (acc) =>
           acc.type_client?.toLowerCase() === cluster &&
           dateCondition(normalizeDate(acc.next_available_date)) &&
-          acc.status?.toLowerCase() !== "pending"
+          acc.status?.toLowerCase() !== "pending",
       );
     }
     return grouped;
@@ -249,7 +353,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`
+          `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`,
         );
         if (!response.ok) {
           setError("Failed to fetch accounts");
@@ -283,18 +387,24 @@ export const NewTask: React.FC<NewTaskProps> = ({
     setErrorEndorsed(null);
 
     try {
-      const res = await fetch(`/api/act-fetch-endorsed-ticket?referenceid=${encodeURIComponent(referenceid)}`, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+      const res = await fetch(
+        `/api/act-fetch-endorsed-ticket?referenceid=${encodeURIComponent(referenceid)}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
         },
-      });
+      );
 
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error(json.message || json.error || "Failed to fetch endorsed tickets");
+        throw new Error(
+          json.message || json.error || "Failed to fetch endorsed tickets",
+        );
       }
 
       const json = await res.json();
@@ -305,7 +415,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setLoadingEndorsed(false);
     }
   }, [referenceid]);
-
 
   useEffect(() => {
     if (!referenceid) return;
@@ -327,7 +436,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         (payload) => {
           console.log("Realtime endorsed-ticket update:", payload);
           fetchEndorsedTickets();
-        }
+        },
       )
       .subscribe();
 
@@ -362,6 +471,33 @@ export const NewTask: React.FC<NewTaskProps> = ({
       return;
     }
 
+    // ─── Block check for endorsed ticket too ────────────────────────────
+    // Block if company is already in-progress or scheduled
+    const blockCheck = checkCompanyBlocked(
+      selectedTicket.account_reference_number,
+      existingActivities,
+      existingHistory,
+      BLOCK_NEW_TASK.statuses,
+      BLOCK_NEW_TASK.checkScheduled,
+    );
+
+    if (blockCheck.blocked) {
+      sileo.error({
+        title: "Cannot Use Ticket",
+        description: blockCheck.reason,
+        duration: 6000,
+        position: "top-right",
+        fill: "black",
+        styles: {
+          title: "text-white!",
+          description: "text-white",
+        },
+      });
+      setConfirmOpen(false);
+      setSelectedTicket(null);
+      return;
+    }
+
     try {
       setConfirmLoading(true);
 
@@ -385,7 +521,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
         agent: ticket.agent,
         activity_reference_number: generateActivityRef(
           ticket.company_name || "Taskflow",
-          region
+          region,
         ),
       };
 
@@ -426,7 +562,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
       if (!updateStatusRes.ok) {
         sileo.error({
           title: "Failed",
-          description: updateStatusData?.error || "Failed to update ticket status",
+          description:
+            updateStatusData?.error || "Failed to update ticket status",
           duration: 4000,
           position: "top-right",
           fill: "black",
@@ -439,22 +576,26 @@ export const NewTask: React.FC<NewTaskProps> = ({
       }
 
       // 3. Update company reference
-      const updateCompanyRefRes = await fetch("/api/com-update-company-ticket", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          account_reference_number: ticket.account_reference_number,
-          referenceid: userDetails.referenceid,
-          tsm: userDetails.tsm,
-          manager: userDetails.manager,
-        }),
-      });
+      const updateCompanyRefRes = await fetch(
+        "/api/com-update-company-ticket",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            account_reference_number: ticket.account_reference_number,
+            referenceid: userDetails.referenceid,
+            tsm: userDetails.tsm,
+            manager: userDetails.manager,
+          }),
+        },
+      );
 
       const updateCompanyRefData = await updateCompanyRefRes.json();
       if (!updateCompanyRefRes.ok) {
         sileo.error({
           title: "Failed",
-          description: updateCompanyRefData?.error ||
+          description:
+            updateCompanyRefData?.error ||
             "Ticket processed but company update failed. Please contact admin.",
           duration: 4000,
           position: "top-right",
@@ -491,7 +632,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       setSelectedTicket(null);
     } catch (err) {
       console.error(err);
-      sileo.success({
+      sileo.error({
         title: "Failed",
         description: "Unexpected error while using endorsed ticket.",
         duration: 4000,
@@ -509,21 +650,24 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Filter accounts by search term - includes all regardless of date
   const filteredBySearch = React.useMemo(() => {
-    if (!searchTerm.trim()) return accounts.filter(acc =>
-      acc.status?.toLowerCase() !== "subject for transfer" &&
-      acc.status?.toLowerCase() !== "approved for deletion" &&
-      acc.status?.toLowerCase() !== "removed"
-    );
+    if (!searchTerm.trim())
+      return accounts.filter(
+        (acc) =>
+          acc.status?.toLowerCase() !== "subject for transfer" &&
+          acc.status?.toLowerCase() !== "approved for deletion" &&
+          acc.status?.toLowerCase() !== "removed",
+      );
 
     const lowerSearch = searchTerm.toLowerCase();
     return accounts.filter((acc) => {
       const status = acc.status?.toLowerCase();
       const isStatusAllowed =
-        status !== "subject for transfer" && status !== "removed" && status !== "approved for deletion";
+        status !== "subject for transfer" &&
+        status !== "removed" &&
+        status !== "approved for deletion";
 
       return (
-        isStatusAllowed &&
-        acc.company_name.toLowerCase().includes(lowerSearch)
+        isStatusAllowed && acc.company_name.toLowerCase().includes(lowerSearch)
       );
     });
   }, [accounts, searchTerm]);
@@ -532,7 +676,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
     2,
-    "0"
+    "0",
   )}-${String(now.getDate()).padStart(2, "0")}`;
 
   // Group accounts by date condition (only when no search term)
@@ -549,7 +693,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // Totals for UI display when no search term
   const totalTodayCount = React.useMemo(() => {
     if (searchTerm.trim()) return 0;
-    return Object.values(groupedToday).reduce((sum, arr) => sum + arr.length, 0);
+    return Object.values(groupedToday).reduce(
+      (sum, arr) => sum + arr.length,
+      0,
+    );
   }, [groupedToday, searchTerm]);
 
   const totalAvailableCount = React.useMemo(() => {
@@ -560,7 +707,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // Find first non-empty cluster for available OB calls
   const getFirstNonEmptyCluster = (
     grouped: Record<string, Account[]>,
-    orderedList: string[]
+    orderedList: string[],
   ) => {
     for (const cluster of orderedList) {
       if (grouped[cluster]?.length) return cluster;
@@ -568,12 +715,83 @@ export const NewTask: React.FC<NewTaskProps> = ({
     return null;
   };
 
-  const firstAvailableCluster = getFirstNonEmptyCluster(groupedNull, clusterOrder);
+  const firstAvailableCluster = getFirstNonEmptyCluster(
+    groupedNull,
+    clusterOrder,
+  );
 
   useEffect(() => {
     endorsedSoundRef.current = new Audio("/ticket-endorsed.mp3");
     endorsedSoundRef.current.volume = 0.9;
   }, []);
+
+  // ─── Reusable "Add" button with block guard ──────────────────────────────
+  const AddButton = ({ account }: { account: Account }) => {
+    // Block if company is already in-progress or scheduled
+    const blockCheck = checkCompanyBlocked(
+      account.account_reference_number,
+      existingActivities,
+      existingHistory,
+      BLOCK_NEW_TASK.statuses,
+      BLOCK_NEW_TASK.checkScheduled,
+    );
+
+    if (blockCheck.blocked) {
+      return (
+        <HoverCard>
+          <HoverCardTrigger asChild>
+            <Button
+              type="button"
+              disabled
+              variant="outline"
+              className="cursor-not-allowed rounded-none opacity-60 text-xs"
+            >
+              <Lock size={13} className="mr-1" /> Locked
+            </Button>
+          </HoverCardTrigger>
+          <HoverCardContent
+            side="top"
+            align="end"
+            className="text-xs max-w-xs leading-relaxed"
+          >
+            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
+              <Lock size={12} /> Activity Locked
+            </p>
+            <p>{blockCheck.reason}</p>
+            {blockCheck.daysRemaining !== undefined && (
+              <p className="mt-1 text-muted-foreground">
+                Unlocks in{" "}
+                <strong>
+                  {blockCheck.daysRemaining} day
+                  {blockCheck.daysRemaining !== 1 ? "s" : ""}
+                </strong>{" "}
+                or when marked as Delivered.
+              </p>
+            )}
+          </HoverCardContent>
+        </HoverCard>
+      );
+    }
+
+    return (
+      <Button
+        type="button"
+        className="cursor-pointer rounded-none"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleAdd(account);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleAdd(account);
+          }
+        }}
+      >
+        <Plus /> Add
+      </Button>
+    );
+  };
 
   // === RENDER ===
   return (
@@ -583,11 +801,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
           <Spinner className="size-8" />
         </div>
       ) : error ? (
-        <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
+        <Alert
+          variant="destructive"
+          className="flex flex-col space-y-4 p-4 text-xs"
+        >
           <div className="flex items-center space-x-3">
             <AlertCircleIcon className="h-6 w-6 text-red-600" />
             <div>
-              <AlertTitle>No Companies Found or No Network Connection</AlertTitle>
+              <AlertTitle>
+                No Companies Found or No Network Connection
+              </AlertTitle>
               <AlertDescription className="text-xs">
                 Please check your internet connection or try again later.
               </AlertDescription>
@@ -622,51 +845,114 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 Endorsed Tickets ({endorsedTickets.length})
               </h2>
 
-              <Accordion type="single" collapsible className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500">
-                {endorsedTickets.map((ticket) => (
-                  <AccordionItem key={ticket.id} value={ticket.id}>
-                    <div className="flex justify-between items-center p-2 select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
-                        {ticket.company_name}
-                      </AccordionTrigger>
-                      <Button
-                        type="button"
-                        className="cursor-pointer rounded-none"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openConfirmUseTicket(ticket);
-                        }}
-                      >
-                        <TicketIcon /> Use Ticket
-                      </Button>
-                    </div>
+              <Accordion
+                type="single"
+                collapsible
+                className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500"
+              >
+                {endorsedTickets.map((ticket) => {
+                  const ticketBlockCheck = checkCompanyBlocked(
+                    ticket.account_reference_number,
+                    existingActivities,
+                    existingHistory,
+                    BLOCK_NEW_TASK.statuses,
+                    BLOCK_NEW_TASK.checkScheduled,
+                  );
 
-                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
-                      <p>
-                        <strong>Contact Person:</strong> {ticket.contact_person}
-                      </p>
-                      <p>
-                        <strong>Contact Number:</strong> {ticket.contact_number}
-                      </p>
-                      <p>
-                        <strong>Email Address:</strong> {ticket.email_address}
-                      </p>
-                      <p>
-                        <strong>Address:</strong> {ticket.address}
-                      </p>
-                      <p>
-                        <strong>Ticket Reference #:</strong> {ticket.ticket_reference_number}
-                      </p>
-                      <p>
-                        <strong>Wrap Up:</strong> {ticket.wrap_up}
-                      </p>
-                      <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
-                        <strong>Inquiry / Notes:</strong> {ticket.inquiry}
-                      </p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
+                  return (
+                    <AccordionItem key={ticket.id} value={ticket.id}>
+                      <div className="flex justify-between items-center p-2 select-none">
+                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
+                          {ticket.company_name}
+                        </AccordionTrigger>
+
+                        {ticketBlockCheck.blocked ? (
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <Button
+                                type="button"
+                                disabled
+                                variant="outline"
+                                className="cursor-not-allowed rounded-none opacity-60 text-xs"
+                              >
+                                <Lock size={13} className="mr-1" /> Locked
+                              </Button>
+                            </HoverCardTrigger>
+                            <HoverCardContent
+                              side="top"
+                              align="end"
+                              className="text-xs max-w-xs leading-relaxed"
+                            >
+                              <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
+                                <Lock size={12} /> Activity Locked
+                              </p>
+                              <p>{ticketBlockCheck.reason}</p>
+                              {ticketBlockCheck.daysRemaining !== undefined && (
+                                <p className="mt-1 text-muted-foreground">
+                                  Unlocks in{" "}
+                                  <strong>
+                                    {ticketBlockCheck.daysRemaining} day
+                                    {ticketBlockCheck.daysRemaining !== 1
+                                      ? "s"
+                                      : ""}
+                                  </strong>{" "}
+                                  or when marked as Delivered.
+                                </p>
+                              )}
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : (
+                          <Button
+                            type="button"
+                            className="cursor-pointer rounded-none"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openConfirmUseTicket(ticket);
+                            }}
+                          >
+                            <TicketIcon /> Use Ticket
+                          </Button>
+                        )}
+                      </div>
+
+                      <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
+                        <p>
+                          <strong>Contact Person:</strong>{" "}
+                          {ticket.contact_person}
+                        </p>
+                        <p>
+                          <strong>Contact Number:</strong>{" "}
+                          {ticket.contact_number}
+                        </p>
+                        <p>
+                          <strong>Email Address:</strong> {ticket.email_address}
+                        </p>
+                        <p>
+                          <strong>Address:</strong> {ticket.address}
+                        </p>
+                        <p>
+                          <strong>Ticket Reference #:</strong>{" "}
+                          {ticket.ticket_reference_number}
+                        </p>
+                        <p>
+                          <strong>Wrap Up:</strong> {ticket.wrap_up}
+                        </p>
+                        <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
+                          <strong>Inquiry / Notes:</strong> {ticket.inquiry}
+                        </p>
+                        {ticketBlockCheck.blocked && (
+                          <p className="border border-orange-400 border-dashed rounded-none p-3 bg-orange-50 text-orange-700 flex items-center gap-2">
+                            <Lock size={12} />
+                            <span>
+                              <strong>Locked:</strong> {ticketBlockCheck.reason}
+                            </span>
+                          </p>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
               </Accordion>
             </section>
           ) : null}
@@ -677,7 +963,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 <DialogTitle>Use Endorsed Ticket</DialogTitle>
               </DialogHeader>
               <div>
-                Are you sure you want to use this ticket? This action cannot be undone.
+                Are you sure you want to use this ticket? This action cannot be
+                undone.
               </div>
               <DialogFooter className="flex gap-4 mt-4 justify-end">
                 <Button
@@ -725,12 +1012,19 @@ export const NewTask: React.FC<NewTaskProps> = ({
           {searchTerm.trim() ? (
             <section>
               <h2 className="text-xs font-bold mb-4">
-                Search Results <span className="text-green-600">({filteredBySearch.length})</span>
+                Search Results{" "}
+                <span className="text-green-600">
+                  ({filteredBySearch.length})
+                </span>
               </h2>
               {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
-                <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase">
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase"
+                >
                   {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
@@ -739,27 +1033,15 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
                           {account.next_available_date && (
                             <Badge className="bg-green-600">
-                              <CalendarCheck2 /> Scheduled {new Date(account.next_available_date).toLocaleDateString("en-CA")}
+                              <CalendarCheck2 /> Scheduled{" "}
+                              {new Date(
+                                account.next_available_date,
+                              ).toLocaleDateString("en-CA")}
                             </Badge>
                           )}
                         </AccordionTrigger>
                         <div className="flex gap-2 ml-4">
-                          <Button
-                            type="button"
-                            className="cursor-pointer rounded-none"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAdd(account);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                handleAdd(account);
-                              }
-                            }}
-                          >
-                            <Plus /> Add
-                          </Button>
+                          <AddButton account={account} />
                         </div>
                       </div>
 
@@ -776,7 +1058,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
                         <p>
                           <strong>Address:</strong> {account.address}
                         </p>
-                        <p className="text-[8px]">{account.account_reference_number}</p>
+                        <p className="text-[8px]">
+                          {account.account_reference_number}
+                        </p>
                       </AccordionContent>
                     </AccordionItem>
                   ))}
@@ -794,7 +1078,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
                   {clusterOrder.map((cluster) => {
                     const clusterAccounts = groupedToday[cluster];
-                    if (!clusterAccounts || clusterAccounts.length === 0) return null;
+                    if (!clusterAccounts || clusterAccounts.length === 0)
+                      return null;
 
                     return (
                       <div key={cluster} className="mb-4">
@@ -811,39 +1096,29 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                 </AccordionTrigger>
 
                                 <div className="flex gap-2 ml-4">
-                                  <Button
-                                    type="button"
-                                    className="cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAdd(account);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        handleAdd(account);
-                                      }
-                                    }}
-                                  >
-                                    <Plus /> Add
-                                  </Button>
+                                  <AddButton account={account} />
                                 </div>
                               </div>
 
                               <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
                                 <p>
-                                  <strong>Contact:</strong> {account.contact_number}
+                                  <strong>Contact:</strong>{" "}
+                                  {account.contact_number}
                                 </p>
                                 <p>
-                                  <strong>Email:</strong> {account.email_address}
+                                  <strong>Email:</strong>{" "}
+                                  {account.email_address}
                                 </p>
                                 <p>
-                                  <strong>Client Type:</strong> {account.type_client}
+                                  <strong>Client Type:</strong>{" "}
+                                  {account.type_client}
                                 </p>
                                 <p>
                                   <strong>Address:</strong> {account.address}
                                 </p>
-                                <p className="text-[8px]">{account.account_reference_number}</p>
+                                <p className="text-[8px]">
+                                  {account.account_reference_number}
+                                </p>
                               </AccordionContent>
                             </AccordionItem>
                           ))}
@@ -858,7 +1133,8 @@ export const NewTask: React.FC<NewTaskProps> = ({
               {totalAvailableCount > 0 && firstAvailableCluster && (
                 <section>
                   <h2 className="text-xs font-bold mb-4">
-                    Available OB Calls ({groupedNull[firstAvailableCluster].length})
+                    Available OB Calls (
+                    {groupedNull[firstAvailableCluster].length})
                   </h2>
 
                   <Alert className="font-mono rounded-xl shadow-lg">
@@ -867,11 +1143,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
                       CLUSTER SERIES: {firstAvailableCluster.toUpperCase()}
                     </AlertTitle>
                     <AlertDescription className="text-xs italic">
-                      This alert provides important information about the selected cluster.
+                      This alert provides important information about the
+                      selected cluster.
                     </AlertDescription>
                   </Alert>
 
-                  <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase">
+                  <Accordion
+                    type="single"
+                    collapsible
+                    className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase"
+                  >
                     {groupedNull[firstAvailableCluster].map((account) => (
                       <AccordionItem key={account.id} value={account.id}>
                         <div className="flex justify-between items-center p-2 select-none">
@@ -880,22 +1161,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           </AccordionTrigger>
 
                           <div className="flex gap-2 ml-4">
-                            <Button
-                              type="button"
-                              className="cursor-pointer rounded-none"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAdd(account);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  handleAdd(account);
-                                }
-                              }}
-                            >
-                              <Plus /> Add
-                            </Button>
+                            <AddButton account={account} />
                           </div>
                         </div>
 
@@ -912,7 +1178,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
                           <p>
                             <strong>Address:</strong> {account.address}
                           </p>
-                          <p className="text-[8px]">{account.account_reference_number}</p>
+                          <p className="text-[8px]">
+                            {account.account_reference_number}
+                          </p>
                         </AccordionContent>
                       </AccordionItem>
                     ))}
