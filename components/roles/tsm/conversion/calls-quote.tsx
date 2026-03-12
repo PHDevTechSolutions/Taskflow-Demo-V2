@@ -12,6 +12,7 @@ interface CallHistory {
     id: number;
     source?: string;
     status?: string;
+    call_status?: string;
     date_created?: string;
     referenceid: string;
     target_quota: string;
@@ -188,38 +189,41 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
 
     // For each agent, calculate metrics
     const rows = filteredAgents.map((agent) => {
-        const refId = agent.ReferenceID.toLowerCase();
+    const refId = agent.ReferenceID.toLowerCase();
 
-        const filteredActivities = activitiesFilteredByMonth.filter(
-            (a) => a.referenceid.toLowerCase() === refId
-        );
+    const filteredActivities = activitiesFilteredByMonth.filter(
+        (a) => a.referenceid.toLowerCase() === refId
+    );
 
-        // Get latest target_quota from filteredActivities (by date_created desc)
-        const sortedByDate = [...filteredActivities].sort((a, b) => {
-            const da = a.date_created ? new Date(a.date_created).getTime() : 0;
-            const db = b.date_created ? new Date(b.date_created).getTime() : 0;
-            return db - da; // descending
-        });
-
-        const target_quota = sortedByDate.length > 0 ? sortedByDate[0].target_quota : "0";
-
-        const totalCalls = filteredActivities.filter(
-            (a) => a.source === "Outbound - Touchbase"
-        ).length;
-
-        const totalQuotes = filteredActivities.filter((a) => a.status === "Quote-Done").length;
-
-        const percentageCallsToQuote = totalCalls === 0 ? 0 : (totalQuotes / totalCalls) * 100;
-
-        return {
-            agentName: `${agent.Firstname} ${agent.Lastname}`,
-            profilePicture: agent.profilePicture || "/Taskflow.png",
-            target_quota,
-            totalCalls,
-            totalQuotes,
-            percentageCallsToQuote,
-        };
+    // Get latest target_quota from filteredActivities (by date_created desc)
+    const sortedByDate = [...filteredActivities].sort((a, b) => {
+        const da = a.date_created ? new Date(a.date_created).getTime() : 0;
+        const db = b.date_created ? new Date(b.date_created).getTime() : 0;
+        return db - da; // descending
     });
+
+    const target_quota = sortedByDate.length > 0 ? sortedByDate[0].target_quota : "0";
+
+    // Only Successful Touchbase calls
+    const totalCalls = filteredActivities.filter(
+        (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
+    ).length;
+
+    const totalQuotes = filteredActivities.filter(
+        (a) => a.status === "Quote-Done"
+    ).length;
+
+    const percentageCallsToQuote = totalCalls === 0 ? 0 : (totalQuotes / totalCalls) * 100;
+
+    return {
+        agentName: `${agent.Firstname} ${agent.Lastname}`,
+        profilePicture: agent.profilePicture || "/Taskflow.png",
+        target_quota: agent.TargetQuota || "0",
+        totalCalls,
+        totalQuotes,
+        percentageCallsToQuote,
+    };
+});
 
     // Compute totals
     const totals = rows.reduce(
@@ -311,7 +315,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                         </TableHeader>
                         <TableBody>
                             {rows.map((row, idx) => (
-                                <TableRow key={idx}>
+                                <TableRow key={idx} className="text-xs">
                                     <TableCell>
                                         <div className="flex items-center gap-2">
                                             <img
@@ -322,10 +326,14 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
                                                     (e.currentTarget as HTMLImageElement).src = "/avatar-placeholder.png";
                                                 }}
                                             />
-                                            <span className="capitalize text-sm">{row.agentName}</span>
+                                            <span className="capitalize">{row.agentName}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right">{row.target_quota && row.target_quota !== "0" ? row.target_quota : "-"}</TableCell>
+                                    <TableCell className="text-right">
+                                        {row.target_quota && row.target_quota !== "0"
+                                            ? Number(row.target_quota).toLocaleString()
+                                            : "-"}
+                                    </TableCell>
                                     <TableCell className="text-right">{row.totalCalls}</TableCell>
                                     <TableCell className="text-right">{row.totalQuotes}</TableCell>
                                     <TableCell className="text-right">{row.percentageCallsToQuote.toFixed(2)}%</TableCell>
