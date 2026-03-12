@@ -12,6 +12,7 @@ interface CallHistory {
   id: number;
   source?: string;
   status?: string;
+  call_status?: string;
   date_created?: string;
 }
 
@@ -138,7 +139,7 @@ export const CallQuote: React.FC<CallQuoteProps> = ({
   }, [activities, selectedMonth]);
 
   const totalCalls = activitiesFilteredByMonth.filter(
-    (a) => a.source === "Outbound - Touchbase"
+    (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
   ).length;
 
   const totalQuotes = activitiesFilteredByMonth.filter((a) => a.status === "Quote-Done").length;
