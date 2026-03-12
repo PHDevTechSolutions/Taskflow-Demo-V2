@@ -119,8 +119,11 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
 
   const totalOutboundDurationMs = useMemo(() => {
     return outboundCalls.reduce((total, item) => {
+      if (!item.start_date || !item.end_date) return total; // skip if null/undefined
+
       const start = new Date(item.start_date.replace(" ", "T")).getTime();
       const end = new Date(item.end_date.replace(" ", "T")).getTime();
+
       if (!isNaN(start) && !isNaN(end) && end > start) return total + (end - start);
       return total;
     }, 0);
