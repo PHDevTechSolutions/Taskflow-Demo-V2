@@ -399,10 +399,14 @@ export function RequestDialog({
                                             className="rounded-none"
                                             value={row.item_description}
                                             onChange={(e) => {
+                                                // Remove any commas from input
+                                                const sanitizedValue = e.target.value.replace(/,/g, "");
                                                 const updated = [...items];
-                                                updated[index].item_description = e.target.value;
+                                                updated[index].item_description = sanitizedValue;
                                                 setItems(updated);
                                             }}
+                                            rows={15}
+                                            placeholder="Enter item description without commas"
                                         />
                                     </div>
 
