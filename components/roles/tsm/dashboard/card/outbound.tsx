@@ -134,6 +134,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       followupCount: 0,
       followupSuccessful: 0,
       followupUnsuccessful: 0,
+      subtotal: 0,
       totalOutbound: 0,
     };
 
@@ -146,8 +147,8 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       totals.followupUnsuccessful += s.followupUnsuccessful;
     });
 
-    totals.totalOutbound =
-      totals.touchbaseCount + totals.followupCount;
+    totals.subtotal = totals.touchbaseCount + totals.followupCount;
+    totals.totalOutbound = totals.subtotal;
 
     return totals;
   }, [statsByAgent]);
@@ -170,12 +171,13 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                 <TableHeader>
                   <TableRow className="font-mono">
                     <TableHead className="text-xs">Agent</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-l border-r bg-yellow-100">Outbound - Touchbase</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-r bg-green-100">Success</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-r bg-red-200">Unsuccess</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-r bg-blue-100">Outbound - Follow-up</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-r bg-green-100">Success</TableHead>
-                    <TableHead className="text-xs text-center font-bold border-r bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center bg-yellow-100">Touchbase</TableHead>
+                    <TableHead className="text-xs text-center bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center bg-blue-100">Follow-up</TableHead>
+                    <TableHead className="text-xs text-center bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center bg-gray-200">Subtotal</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -183,6 +185,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                   {statsByAgent.map((stat) => {
                     const agentName = agentMap.get(stat.agentID) || stat.agentID;
                     const profilePicture = agentPictureMap.get(stat.agentID);
+                    const subtotal = stat.touchbaseCount + stat.followupCount;
 
                     return (
                       <TableRow key={stat.agentID} className="text-xs">
@@ -201,12 +204,13 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                           {agentName}
                         </TableCell>
 
-                        <TableCell className="text-center font-bold border-r bg-yellow-100">{stat.touchbaseCount}</TableCell>
-                        <TableCell className="text-center font-bold border-r bg-green-100">{stat.touchbaseSuccessful}</TableCell>
-                        <TableCell className="text-center font-bold border-r bg-red-200">{stat.touchbaseUnsuccessful}</TableCell>
-                        <TableCell className="text-center font-bold border-r bg-blue-100">{stat.followupCount}</TableCell>
-                        <TableCell className="text-center font-bold border-r bg-green-100">{stat.followupSuccessful}</TableCell>
-                        <TableCell className="text-center font-bold border-r bg-red-200">{stat.followupUnsuccessful}</TableCell>
+                        <TableCell className="text-center bg-yellow-100 font-bold">{stat.touchbaseCount}</TableCell>
+                        <TableCell className="text-center bg-green-100 font-bold">{stat.touchbaseSuccessful}</TableCell>
+                        <TableCell className="text-center bg-red-200 font-bold">{stat.touchbaseUnsuccessful}</TableCell>
+                        <TableCell className="text-center bg-blue-100 font-bold">{stat.followupCount}</TableCell>
+                        <TableCell className="text-center bg-green-100 font-bold">{stat.followupSuccessful}</TableCell>
+                        <TableCell className="text-center bg-red-200 font-bold">{stat.followupUnsuccessful}</TableCell>
+                        <TableCell className="text-center bg-gray-200 font-bold">{subtotal}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -215,12 +219,13 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                 <tfoot>
                   <TableRow className="text-xs font-semibold border-t">
                     <TableCell className="font-bold">Total</TableCell>
-                    <TableCell className="text-center font-bold border-r border-l bg-yellow-200">{grandTotals.touchbaseCount}</TableCell>
-                    <TableCell className="text-center font-bold border-r bg-green-200">{grandTotals.touchbaseSuccessful}</TableCell>
-                    <TableCell className="text-center font-bold border-r bg-red-300">{grandTotals.touchbaseUnsuccessful}</TableCell>
-                    <TableCell className="text-center font-bold border-r bg-blue-200">{grandTotals.followupCount}</TableCell>
-                    <TableCell className="text-center font-bold border-r bg-green-200">{grandTotals.followupSuccessful}</TableCell>
-                    <TableCell className="text-center font-bold border-r bg-red-300">{grandTotals.followupUnsuccessful}</TableCell>
+                    <TableCell className="text-center bg-yellow-200 font-bold">{grandTotals.touchbaseCount}</TableCell>
+                    <TableCell className="text-center bg-green-200 font-bold">{grandTotals.touchbaseSuccessful}</TableCell>
+                    <TableCell className="text-center bg-red-300 font-bold">{grandTotals.touchbaseUnsuccessful}</TableCell>
+                    <TableCell className="text-center bg-blue-200 font-bold">{grandTotals.followupCount}</TableCell>
+                    <TableCell className="text-center bg-green-200 font-bold">{grandTotals.followupSuccessful}</TableCell>
+                    <TableCell className="text-center bg-red-300 font-bold">{grandTotals.followupUnsuccessful}</TableCell>
+                    <TableCell className="text-center bg-gray-300 font-bold">{grandTotals.totalOutbound}</TableCell>
                   </TableRow>
                 </tfoot>
               </Table>
