@@ -205,8 +205,8 @@ export const Summary: React.FC<CallQuoteProps> = ({
         const uniqueSIDates = new Set(filteredSI.map((a) => a.si_date));
         const totalSI = uniqueSIDates.size;
 
-        const percentageSOToSI = totalSI === 0 ? 0 : (totalSO / totalSI) * 100;
-        const percentageCallsToSI = totalSI === 0 ? 0 : (totalCalls / totalSI) * 100;
+        const percentageSOToSI = totalSI === 0 ? 0 : (totalSI / totalSO) * 100;
+        const percentageCallsToSI = totalSI === 0 ? 0 : (totalSI / totalCalls) * 100;
 
 
         return {

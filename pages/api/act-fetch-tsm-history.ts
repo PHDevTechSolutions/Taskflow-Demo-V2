@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-import redis from "@/lib/redis";
 
 const BATCH_SIZE = 5000;
 
@@ -44,18 +43,7 @@ export default async function handler(
     });
   }
 
-  const cacheKey = `history:tsm:${referenceid}`;
-
   try {
-    // ✅ Redis cache
-    const cached = await redis.get(cacheKey);
-    if (cached && typeof cached === "string") {
-      return res.status(200).json({
-        activities: JSON.parse(cached),
-        cached: true,
-      });
-    }
-
     // ✅ Fetch ALL rows safely (100k+)
     const activities: any[] = [];
 
@@ -70,14 +58,8 @@ export default async function handler(
         new Date(a.date_created).getTime()
     );
 
-    // ✅ Cache result (5 minutes)
-    await redis.set(cacheKey, JSON.stringify(activities), {
-      ex: 300,
-    });
-
     return res.status(200).json({
       activities,
-      cached: false,
     });
   } catch (err: any) {
     console.error("Server error:", err);

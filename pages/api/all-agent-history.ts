@@ -37,7 +37,7 @@ async function* fetchTableBatches(
 function normalizeRecord(item: any, source: string) {
   switch (source) {
     case "history":
-      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source };
+      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source: item.source };
     case "documentation":
       return { ...item, type_activity: item.doc_type || "Documentation", start_date: item.start_date || null, end_date: item.end_date || null, source };
     case "revised_quotations":
