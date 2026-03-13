@@ -208,12 +208,12 @@ export function RequestTable({
 
             {/* Cards */}
             <div className="h-[500px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                {error && <div className="col-span-full text-red-600 font-semibold">{error}</div>}
+                {error && (<div className="col-span-full text-red-600 font-semibold">{error}</div>)}
 
                 {filteredData.length > 0 && (
                     <div className="text-xs font-bold">Total Records: {filteredData.length}</div>
                 )}
-                
+
                 {filteredData.length === 0 ? (
                     <div className="col-span-full text-center text-gray-500 py-8">
                         No accounts found.
@@ -298,3 +298,4 @@ export function RequestTable({
         </div>
     );
 }
+export { RequestTable as AccountsTable };

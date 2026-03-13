@@ -33,6 +33,7 @@ export function NavWorkspaces({
       name: string;
       icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
       url: string;
+      badge?: string | number; // 1. Added badge to the type definition
     }[];
   }[];
   openSections: Record<string, boolean>;
@@ -52,7 +53,6 @@ export function NavWorkspaces({
                 onOpenChange={() => onToggleSection(workspace.name)}
               >
                 <SidebarMenuItem className="flex items-center justify-between">
-                  {/* This button toggles collapse */}
                   <SidebarMenuButton
                     onClick={() => onToggleSection(workspace.name)}
                     className="flex items-center space-x-2 cursor-pointer flex-grow break-words"
@@ -61,19 +61,16 @@ export function NavWorkspaces({
                     <span className="truncate">{workspace.name}</span>
                   </SidebarMenuButton>
 
-
-                  {/* Optional navigation link as separate button */}
                   {workspace.url && (
                     <a
                       href={workspace.url}
-                      onClick={(e) => e.stopPropagation()} // Prevent toggle when clicking this link
+                      onClick={(e) => e.stopPropagation()}
                       className="text-sm text-blue-500 hover:underline ml-2"
                     >
                       Go
                     </a>
                   )}
 
-                  {/* Arrow icon for collapse state */}
                   <CollapsibleTrigger asChild>
                     <SidebarMenuAction
                       className="bg-sidebar-accent text-sidebar-accent-foreground left-2 data-[state=open]:rotate-90"
@@ -91,11 +88,19 @@ export function NavWorkspaces({
                       return (
                         <SidebarMenuSubItem key={`${workspace.name}-${page.name}-${page.url}`}>
                           <SidebarMenuSubButton asChild>
-                            <a href={page.url} className="flex items-center space-x-2 break-words">
-                              <PageIcon className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{page.name}</span>
+                            <a href={page.url} className="flex items-center justify-between w-full pr-2">
+                              <div className="flex items-center space-x-2 truncate">
+                                <PageIcon className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{page.name}</span>
+                              </div>
+                              
+                              {/* 2. ADDED THIS BLOCK TO SHOW THE BUBBLE */}
+                              {page.badge && (
+                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                                  {page.badge}
+                                </span>
+                              )}
                             </a>
-
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       );

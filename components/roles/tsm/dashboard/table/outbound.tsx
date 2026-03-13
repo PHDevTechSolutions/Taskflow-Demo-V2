@@ -1,14 +1,18 @@
 import React, { useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-
-import { Button } from "@/components/ui/button"
-import { Info, Eye } from "lucide-react";
+import {
+  Card, CardContent, CardHeader,
+} from "@/components/ui/card";
+import {
+  Table, TableBody, TableCell, TableHead,
+  TableHeader, TableRow, TableFooter,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Info } from "lucide-react";
 
 /* ================= TYPES ================= */
 
 interface HistoryItem {
-  referenceid: string; // AGENT ID
+  referenceid: string;
   source: string;
   call_status: string;
   status: string;
@@ -34,230 +38,325 @@ interface OutboundCardProps {
   setDateCreatedFilterRangeAction?: React.Dispatch<React.SetStateAction<any>>;
 }
 
+/* ================= HELPERS ================= */
+
+const pct = (num: number, den: number) =>
+  den > 0 ? ((num / den) * 100).toFixed(2) + "%" : "0.00%";
+
+const convBadge = (count: number) => (
+  <span className="ml-1 text-green-600 text-[10px] font-medium">({count})</span>
+);
+
 /* ================= COMPONENT ================= */
 
-export function OutboundCallsTableCard({ history, agents, dateCreatedFilterRange, }: OutboundCardProps) {
+export function OutboundCallsTableCard({
+  history,
+  agents,
+  dateCreatedFilterRange,
+}: OutboundCardProps) {
   const [showComputation, setShowComputation] = useState(false);
-  /* -------- Agent Map -------- */
+
+  /* ---- Agent map ---- */
   const agentMap = useMemo(() => {
     const map = new Map<string, { name: string; picture: string }>();
-    agents.forEach((a) => {
+    agents.forEach((a) =>
       map.set(a.ReferenceID.toLowerCase(), {
         name: `${a.Firstname} ${a.Lastname}`,
         picture: a.profilePicture,
-      });
-    });
+      })
+    );
     return map;
   }, [agents]);
 
-  /* -------- Filter history by date range -------- */
-  const filteredActivities = useMemo(() => {
-    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) {
-      return history;
+  /* ---- Step 1: Get only Outbound - Touchbase + Successful calls (with date filter) ----
+     These are the "source" calls. Their activity_reference_number is the key
+     we'll use to trace downstream activities (Quote, SO, SI).
+  ---- */
+  const successfulOBCalls = useMemo(() => {
+    let base = history.filter(
+      (h) =>
+        h.source === "Outbound - Touchbase" &&
+        h.call_status === "Successful"
+    );
+
+    if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+      const start = new Date(dateCreatedFilterRange.from);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dateCreatedFilterRange.to);
+      end.setHours(23, 59, 59, 999);
+      base = base.filter((h) => {
+        const d = new Date(h.date_created);
+        return d >= start && d <= end;
+      });
     }
-    return history.filter((h) => {
-      const d = new Date(h.date_created);
-      return d >= dateCreatedFilterRange.from && d <= dateCreatedFilterRange.to;
-    });
+
+    return base;
   }, [history, dateCreatedFilterRange]);
 
-  /* -------- Calculate days & OB target -------- */
+  /* ---- Step 2: Build a lookup of ALL history by activity_reference_number ----
+     This lets us efficiently find what happened on each ref number
+     (Quote-Done, SO-Done, Delivered/Closed) across ALL records — not just
+     the agent's own records, since downstream activities share the same ref number.
+  ---- */
+  const historyByRefNum = useMemo(() => {
+    const map = new Map<string, HistoryItem[]>();
+    history.forEach((h) => {
+      if (!h.activity_reference_number) return;
+      if (!map.has(h.activity_reference_number)) {
+        map.set(h.activity_reference_number, []);
+      }
+      map.get(h.activity_reference_number)!.push(h);
+    });
+    return map;
+  }, [history]);
+
+  /* ---- OB target days ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diffTime = dateCreatedFilterRange.to.getTime() - dateCreatedFilterRange.from.getTime();
-      const oneDay = 1000 * 60 * 60 * 24;
-      return Math.floor(diffTime / oneDay) + 1;
+      const diff =
+        dateCreatedFilterRange.to.getTime() -
+        dateCreatedFilterRange.from.getTime();
+      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
     }
     return 26;
   }, [dateCreatedFilterRange]);
 
   const obTarget = 20 * daysCount;
 
-  /* -------- Compute stats per agent -------- */
+  /* ---- Step 3: Compute per-agent stats ---- */
   const statsByAgent = useMemo(() => {
-    // Prepare a map to group activities per agent
-    const agentActivitiesMap: Record<string, HistoryItem[]> = {};
-
-    filteredActivities.forEach((activity) => {
-      const agentId = activity.referenceid?.toLowerCase();
-      if (!agentId) return;
-      if (!agentActivitiesMap[agentId]) agentActivitiesMap[agentId] = [];
-      agentActivitiesMap[agentId].push(activity);
+    // Group successful OB calls by agent
+    const byAgent: Record<string, HistoryItem[]> = {};
+    successfulOBCalls.forEach((h) => {
+      const id = h.referenceid?.toLowerCase();
+      if (!id) return;
+      if (!byAgent[id]) byAgent[id] = [];
+      byAgent[id].push(h);
     });
 
-    // For each agent, calculate the grouped stats
-    const results = [];
+    return Object.entries(byAgent).map(([agentId, obCalls]) => {
+      // ── 1. Total successful OB Touchbase calls for this agent
+      const totalCalls = obCalls.length;
 
-    for (const [agentId, activities] of Object.entries(agentActivitiesMap)) {
-      // Group activities by activity_reference_number for this agent
-      const groups: Record<string, HistoryItem[]> = {};
-      activities.forEach((act) => {
-        if (!act.activity_reference_number) return;
-        if (!groups[act.activity_reference_number]) groups[act.activity_reference_number] = [];
-        groups[act.activity_reference_number].push(act);
+      // ── 2. Collect unique activity_reference_numbers from those OB calls
+      //       These are the reference numbers we'll trace downstream.
+      const obRefNums = new Set(
+        obCalls.map((c) => c.activity_reference_number).filter(Boolean)
+      );
+
+      // ── 3. For each ref number, look at ALL activities in history
+      //       (across all sources/statuses) to find Quote, SO, and SI.
+      //       A ref number counts once per conversion stage (unique refs).
+
+      const quoteRefNums = new Set<string>();  // refs with status = "Quote - Done"
+      const soRefNums = new Set<string>();     // refs with status = "SO-Done"
+      const siRefNums = new Set<string>();     // refs with type_activity = "Delivered / Closed Transaction"
+
+      obRefNums.forEach((refNum) => {
+        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
+
+        activitiesOnRef.forEach((act) => {
+          if (act.status === "Quote-Done") {
+            quoteRefNums.add(refNum);
+          }
+          if (act.status === "SO-Done") {
+            soRefNums.add(refNum);
+          }
+          if (act.type_activity === "Delivered / Closed Transaction") {
+            siRefNums.add(refNum);
+          }
+        });
       });
 
-      const referenceNumbers = Object.keys(groups);
+      const numQuotes = quoteRefNums.size;
+      const numSO = soRefNums.size;
+      const numSI = siRefNums.size;
 
-      // Count successful Outbound - Touchbase activities
-      const touchbaseCount = activities.filter(
-        (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
-      ).length;
+      // ── 4. Conversions
+      const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
+      // Calls → Quote: how many of the OB call refs eventually got a Quote
+      const callsToQuote = pct(numQuotes, totalCalls);
+      // Quote → SO: how many of the quoted refs eventually got an SO
+      const quoteToSO = pct(numSO, numQuotes);
+      // SO → SI: how many of the SO refs eventually got delivered/closed
+      const soToSI = pct(numSI, numSO);
 
-      // Count Quotation Preparation refs with successful touchbase in same ref
-      let quotationPrepCount = 0;
-      for (const refNum of referenceNumbers) {
-        const acts = groups[refNum];
-        const hasSuccessfulOutboundTouchbase = acts.some(
-          (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
-        );
-        const hasQuotationPreparation = acts.some(
-          (a) => a.type_activity === "Quotation Preparation"
-        );
-        if (hasSuccessfulOutboundTouchbase && hasQuotationPreparation) {
-          quotationPrepCount++;
-        }
-      }
-
-      // Count Delivered / Closed Transaction refs with successful touchbase
-      let deliveredClosedCount = 0;
-      for (const refNum of referenceNumbers) {
-        const acts = groups[refNum];
-        const hasSuccessfulOutboundTouchbase = acts.some(
-          (a) => a.source === "Outbound - Touchbase" && a.call_status === "Successful"
-        );
-        const hasDeliveredClosedTransaction = acts.some(
-          (a) => a.type_activity === "Delivered / Closed Transaction"
-        );
-        if (hasSuccessfulOutboundTouchbase && hasDeliveredClosedTransaction) {
-          deliveredClosedCount++;
-        }
-      }
-
-      // Total OB count = all Outbound - Touchbase source activities
-      const totalOutboundCount = activities.filter((a) => a.source === "Outbound - Touchbase").length;
-
-      // Sum actual sales for this agent
-      const totalActualSales = activities.reduce((sum, a) => {
-        const value =
-          typeof a.actual_sales === "number" ? a.actual_sales : parseFloat(a.actual_sales ?? "");
-        return sum + (isNaN(value) ? 0 : value);
-      }, 0);
-
-      // Compute achievement and conversion percentages
-      const achievement = obTarget > 0 ? (touchbaseCount / obTarget) * 100 : 0;
-      const callsToQuoteConversion =
-        touchbaseCount > 0 ? ((quotationPrepCount / touchbaseCount) * 100).toFixed(2) : "0.00";
-      const outboundToSalesConversion =
-        touchbaseCount > 0 ? ((deliveredClosedCount / touchbaseCount) * 100).toFixed(2) : "0.00";
-
-      results.push({
-        agentID: agentId,
-        totalOB: totalOutboundCount,
-        successfulTouchbase: touchbaseCount,
-        quotationPrep: quotationPrepCount,
-        deliveredClosed: deliveredClosedCount,
-        totalSales: totalActualSales,
+      return {
+        agentId,
+        totalCalls,
+        numQuotes,
+        numSO,
+        numSI,
         achievement,
-        callsToQuoteConversion,
-        outboundToSalesConversion,
-      });
-    }
+        callsToQuote,
+        quoteToSO,
+        soToSI,
+      };
+    });
+  }, [successfulOBCalls, historyByRefNum, obTarget]);
 
-    return results;
-  }, [filteredActivities, obTarget]);
+  /* ── Footer totals ── */
+  const totals = useMemo(() => {
+    const totalCalls = statsByAgent.reduce((s, a) => s + a.totalCalls, 0);
+    const numQuotes = statsByAgent.reduce((s, a) => s + a.numQuotes, 0);
+    const numSO = statsByAgent.reduce((s, a) => s + a.numSO, 0);
+    const numSI = statsByAgent.reduce((s, a) => s + a.numSI, 0);
+    return {
+      totalCalls,
+      numQuotes,
+      numSO,
+      numSI,
+      achievement: pct(totalCalls, obTarget * statsByAgent.length || 1),
+      callsToQuote: pct(numQuotes, totalCalls),
+      quoteToSO: pct(numSO, numQuotes),
+      soToSI: pct(numSI, numSO),
+    };
+  }, [statsByAgent, obTarget]);
 
   return (
-    <Card className="h-full bg-white text-black rounded-none">
-      <CardHeader className="flex items-center justify-between">
-        <div>
-          <CardTitle>Outbound Calls (Touch-Based)</CardTitle>
+    <Card className="rounded-xl border shadow-sm">
+      {/* Header */}
+      <CardHeader className="px-5 pt-5 pb-3 border-b">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">Outbound Calls (Touchbase)</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Based on <span className="font-medium text-gray-500">Outbound – Touchbase · Successful</span> calls only
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowComputation(!showComputation)}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+          >
+            <Info className="w-3.5 h-3.5" />
+            {showComputation ? "Hide" : "Details"}
+          </Button>
         </div>
-
-        <Button
-          variant="outline"
-          onClick={() => setShowComputation(!showComputation)}
-          aria-label="Show computation details"
-          className="flex items-center text-blue-600 hover:text-blue-800 rounded-none p-6"
-          title="Show computation details"
-        >
-          <Info className="mr-2" />
-          Details
-        </Button>
       </CardHeader>
 
-      <CardContent className="overflow-auto">
+      <CardContent className="p-4">
         {statsByAgent.length === 0 ? (
-          <p className="text-center text-sm italic text-gray-500">
+          <div className="flex items-center justify-center py-10 text-xs text-gray-400">
             No outbound records found.
-          </p>
+          </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead>Agent</TableHead>
-                <TableHead className="font-bold">OB Target</TableHead>
-                <TableHead className="font-bold">Total OB </TableHead>
-                <TableHead className="font-bold">Achievement</TableHead>
-                <TableHead className="font-bold">Calls to Quote Conversion</TableHead>
-                <TableHead className="font-bold">Outbound to Sales Conversion</TableHead>
-                <TableHead className="font-bold">Total Sales Invoice</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 text-[11px]">
+                  <TableHead className="text-gray-500">Agent</TableHead>
+                  <TableHead className="text-gray-500 text-center">OB Target</TableHead>
+                  <TableHead className="text-gray-500 text-center">Successful Calls</TableHead>
+                  <TableHead className="text-gray-500 text-center">Achievement</TableHead>
+                  <TableHead className="text-gray-500 text-center">
+                    Calls → Quote
+                    <span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span>
+                  </TableHead>
+                  <TableHead className="text-gray-500 text-center">
+                    Quote → SO
+                    <span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span>
+                  </TableHead>
+                  <TableHead className="text-gray-500 text-center">
+                    SO → SI
+                    <span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
 
-            <TableBody>
-              {statsByAgent.map((stat) => {
-                const agentInfo = agentMap.get(stat.agentID);
-
-                return (
-                  <TableRow key={stat.agentID} className="text-xs">
-                    <TableCell className="flex items-center gap-2 capitalize">
-                      {agentInfo?.picture ? (
-                        <img
-                          src={agentInfo.picture}
-                          alt={agentInfo.name}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs">
-                          ?
+              <TableBody>
+                {statsByAgent.map((stat) => {
+                  const info = agentMap.get(stat.agentId);
+                  return (
+                    <TableRow key={stat.agentId} className="text-xs hover:bg-gray-50/50 font-mono">
+                      {/* Agent */}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {info?.picture ? (
+                            <img
+                              src={info.picture}
+                              alt={info.name}
+                              className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
+                              {info?.name?.[0] ?? "?"}
+                            </div>
+                          )}
+                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentId}</span>
                         </div>
-                      )}
-                      {agentInfo?.name ?? stat.agentID}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell>{obTarget}</TableCell>
-                    <TableCell>{stat.totalOB} - <span className="text-green-600 text-[10px]">(Suc-{stat.successfulTouchbase})</span></TableCell>
-                    <TableCell>{stat.achievement.toFixed(2)}%</TableCell>
-                    <TableCell>{stat.callsToQuoteConversion}% - <span className="text-green-600 text-[10px]">(Suc-{stat.quotationPrep})</span></TableCell>
-                    <TableCell>{stat.outboundToSalesConversion}% - <span className="text-green-600 text-[10px]">(Suc-{stat.deliveredClosed})</span></TableCell>
-                    <TableCell>{stat.totalSales.toLocaleString()}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
+                      {/* OB Target */}
+                      <TableCell className="text-center text-gray-600">{obTarget}</TableCell>
 
-        {showComputation && (
-          <div
-            className="mt-2 p-3 w-full border border-blue-400 bg-blue-50 rounded text-sm text-blue-900"
-            role="region"
-            aria-live="polite"
-            aria-label="Computation explanation"
-          >
-            <p><strong>Computation Details:</strong></p>
-            <ul className="list-disc list-inside">
-              <li><strong>OB Target:</strong> 20 x number of days in selected date range (default 26 days).</li>
-              <li><strong>Total OB:</strong> Total count of all activities with source "Outbound - Touchbase".</li>
-              <li><strong>Achievement:</strong> (Successful Outbound Touchbase / OB Target) × 100.</li>
-              <li><strong>Calls to Quote Conversion:</strong> (Quotation Preparation count / Successful Outbound Touchbase) × 100.</li>
-              <li><strong>Outbound to Sales Conversion:</strong> (Delivered / Closed Transaction count / Successful Outbound Touchbase) × 100.</li>
-              <li><strong>Total Sales Invoice:</strong> Sum of all actual sales values.</li>
-            </ul>
+                      {/* Successful Calls */}
+                      <TableCell className="text-center font-semibold text-gray-800">
+                        {stat.totalCalls}
+                      </TableCell>
+
+                      {/* Achievement */}
+                      <TableCell className="text-center">
+                        <span className={`font-semibold ${stat.achievement >= 100 ? "text-green-600" : stat.achievement >= 70 ? "text-amber-500" : "text-red-500"}`}>
+                          {stat.achievement.toFixed(2)}%
+                        </span>
+                      </TableCell>
+
+                      {/* Calls → Quote */}
+                      <TableCell className="text-center">
+                        <span className="text-gray-700">{stat.callsToQuote}</span>
+                        {convBadge(stat.numQuotes)}
+                      </TableCell>
+
+                      {/* Quote → SO */}
+                      <TableCell className="text-center">
+                        <span className="text-gray-700">{stat.quoteToSO}</span>
+                        {convBadge(stat.numSO)}
+                      </TableCell>
+
+                      {/* SO → SI */}
+                      <TableCell className="text-center">
+                        <span className="text-gray-700">{stat.soToSI}</span>
+                        {convBadge(stat.numSI)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+
+              {/* Footer totals */}
+              <TableFooter>
+                <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                  <TableCell className="text-gray-700">Total</TableCell>
+                  <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.length}</TableCell>
+                  <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>
+                  <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
+                  <TableCell className="text-center">{totals.callsToQuote}{convBadge(totals.numQuotes)}</TableCell>
+                  <TableCell className="text-center">{totals.quoteToSO}{convBadge(totals.numSO)}</TableCell>
+                  <TableCell className="text-center">{totals.soToSI}{convBadge(totals.numSI)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
         )}
 
+        {/* Computation details */}
+        {showComputation && (
+          <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
+            <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
+            <p><strong>Base data:</strong> All records where <code>source = "Outbound - Touchbase"</code> AND <code>call_status = "Successful"</code> (date filter applied here).</p>
+            <p><strong>OB Target:</strong> 20 × number of days in selected range (default: 26 days = 520).</p>
+            <p><strong>Achievement:</strong> (Successful Calls ÷ OB Target) × 100%</p>
+            <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s (from OB calls) that have ANY activity with <code>status = "Quote - Done"</code> in the full history ÷ Successful Calls</p>
+            <p><strong>Quote → SO %:</strong> Count of unique refs with <code>status = "SO-Done"</code> ÷ Count of Quoted refs</p>
+            <p><strong>SO → SI %:</strong> Count of unique refs with <code>type_activity = "Delivered / Closed Transaction"</code> ÷ Count of SO refs</p>
+            <p className="text-blue-700 text-[10px] mt-1">
+              * Each conversion stage traces back to the same <code>activity_reference_number</code> from a Successful OB Touchbase call.
+              All activities on that ref number (any source, any status) are scanned to determine if a conversion occurred.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

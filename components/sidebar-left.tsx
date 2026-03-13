@@ -105,6 +105,7 @@ const data = {
         { name: "SPF Request", url: "/roles/tsa/activity/spf", icon: Mail },
         { name: "Daily Admin Task", url: "/roles/tsa/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
+        { name: "Engr. Services", url: "/roles/tsa/activity/engineering", icon: Briefcase },
 
         // TSM
         { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
@@ -175,11 +176,11 @@ const data = {
         { name: "Calls to SI", url: "/roles/tsa/conversion/calls-to-si", icon: Rocket },
 
         // TSM
-        { name: "Summary", url: "/roles/tsm/conversion/summary", icon: GitGraph },
-        { name: "Call to Quotes", url: "/roles/tsm/conversion/calls-to-quote", icon: PhoneCall },
-        { name: "Quotes To SO", url: "/roles/tsm/conversion/quote-to-so", icon: FileText },
-        { name: "SO's To SI", url: "/roles/tsm/conversion/so-to-si", icon: CreditCard },
-        { name: "Call to SI", url: "/roles/tsm/conversion/calls-to-si", icon: Rocket },
+        //{ name: "Summary", url: "/roles/tsm/conversion/summary", icon: GitGraph },
+        //{ name: "Call to Quotes", url: "/roles/tsm/conversion/calls-to-quote", icon: PhoneCall },
+        //{ name: "Quotes To SO", url: "/roles/tsm/conversion/quote-to-so", icon: FileText },
+        //{ name: "SO's To SI", url: "/roles/tsm/conversion/so-to-si", icon: CreditCard },
+        //{ name: "Call to SI", url: "/roles/tsm/conversion/calls-to-si", icon: Rocket },
 
         // Manager
         { name: "Calls to Quote", url: "/roles/manager/conversion/calls-to-quote", icon: PhoneCall },

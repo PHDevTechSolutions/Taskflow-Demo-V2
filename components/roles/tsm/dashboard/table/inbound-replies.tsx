@@ -2,13 +2,12 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardHeader,
 } from "@/components/ui/card";
+import { Info, ChevronDown, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+/* ================= TYPES ================= */
 
 interface HistoryItem {
   source: string;
@@ -29,20 +28,24 @@ interface Agent {
   Role?: string;
 }
 
+interface InboundRepliesCardProps {
+  history: HistoryItem[];
+  agents: Agent[];
+}
+
+/* ================= HELPERS ================= */
+
 function formatDurationMs(ms: number) {
   if (ms <= 0) return "-";
-
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-
   const parts: string[] = [];
-  if (hours) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
-  if (minutes) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
-  if (seconds) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
-
-  return parts.join(" ");
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (seconds) parts.push(`${seconds}s`);
+  return parts.join(" ") || "-";
 }
 
 function parseDateMs(value?: string | null) {
@@ -51,253 +54,250 @@ function parseDateMs(value?: string | null) {
   return isNaN(ms) ? null : ms;
 }
 
-interface InboundRepliesCardProps {
-  history: HistoryItem[];
-  agents: Agent[];
-}
+/* ================= COMPONENT ================= */
 
 export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps) {
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
+  const [expandedActivity, setExpandedActivity] = useState<Record<string, string | null>>({});
+  const [showComputation, setShowComputation] = useState(false);
 
-  // ✅ per-agent expanded activity
-  const [expandedActivity, setExpandedActivity] = useState<
-    Record<string, string | null>
-  >({});
+  /* ---- TSA only ---- */
+  const filteredAgents = useMemo(() =>
+    agents.filter((a) => a.Role?.toLowerCase() === "territory sales associate"),
+    [agents]
+  );
 
-  // ✅ TSA only
-  const filteredAgents = useMemo(() => {
-    return agents.filter(
-      (a) => a.Role?.toLowerCase() === "territory sales associate"
-    );
-  }, [agents]);
-
-  // ✅ Build agent list with STRICT filtering
+  /* ---- Build per-agent data ---- */
   const agentList = useMemo(() => {
     return filteredAgents
       .map((agent) => {
         const agentId = agent.ReferenceID.trim().toLowerCase();
-
-        // 🔒 only records that REALLY belong to agent
         const agentHistory = history.filter(
           (h) => h.referenceid?.trim().toLowerCase() === agentId
         );
-
-        // 🚫 skip agent if no records
         if (agentHistory.length === 0) return null;
 
-        const activitiesMap: Record<
-          string,
-          { count: number; totalDurationMs: number; records: HistoryItem[] }
-        > = {};
+        const activitiesMap: Record<string, {
+          count: number;
+          totalDurationMs: number;
+          records: HistoryItem[];
+        }> = {};
 
         agentHistory.forEach((h) => {
           const type = h.type_activity || "Unknown";
-
           if (!activitiesMap[type]) {
-            activitiesMap[type] = {
-              count: 0,
-              totalDurationMs: 0,
-              records: [],
-            };
+            activitiesMap[type] = { count: 0, totalDurationMs: 0, records: [] };
           }
-
           activitiesMap[type].count += 1;
-
           const start = parseDateMs(h.start_date);
           const end = parseDateMs(h.end_date);
           if (start && end && end > start) {
             activitiesMap[type].totalDurationMs += end - start;
           }
-
           activitiesMap[type].records.push(h);
         });
 
-        const activities = Object.entries(activitiesMap).map(
-          ([name, data]) => ({
-            name,
-            count: data.count,
-            totalDurationMs: data.totalDurationMs,
-            records: data.records,
-          })
-        );
-
-        const totalActivities = activities.reduce(
-          (sum, a) => sum + a.count,
-          0
-        );
-        const totalDurationMs = activities.reduce(
-          (sum, a) => sum + a.totalDurationMs,
-          0
-        );
+        const activities = Object.entries(activitiesMap).map(([name, data]) => ({
+          name,
+          count: data.count,
+          totalDurationMs: data.totalDurationMs,
+          records: data.records,
+        }));
 
         return {
           agentId,
           agentName: `${agent.Firstname} ${agent.Lastname}`,
           profilePicture: agent.profilePicture,
           activities,
-          totalActivities,
-          totalDurationMs,
+          totalActivities: activities.reduce((s, a) => s + a.count, 0),
+          totalDurationMs: activities.reduce((s, a) => s + a.totalDurationMs, 0),
         };
       })
-      .filter(
-        (a): a is {
-          agentId: string;
-          agentName: string;
-          profilePicture: string;
-          activities: {
-            name: string;
-            count: number;
-            totalDurationMs: number;
-            records: HistoryItem[];
-          }[];
-          totalActivities: number;
-          totalDurationMs: number;
-        } => a !== null
-      );
-
+      .filter(Boolean) as {
+        agentId: string;
+        agentName: string;
+        profilePicture: string;
+        activities: { name: string; count: number; totalDurationMs: number; records: HistoryItem[] }[];
+        totalActivities: number;
+        totalDurationMs: number;
+      }[];
   }, [filteredAgents, history]);
 
+  const grandTotalActivities = agentList.reduce((s, a) => s + a.totalActivities, 0);
+  const grandTotalDuration = agentList.reduce((s, a) => s + a.totalDurationMs, 0);
+
   return (
-    <Card className="flex flex-col h-full bg-white rounded-none">
-      <CardHeader>
-        <CardTitle>Other Activities Duration</CardTitle>
-        <CardDescription>
-          Summary of all activities grouped per agent.
-        </CardDescription>
+    <Card className="rounded-xl border shadow-sm">
+      {/* Header */}
+      <CardHeader className="px-5 pt-5 pb-3 border-b">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">Other Activities Duration</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Summary of all activities <span className="font-medium text-gray-500">grouped per agent</span>
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowComputation(!showComputation)}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+          >
+            <Info className="w-3.5 h-3.5" />
+            {showComputation ? "Hide" : "Details"}
+          </Button>
+        </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-auto">
+      <CardContent className="p-4">
         {agentList.length === 0 ? (
-          <p className="text-center text-sm italic text-gray-500">
-            No records found.
-          </p>
+          <div className="flex items-center justify-center py-10 text-xs text-gray-400">
+            No activity records found.
+          </div>
         ) : (
-          agentList.map((agent) => (
-            <div key={agent.agentId} className="p-2 border-b">
-              {/* AGENT HEADER */}
-              <div
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() => {
-                  setExpandedAgentId(
-                    expandedAgentId === agent.agentId
-                      ? null
-                      : agent.agentId
-                  );
-                  setExpandedActivity({});
-                }}
-              >
-                <div className="flex items-center gap-3 text-xs">
-                  {agent.profilePicture ? (
-                    <img
-                      src={agent.profilePicture}
-                      className="w-6 h-6 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
-                      ?
-                    </div>
-                  )}
-                  <span>{agent.agentName}</span>
-                </div>
+          <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
+            {agentList.map((agent) => {
+              const isAgentOpen = expandedAgentId === agent.agentId;
 
-                <div className="flex gap-4 text-xs font-semibold text-gray-700">
-                  <span>Total Activities: {agent.totalActivities}</span>
-                  <span>
-                    Total Duration:{" "}
-                    {formatDurationMs(agent.totalDurationMs)}
-                  </span>
-                </div>
-              </div>
-
-              {/* ACTIVITIES */}
-              {expandedAgentId === agent.agentId && (
-                <div className="mt-4 ml-10">
-                  {agent.activities.map((activity) => (
-                    <div key={activity.name} className="border-t p-2 text-xs">
-                      <div
-                        className="flex justify-between cursor-pointer"
-                        onClick={() =>
-                          setExpandedActivity((prev) => ({
-                            ...prev,
-                            [agent.agentId]:
-                              prev[agent.agentId] === activity.name
-                                ? null
-                                : activity.name,
-                          }))
-                        }
-                      >
-                        <span className="font-medium capitalize">
-                          {activity.name} ( {activity.count} )
-                        </span>
-                        <span className="text-gray-600">
-                          {formatDurationMs(activity.totalDurationMs)}
-                        </span>
-                      </div>
-
-                      {/* RECORDS */}
-                      {expandedActivity[agent.agentId] === activity.name && (
-                        <div className="ml-6 mt-2 space-y-1 max-h-48 overflow-auto">
-                          {activity.records.map((r, i) => (
-                            <div
-                              key={i}
-                              className="border-b pb-1 text-gray-700"
-                            >
-                              <div>
-                                <strong>Company:</strong>{" "}
-                                {r.company_name || "-"}
-                              </div>
-                              <div>
-                                <strong>Source:</strong> {r.source || "-"}
-                              </div>
-                              <div>
-                                <strong>Status:</strong>{" "}
-                                {r.call_status || "-"}
-                              </div>
-                              <div>
-                                <strong>Start:</strong>{" "}
-                                {r.start_date
-                                  ? new Date(
-                                    r.start_date.replace(" ", "T")
-                                  ).toLocaleString()
-                                  : "-"}
-                              </div>
-                              <div>
-                                <strong>End:</strong>{" "}
-                                {r.end_date
-                                  ? new Date(
-                                    r.end_date.replace(" ", "T")
-                                  ).toLocaleString()
-                                  : "-"}
-                              </div>
-                              <div>
-                                <strong>Remarks:</strong>{" "}
-                                {r.remarks || "-"}
-                              </div>
-                            </div>
-                          ))}
+              return (
+                <div key={agent.agentId}>
+                  {/* Agent row */}
+                  <div
+                    className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                    onClick={() => {
+                      setExpandedAgentId(isAgentOpen ? null : agent.agentId);
+                      setExpandedActivity({});
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-gray-400">
+                        {isAgentOpen
+                          ? <ChevronDown className="w-3.5 h-3.5" />
+                          : <ChevronRight className="w-3.5 h-3.5" />}
+                      </span>
+                      {agent.profilePicture ? (
+                        <img
+                          src={agent.profilePicture}
+                          alt={agent.agentName}
+                          className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
+                          {agent.agentName[0]}
                         </div>
                       )}
+                      <span className="text-xs font-medium capitalize text-gray-700">
+                        {agent.agentName}
+                      </span>
                     </div>
-                  ))}
+
+                    <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
+                      <span>
+                        <span className="text-gray-400 mr-1">Activities:</span>
+                        <span className="font-semibold text-gray-700">{agent.totalActivities}</span>
+                      </span>
+                      <span>
+                        <span className="text-gray-400 mr-1">Duration:</span>
+                        <span className="font-semibold text-gray-700">{formatDurationMs(agent.totalDurationMs)}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Activity rows */}
+                  {isAgentOpen && (
+                    <div className="bg-gray-50/40 divide-y divide-gray-100">
+                      {agent.activities.map((activity) => {
+                        const isActivityOpen = expandedActivity[agent.agentId] === activity.name;
+
+                        return (
+                          <div key={activity.name}>
+                            <div
+                              className="flex items-center justify-between px-8 py-2.5 cursor-pointer hover:bg-gray-100/60 transition-colors"
+                              onClick={() =>
+                                setExpandedActivity((prev) => ({
+                                  ...prev,
+                                  [agent.agentId]: isActivityOpen ? null : activity.name,
+                                }))
+                              }
+                            >
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <span className="text-gray-300">
+                                  {isActivityOpen
+                                    ? <ChevronDown className="w-3 h-3" />
+                                    : <ChevronRight className="w-3 h-3" />}
+                                </span>
+                                <span className="capitalize font-medium">{activity.name}</span>
+                                <span className="bg-gray-200 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                                  {activity.count}
+                                </span>
+                              </div>
+                              <span className="text-xs font-mono text-gray-500">
+                                {formatDurationMs(activity.totalDurationMs)}
+                              </span>
+                            </div>
+
+                            {/* Records */}
+                            {isActivityOpen && (
+                              <div className="px-12 pb-3 pt-1 space-y-2 max-h-60 overflow-y-auto">
+                                {activity.records.map((r, i) => (
+                                  <div
+                                    key={i}
+                                    className="bg-white border border-gray-100 rounded-lg p-3 text-[11px] text-gray-600 space-y-0.5 shadow-sm"
+                                  >
+                                    <p><span className="font-semibold text-gray-700">Company:</span> {r.company_name || "—"}</p>
+                                    <p><span className="font-semibold text-gray-700">Source:</span> {r.source || "—"}</p>
+                                    <p><span className="font-semibold text-gray-700">Status:</span> {r.call_status || "—"}</p>
+                                    <p>
+                                      <span className="font-semibold text-gray-700">Start:</span>{" "}
+                                      {r.start_date ? new Date(r.start_date.replace(" ", "T")).toLocaleString() : "—"}
+                                    </p>
+                                    <p>
+                                      <span className="font-semibold text-gray-700">End:</span>{" "}
+                                      {r.end_date ? new Date(r.end_date.replace(" ", "T")).toLocaleString() : "—"}
+                                    </p>
+                                    <p><span className="font-semibold text-gray-700">Remarks:</span> {r.remarks || "—"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer summary */}
+        <div className="mt-3 flex items-center justify-between px-1">
+          <span className="text-xs text-gray-400 italic">
+            All TSA agents · grouped by activity type
+          </span>
+          <div className="flex items-center gap-4 text-xs font-mono">
+            <span className="text-gray-500">
+              Total Activities:{" "}
+              <span className="font-semibold text-gray-700">{grandTotalActivities}</span>
+            </span>
+            <span className="text-gray-500">
+              Total Duration:{" "}
+              <span className="font-semibold text-gray-700">{formatDurationMs(grandTotalDuration)}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Computation details */}
+        {showComputation && (
+          <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
+            <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
+            <p><strong>Agents shown:</strong> Only agents with <code>Role = "Territory Sales Associate"</code>.</p>
+            <p><strong>Activities:</strong> Grouped by <code>type_activity</code> per agent.</p>
+            <p><strong>Duration:</strong> Sum of <code>end_date - start_date</code> per activity group.</p>
+          </div>
         )}
       </CardContent>
-
-      <CardFooter className="border-t text-sm font-semibold">
-        <span>
-          Total Activities:{" "}
-          {agentList.reduce((s, a) => s + a.totalActivities, 0)}
-        </span>
-        <span className="ml-4">
-          Total Duration:{" "}
-          {formatDurationMs(
-            agentList.reduce((s, a) => s + a.totalDurationMs, 0)
-          )}
-        </span>
-      </CardFooter>
     </Card>
   );
 }

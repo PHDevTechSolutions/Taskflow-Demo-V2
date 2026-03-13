@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -29,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/* ================= TYPES ================= */
+
 interface Quotation {
   id: number;
   quotation_number?: string;
@@ -37,11 +37,12 @@ interface Quotation {
   date_created: string;
   date_updated?: string;
   account_reference_number?: string;
-  company_name?: string; // If company_name comes directly from activities, keep this
-  contact_number?: string; // If this comes from activities as well, keep
+  company_name?: string;
+  contact_number?: string;
   type_activity: string;
   status: string;
   referenceid: string;
+  quotation_status: string;
 }
 
 interface UserDetails {
@@ -61,11 +62,55 @@ interface QuotationProps {
   userDetails: UserDetails;
 }
 
+/* ================= PRIORITY MAP ================= */
+
+const PRIORITY_MAP: Record<string, "HOT" | "WARM" | "COLD" | "DONE"> = {
+  "PENDING CLIENT APPROVAL": "WARM",
+  "FOR BIDDING": "WARM",
+  "NEGO": "WARM",
+  "ORDER COMPLETE": "DONE",
+  "CONVERT TO SO": "HOT",
+  "LOSS PRICE IS TOO HIGH": "COLD",
+  "LEAD TIME ISSUE": "COLD",
+  "OUT OF STOCK": "COLD",
+  "INSUFFICIENT STOCK": "COLD",
+  "LOST BID": "COLD",
+  "CANVASS ONLY": "COLD",
+  "DID NOT MEET THE SPECS": "COLD",
+  "DECLINE / DISAPPROVED": "COLD",
+};
+
+const ALL_STATUSES = [
+  "PENDING CLIENT APPROVAL",
+  "FOR BIDDING",
+  "NEGO",
+  "ORDER COMPLETE",
+  "CONVERT TO SO",
+  "LOSS PRICE IS TOO HIGH",
+  "LEAD TIME ISSUE",
+  "OUT OF STOCK",
+  "INSUFFICIENT STOCK",
+  "LOST BID",
+  "CANVASS ONLY",
+  "DID NOT MEET THE SPECS",
+  "DECLINE / DISAPPROVED",
+];
+
+type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
+
+const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
+  HOT:  { badge: "bg-red-50 text-red-600 border border-red-200",    dot: "bg-red-500"    },
+  WARM: { badge: "bg-amber-50 text-amber-600 border border-amber-200", dot: "bg-amber-400" },
+  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200",  dot: "bg-blue-400"  },
+  DONE: { badge: "bg-green-50 text-green-600 border border-green-200", dot: "bg-green-500" },
+};
+
 const PAGE_SIZE = 10;
+
+/* ================= COMPONENT ================= */
 
 export const QuotationTable: React.FC<QuotationProps> = ({
   referenceid,
-  target_quota,
   dateCreatedFilterRange,
   userDetails,
   setDateCreatedFilterRangeAction,
@@ -75,199 +120,72 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-
-  // Pagination state
+  const [filterPriority, setFilterPriority] = useState<Priority>("all");
+  const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
 
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-  // Fetch activities
+  /* ---- Fetch activities ---- */
   const fetchActivities = useCallback(() => {
-    if (!referenceid) {
-      setActivities([]);
-      return;
-    }
-
+    if (!referenceid) { setActivities([]); return; }
     setLoading(true);
     setError(null);
 
-    // Prepare date filters (keep as "YYYY-MM-DD" for date-only comparison)
-    let from: string | null = null;
-    let to: string | null = null;
+    let from: string | null = dateCreatedFilterRange?.from ?? null;
+    let to: string | null = dateCreatedFilterRange?.to ?? null;
 
-    if (dateCreatedFilterRange?.from) {
-      from = dateCreatedFilterRange.from; // e.g., "2026-03-01"
-    }
-
-    if (dateCreatedFilterRange?.to) {
-      to = dateCreatedFilterRange.to; // e.g., "2026-03-03"
-    }
-
-    // Build API URL
     const url = new URL("/api/reports/tsm/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-
     if (from) url.searchParams.append("from", from);
     if (to) url.searchParams.append("to", to);
 
-    // Fetch data
     fetch(url.toString())
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch activities");
-        return res.json();
-      })
-      .then((data) => {
-        // Ensure activities array exists
-        setActivities(data.activities || []);
-      })
+      .then(async (res) => { if (!res.ok) throw new Error("Failed to fetch activities"); return res.json(); })
+      .then((data) => setActivities(data.activities || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
-  // Real-time subscription using Supabase
+  /* ---- Realtime subscription ---- */
   useEffect(() => {
     fetchActivities();
-
     if (!referenceid) return;
 
     const channel = supabase
       .channel(`public:history:tsm=eq.${referenceid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "history",
-          filter: `tsm=eq.${referenceid}`,
-        },
+      .on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `tsm=eq.${referenceid}` },
         (payload) => {
           const newRecord = payload.new as Quotation;
           const oldRecord = payload.old as Quotation;
-
           setActivities((curr) => {
             switch (payload.eventType) {
-              case "INSERT":
-                if (!curr.some((a) => a.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
-                return curr;
-              case "UPDATE":
-                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-              case "DELETE":
-                return curr.filter((a) => a.id !== oldRecord.id);
-              default:
-                return curr;
+              case "INSERT": return curr.some(a => a.id === newRecord.id) ? curr : [...curr, newRecord];
+              case "UPDATE": return curr.map(a => a.id === newRecord.id ? newRecord : a);
+              case "DELETE": return curr.filter(a => a.id !== oldRecord.id);
+              default: return curr;
             }
           });
-        }
-      )
+        })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [referenceid, fetchActivities]);
 
-  // No merging with companies — activities used as is, sorted by date
-  const sortedActivities = useMemo(() => {
-    return activities
-      .sort(
-        (a, b) =>
-          new Date(b.date_updated ?? b.date_created).getTime() -
-          new Date(a.date_updated ?? a.date_created).getTime()
-      );
-  }, [activities]);
-
-  // Filter logic
-  const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-
-    return sortedActivities
-      .filter((item) => item.type_activity?.toLowerCase() === "quotation preparation")
-      .filter((item) => {
-        if (!search) return true;
-        return (
-          (item.company_name?.toLowerCase().includes(search) ?? false) ||
-          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
-          (item.remarks?.toLowerCase().includes(search) ?? false)
-        );
-      })
-      .filter((item) => {
-        if (filterStatus !== "all" && item.status !== filterStatus) return false;
-        return true;
-      })
-      .filter((item) => {
-        if (selectedAgent === "all") return true;
-        return item.referenceid === selectedAgent;
-      })
-      .filter((item) => {
-        if (
-          !dateCreatedFilterRange ||
-          (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-        ) {
-          return true;
-        }
-
-        const updatedDate = item.date_updated
-          ? new Date(item.date_updated)
-          : new Date(item.date_created);
-
-        if (isNaN(updatedDate.getTime())) return false;
-
-        const fromDate = dateCreatedFilterRange.from
-          ? new Date(dateCreatedFilterRange.from)
-          : null;
-        const toDate = dateCreatedFilterRange.to
-          ? new Date(dateCreatedFilterRange.to)
-          : null;
-
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
-
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-          return isSameDay(updatedDate, fromDate);
-        }
-
-        if (fromDate && updatedDate < fromDate) return false;
-        if (toDate && updatedDate > toDate) return false;
-
-        return true;
-      });
-  }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
-
+  /* ---- Fetch agents ---- */
   useEffect(() => {
-    setPage(1);
-  }, [searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
-
-  // Calculate totals for footer (filteredActivities, not paginated)
-  const totalQuotationAmount = useMemo(() => {
-    return filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0);
-  }, [filteredActivities]);
-
-  // Count unique quotation_number
-  const uniqueQuotationCount = useMemo(() => {
-    const uniqueSet = new Set<string>();
-    filteredActivities.forEach((item) => {
-      if (item.quotation_number) uniqueSet.add(item.quotation_number);
-    });
-    return uniqueSet.size;
-  }, [filteredActivities]);
-
-  // Pagination logic
-  const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-  const paginatedActivities = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredActivities.slice(start, start + PAGE_SIZE);
-  }, [filteredActivities, page]);
+    if (!userDetails.referenceid) return;
+    fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
+      .then(res => { if (!res.ok) throw new Error("Failed"); return res.json(); })
+      .then(setAgents)
+      .catch(() => setError("Failed to load agents."));
+  }, [userDetails.referenceid]);
 
   const agentMap = useMemo(() => {
     const map: Record<string, { name: string; profilePicture: string }> = {};
     agents.forEach((agent) => {
-      if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
+      if (agent.ReferenceID) {
         map[agent.ReferenceID.toLowerCase()] = {
           name: `${agent.Firstname} ${agent.Lastname}`,
           profilePicture: agent.profilePicture || "",
@@ -277,53 +195,186 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return map;
   }, [agents]);
 
-  useEffect(() => {
-    if (!userDetails.referenceid) return;
+  /* ---- Sorted ---- */
+  const sortedActivities = useMemo(() =>
+    [...activities].sort((a, b) =>
+      new Date(b.date_updated ?? b.date_created).getTime() -
+      new Date(a.date_updated ?? a.date_created).getTime()
+    ), [activities]);
 
-    const fetchAgents = async () => {
-      try {
-        const response = await fetch(
-          `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
+  /* ---- Filtered ---- */
+  const filteredActivities = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+
+    return sortedActivities
+      .filter(item => item.type_activity?.toLowerCase() === "quotation preparation")
+      .filter(item => {
+        if (!search) return true;
+        return (
+          (item.company_name?.toLowerCase().includes(search) ?? false) ||
+          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
+          (item.remarks?.toLowerCase().includes(search) ?? false)
         );
-        if (!response.ok) throw new Error("Failed to fetch agents");
+      })
+      .filter(item => {
+        if (filterQuotationStatus !== "all") {
+          return item.quotation_status?.toUpperCase() === filterQuotationStatus;
+        }
+        return true;
+      })
+      .filter(item => {
+        if (filterPriority !== "all") {
+          const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
+          return priority === filterPriority;
+        }
+        return true;
+      })
+      .filter(item => {
+        if (selectedAgent !== "all") return item.referenceid === selectedAgent;
+        return true;
+      })
+      .filter(item => {
+        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
 
-        const data = await response.json();
-        setAgents(data);
-      } catch (err) {
-        console.error("Error fetching agents:", err);
-        setError("Failed to load agents.");
-      }
-    };
+        const updatedDate = item.date_updated ? new Date(item.date_updated) : new Date(item.date_created);
+        if (isNaN(updatedDate.getTime())) return false;
 
-    fetchAgents();
-  }, [userDetails.referenceid]);
+        const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+        const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+
+        const isSameDay = (d1: Date, d2: Date) =>
+          d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(updatedDate, fromDate);
+        if (fromDate && updatedDate < fromDate) return false;
+        if (toDate && updatedDate > toDate) return false;
+        return true;
+      });
+  }, [sortedActivities, searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
+
+  /* Reset page on filter change */
+  useEffect(() => { setPage(1); }, [searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
+
+  /* Reset quotation_status filter when priority changes */
+  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
+
+  /* ---- Totals ---- */
+  const totalQuotationAmount = useMemo(() =>
+    filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0),
+    [filteredActivities]);
+
+  const uniqueQuotationCount = useMemo(() => {
+    const s = new Set<string>();
+    filteredActivities.forEach(item => { if (item.quotation_number) s.add(item.quotation_number); });
+    return s.size;
+  }, [filteredActivities]);
+
+  /* ---- Pagination ---- */
+  const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
+  const paginatedActivities = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredActivities.slice(start, start + PAGE_SIZE);
+  }, [filteredActivities, page]);
+
+  /* ---- Statuses filtered by selected priority ---- */
+  const availableStatuses = useMemo(() => {
+    if (filterPriority === "all") return ALL_STATUSES;
+    return ALL_STATUSES.filter(s => PRIORITY_MAP[s] === filterPriority);
+  }, [filterPriority]);
+
+  /* ---- Priority summary counts ---- */
+  const priorityCounts = useMemo(() => {
+    const base = sortedActivities.filter(item => item.type_activity?.toLowerCase() === "quotation preparation");
+    const counts: Record<string, number> = { HOT: 0, WARM: 0, COLD: 0, DONE: 0 };
+    base.forEach(item => {
+      const p = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
+      if (p) counts[p]++;
+    });
+    return counts;
+  }, [sortedActivities]);
 
   return (
-    <>
-      {/* Search */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-4">
+
+      {/* ── Priority pills ── */}
+      <div className="flex flex-wrap gap-2">
+        {(["all", "HOT", "WARM", "COLD", "DONE"] as const).map((p) => {
+          const isActive = filterPriority === p;
+          const style = p !== "all" ? PRIORITY_STYLES[p] : null;
+          return (
+            <button
+              key={p}
+              onClick={() => setFilterPriority(p)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all
+                ${isActive
+                  ? p === "all"
+                    ? "bg-gray-800 text-white border-gray-800"
+                    : style?.badge + " ring-2 ring-offset-1 ring-current"
+                  : p === "all"
+                    ? "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                }`}
+            >
+              {p !== "all" && (
+                <span className={`w-1.5 h-1.5 rounded-full ${style?.dot}`} />
+              )}
+              {p === "all" ? "All" : p}
+              {p !== "all" && (
+                <span className="ml-0.5 text-[10px] font-semibold opacity-70">
+                  {priorityCounts[p]}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Filters row ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
         <Input
           type="text"
-          placeholder="Search company or remarks..."
-          className="max-w-md"
+          placeholder="Search company, quotation no., remarks..."
+          className="max-w-xs text-xs"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
 
+        {/* Quotation status */}
+        <Select
+          value={filterQuotationStatus}
+          onValueChange={(v) => setFilterQuotationStatus(v)}
+        >
+          <SelectTrigger className="w-[240px] text-xs">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            {availableStatuses.map((s) => {
+              const priority = PRIORITY_MAP[s];
+              const style = PRIORITY_STYLES[priority];
+              return (
+                <SelectItem key={s} value={s} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style?.dot}`} />
+                    {s}
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+
+        {/* Agent filter */}
         <Select
           value={selectedAgent}
-          onValueChange={(value) => {
-            setSelectedAgent(value);
-            setPage(1);
-          }}
+          onValueChange={(v) => { setSelectedAgent(v); setPage(1); }}
         >
-          <SelectTrigger className="w-[220px] text-xs">
+          <SelectTrigger className="w-[200px] text-xs">
             <SelectValue placeholder="Filter by Agent" />
           </SelectTrigger>
-
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
-
             {agents.map((agent) => (
               <SelectItem className="capitalize" key={agent.ReferenceID} value={agent.ReferenceID}>
                 {agent.Firstname} {agent.Lastname}
@@ -333,107 +384,152 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         </Select>
       </div>
 
-      {/* Total info */}
+      {/* ── Summary bar ── */}
       {filteredActivities.length > 0 && (
-        <div className="mb-2 text-xs font-bold">
-          Total Activities: {filteredActivities.length} | Unique Quotations: {uniqueQuotationCount}
+        <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
+          <span>
+            Records: <span className="font-semibold text-gray-700">{filteredActivities.length}</span>
+          </span>
+          <span className="text-gray-200">|</span>
+          <span>
+            Unique Quotations: <span className="font-semibold text-gray-700">{uniqueQuotationCount}</span>
+          </span>
+          <span className="text-gray-200">|</span>
+          <span>
+            Total Amount:{" "}
+            <span className="font-semibold text-gray-700">
+              {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+            </span>
+          </span>
         </div>
       )}
 
-      {/* Table */}
-      {filteredActivities.length > 0 && (
-        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
+      {/* ── Table ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+      ) : error ? (
+        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+      ) : filteredActivities.length === 0 ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
+          No quotation records found.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-100">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="w-[120px] text-xs text-right">Date Created</TableHead>
-                <TableHead className="text-xs">Quotation Number</TableHead>
-                <TableHead className="text-right text-xs">Quotation Amount</TableHead>
-                <TableHead className="text-xs">Company Name</TableHead>
-                <TableHead className="text-xs">Contact Number</TableHead>
-                <TableHead className="text-xs">Remarks</TableHead>
+              <TableRow className="bg-gray-50 text-[11px]">
+                <TableHead className="text-gray-500">Agent</TableHead>
+                <TableHead className="text-gray-500">Date</TableHead>
+                <TableHead className="text-gray-500">Quotation No.</TableHead>
+                <TableHead className="text-gray-500 text-right">Amount</TableHead>
+                <TableHead className="text-gray-500">Company</TableHead>
+                <TableHead className="text-gray-500">Contact</TableHead>
+                <TableHead className="text-gray-500">Priority</TableHead>
+                <TableHead className="text-gray-500">Status</TableHead>
+                <TableHead className="text-gray-500">Remarks</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {paginatedActivities.map((item) => {
+                const agentInfo = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
+                const priority = PRIORITY_MAP[quotationStatus];
+                const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+
                 return (
-                  <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                    <TableCell className="flex items-center gap-2 capitalize">
-                      {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
-                        <img
-                          src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
-                          alt={agentMap[item.referenceid?.toLowerCase()]!.name}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                          N/A
-                        </div>
-                      )}
-                      <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
+                  <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                    {/* Agent */}
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {agentInfo?.profilePicture ? (
+                          <img src={agentInfo.profilePicture} alt={agentInfo.name} className="w-6 h-6 rounded-full object-cover border border-white shadow-sm flex-shrink-0" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">
+                            {agentInfo?.name?.[0] ?? "?"}
+                          </div>
+                        )}
+                        <span className="capitalize text-gray-700">{agentInfo?.name ?? "-"}</span>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right">{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                    <TableCell className="uppercase">{item.quotation_number || "-"}</TableCell>
-                    <TableCell className="text-right">
-                      {item.quotation_amount !== undefined && item.quotation_amount !== null
-                        ? item.quotation_amount.toLocaleString(undefined, {
-                          style: "currency",
-                          currency: "PHP",
-                        })
+
+                    {/* Date */}
+                    <TableCell className="text-gray-500 whitespace-nowrap">
+                      {new Date(item.date_created).toLocaleDateString()}
+                    </TableCell>
+
+                    {/* Quotation No. */}
+                    <TableCell className="uppercase text-gray-700">{item.quotation_number || "-"}</TableCell>
+
+                    {/* Amount */}
+                    <TableCell className="text-right text-gray-700">
+                      {item.quotation_amount != null
+                        ? item.quotation_amount.toLocaleString(undefined, { style: "currency", currency: "PHP" })
                         : "-"}
                     </TableCell>
-                    <TableCell>{item.company_name || "-"}</TableCell>
-                    <TableCell>{item.contact_number || "-"}</TableCell>
-                    <TableCell className="capitalize italic font-semibold">{item.remarks || "-"}</TableCell>
+
+                    {/* Company */}
+                    <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
+
+                    {/* Contact */}
+                    <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
+
+                    {/* Priority badge */}
+                    <TableCell>
+                      {priority && priorityStyle ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
+                          {priority}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </TableCell>
+
+                    {/* Quotation Status */}
+                    <TableCell className="uppercase text-gray-600 text-[10px]">
+                      {item.quotation_status || "-"}
+                    </TableCell>
+
+                    {/* Remarks */}
+                    <TableCell className="capitalize italic text-gray-500">{item.remarks || "-"}</TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
+
             <tfoot>
-              <TableRow className="bg-muted font-semibold text-xs">
-                <TableCell colSpan={3} className="text-right pr-4"></TableCell>
-                <TableCell className="text-right">
-                  Totals:{" "}
-                  {totalQuotationAmount.toLocaleString(undefined, {
-                    style: "currency",
-                    currency: "PHP",
-                  })}
+              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                <TableCell colSpan={3} className="text-gray-500">Total</TableCell>
+                <TableCell className="text-right text-gray-800">
+                  {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                 </TableCell>
-                <TableCell colSpan={4}></TableCell>
+                <TableCell colSpan={5} />
               </TableRow>
             </tfoot>
           </Table>
         </div>
       )}
 
+      {/* ── Pagination ── */}
       {pageCount > 1 && (
         <Pagination>
-          <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
+          <PaginationContent className="flex items-center space-x-4 justify-center mt-2 text-xs">
             <PaginationItem>
               <PaginationPrevious
                 href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page > 1) setPage(page - 1);
-                }}
+                onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
                 aria-disabled={page === 1}
                 className={page === 1 ? "pointer-events-none opacity-50" : ""}
               />
             </PaginationItem>
-
-            {/* Current page / total pages */}
-            <div className="px-4 font-medium select-none">
+            <div className="px-4 font-medium select-none text-gray-600">
               {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
             </div>
-
             <PaginationItem>
               <PaginationNext
                 href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page < pageCount) setPage(page + 1);
-                }}
+                onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
                 aria-disabled={page === pageCount}
                 className={page === pageCount ? "pointer-events-none opacity-50" : ""}
               />
@@ -441,6 +537,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           </PaginationContent>
         </Pagination>
       )}
-    </>
+    </div>
   );
 };
