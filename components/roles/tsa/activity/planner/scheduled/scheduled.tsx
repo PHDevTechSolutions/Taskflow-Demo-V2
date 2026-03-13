@@ -1,16 +1,46 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import {
-  CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle,
-  PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  CheckCircle2Icon,
+  AlertCircleIcon,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  PhoneOutgoing,
+  PackageCheck,
+  ReceiptText,
+  Activity,
+  ThumbsUp,
+  Check,
+  Repeat,
+  MoreVertical,
+  ThumbsDown,
+  Dot,
+  Filter,
+  Lock,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { sileo } from "sileo";
 
 import { CreateActivityDialog } from "../dialog/create";
@@ -22,7 +52,11 @@ import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@/components/ui/separator";
+import {
+  checkCompanyBlocked,
+  BLOCK_SCHEDULED,
+} from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -73,6 +107,7 @@ interface HistoryItem {
   tsm_approved_status: string;
   type_activity: string;
   quotation_status: string;
+  status?: string; // Added for delivery/completion check
 }
 
 interface ScheduledProps {
@@ -110,7 +145,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   tsmDetails,
   managerDetails,
   signature,
-  onCountChange
+  onCountChange,
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -126,7 +161,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [dialogTransferOpen, setDialogTransferOpen] = useState(false);
 
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
+    null,
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
 
@@ -148,7 +185,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
       : null;
 
-    const url = new URL("/api/activity/tsa/planner/fetch", window.location.origin);
+    const url = new URL(
+      "/api/activity/tsa/planner/fetch",
+      window.location.origin,
+    );
     url.searchParams.append("referenceid", referenceid);
     if (from && to) {
       url.searchParams.append("from", from);
@@ -191,7 +231,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         (payload) => {
           console.log("Activity realtime update:", payload);
           fetchAllData();
-        }
+        },
       )
       .subscribe();
 
@@ -209,7 +249,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         (payload) => {
           console.log("History realtime update:", payload);
           fetchAllData();
-        }
+        },
       )
       .subscribe();
 
@@ -223,21 +263,29 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   }, [referenceid, fetchAllData]);
 
   function isDelivered(status: string) {
-    return ["Delivered", "Done", "Completed", "Cancelled", "On-Progress", "Transfer"].includes(status);
+    return [
+      "Delivered",
+      "Done",
+      "Completed",
+      "Cancelled",
+      "On-Progress",
+      "Transfer",
+    ].includes(status);
   }
 
   const mergedActivities = activities
     .filter((a) => !isDelivered(a.status)) // Remove delivered/completed/cancelled
     .map((activity) => {
       const relatedHistoryItems = history.filter(
-        (h) => h.activity_reference_number === activity.activity_reference_number
+        (h) =>
+          h.activity_reference_number === activity.activity_reference_number,
       );
 
       return {
         ...activity,
         relatedHistoryItems,
       };
-    })
+    });
 
   const term = searchTerm.toLowerCase();
 
@@ -262,7 +310,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           Object.values(h)
             .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
             .join(" ")
-            .toLowerCase()
+            .toLowerCase(),
         )
         .join(" ");
 
@@ -272,8 +320,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     })
     .sort(
       (a, b) =>
-        new Date(b.date_updated).getTime() -
-        new Date(a.date_updated).getTime()
+        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
     );
 
   const openCancelledDialog = (id: string) => {
@@ -363,9 +410,18 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   };
 
-  type BadgeVariant = "secondary" | "outline" | "destructive" | "default" | null | undefined;
+  type BadgeVariant =
+    | "secondary"
+    | "outline"
+    | "destructive"
+    | "default"
+    | null
+    | undefined;
 
-  function getBadgeProps(status: string): { variant: BadgeVariant; className?: string } {
+  function getBadgeProps(status: string): {
+    variant: BadgeVariant;
+    className?: string;
+  } {
     switch (status) {
       case "Assisted":
       case "On-Progress":
@@ -381,13 +437,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
-  function getStatusStyles(status: string): { badgeClass?: string; bgClass?: string } {
+  function getStatusStyles(status: string): {
+    badgeClass?: string;
+    bgClass?: string;
+  } {
     switch (status) {
       case "Assisted":
       case "On-Progress":
-        return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
+        return {
+          badgeClass: "bg-orange-500 text-white",
+          bgClass: "bg-orange-100",
+        };
       case "SO-Done":
-        return { badgeClass: "bg-yellow-400 text-white", bgClass: "bg-yellow-100" };
+        return {
+          badgeClass: "bg-yellow-400 text-white",
+          bgClass: "bg-yellow-100",
+        };
       case "Quote-Done":
         return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
       case "Cancelled":
@@ -470,7 +535,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setDialogTransferOpen(true);
   };
 
-  const handleConfirmTransfer = async (selectedUserReferenceID: string | undefined) => {
+  const handleConfirmTransfer = async (
+    selectedUserReferenceID: string | undefined,
+  ) => {
     if (!selectedActivityId) return;
     if (!selectedUserReferenceID) {
       sileo.error({
@@ -550,7 +617,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   };
 
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
-  const selectedTicketReferenceNumber = selectedActivity?.ticket_reference_number || null;
+  const selectedTicketReferenceNumber =
+    selectedActivity?.ticket_reference_number || null;
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
@@ -566,7 +634,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   if (error) {
     return (
-      <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
+      <Alert
+        variant="destructive"
+        className="flex flex-col space-y-4 p-4 text-xs"
+      >
         <div className="flex items-center space-x-3">
           <AlertCircleIcon className="h-6 w-6 text-red-600" />
           <div>
@@ -598,7 +669,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           <Input
             type="search"
             placeholder="Search..."
-            className="text-xs flex-grow rounded-none mb-2"
+            className="text-xs grow rounded-none mb-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search accounts"
@@ -607,7 +678,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           {/* Status Dropdown - nasa right */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="whitespace-nowrap rounded-none">
+              <Button
+                variant="outline"
+                className="whitespace-nowrap rounded-none"
+              >
                 {statusFilter === "All" ? <Filter /> : statusFilter} Filter
               </Button>
             </DropdownMenuTrigger>
@@ -618,24 +692,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 All
               </DropdownMenuItem>
 
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => {
-                const { badgeClass } = getStatusStyles(status);
+              {Array.from(new Set(filteredActivities.map((a) => a.status))).map(
+                (status) => {
+                  const { badgeClass } = getStatusStyles(status);
 
-                return (
-                  <DropdownMenuItem
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className="flex items-center gap-2"
-                  >
-                    {/* Colored Dot */}
-                    <span
-                      className={`w-2 h-2 rounded-full ${badgeClass}`}
-                    />
+                  return (
+                    <DropdownMenuItem
+                      key={status}
+                      onClick={() => setStatusFilter(status)}
+                      className="flex items-center gap-2"
+                    >
+                      {/* Colored Dot */}
+                      <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
 
-                    <span className="capitalize">{status}</span>
-                  </DropdownMenuItem>
-                );
-              })}
+                      <span className="capitalize">{status}</span>
+                    </DropdownMenuItem>
+                  );
+                },
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -652,8 +726,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
               const badgeProps = getBadgeProps(item.status);
               const statusStyles = getStatusStyles(item.status);
 
+              // ─── Company Block Check ──────────────────────────────────────────
+              // Scheduled items are themselves "blocking". We still check for OTHER
+              // Block only if the company already has another scheduled activity within 30 days.
+              const blockCheck = checkCompanyBlocked(
+                item.account_reference_number,
+                activities,
+                history,
+                BLOCK_SCHEDULED.statuses,
+                BLOCK_SCHEDULED.checkScheduled,
+                item.id, // exclude the current activity
+              );
+
               return (
-                <AccordionItem key={item.id} value={item.id} className={`w-full border rounded-none shadow-sm mt-2 ${statusStyles.bgClass}`}>
+                <AccordionItem
+                  key={item.id}
+                  value={item.id}
+                  className={`w-full border rounded-none shadow-sm mt-2 ${statusStyles.bgClass}`}
+                >
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
                       <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
@@ -661,34 +751,76 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
-                        <CreateActivityDialog
-                          firstname={firstname}
-                          lastname={lastname}
-                          target_quota={target_quota}
-                          email={email}
-                          contact={contact}
-                          tsmname={tsmname}
-                          managername={managername}
-                          referenceid={item.referenceid}
-                          tsm={item.tsm}
-                          manager={item.manager}
-                          type_client={item.type_client}
-                          contact_number={item.contact_number}
-                          email_address={item.email_address}
-                          activityReferenceNumber={item.activity_reference_number}
-                          ticket_reference_number={item.ticket_reference_number}
-                          agent={item.agent}
-                          company_name={item.company_name}
-                          contact_person={item.contact_person}
-                          address={item.address}
-                          accountReferenceNumber={item.account_reference_number}
-                          onCreated={() => {
-                            fetchAllData();
-                          }}
-                          managerDetails={managerDetails ?? null}
-                          tsmDetails={tsmDetails ?? null}
-                          signature={signature}
-                        />
+                        {/* ─── Block Guard ─────────────────────────── */}
+                        {blockCheck.blocked ? (
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <Button
+                                disabled
+                                variant="outline"
+                                className="rounded-none cursor-not-allowed opacity-60 text-xs"
+                              >
+                                <Lock size={13} className="mr-1" />
+                                Locked
+                              </Button>
+                            </HoverCardTrigger>
+                            <HoverCardContent
+                              side="top"
+                              align="end"
+                              className="text-xs max-w-xs leading-relaxed"
+                            >
+                              <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
+                                <Lock size={12} /> Activity Locked
+                              </p>
+                              <p>{blockCheck.reason}</p>
+                              {blockCheck.daysRemaining !== undefined && (
+                                <p className="mt-1 text-muted-foreground">
+                                  Unlocks in{" "}
+                                  <strong>
+                                    {blockCheck.daysRemaining} day
+                                    {blockCheck.daysRemaining !== 1 ? "s" : ""}
+                                  </strong>{" "}
+                                  or when marked as Delivered.
+                                </p>
+                              )}
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : (
+                          <CreateActivityDialog
+                            firstname={firstname}
+                            lastname={lastname}
+                            target_quota={target_quota}
+                            email={email}
+                            contact={contact}
+                            tsmname={tsmname}
+                            managername={managername}
+                            referenceid={item.referenceid}
+                            tsm={item.tsm}
+                            manager={item.manager}
+                            type_client={item.type_client}
+                            contact_number={item.contact_number}
+                            email_address={item.email_address}
+                            activityReferenceNumber={
+                              item.activity_reference_number
+                            }
+                            ticket_reference_number={
+                              item.ticket_reference_number
+                            }
+                            agent={item.agent}
+                            company_name={item.company_name}
+                            contact_person={item.contact_person}
+                            address={item.address}
+                            accountReferenceNumber={
+                              item.account_reference_number
+                            }
+                            onCreated={() => {
+                              fetchAllData();
+                            }}
+                            managerDetails={managerDetails ?? null}
+                            tsmDetails={tsmDetails ?? null}
+                            signature={signature}
+                          />
+                        )}
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -732,7 +864,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                   Transfer
                                 </DropdownMenuItem>
                               )}
-
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -741,27 +872,31 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                     <div className="ml-1 flex flex-wrap gap-1 uppercase">
                       {/* Status Badge */}
-                      {!["assisted", "not assisted"].includes(item.status.toLowerCase()) && (
+                      {!["assisted", "not assisted"].includes(
+                        item.status.toLowerCase(),
+                      ) && (
                         <Badge
                           variant={badgeProps.variant}
                           className={`font-mono rounded-sm shadow-md p-2 border-none text-[10px] ${badgeProps.className || ""}`}
                         >
                           <CheckCircle2 />
-                          {item.status.replace("-", " ")} / {item.relatedHistoryItems.some(
-                            (h) => h.quotation_status && h.quotation_status !== "-"
+                          {item.status.replace("-", " ")} /{" "}
+                          {item.relatedHistoryItems.some(
+                            (h) =>
+                              h.quotation_status && h.quotation_status !== "-",
                           ) && (
-                              <p>
-                                <span className="uppercase">
-                                  {Array.from(
-                                    new Set(
-                                      item.relatedHistoryItems
-                                        .map((h) => h.quotation_status ?? "-")
-                                        .filter((v) => v !== "-")
-                                    )
-                                  ).join(", ")}
-                                </span>
-                              </p>
-                            )}
+                            <p>
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.quotation_status ?? "-")
+                                      .filter((v) => v !== "-"),
+                                  ),
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
                         </Badge>
                       )}
 
@@ -769,24 +904,36 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         (h: HistoryItem) =>
                           !!h.type_activity &&
                           h.type_activity !== "-" &&
-                          h.type_activity.trim() !== ""
+                          h.type_activity.trim() !== "",
                       ) &&
                         Array.from(
                           new Set(
                             item.relatedHistoryItems
-                              .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
-                              .filter((v) => v && v !== "-")
-                          )
+                              .map(
+                                (h: HistoryItem) =>
+                                  h.type_activity?.trim() ?? "",
+                              )
+                              .filter((v) => v && v !== "-"),
+                          ),
                         ).map((activity) => {
                           const getIcon = (act: string) => {
                             const lowerAct = act.toLowerCase();
-                            if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
+                            if (
+                              lowerAct.includes("outbound") ||
+                              lowerAct.includes("call")
+                            ) {
                               return <PhoneOutgoing size={14} />;
                             }
-                            if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
+                            if (
+                              lowerAct.includes("sales order") ||
+                              lowerAct.includes("so prep")
+                            ) {
                               return <PackageCheck size={14} />;
                             }
-                            if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
+                            if (
+                              lowerAct.includes("quotation") ||
+                              lowerAct.includes("quote")
+                            ) {
                               return <ReceiptText size={14} />;
                             }
                             return <Activity size={14} />;
@@ -819,26 +966,29 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           h.tsm_approved_status &&
                           h.tsm_approved_status.trim() !== "" &&
                           h.tsm_approved_status.trim() !== "-" &&
-                          h.tsm_approved_status.toLowerCase() !== "pending"
+                          h.tsm_approved_status.toLowerCase() !== "pending",
                       ) &&
                         (() => {
                           const statuses = Array.from(
                             new Set(
                               item.relatedHistoryItems
-                                .map((h) => h.tsm_approved_status?.trim().toLowerCase() ?? "")
-                                .filter(
-                                  (v) =>
-                                    v &&
-                                    v !== "-" &&
-                                    v !== "pending" // ⬅️ dito talaga inaalis ang pending
+                                .map(
+                                  (h) =>
+                                    h.tsm_approved_status
+                                      ?.trim()
+                                      .toLowerCase() ?? "",
                                 )
-                            )
+                                .filter(
+                                  (v) => v && v !== "-" && v !== "pending",
+                                ),
+                            ),
                           );
 
-                          // safety check: kung wala na talagang valid status, wag mag-render
                           if (statuses.length === 0) return null;
 
-                          const isDeclined = statuses.some((status) => status === "decline");
+                          const isDeclined = statuses.some(
+                            (status) => status === "decline",
+                          );
 
                           const hoverText = isDeclined
                             ? "Declined by TSM"
@@ -848,12 +998,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <HoverCard>
                               <HoverCardTrigger asChild>
                                 <Badge
-                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined
-                                    ? "bg-red-600 text-white"
-                                    : "bg-blue-900 text-white"
-                                    }`}
+                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${
+                                    isDeclined
+                                      ? "bg-red-600 text-white"
+                                      : "bg-blue-900 text-white"
+                                  }`}
                                 >
-                                  {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
+                                  {isDeclined ? (
+                                    <ThumbsDown size={12} />
+                                  ) : (
+                                    <ThumbsUp size={12} />
+                                  )}
                                 </Badge>
                               </HoverCardTrigger>
 
@@ -871,10 +1026,21 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                   </div>
 
                   <AccordionContent className="text-xs px-4 py-2 uppercase">
-                    <p><strong>Contact Number:</strong> {item.contact_number || "-"}</p>
-                    <p><strong>Contact Person:</strong> {item.contact_person || "-"}</p>
-                    <p><strong>Email Address:</strong> {item.email_address || "-"}</p>
-                    <p><strong>Address:</strong> {item.address || "-"}</p>
+                    <p>
+                      <strong>Contact Number:</strong>{" "}
+                      {item.contact_number || "-"}
+                    </p>
+                    <p>
+                      <strong>Contact Person:</strong>{" "}
+                      {item.contact_person || "-"}
+                    </p>
+                    <p>
+                      <strong>Email Address:</strong>{" "}
+                      {item.email_address || "-"}
+                    </p>
+                    <p>
+                      <strong>Address:</strong> {item.address || "-"}
+                    </p>
 
                     <Separator className="mb-2 mt-2" />
                     {item.relatedHistoryItems.length === 0 ? (
@@ -882,150 +1048,160 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     ) : (
                       <>
                         {item.relatedHistoryItems.some(
-                          (h) => h.ticket_reference_number && h.ticket_reference_number !== "-"
+                          (h) =>
+                            h.ticket_reference_number &&
+                            h.ticket_reference_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Ticket Reference Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.ticket_reference_number ?? "-")
-                                      .filter((v) => v !== "-")
-                                  )
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map(
+                                      (h) => h.ticket_reference_number ?? "-",
+                                    )
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.so_number && h.so_number !== "-"
+                          (h) => h.so_number && h.so_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Sales Order Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.so_number ?? "-")
-                                      .filter((v) => v !== "-")
-                                  )
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Sales Order Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.so_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.quotation_number && h.quotation_number !== "-"
+                          (h) =>
+                            h.quotation_number && h.quotation_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Quotation Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.quotation_number ?? "-")
-                                      .filter((v) => v !== "-")
-                                  )
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.quotation_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.call_type && h.call_type !== "-"
+                          (h) => h.call_type && h.call_type !== "-",
                         ) && (
-                            <p>
-                              <strong>Type:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.call_type ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.source && h.source !== "-"
+                          (h) => h.source && h.source !== "-",
                         ) && (
-                            <p>
-                              <strong>Source:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.source ?? "-")
-                                      .filter((v) => v !== "-")
-                                  )
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {/* TOTAL Quotation Amount */}
                         {item.relatedHistoryItems.some(
-                          (h) => h.quotation_amount !== null && h.quotation_amount !== undefined
+                          (h) =>
+                            h.quotation_amount !== null &&
+                            h.quotation_amount !== undefined,
                         ) && (
-                            <p>
-                              <strong>Total Quotation Amount:</strong>{" "}
-                              {item.relatedHistoryItems
-                                .reduce((total, h) => {
-                                  return total + (h.quotation_amount ?? 0);
-                                }, 0)
-                                .toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })}
-                            </p>
-                          )}
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.quotation_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                         {/* SO Number */}
                         {item.relatedHistoryItems.some(
-                          (h) => h.so_number && h.so_number !== "-"
+                          (h) => h.so_number && h.so_number !== "-",
                         ) && (
-                            <p>
-                              <strong>SO Number:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.so_number ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>SO Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.so_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {/* TOTAL SO Amount */}
                         {item.relatedHistoryItems.some(
-                          (h) => h.so_amount !== null && h.so_amount !== undefined
+                          (h) =>
+                            h.so_amount !== null && h.so_amount !== undefined,
                         ) && (
-                            <p>
-                              <strong>Total SO Amount:</strong>{" "}
-                              {item.relatedHistoryItems
-                                .reduce((total, h) => {
-                                  return total + (h.so_amount ?? 0);
-                                }, 0)
-                                .toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })}
-                            </p>
-                          )}
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.so_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                         <Separator className="mb-2 mt-2" />
                         {item.relatedHistoryItems.some(
-                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                          (h) =>
+                            h.tsm_approved_status &&
+                            h.tsm_approved_status !== "-",
                         ) && (
-                            <p>
-                              <strong>TSM Feedback:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.tsm_approved_status ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                       </>
                     )}
 
@@ -1035,7 +1211,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </p>
                     <div className="flex items-center gap-1 text-xs font-semibold">
                       <Dot />
-                      <span className="text-[10px]">{item.activity_reference_number}</span>
+                      <span className="text-[10px]">
+                        {item.activity_reference_number}
+                      </span>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
