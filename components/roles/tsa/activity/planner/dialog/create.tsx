@@ -67,6 +67,7 @@ interface Activity {
     product_title?: string;
     vat_type: string;
     delivery_fee: string;
+    restocking_fee: string;
     item_remarks?: string;
 
     project_type?: string;
@@ -203,6 +204,8 @@ export function CreateActivityDialog({
     const [productTitle, setProductTitle] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
+    const [restockingFee, setRestockingFee] = useState("");
+    const [whtType, setWhtType] = useState("none");
     const [itemRemarks, setItemRemarks] = useState("");
 
     const [projectType, setProjectType] = useState("");
@@ -237,6 +240,7 @@ export function CreateActivityDialog({
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
+    const [quotationSubject, setQuotationSubject] = useState("For Quotation");
 
     // AUTO SET DATE CREATED
     useEffect(() => {
@@ -469,6 +473,7 @@ export function CreateActivityDialog({
             product_title: productTitle || undefined,
             vat_type: vatType,
             delivery_fee: deliveryFee,
+            restocking_fee: restockingFee,
             item_remarks: itemRemarks || undefined,
 
             project_type: projectType || undefined,
@@ -995,16 +1000,14 @@ export function CreateActivityDialog({
                                         setRemarks={setRemarks}
                                         status={status}
                                         setStatus={setStatus}
-
-                                        // Pass vatType here
                                         vatType={vatType}
                                         setVatType={setVatType}
-
                                         deliveryFee={deliveryFee}
                                         setDeliveryFee={setDeliveryFee}
+                                        restockingFee={restockingFee}
+                                        setRestockingFee={setRestockingFee}
                                         itemRemarks={itemRemarks}
                                         setItemRemarks={setItemRemarks}
-
                                         typeClient={typeClient}
                                         setTypeClient={setTypeClient}
                                         tsm={tsm}
@@ -1027,11 +1030,13 @@ export function CreateActivityDialog({
                                         contact_person={selectedContactPerson}
                                         managerDetails={managerDetails ?? null}
                                         tsmDetails={tsmDetails ?? null}
-                                        signature={signature} whtType={""} setWhtType={function (value: string): void {
-                                            throw new Error("Function not implemented.");
-                                        } } restockingFee={""} setRestockingFee={function (value: string): void {
-                                            throw new Error("Function not implemented.");
-                                        } }                                />
+                                        signature={signature}
+                                        whtType={whtType}
+                                        setWhtType={setWhtType}
+
+                                        quotationSubject={quotationSubject}
+                                        setQuotationSubject={setQuotationSubject}
+                                        />
                             )}
 
                             {typeActivity === "Sales Order Preparation" && (
