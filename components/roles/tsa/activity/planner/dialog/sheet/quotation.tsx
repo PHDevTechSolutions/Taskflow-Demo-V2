@@ -80,6 +80,8 @@ interface Props {
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
   setItemRemarks: (value: string) => void;
+  quotationSubject: string;     
+  setQuotationSubject: (v: string) => void;
 
   // --- ACTIONS ---
   handleBack: () => void;
