@@ -348,12 +348,12 @@ export function QuotationSheet(props: Props) {
       return acc + totalAfterDiscount;
     }, 0);
 
-    // Add delivery fee (parse it to number safely)
     const deliveryFeeNumber = parseFloat(deliveryFee) || 0;
-    const totalWithDelivery = productTotal + deliveryFeeNumber;
+    const restockingFeeNumber = parseFloat(restockingFee) || 0;
+    const totalWithDelivery = productTotal + deliveryFeeNumber + restockingFeeNumber;
 
-    setQuotationAmount(totalWithDelivery.toFixed(2)); // keeps it as string
-  }, [selectedProducts, deliveryFee, discount]); // also watch deliveryFee and discount
+    setQuotationAmount(totalWithDelivery.toFixed(2));
+  }, [selectedProducts, deliveryFee, restockingFee, discount]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -703,6 +703,7 @@ export function QuotationSheet(props: Props) {
       // --- TOTALS ---
       totalPrice: totalInvoiceAmount,
       deliveryFee: Number(deliveryFee ?? 0),
+      restockingFee: Number(restockingFee ?? 0),
       netAmountToCollect,
 
       // --- STAFF DETAILS ---
@@ -2324,61 +2325,59 @@ ${spec.value}
                     </tbody>
                     <tfoot className="bg-gray-100 font-bold text-xs">
                       <tr>
-                        {/* Vat Adjust Column */}
-                        <td className="border border-gray-300 p-2 text-center">
-                        </td>
-                        <td className="border border-gray-300 p-2 text-center">
-                        </td>
-
-                        {/* Product Column: leave empty */}
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
                         <td className="border border-gray-300 p-2"></td>
-
-                        {/* Quantity Column */}
                         <td className="border border-gray-300 p-4 text-left">
                           {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
                         </td>
-
-                        {/* Price Column */}
                         <td className="border border-gray-300 p-4 text-left">
-                          {selectedProducts
-                            .reduce((acc, p) => acc + p.price, 0)
-                            .toFixed(2)}
+                          {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
                         </td>
-
-                        {/* Discounted Column */}
                         <td className="border border-gray-300 p-2 text-center">
-                          ₱{selectedProducts
-                            .reduce((acc, p) => {
-                              const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                              const baseAmount = p.price * p.quantity;
-                              return acc + (baseAmount * discount) / 100;
-                            }, 0)
-                            .toFixed(2)}
+                          ₱{selectedProducts.reduce((acc, p) => {
+                            const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                            const baseAmount = p.price * p.quantity;
+                            return acc + (baseAmount * discount) / 100;
+                          }, 0).toFixed(2)}
                         </td>
-
-                        {/* Subtotal Column */}
                         <td className="border border-gray-300 p-2 text-center">
-                          ₱{selectedProducts
-                            .reduce((acc, p) => {
-                              const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                              const baseAmount = p.price * p.quantity;
-                              return acc + baseAmount - (baseAmount * discount) / 100;
-                            }, 0)
-                            .toFixed(2)}
+                          ₱{selectedProducts.reduce((acc, p) => {
+                            const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                            const baseAmount = p.price * p.quantity;
+                            return acc + baseAmount - (baseAmount * discount) / 100;
+                          }, 0).toFixed(2)}
                         </td>
+                        <td className="border border-gray-300 p-2"></td>
+                      </tr>
 
-                        {/* Action Column: leave empty */}
-                        <td className="border border-gray-300 p-2">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-sm whitespace-nowrap">Delivery Fee:</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
-                              placeholder="0.00"
-                              value={deliveryFee}
-                              onChange={(e) => setDeliveryFee(e.target.value)}
-                            />
+                      {/* Delivery & Restocking Fee Row */}
+                      <tr>
+                        <td colSpan={6} className="border border-gray-300 p-2"></td>
+                        <td colSpan={2} className="border border-gray-300 p-2">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm whitespace-nowrap">Delivery Fee:</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
+                                placeholder="0.00"
+                                value={deliveryFee}
+                                onChange={(e) => setDeliveryFee(e.target.value)}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm whitespace-nowrap">Restocking Fee:</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
+                                placeholder="0.00"
+                                value={restockingFee}
+                                onChange={(e) => setRestockingFee(e.target.value)}
+                              />
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -2612,136 +2611,150 @@ ${spec.value}
                         </tr> */}
 
                         {/* --- DETAILED SUMMARY BREAKDOWN --- */}
-<tr className="border-t-2 border-black bg-white text-gray-900">
-  <td colSpan={4} className="border-r-2 border-black p-4 align-top">
-    <div className="flex flex-col gap-4 h-full pt-2">
-      <div className="flex items-center gap-6">
-        <span className="font-bold text-red-600 italic text-[14px] uppercase whitespace-nowrap tracking-tighter">
-          Tax Type:
-        </span>
-        <div className="flex gap-4 text-[11px] font-black uppercase tracking-tight">
-          <span className={payload.vatTypeLabel === "VAT Inc" ? "text-gray-900" : "text-gray-400"}>
-            {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
-          </span>
-          <span className={payload.vatTypeLabel === "VAT Exe" ? "text-gray-900" : "text-gray-400"}>
-            {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
-          </span>
-          <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-gray-900" : "text-gray-400"}>
-            {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
-          </span>
-        </div>
-      </div>
+                        <tr className="border-t-2 border-black bg-white text-gray-900">
+                          <td colSpan={4} className="border-r-2 border-black p-4 align-top">
+                            <div className="flex flex-col gap-3 h-full pt-1">
 
-      {payload.whtType !== "none" && (
-        <div className="flex items-center gap-6 border-t border-gray-100 pt-2">
-          <span className="font-bold text-blue-600 italic text-[12px] uppercase whitespace-nowrap tracking-tighter">
-            Withholding:
-          </span>
-          <span className="text-[10px] font-black uppercase text-blue-800">
-            ● {payload.whtLabel} (Applied to Net of VAT)
-          </span>
-        </div>
-      )}
-    </div>
-  </td>
+                              {/* VAT Type */}
+                              <div>
+                                <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Tax Type</p>
+                                <div className="flex gap-3 text-[10px] font-black uppercase">
+                                  {["VAT Inc", "VAT Exe", "Zero-Rated"].map((label) => (
+                                    <span
+                                      key={label}
+                                      className={payload.vatTypeLabel === label
+                                        ? "text-gray-900 bg-gray-100 px-2 py-0.5 rounded-sm"
+                                        : "text-gray-300"}
+                                    >
+                                      {payload.vatTypeLabel === label ? "●" : "○"} {label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
 
-  <td colSpan={2} className="p-0">
-    <table className="w-full border-collapse">
-      <tbody className="text-[10px]">
-        {/* Row 1: Net Sales */}
-        <tr className="border-b border-gray-100">
-          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
-            Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
-          </td>
-          <td className="px-3 py-1.5 text-right font-black text-gray-900">
-            ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
+                              {/* Withholding Tax */}
+                              {payload.whtType !== "none" && (
+                                <div className="border-t border-gray-100 pt-2">
+                                  <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Withholding Tax (EWT)</p>
+                                  <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 px-2 py-0.5 rounded-sm">
+                                    ● {payload.whtLabel} — Applied on Net of VAT
+                                  </span>
+                                </div>
+                              )}
 
-        {/* Row 2: Delivery */}
-        <tr className="border-b border-gray-100">
-          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
-            Delivery Charge
-          </td>
-          <td className="px-3 py-1.5 text-right font-black text-gray-900">
-            ₱{Number(payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
+                              {/* WHT Base Breakdown (informational) */}
+                              {payload.whtType !== "none" && (
+                                <div className="border-t border-gray-100 pt-2 text-[9px] text-gray-400 space-y-0.5">
+                                  <p>WHT Base: ₱{payload.whtBase.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <p>WHT Deducted: - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
 
-        {/* Row 3: Restocking Fee (RESTORED) */}
-        <tr className="border-b-2 border-black">
-          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
-            Restocking Fee
-          </td>
-          <td className="px-3 py-1.5 text-right font-black text-gray-900">
-            ₱{(restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
+                          {/* Right Side: Computation Table */}
+                          <td colSpan={2} className="p-0 align-top">
+                            <table className="w-full border-collapse text-[10px]">
+                              <tbody>
 
-        {/* Row 4: Total Invoice Amount */}
-        <tr className="bg-gray-50 border-b border-black">
-          <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
-            Total Invoice Amount
-          </td>
-          <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900">
-            ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
+                                {/* Net Sales */}
+                                <tr className="border-b border-gray-100">
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400 w-[58%]">
+                                    Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right font-black text-gray-900">
+                                    ₱{(payload.totalPrice - payload.deliveryFee - payload.restockingFee)
+                                      .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
 
-        {/* VAT & WHT Logic */}
-        {payload.vatTypeLabel === "VAT Inc" ? (
-          <>
-            <tr className="border-b border-gray-100">
-              <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
-                Less: VAT (12%)
-              </td>
-              <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-            <tr className={payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
-              <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
-                Net of VAT (Tax Base)
-              </td>
-              <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-            {payload.whtType !== "none" && (
-              <tr className="border-b-2 border-black bg-blue-50/50">
-                <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
-                  LESS: {payload.whtLabel}
-                </td>
-                <td className="px-3 py-2 text-right font-black text-blue-700">
-                  - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-            )}
-          </>
-        ) : (
-          <tr className="border-b-2 border-black">
-            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
-              Tax Status
-            </td>
-            <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
-              {payload.vatTypeLabel === "VAT Exe" ? "Exempted" : "Zero-Rated"}
-            </td>
-          </tr>
-        )}
+                                {/* Delivery Fee */}
+                                <tr className="border-b border-gray-100">
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400">
+                                    Delivery Charge
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right font-black text-gray-900">
+                                    ₱{payload.deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
 
-        {/* Final Total */}
-        <tr className="bg-black text-white">
-          <td className="px-3 py-3 text-right font-black uppercase border-r border-white/20 text-[10px] tracking-tight">
-            {payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
-          </td>
-          <td className="px-3 py-3 text-right font-black text-[16px]">
-            ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </td>
-</tr>
+                                {/* Restocking Fee */}
+                                <tr className="border-b-2 border-black">
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400">
+                                    Restocking Fee
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right font-black text-gray-900">
+                                    ₱{payload.restockingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+
+                                {/* Total Invoice Amount */}
+                                <tr className="bg-gray-50 border-b border-black">
+                                  <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
+                                    Total Invoice Amount
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900">
+                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+
+                                {/* VAT Inc breakdown */}
+                                {payload.vatTypeLabel === "VAT Inc" ? (
+                                  <>
+                                    <tr className="border-b border-gray-100">
+                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
+                                        Less: VAT (12/112)
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right font-bold text-gray-400">
+                                        ₱{(payload.totalPrice * (12 / 112))
+                                          .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </td>
+                                    </tr>
+                                    <tr className={payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
+                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
+                                        Net of VAT (Tax Base)
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right font-bold text-gray-400">
+                                        ₱{(payload.totalPrice / 1.12)
+                                          .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </td>
+                                    </tr>
+                                    {payload.whtType !== "none" && (
+                                      <tr className="border-b-2 border-black bg-blue-50">
+                                        <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[8px] text-blue-700">
+                                          Less: {payload.whtLabel}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-black text-blue-700">
+                                          − ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                ) : (
+                                  <tr className="border-b-2 border-black">
+                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
+                                      Tax Status
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
+                                      {payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}
+                                    </td>
+                                  </tr>
+                                )}
+
+                                {/* Final Amount */}
+                                <tr className="bg-gray-900 text-white">
+                                  <td className="px-3 py-3 text-right font-black uppercase border-r border-gray-700 text-[10px] tracking-tight">
+                                    {payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
+                                  </td>
+                                  <td className="px-3 py-3 text-right font-black text-[16px]">
+                                    ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
