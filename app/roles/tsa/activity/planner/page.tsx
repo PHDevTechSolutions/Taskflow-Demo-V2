@@ -1,13 +1,7 @@
 "use client";
 
-import React, {
-  useEffect,
-  useState,
-  useMemo,
-  Suspense,
-  useCallback,
-} from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useEffect, useState, Suspense, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
@@ -41,6 +35,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
@@ -64,7 +59,11 @@ import {
   Bell,
   CheckCircle2,
   XCircle,
+  Eye,
+  Download,
 } from "lucide-react";
+
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface Account {
   id: string;
@@ -111,6 +110,7 @@ interface UserDetails {
 
 interface QuotationNotification {
   id: number;
+  activity_reference_number: string;
   company_name: string;
   quotation_number?: string;
   quotation_amount?: number;
@@ -123,9 +123,20 @@ interface QuotationNotification {
   date_created: string;
 }
 
-// ─── Notification Dropdown Component ────────────────────────────────────────
+// ─── Route where RevisedQuotation lives ──────────────────────────────────────
+const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
 
-function NotificationDropdown({ referenceid }: { referenceid: string }) {
+// ─── Notification Dropdown ────────────────────────────────────────────────────
+
+function NotificationDropdown({
+  referenceid,
+  userId,
+}: {
+  referenceid: string;
+  userId: string;
+}) {
+  const router = useRouter();
+
   const [notifications, setNotifications] = useState<QuotationNotification[]>(
     [],
   );
@@ -135,7 +146,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
 
   const READ_KEY = `notif_read_${referenceid}`;
 
-  // Load read IDs from localStorage on mount
   useEffect(() => {
     if (!referenceid) return;
     try {
@@ -165,7 +175,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
           a.tsm_approved_status === "Decline",
       );
 
-      // Sort: most recently actioned first
       filtered.sort((a: QuotationNotification, b: QuotationNotification) => {
         const dateA = new Date(
           a.manager_approval_date ??
@@ -184,7 +193,7 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
 
       setNotifications(filtered);
     } catch {
-      // non-critical — fail silently
+      // non-critical
     } finally {
       setLoading(false);
     }
@@ -194,7 +203,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Mark all as read when dropdown opens
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && notifications.length > 0) {
@@ -228,6 +236,59 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
     })}`;
   };
 
+  /**
+   * Navigate to the RevisedQuotation page.
+   *
+   * URL params consumed by RevisedQuotation / TaskListEditDialog:
+   *   ?id=<userId>          — required by the page to load user details
+   *   ?highlight=<arn>      — scroll + pulse the matching row
+   *   ?openEdit=<arn>       — auto-open the edit dialog for this row
+   *   ?action=preview|download
+   *                         — once the edit dialog is mounted, auto-fire
+   *                           "Review Quotation" (preview) or DownloadPDF()
+   *                           exactly as if the user clicked those buttons
+   */
+  const buildUrl = (
+    notif: QuotationNotification,
+    action?: "preview" | "download",
+  ) => {
+    const params: Record<string, string> = {
+      id: userId,
+      highlight: notif.activity_reference_number,
+      openEdit: notif.activity_reference_number,
+    };
+    if (action) params.action = action;
+    return `${REVISED_QUOTATION_ROUTE}?${new URLSearchParams(params).toString()}`;
+  };
+
+  /** Plain row click — just navigate + highlight */
+  const handleNotifClick = (notif: QuotationNotification) => {
+    setOpen(false);
+    router.push(
+      `${REVISED_QUOTATION_ROUTE}?${new URLSearchParams({
+        id: userId,
+        highlight: notif.activity_reference_number,
+      }).toString()}`,
+    );
+  };
+
+  /** "View PDF" — open edit dialog then auto-open the Preview modal */
+  const handleViewPdf = (e: React.MouseEvent, notif: QuotationNotification) => {
+    e.stopPropagation();
+    setOpen(false);
+    router.push(buildUrl(notif, "preview"));
+  };
+
+  /** "Download PDF" — open edit dialog then auto-trigger jsPDF download */
+  const handleDownloadPdf = (
+    e: React.MouseEvent,
+    notif: QuotationNotification,
+  ) => {
+    e.stopPropagation();
+    setOpen(false);
+    router.push(buildUrl(notif, "download"));
+  };
+
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -243,9 +304,8 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
 
       <DropdownMenuContent
         align="end"
-        className="w-[360px] max-h-[480px] overflow-y-auto rounded-none p-0"
+        className="w-[380px] max-h-[520px] overflow-y-auto rounded-none p-0"
       >
-        {/* Header */}
         <div className="sticky top-0 bg-background z-10 px-4 py-3 border-b flex items-center justify-between">
           <DropdownMenuLabel className="p-0 text-sm font-semibold">
             Quotation Notifications
@@ -257,7 +317,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
           )}
         </div>
 
-        {/* Body */}
         {loading ? (
           <div className="flex items-center justify-center p-6 text-muted-foreground text-xs gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -278,20 +337,22 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
               return (
                 <div
                   key={notif.id}
-                  className={`px-4 py-3 text-xs flex flex-col gap-1.5 ${isUnread ? "bg-muted/40" : "bg-background"}`}
+                  className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors
+                    hover:bg-accent/60 active:bg-accent
+                    ${isUnread ? "bg-muted/40" : "bg-background"}`}
+                  onClick={() => handleNotifClick(notif)}
                 >
-                  {/* Company name + status badge */}
+                  {/* Company + status badge */}
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-sm leading-tight flex-1">
                       {notif.company_name}
                     </span>
                     <span
-                      className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold
-                                                ${
-                                                  isApproved
-                                                    ? "bg-green-100 text-green-700"
-                                                    : "bg-red-100 text-red-700"
-                                                }`}
+                      className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold ${
+                        isApproved
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
                     >
                       {isApproved ? (
                         <CheckCircle2 className="w-3 h-3" />
@@ -316,7 +377,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
                     )}
                   </div>
 
-                  {/* TSM approval date */}
                   {notif.tsm_approval_date && (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <CheckCircle className="w-3 h-3 shrink-0 text-green-600" />
@@ -329,7 +389,6 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
                     </div>
                   )}
 
-                  {/* Manager approval date — labeled clearly */}
                   {approvedByManager && (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
@@ -342,21 +401,41 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
                     </div>
                   )}
 
-                  {/* TSM remarks */}
                   {notif.tsm_remarks && (
                     <p className="text-muted-foreground italic">
                       TSM: &ldquo;{notif.tsm_remarks}&rdquo;
                     </p>
                   )}
-
-                  {/* Manager remarks */}
                   {notif.manager_remarks && (
                     <p className="text-muted-foreground italic">
                       Manager: &ldquo;{notif.manager_remarks}&rdquo;
                     </p>
                   )}
 
-                  {/* Unread indicator dot */}
+                  {/* PDF actions — Approved only */}
+                  {isApproved && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer"
+                        onClick={(e) => handleViewPdf(e, notif)}
+                      >
+                        <Eye className="w-3 h-3" />
+                        View PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer"
+                        onClick={(e) => handleDownloadPdf(e, notif)}
+                      >
+                        <Download className="w-3 h-3" />
+                        Download PDF
+                      </Button>
+                    </div>
+                  )}
+
                   {isUnread && (
                     <div className="flex justify-end mt-0.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -372,7 +451,7 @@ function NotificationDropdown({ referenceid }: { referenceid: string }) {
   );
 }
 
-// ─── Main Dashboard ──────────────────────────────────────────────────────────
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -396,7 +475,6 @@ function DashboardContent() {
 
   const [posts, setPosts] = useState<Account[]>([]);
   const [loadingUser, setLoadingUser] = useState(true);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
     React.useState<DateRange | undefined>(undefined);
@@ -418,12 +496,8 @@ function DashboardContent() {
   const queryUserId = searchParams?.get("id") ?? "";
 
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) {
-      setUserId(queryUserId);
-    }
+    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
-
-  const [hierarchy, setHierarchy] = useState({ manager: null, tsm: null });
 
   useEffect(() => {
     if (!userId) {
@@ -440,7 +514,6 @@ function DashboardContent() {
         );
         if (!response.ok) throw new Error("Failed to fetch user data");
         const data = await response.json();
-
         setUserDetails({
           referenceid: data.ReferenceID || "",
           tsm: data.TSM || "",
@@ -456,35 +529,21 @@ function DashboardContent() {
           managerDetails: data.managerDetails || null,
           tsmDetails: data.tsmDetails || null,
         });
-
-        setHierarchy({
-          manager: data.managerDetails,
-          tsm: data.tsmDetails,
-        });
-
         sileo.success({
           title: "Success",
           description: "User data loaded successfully!",
           duration: 4000,
-          position: "top-right",
+          position: "top-center",
           fill: "black",
           styles: { title: "text-white!", description: "text-white" },
         });
-      } catch (err) {
-        sileo.warning({
-          title: "Failed",
-          description: "Error fetching user data:",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
+      } catch {
         sileo.error({
           title: "Failed",
           description:
             "Failed to connect to server. Please try again later or refresh your network connection",
           duration: 4000,
-          position: "top-right",
+          position: "top-center",
           fill: "black",
           styles: { title: "text-white!", description: "text-white" },
         });
@@ -515,20 +574,17 @@ function DashboardContent() {
           ? data.email_address.split(",").map((v) => v.trim())
           : [],
     };
-
     try {
       const isEdit = Boolean(payload.id);
-      const url = isEdit ? "/api/com-edit-account" : "/api/com-save-account";
-      const method = isEdit ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
+      const response = await fetch(
+        isEdit ? "/api/com-edit-account" : "/api/com-save-account",
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       if (!response.ok) throw new Error("Failed to save account");
-
       sileo.success({
         title: "Success",
         description: `Account ${isEdit ? "updated" : "created"} successfully!`,
@@ -537,9 +593,8 @@ function DashboardContent() {
         fill: "black",
         styles: { title: "text-white!", description: "text-white" },
       });
-
       await refreshAccounts();
-    } catch (error) {
+    } catch {
       sileo.error({
         title: "Failed",
         description: "Failed to save account.",
@@ -559,15 +614,7 @@ function DashboardContent() {
       if (!response.ok) throw new Error("Failed to fetch accounts");
       const data = await response.json();
       setPosts(data.data || []);
-      sileo.success({
-        title: "Success",
-        description: "Accounts loaded successfully!",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch (error) {
+    } catch {
       sileo.error({
         title: "Failed",
         description:
@@ -581,7 +628,6 @@ function DashboardContent() {
   }
 
   const COLLAPSE_KEY = "activity_planner_collapsible_state";
-
   useEffect(() => {
     const saved = localStorage.getItem(COLLAPSE_KEY);
     if (saved) {
@@ -592,17 +638,11 @@ function DashboardContent() {
       }
     }
   }, []);
-
   useEffect(() => {
     localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState));
   }, [collapseState]);
-
-  const toggleCollapse = (key: keyof typeof collapseState) => {
-    setCollapseState((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
+  const toggleCollapse = (key: keyof typeof collapseState) =>
+    setCollapseState((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <>
@@ -626,17 +666,18 @@ function DashboardContent() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
-
-            {/* ─── Notification Bell ─── */}
             <div className="flex items-center gap-2 px-3">
               {userDetails.referenceid && (
-                <NotificationDropdown referenceid={userDetails.referenceid} />
+                <NotificationDropdown
+                  referenceid={userDetails.referenceid}
+                  userId={userId ?? ""}
+                />
               )}
             </div>
           </header>
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            <div className="w-full columns-1 sm:columns-2 lg:columns-2 gap-4 [&>*]:break-inside-avoid">
+            <div className="w-full columns-1 sm:columns-2 lg:columns-2 gap-4 *:break-inside-avoid">
               <Card className="rounded-none h-auto transition-all duration-300">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -649,7 +690,6 @@ function DashboardContent() {
                     your workflow.
                   </CardDescription>
                 </CardHeader>
-
                 <CardContent>
                   <NewTask
                     referenceid={userDetails.referenceid}
@@ -660,271 +700,174 @@ function DashboardContent() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-none h-auto transition-all duration-300">
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => toggleCollapse("inProgress")}
-                >
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
+              {(
+                [
+                  "inProgress",
+                  "scheduled",
+                  "completed",
+                  "done",
+                  "overdue",
+                ] as const
+              ).map((key) => {
+                const meta = {
+                  inProgress: {
+                    label: "In Progress",
+                    icon: (
                       <Loader2
                         className={`w-4 h-4 ${progressCount > 0 ? "animate-spin" : ""}`}
                       />
-                      <span>In Progress</span>
-                      <span className="text-xs text-red-600 font-bold">
-                        ({progressCount})
-                      </span>
-                    </div>
-                    <span className="text-xs rounded-sm border p-1">
-                      {collapseState.inProgress ? (
-                        <ChevronRight />
-                      ) : (
-                        <ChevronDown />
+                    ),
+                    count: progressCount,
+                  },
+                  scheduled: {
+                    label: "Scheduled",
+                    icon: <Calendar className="w-4 h-4" />,
+                    count: scheduledCount,
+                  },
+                  completed: {
+                    label: "Completed",
+                    icon: <CheckCircle className="w-4 h-4" />,
+                    count: completedCount,
+                  },
+                  done: {
+                    label: "Done",
+                    icon: <ClipboardCheck className="w-4 h-4" />,
+                    count: doneCount,
+                  },
+                  overdue: {
+                    label: "Overdue",
+                    icon: <AlertCircle className="w-4 h-4" />,
+                    count: overdueCount,
+                  },
+                }[key];
+
+                return (
+                  <Card
+                    key={key}
+                    className={`rounded-none h-auto transition-all duration-300 ${key === "overdue" ? "border-3 border-red-400 shadow-lg" : ""}`}
+                  >
+                    <CardHeader
+                      className="cursor-pointer"
+                      onClick={() => toggleCollapse(key)}
+                    >
+                      <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          {meta.icon}
+                          <span>{meta.label}</span>
+                          <span className="text-xs text-red-600 font-bold">
+                            ({meta.count})
+                          </span>
+                        </div>
+                        <span className="text-xs rounded-sm border p-1">
+                          {collapseState[key] ? (
+                            <ChevronRight />
+                          ) : (
+                            <ChevronDown />
+                          )}
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent
+                      className={`transition-all duration-300 overflow-hidden ${collapseState[key] ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}
+                    >
+                      {key === "inProgress" && (
+                        <Progress
+                          referenceid={userDetails.referenceid}
+                          firstname={userDetails.firstname}
+                          lastname={userDetails.lastname}
+                          email={userDetails.email}
+                          contact={userDetails.contact}
+                          tsmname={userDetails.tsmname}
+                          managername={userDetails.managername}
+                          target_quota={userDetails.target_quota}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          onCountChange={setProgressCount}
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                        />
                       )}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    View and track all ongoing tasks to ensure timely completion
-                    and effective follow-up.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent
-                  className={`transition-all duration-300 overflow-hidden ${
-                    collapseState.inProgress
-                      ? "max-h-[2000px] opacity-100"
-                      : "max-h-0 opacity-0 p-0"
-                  }`}
-                >
-                  <Progress
-                    referenceid={userDetails.referenceid}
-                    firstname={userDetails.firstname}
-                    lastname={userDetails.lastname}
-                    email={userDetails.email}
-                    contact={userDetails.contact}
-                    tsmname={userDetails.tsmname}
-                    managername={userDetails.managername}
-                    target_quota={userDetails.target_quota}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={
-                      setDateCreatedFilterRangeAction
-                    }
-                    onCountChange={setProgressCount}
-                    managerDetails={userDetails.managerDetails ?? null}
-                    tsmDetails={userDetails.tsmDetails ?? null}
-                    signature={userDetails.signature}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-none h-auto transition-all duration-300">
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => toggleCollapse("scheduled")}
-                >
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>Scheduled</span>
-                      <span className="text-xs text-red-600 font-bold">
-                        ({scheduledCount})
-                      </span>
-                    </div>
-                    <span className="text-xs rounded-sm border p-1">
-                      {collapseState.scheduled ? (
-                        <ChevronRight />
-                      ) : (
-                        <ChevronDown />
+                      {key === "scheduled" && (
+                        <Scheduled
+                          referenceid={userDetails.referenceid}
+                          firstname={userDetails.firstname}
+                          lastname={userDetails.lastname}
+                          email={userDetails.email}
+                          contact={userDetails.contact}
+                          tsmname={userDetails.tsmname}
+                          tsm={userDetails.tsm}
+                          managername={userDetails.managername}
+                          target_quota={userDetails.target_quota}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          onCountChange={setScheduledCount}
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                        />
                       )}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    View all upcoming scheduled tasks and track their progress
-                    for timely completion.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent
-                  className={`transition-all duration-300 overflow-hidden ${
-                    collapseState.scheduled
-                      ? "max-h-[2000px] opacity-100"
-                      : "max-h-0 opacity-0 p-0"
-                  }`}
-                >
-                  <Scheduled
-                    referenceid={userDetails.referenceid}
-                    firstname={userDetails.firstname}
-                    lastname={userDetails.lastname}
-                    email={userDetails.email}
-                    contact={userDetails.contact}
-                    tsmname={userDetails.tsmname}
-                    tsm={userDetails.tsm}
-                    managername={userDetails.managername}
-                    target_quota={userDetails.target_quota}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={
-                      setDateCreatedFilterRangeAction
-                    }
-                    onCountChange={setScheduledCount}
-                    managerDetails={userDetails.managerDetails ?? null}
-                    tsmDetails={userDetails.tsmDetails ?? null}
-                    signature={userDetails.signature}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-none h-auto transition-all duration-300">
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => toggleCollapse("completed")}
-                >
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Completed</span>
-                      <span className="text-xs text-red-600 font-bold">
-                        ({completedCount})
-                      </span>
-                    </div>
-                    <span className="text-xs rounded-sm border p-1">
-                      {collapseState.completed ? (
-                        <ChevronRight />
-                      ) : (
-                        <ChevronDown />
+                      {key === "completed" && (
+                        <Completed
+                          referenceid={userDetails.referenceid}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          onCountChange={setCompletedCount}
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                        />
                       )}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    Review all delivered transactions and successfully completed
-                    tasks for your records.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent
-                  className={`transition-all duration-300 overflow-hidden ${
-                    collapseState.completed
-                      ? "max-h-[2000px] opacity-100"
-                      : "max-h-0 opacity-0 p-0"
-                  }`}
-                >
-                  <Completed
-                    referenceid={userDetails.referenceid}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={
-                      setDateCreatedFilterRangeAction
-                    }
-                    onCountChange={setCompletedCount}
-                    managerDetails={userDetails.managerDetails ?? null}
-                    tsmDetails={userDetails.tsmDetails ?? null}
-                    signature={userDetails.signature}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-none h-auto transition-all duration-300">
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => toggleCollapse("done")}
-                >
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <ClipboardCheck className="w-4 h-4" />
-                      <span>Done</span>
-                      <span className="text-xs text-red-600 font-bold">
-                        ({doneCount})
-                      </span>
-                    </div>
-                    <span className="text-xs rounded-sm border p-1">
-                      {collapseState.done ? <ChevronRight /> : <ChevronDown />}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    This task has been completed.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent
-                  className={`transition-all duration-300 overflow-hidden ${
-                    collapseState.done
-                      ? "max-h-[2000px] opacity-100"
-                      : "max-h-0 opacity-0 p-0"
-                  }`}
-                >
-                  <Done
-                    referenceid={userDetails.referenceid}
-                    firstname={userDetails.firstname}
-                    lastname={userDetails.lastname}
-                    email={userDetails.email}
-                    contact={userDetails.contact}
-                    tsmname={userDetails.tsmname}
-                    managername={userDetails.managername}
-                    target_quota={userDetails.target_quota}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={
-                      setDateCreatedFilterRangeAction
-                    }
-                    onCountChange={setDoneCount}
-                    managerDetails={userDetails.managerDetails ?? null}
-                    tsmDetails={userDetails.tsmDetails ?? null}
-                    signature={userDetails.signature}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="border-3 border-red-400 rounded-none shadow-lg h-auto transition-all duration-300">
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => toggleCollapse("overdue")}
-                >
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Overdue</span>
-                      <span className="text-xs text-red-600 font-bold">
-                        ({overdueCount})
-                      </span>
-                    </div>
-                    <span className="text-xs rounded-sm border p-1">
-                      {collapseState.overdue ? (
-                        <ChevronRight />
-                      ) : (
-                        <ChevronDown />
+                      {key === "done" && (
+                        <Done
+                          referenceid={userDetails.referenceid}
+                          firstname={userDetails.firstname}
+                          lastname={userDetails.lastname}
+                          email={userDetails.email}
+                          contact={userDetails.contact}
+                          tsmname={userDetails.tsmname}
+                          managername={userDetails.managername}
+                          target_quota={userDetails.target_quota}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          onCountChange={setDoneCount}
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                        />
                       )}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    This activity has passed its scheduled date and requires
-                    attention.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent
-                  className={`transition-all duration-300 overflow-hidden ${
-                    collapseState.overdue
-                      ? "max-h-[2000px] opacity-100"
-                      : "max-h-0 opacity-0 p-0"
-                  }`}
-                >
-                  <Overdue
-                    referenceid={userDetails.referenceid}
-                    firstname={userDetails.firstname}
-                    lastname={userDetails.lastname}
-                    email={userDetails.email}
-                    contact={userDetails.contact}
-                    tsmname={userDetails.tsmname}
-                    managername={userDetails.managername}
-                    target_quota={userDetails.target_quota}
-                    dateCreatedFilterRange={dateCreatedFilterRange}
-                    setDateCreatedFilterRangeAction={
-                      setDateCreatedFilterRangeAction
-                    }
-                    managerDetails={userDetails.managerDetails ?? null}
-                    tsmDetails={userDetails.tsmDetails ?? null}
-                    signature={userDetails.signature}
-                    onCountChange={setOverdueCount}
-                  />
-                </CardContent>
-              </Card>
+                      {key === "overdue" && (
+                        <Overdue
+                          referenceid={userDetails.referenceid}
+                          firstname={userDetails.firstname}
+                          lastname={userDetails.lastname}
+                          email={userDetails.email}
+                          contact={userDetails.contact}
+                          tsmname={userDetails.tsmname}
+                          managername={userDetails.managername}
+                          target_quota={userDetails.target_quota}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                          onCountChange={setOverdueCount}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </main>
         </SidebarInset>
