@@ -81,8 +81,6 @@ const data = {
 
         // TSM
         { name: "All", url: "/roles/tsm/companies/all", icon: BookOpen },
-        //{ name: "Pending Transferred", url: "/roles/tsm/companies/transfer", icon: BookOpen },
-        //{ name: "Account Deletion", url: "/roles/tsm/companies/approval", icon: Trash2 },
 
         // Manager
         { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
@@ -109,7 +107,6 @@ const data = {
 
         // TSM
         { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
-        //{ name: "Pending Approval", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
 
@@ -169,18 +166,12 @@ const data = {
     {
       name: "Conversion Rates",
       icon: TrendingUp,
+      // TSM is intentionally excluded from this workspace
       pages: [
         { name: "Calls to Quote", url: "/roles/tsa/conversion/calls-to-quote", icon: PhoneCall },
         { name: "Quote To SO", url: "/roles/tsa/conversion/quote-to-so", icon: FileText },
         { name: "SO To SI", url: "/roles/tsa/conversion/so-to-si", icon: CreditCard },
         { name: "Calls to SI", url: "/roles/tsa/conversion/calls-to-si", icon: Rocket },
-
-        // TSM
-        //{ name: "Summary", url: "/roles/tsm/conversion/summary", icon: GitGraph },
-        //{ name: "Call to Quotes", url: "/roles/tsm/conversion/calls-to-quote", icon: PhoneCall },
-        //{ name: "Quotes To SO", url: "/roles/tsm/conversion/quote-to-so", icon: FileText },
-        //{ name: "SO's To SI", url: "/roles/tsm/conversion/so-to-si", icon: CreditCard },
-        //{ name: "Call to SI", url: "/roles/tsm/conversion/calls-to-si", icon: Rocket },
 
         // Manager
         { name: "Calls to Quote", url: "/roles/manager/conversion/calls-to-quote", icon: PhoneCall },
@@ -216,31 +207,23 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
   const [isLoadingUser, setIsLoadingUser] = React.useState(true);
 
-  // Load openSections from localStorage on mount
   React.useEffect(() => {
     const saved = localStorage.getItem("sidebarOpenSections");
-    if (saved) {
-      setOpenSections(JSON.parse(saved));
-    }
+    if (saved) setOpenSections(JSON.parse(saved));
   }, []);
 
-  // Save openSections to localStorage on change
   React.useEffect(() => {
     localStorage.setItem("sidebarOpenSections", JSON.stringify(openSections));
   }, [openSections]);
 
-  // Get userId from URL query param on mount
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setUserId(params.get("id"));
   }, []);
 
-  // Fetch user details when userId changes
   React.useEffect(() => {
     if (!userId) return;
-
     setIsLoadingUser(true);
-
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
       .then((res) => res.json())
       .then((data) => {
@@ -259,20 +242,14 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
           profilePicture: data.profilePicture || prev.profilePicture,
         }));
       })
-      .catch((err) => {
-        console.error("Failed to fetch user details:", err);
-      })
-      .finally(() => {
-        setIsLoadingUser(false);
-      });
+      .catch((err) => console.error("Failed to fetch user details:", err))
+      .finally(() => setIsLoadingUser(false));
   }, [userId]);
 
-  // Toggle section open/close state
   const handleToggle = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // Append userId query param to URLs
   const withUserId = React.useCallback(
     (url: string) => {
       if (!userId) return url;
@@ -284,43 +261,52 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     [userId]
   );
 
-  // Filter workspaces based on role
   const filteredWorkspaces = React.useMemo(() => {
     const role = userDetails.Role;
     if (!role) return [];
 
-    // Manager sees all workspaces, TSA/TSM/Admin filtered accordingly
-    return data.workspaces.map((workspace) => {
-      switch (role) {
-        case "Territory Sales Associate":
-          return {
-            ...workspace,
-            pages: workspace.pages.filter(
-              (p) =>
-                p.url?.includes("/tsa") && !p.url?.includes("/tsm") && !p.url?.includes("/manager") && !p.url?.includes("/admin")
-            ),
-          };
-        case "Territory Sales Manager":
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
-          };
-        case "Manager":
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
-          };
-        case "Super Admin":
-          return {
-            ...workspace,
-            pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
-          };
-        default:
-          return { ...workspace, pages: [] };
-      }
-    });
+    return data.workspaces
+      // TSM cannot see Conversion Rates at all
+      .filter((workspace) => {
+        if (role === "Territory Sales Manager" && workspace.name === "Conversion Rates") {
+          return false;
+        }
+        return true;
+      })
+      .map((workspace) => {
+        switch (role) {
+          case "Territory Sales Associate":
+            return {
+              ...workspace,
+              pages: workspace.pages.filter(
+                (p) =>
+                  p.url?.includes("/tsa") &&
+                  !p.url?.includes("/tsm") &&
+                  !p.url?.includes("/manager") &&
+                  !p.url?.includes("/admin")
+              ),
+            };
+          case "Territory Sales Manager":
+            return {
+              ...workspace,
+              pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
+            };
+          case "Manager":
+            return {
+              ...workspace,
+              pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
+            };
+          case "Super Admin":
+            return {
+              ...workspace,
+              pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
+            };
+          default:
+            return { ...workspace, pages: [] };
+        }
+      });
   }, [userDetails.Role]);
-  // Filter favorites based on role
+
   const filteredFavorites = React.useMemo(() => {
     const role = userDetails.Role;
 
@@ -369,30 +355,21 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     return data.favorites;
   }, [userDetails.Role]);
 
-  // Add userId query param to favorites URLs
-  const favoritesWithId = React.useMemo(() => {
-    return filteredFavorites.map((favorite) => ({
-      ...favorite,
-      url: withUserId(favorite.url),
-    }));
-  }, [filteredFavorites, withUserId]);
+  const favoritesWithId = React.useMemo(() =>
+    filteredFavorites.map((fav) => ({ ...fav, url: withUserId(fav.url) })),
+    [filteredFavorites, withUserId]
+  );
 
-  // Add userId query param to workspaces URLs
-  const workspacesWithId = React.useMemo(
-    () =>
-      filteredWorkspaces.map((workspace) => ({
-        ...workspace,
-        pages: workspace.pages.map((page) => ({
-          ...page,
-          url: withUserId(page.url),
-        })),
-      })),
+  const workspacesWithId = React.useMemo(() =>
+    filteredWorkspaces.map((workspace) => ({
+      ...workspace,
+      pages: workspace.pages.map((page) => ({ ...page, url: withUserId(page.url) })),
+    })),
     [filteredWorkspaces, withUserId]
   );
 
-  // Add userId query param to secondary nav URLs
-  const navSecondaryWithId = React.useMemo(
-    () => data.navSecondary.map((item) => ({ ...item, url: withUserId(item.url) })),
+  const navSecondaryWithId = React.useMemo(() =>
+    data.navSecondary.map((item) => ({ ...item, url: withUserId(item.url) })),
     [withUserId]
   );
 
