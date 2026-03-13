@@ -105,6 +105,7 @@ const data = {
         { name: "SPF Request", url: "/roles/tsa/activity/spf", icon: Mail },
         { name: "Daily Admin Task", url: "/roles/tsa/activity/notes", icon: FileText },
         { name: "Client Coverage Guide", url: "/roles/tsa/activity/ccg", icon: Compass },
+        { name: "Engr. Services", url: "/roles/tsa/activity/engineering", icon: Briefcase },
 
         // TSM
         { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },

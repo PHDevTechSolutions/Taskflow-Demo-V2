@@ -40,9 +40,9 @@ interface Props {
   setProductDescription: (v: string) => void;
   productPhoto: string;
   setProductPhoto: (v: string) => void;
-  productSku: string;           // comma separated SKUs (first SKU if multiple)
+  productSku: string; // comma separated SKUs
   setProductSku: (v: string) => void;
-  productTitle: string;         // comma separated titles
+  productTitle: string; // comma separated titles
   setProductTitle: (v: string) => void;
   projectType: string;
   setProjectType: (v: string) => void;
@@ -68,15 +68,25 @@ interface Props {
   setTSM: (v: string) => void;
   typeClient: string;
   setTypeClient: (value: string) => void;
-  vatType: string;
-  setDeliveryFee: (value: string) => void;
-  deliveryFee: string;
-  setItemRemarks: (value: string) => void;
-  itemRemarks: string;
+
+  // --- TAX & LOGISTICS UPDATED ---
+  vatType: string;         // e.g., "vat_inc", "vat_exe", "zero_rated"
   setVatType: (value: string) => void;
+  whtType: string;         // e.g., "none", "wht_1", "wht_2"
+  setWhtType: (value: string) => void;
+  deliveryFee: string;
+  setDeliveryFee: (value: string) => void;
+  restockingFee: string;
+  setRestockingFee: (value: string) => void;
+  itemRemarks: string;
+  setItemRemarks: (value: string) => void;
+
+  // --- ACTIONS ---
   handleBack: () => void;
   handleNext: () => void;
   handleSave: () => void;
+
+  // --- USER & CLIENT DATA ---
   firstname: string;
   lastname: string;
   email: string;
@@ -88,6 +98,8 @@ interface Props {
   contact_number: string;
   email_address: string;
   contact_person: string;
+
+  // --- SUPERVISOR & TRACEABILITY ---
   salesManagerContact?: string;
   salesManagerEmail?: string;
   managerDetails: SupervisorDetails | null;
@@ -160,29 +172,43 @@ export function QuotationSheet(props: Props) {
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
     quotationStatus, setQuotationStatus,
+
+    // --- TAX & FINANCIALS ---
     vatType, setVatType,
+    whtType, setWhtType,       // Added Withholding Tax State
+    deliveryFee, setDeliveryFee,
+    restockingFee, setRestockingFee,
+    itemRemarks, setItemRemarks,
+
+    // --- CRM & STATUS ---
     callType, setCallType,
     followUpDate, setFollowUpDate,
     remarks, setRemarks,
     status, setStatus,
     tsm, setTSM,
     typeClient, setTypeClient,
-    deliveryFee, setDeliveryFee,
-    itemRemarks, setItemRemarks,
+
+    // --- ACTIONS ---
     handleBack,
     handleNext,
     handleSave,
+
+    // --- USER / REP DETAILS ---
     firstname,
     lastname,
     email,
     contact,
     tsmname,
     managername,
+
+    // --- CLIENT DETAILS ---
     company_name,
     address,
     contact_number,
     email_address,
     contact_person,
+
+    // --- SUPERVISOR & TRACEABILITY ---
     salesManagerContact,
     salesManagerEmail,
     managerDetails,
@@ -507,13 +533,36 @@ export function QuotationSheet(props: Props) {
         attention: safeContactPerson ? safeContactPerson : "",
         subject: "For Quotation",
         items,
-        vatType:
-          vatType === "vat_exe"
-            ? "VAT Exe"
-            : vatType === "vat_inc"
-              ? "VAT Inc"
-              : "Zero-Rated",
+
+        // --- TAX & WITHHOLDING LOGIC ---
+        // VAT Type (Tax property of the Sale)
+        vatType: vatType,
+        vatTypeLabel:
+          vatType === "vat_inc" ? "VAT Inc" :
+            vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+
+        // Withholding Tax (Tax property of the Buyer/Relationship)
+        whtType: whtType, // value like "wht_1", "wht_2", or "none"
+        whtLabel:
+          whtType === "wht_1" ? "EWT 1% (Goods)" :
+            whtType === "wht_2" ? "EWT 2% (Services)" : "None",
+
+        // --- CALCULATION LOGIC ---
         totalPrice: Number(quotationAmount ?? 0),
+        deliveryFee: Number(deliveryFee ?? 0),
+        restockingFee: Number(restockingFee ?? 0),
+
+        // EWT is calculated on Net of VAT (Total / 1.12)
+        whtAmount: whtType !== "none"
+          ? (Number(quotationAmount ?? 0) / 1.12) * (whtType === "wht_1" ? 0.01 : 0.02)
+          : 0,
+
+        // This is the actual cash expected to be received
+        netAmountToCollect: Number(quotationAmount ?? 0) - (
+          whtType !== "none" ? (Number(quotationAmount ?? 0) / 1.12) * (whtType === "wht_1" ? 0.01 : 0.02) : 0
+        ),
+
+        // --- REPRESENTATIVE DETAILS ---
         salesRepresentative: salesRepresentativeName,
         salesemail,
         salescontact,
@@ -594,7 +643,6 @@ export function QuotationSheet(props: Props) {
       const isDiscounted = p.isDiscounted ?? false;
       const discount = isDiscounted ? (p.discount ?? 0) : 0;
 
-      // Logic mirrored from handleDownloadQuotation
       const baseAmount = qty * unitPrice;
       const discountedAmount = isDiscounted && discount > 0 ? (baseAmount * discount) / 100 : 0;
       const totalAmount = baseAmount - discountedAmount;
@@ -613,6 +661,24 @@ export function QuotationSheet(props: Props) {
       };
     });
 
+    // --- CALCULATION LOGIC ---
+    const totalInvoiceAmount = Number(quotationAmount ?? 0);
+
+    // Define the Taxable Base for Withholding
+    // If VAT Inc, base = Total / 1.12. Otherwise, base = Total.
+    const whtBase = vatType === "vat_inc"
+      ? totalInvoiceAmount / 1.12
+      : totalInvoiceAmount;
+
+    // Define the Withholding Rate
+    const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
+
+    // Calculate final EWT Amount
+    const whtAmount = whtBase * whtRate;
+
+    // Actual cash to be collected from the client
+    const netAmountToCollect = totalInvoiceAmount - whtAmount;
+
     return {
       referenceNo: quotationNumber ?? "DRAFT-XXXX",
       date: new Date().toLocaleDateString(),
@@ -623,9 +689,23 @@ export function QuotationSheet(props: Props) {
       attention: contact_person ? contact_person : "",
       subject: "For Quotation",
       items,
+
+      // --- TAX LOGIC ---
+      vatType,
       vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-      totalPrice: Number(quotationAmount ?? 0),
-      deliveryFee: deliveryFee,
+
+      // --- WITHHOLDING TAX LOGIC ---
+      whtType,
+      whtLabel: whtType === "wht_1" ? "EWT 1% (Goods)" : whtType === "wht_2" ? "EWT 2% (Services)" : "No Withholding",
+      whtAmount,
+      whtBase, // Useful for the preview table to show the calculation source
+
+      // --- TOTALS ---
+      totalPrice: totalInvoiceAmount,
+      deliveryFee: Number(deliveryFee ?? 0),
+      netAmountToCollect,
+
+      // --- STAFF DETAILS ---
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
@@ -1911,34 +1991,51 @@ ${spec.value}
             <div className="overflow-y-auto max-h-[75vh]">
               {selectedProducts.length > 0 && (
                 <>
-                  <div className="flex items-center justify-between mb-3">
-                    {/* LEFT */}
-                    <h4 className="font-bold text-xs">
-                      Selected Products: ({selectedProducts.length})
-                    </h4>
+                  <div className="flex flex-col gap-4 mb-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-xs">Selected Products: ({selectedProducts.length})</h4>
 
-                    {/* RIGHT */}
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs font-bold">VAT Type:</span>
+                      <div className="flex items-center gap-6">
+                        {/* 1. VAT SELECTION (REQUIRED) */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold uppercase text-gray-500">VAT Type:</span>
+                          <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-3">
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="vat_inc" id="v1" />
+                              <label htmlFor="v1" className="text-[10px] font-black uppercase cursor-pointer">VAT Inc</label>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="vat_exe" id="v2" />
+                              <label htmlFor="v2" className="text-[10px] font-black uppercase cursor-pointer">VAT Exe</label>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="zero_rated" id="v3" />
+                              <label htmlFor="v3" className="text-[10px] font-black uppercase cursor-pointer">Zero Rated</label>
+                            </div>
+                          </RadioGroup>
+                        </div>
 
-                      <RadioGroup
-                        value={vatType}       // direktang galing sa parent props
-                        onValueChange={setVatType} // direktang setter mula sa parent
-                        className="flex items-center gap-3"
-                      >
-                        {[
-                          { label: "VAT Inc", value: "vat_inc" },
-                          { label: "VAT Exe", value: "vat_exe", description: "(12%)" },
-                          { label: "Zero Rated", value: "zero_rated" },
-                        ].map(({ label, value, description }) => (
-                          <div key={value} className="flex items-center gap-1">
-                            <RadioGroupItem value={value} id={value} />
-                            <label htmlFor={value} className="text-xs cursor-pointer">
-                              {label} {description && <span className="text-[10px] text-red-600">{description}</span>}
-                            </label>
-                          </div>
-                        ))}
-                      </RadioGroup>
+                        <Separator orientation="vertical" className="h-4" />
+
+                        {/* 2. WITHHOLDING TAX (OPTIONAL / INDEPENDENT) */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold uppercase text-gray-500">Withholding Tax (EWT):</span>
+                          <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-3">
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="none" id="w0" />
+                              <label htmlFor="w0" className="text-[10px] font-black uppercase cursor-pointer">None</label>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="wht_1" id="w1" />
+                              <label htmlFor="w1" className="text-[10px] font-black uppercase cursor-pointer">1% (Goods)</label>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <RadioGroupItem value="wht_2" id="w2" />
+                              <label htmlFor="w2" className="text-[10px] font-black uppercase cursor-pointer">2% (Services)</label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2446,7 +2543,7 @@ ${spec.value}
                         ))}
 
                         {/* SUMMARY BAR */}
-                        <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                        {/* <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
                           <td colSpan={2} className="border-r border-gray-400"></td>
 
                           <td className="px-4 border-r border-gray-400 font-bold text-red-600 italic text-[14px] uppercase">
@@ -2476,9 +2573,9 @@ ${spec.value}
                           <td className="px-4 text-right font-black text-lg text-gray-900">
                             ₱{payload.deliveryFee}
                           </td>
-                        </tr>
+                        </tr> */}
 
-                        <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                        {/* <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
                           <td colSpan={4} className="border-r border-gray-400"></td>
 
                           <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
@@ -2488,7 +2585,163 @@ ${spec.value}
                           <td className="px-4 text-right font-black text-lg text-green-700">
                             ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                        </tr>
+                        </tr> */}
+
+                        {/* <tr className="border-t-2 border-black bg-gray-200 text-gray-900 h-[45px]">
+                          <td colSpan={4} className="border-r border-gray-400"></td>
+                          <td colSpan={2}>
+                            <tr>
+                              <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                                Grand Total:
+                              </td>
+                              <td className="px-4 text-right font-black text-lg text-green-700">
+                                ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="px-4 text-right border-r border-gray-400 font-bold text-[10px] uppercase text-gray-700">
+                                Grand Total:
+                              </td>
+                              <td className="px-4 text-right font-black text-lg text-green-700">
+                                ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          </td>
+                       
+
+                        </tr> */}
+
+                        {/* --- DETAILED SUMMARY BREAKDOWN --- */}
+<tr className="border-t-2 border-black bg-white text-gray-900">
+  <td colSpan={4} className="border-r-2 border-black p-4 align-top">
+    <div className="flex flex-col gap-4 h-full pt-2">
+      <div className="flex items-center gap-6">
+        <span className="font-bold text-red-600 italic text-[14px] uppercase whitespace-nowrap tracking-tighter">
+          Tax Type:
+        </span>
+        <div className="flex gap-4 text-[11px] font-black uppercase tracking-tight">
+          <span className={payload.vatTypeLabel === "VAT Inc" ? "text-gray-900" : "text-gray-400"}>
+            {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+          </span>
+          <span className={payload.vatTypeLabel === "VAT Exe" ? "text-gray-900" : "text-gray-400"}>
+            {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+          </span>
+          <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-gray-900" : "text-gray-400"}>
+            {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+          </span>
+        </div>
+      </div>
+
+      {payload.whtType !== "none" && (
+        <div className="flex items-center gap-6 border-t border-gray-100 pt-2">
+          <span className="font-bold text-blue-600 italic text-[12px] uppercase whitespace-nowrap tracking-tighter">
+            Withholding:
+          </span>
+          <span className="text-[10px] font-black uppercase text-blue-800">
+            ● {payload.whtLabel} (Applied to Net of VAT)
+          </span>
+        </div>
+      )}
+    </div>
+  </td>
+
+  <td colSpan={2} className="p-0">
+    <table className="w-full border-collapse">
+      <tbody className="text-[10px]">
+        {/* Row 1: Net Sales */}
+        <tr className="border-b border-gray-100">
+          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
+            Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
+          </td>
+          <td className="px-3 py-1.5 text-right font-black text-gray-900">
+            ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+        </tr>
+
+        {/* Row 2: Delivery */}
+        <tr className="border-b border-gray-100">
+          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
+            Delivery Charge
+          </td>
+          <td className="px-3 py-1.5 text-right font-black text-gray-900">
+            ₱{Number(payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+        </tr>
+
+        {/* Row 3: Restocking Fee (RESTORED) */}
+        <tr className="border-b-2 border-black">
+          <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
+            Restocking Fee
+          </td>
+          <td className="px-3 py-1.5 text-right font-black text-gray-900">
+            ₱{(restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+        </tr>
+
+        {/* Row 4: Total Invoice Amount */}
+        <tr className="bg-gray-50 border-b border-black">
+          <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
+            Total Invoice Amount
+          </td>
+          <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900">
+            ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+        </tr>
+
+        {/* VAT & WHT Logic */}
+        {payload.vatTypeLabel === "VAT Inc" ? (
+          <>
+            <tr className="border-b border-gray-100">
+              <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                Less: VAT (12%)
+              </td>
+              <td className="px-3 py-1.5 text-right font-bold text-gray-400">
+                ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+            <tr className={payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
+              <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                Net of VAT (Tax Base)
+              </td>
+              <td className="px-3 py-1.5 text-right font-bold text-gray-400">
+                ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+            {payload.whtType !== "none" && (
+              <tr className="border-b-2 border-black bg-blue-50/50">
+                <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
+                  LESS: {payload.whtLabel}
+                </td>
+                <td className="px-3 py-2 text-right font-black text-blue-700">
+                  - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            )}
+          </>
+        ) : (
+          <tr className="border-b-2 border-black">
+            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+              Tax Status
+            </td>
+            <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
+              {payload.vatTypeLabel === "VAT Exe" ? "Exempted" : "Zero-Rated"}
+            </td>
+          </tr>
+        )}
+
+        {/* Final Total */}
+        <tr className="bg-black text-white">
+          <td className="px-3 py-3 text-right font-black uppercase border-r border-white/20 text-[10px] tracking-tight">
+            {payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
+          </td>
+          <td className="px-3 py-3 text-right font-black text-[16px]">
+            ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </td>
+</tr>
                       </tbody>
                     </table>
                   </div>
