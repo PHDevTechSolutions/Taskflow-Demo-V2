@@ -80,7 +80,7 @@ interface Props {
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
   setItemRemarks: (value: string) => void;
-  quotationSubject: string;
+  quotationSubject: string;     
   setQuotationSubject: (v: string) => void;
 
   // --- ACTIONS ---
@@ -242,9 +242,15 @@ export function QuotationSheet(props: Props) {
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
-
-  const [quotationSubject, setQuotationSubject] = useState("For Quotation");
-
+  const [isSpfMode, setIsSpfMode] = useState(false);
+  const [spfManualProduct, setSpfManualProduct] = useState({
+    title: "",
+    sku: "",
+    price: 0,
+    quantity: 1,
+    description: "",
+    imageUrl: "",
+  });
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -358,7 +364,7 @@ export function QuotationSheet(props: Props) {
     const totalWithDelivery = productTotal + deliveryFeeNumber + restockingFeeNumber;
 
     setQuotationAmount(totalWithDelivery.toFixed(2));
-  }, [selectedProducts, deliveryFee, restockingFee, discount]);
+    }, [selectedProducts, deliveryFee, restockingFee, discount]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -536,7 +542,7 @@ export function QuotationSheet(props: Props) {
         telNo: safeContactNumber,
         email: safeEmailAddress,
         attention: safeContactPerson ? safeContactPerson : "",
-        subject: quotationSubject || "For Quotation",
+        subject: "For Quotation",
         items,
 
         // --- TAX & WITHHOLDING LOGIC ---
@@ -692,7 +698,7 @@ export function QuotationSheet(props: Props) {
       telNo: contact_number ?? "",
       email: email_address ?? "",
       attention: contact_person ? contact_person : "",
-      subject: quotationSubject || "For Quotation",
+      subject: "For Quotation",
       items,
 
       // --- TAX LOGIC ---
@@ -708,7 +714,6 @@ export function QuotationSheet(props: Props) {
       // --- TOTALS ---
       totalPrice: totalInvoiceAmount,
       deliveryFee: Number(deliveryFee ?? 0),
-      restockingFee: Number(restockingFee ?? 0),
       netAmountToCollect,
 
       // --- STAFF DETAILS ---
@@ -1738,114 +1743,223 @@ export function QuotationSheet(props: Props) {
             {/* Left side: Search + checkbox selected */}
             <div className="flex flex-col gap-4 overflow-y-auto pr-2">
               <div className="flex flex-col gap-4 sticky top-0 bg-white z-10 pb-2">
+
+                {/* Source Switcher: SHOPIFY / CMS / PRODUCT DATABASE / SPF */}
                 <div className="flex border rounded-md overflow-hidden border-gray-300">
                   <button
                     type="button"
-                    onClick={() => {
-                      setProductSource("shopify");
-                      setSearchTerm("");
-                      setSearchResults([]);
-                    }}
-                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "shopify"
-                      ? "bg-[#121212] text-white"
-                      : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                    onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
+                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "shopify" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
                   >
                     SHOPIFY
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setProductSource("firebase_shopify");
-                      setSearchTerm("");
-                      setSearchResults([]);
-                    }}
-                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "firebase_shopify"
-                      ? "bg-[#121212] text-white"
-                      : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                    onClick={() => { setProductSource("firebase_shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
+                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "firebase_shopify" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
                   >
                     CMS
                   </button>
                   <button
-                    onClick={() => {
-                      setProductSource("firebase_taskflow");
-                      setSearchTerm("");
-                      setSearchResults([]);
-                    }}
-                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === "firebase_taskflow"
-                      ? "bg-[#121212] text-white"
-                      : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                    type="button"
+                    onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
+                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === "firebase_taskflow" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
                   >
                     PRODUCT DATABASE
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                    className={`flex-1 py-2 text-[10px] font-bold transition-colors border-l border-gray-300 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-600 hover:bg-red-50"}`}
+                  >
+                    SPF
+                  </button>
                 </div>
 
-                {!isManualEntry && (
-                  <>
-                    <FieldLabel>Products:</FieldLabel>
-                    <Input
-                      type="text"
-                      className="uppercase rounded-none"
-                      placeholder="Search Product Name or Item Code.."
-                      value={searchTerm}
-                      onChange={async (e) => {
-                        if (isManualEntry) return;
-                        const rawValue = e.target.value;
-                        setSearchTerm(rawValue);
+                {/* SPF Manual Entry Form OR Normal Search Input — never both */}
+                {isSpfMode ? (
+                  <div className="flex flex-col gap-3 border border-red-200 bg-red-50 p-3 rounded-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF — Manual Product Entry</span>
+                      <span className="text-[9px] text-red-400 italic">(Special Price Form)</span>
+                    </div>
 
-                        if (rawValue.length < 2) {
-                          setSearchResults([]);
-                          return;
-                        }
+                    {/* Image URL */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-gray-500">Image URL (optional)</label>
+                      <Input
+                        type="text"
+                        placeholder="https://..."
+                        value={spfManualProduct.imageUrl}
+                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, imageUrl: e.target.value }))}
+                        className="rounded-none text-xs"
+                      />
+                      {spfManualProduct.imageUrl && (
+                        <img
+                          src={spfManualProduct.imageUrl}
+                          alt="preview"
+                          className="w-20 h-20 object-cover border border-gray-200 mt-1"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
 
-                        setIsSearching(true);
-                        try {
-                          if (productSource === 'shopify') {
-                            const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
-                            let data = await res.json();
-                            setSearchResults(data.products || []);
-                          } else if (
-                            productSource === "firebase_shopify" ||
-                            productSource === "firebase_taskflow"
-                          ) {
-                            const searchUpper = rawValue.toUpperCase();
+                    {/* Product Name */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-gray-500">Product Name *</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter product name..."
+                        value={spfManualProduct.title}
+                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))}
+                        className="rounded-none text-xs uppercase"
+                      />
+                    </div>
 
-                            const websiteFilter =
-                              productSource === "firebase_shopify"
-                                ? "Shopify"
-                                : "Taskflow";
+                    {/* SKU */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-gray-500">Item Code / SKU</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter item code..."
+                        value={spfManualProduct.sku}
+                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))}
+                        className="rounded-none text-xs uppercase"
+                      />
+                    </div>
 
-                            const q = query(
-                              collection(db, "products"),
-                              where("websites", "array-contains", websiteFilter)
-                            );
+                    {/* Quantity & Price */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Quantity</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="1"
+                          value={spfManualProduct.quantity}
+                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                          className="rounded-none text-xs"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Unit Price</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="0.00"
+                          value={spfManualProduct.price}
+                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                          className="rounded-none text-xs"
+                        />
+                      </div>
+                    </div>
 
-                            const querySnapshot = await getDocs(q);
+                    {/* Description */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-gray-500">Description / Specs</label>
+                      <Textarea
+                        placeholder="Enter product description or specifications..."
+                        value={spfManualProduct.description}
+                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))}
+                        rows={4}
+                        className="rounded-none text-xs"
+                      />
+                    </div>
 
-                            const firebaseResults = querySnapshot.docs
-                              .map(doc => {
-                                const data = doc.data();
+                    {/* Add Button */}
+                    <Button
+                      type="button"
+                      disabled={!spfManualProduct.title}
+                      onClick={() => {
+                        setSelectedProducts(prev => [
+                          ...prev,
+                          {
+                            id: `spf-${crypto.randomUUID()}`,
+                            uid: crypto.randomUUID(),
+                            title: spfManualProduct.title.toUpperCase(),
+                            description: spfManualProduct.description,
+                            skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
+                            images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
+                            quantity: spfManualProduct.quantity,
+                            price: spfManualProduct.price,
+                            discount: 0,
+                            isDiscounted: false,
+                          }
+                        ]);
+                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "" });
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-none flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add SPF Product
+                    </Button>
+                  </div>
+                ) : (
+                  !isManualEntry && (
+                    <>
+                      <FieldLabel>Products:</FieldLabel>
+                      <Input
+                        type="text"
+                        className="uppercase rounded-none"
+                        placeholder="Search Product Name or Item Code.."
+                        value={searchTerm}
+                        onChange={async (e) => {
+                          if (isManualEntry) return;
+                          const rawValue = e.target.value;
+                          setSearchTerm(rawValue);
 
-                                let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                let rawSpecsText = "";
+                          if (rawValue.length < 2) {
+                            setSearchResults([]);
+                            return;
+                          }
 
-                                if (Array.isArray(data.technicalSpecs)) {
-                                  data.technicalSpecs.forEach((group: any) => {
-                                    rawSpecsText += ` ${group.specGroup}`;
+                          setIsSearching(true);
+                          try {
+                            if (productSource === 'shopify') {
+                              const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
+                              let data = await res.json();
+                              setSearchResults(data.products || []);
+                            } else if (
+                              productSource === "firebase_shopify" ||
+                              productSource === "firebase_taskflow"
+                            ) {
+                              const searchUpper = rawValue.toUpperCase();
 
-                                    specsHtml += `
+                              const websiteFilter =
+                                productSource === "firebase_shopify"
+                                  ? "Shopify"
+                                  : "Taskflow";
+
+                              const q = query(
+                                collection(db, "products"),
+                                where("websites", "array-contains", websiteFilter)
+                              );
+
+                              const querySnapshot = await getDocs(q);
+
+                              const firebaseResults = querySnapshot.docs
+                                .map(doc => {
+                                  const data = doc.data();
+
+                                  let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                  let rawSpecsText = "";
+
+                                  if (Array.isArray(data.technicalSpecs)) {
+                                    data.technicalSpecs.forEach((group: any) => {
+                                      rawSpecsText += ` ${group.specGroup}`;
+
+                                      specsHtml += `
 <div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
 ${group.specGroup}
 </div>`;
 
-                                    specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+                                      specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
 
-                                    group.specs?.forEach((spec: any) => {
-                                      rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                      group.specs?.forEach((spec: any) => {
+                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
 
-                                      specsHtml += `
+                                        specsHtml += `
 <tr>
 <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
 <b>${spec.name}</b>
@@ -1854,57 +1968,54 @@ ${group.specGroup}
 ${spec.value}
 </td>
 </tr>`;
+                                      });
+
+                                      specsHtml += `</table>`;
                                     });
+                                  }
 
-                                    specsHtml += `</table>`;
-                                  });
-                                }
+                                  return {
+                                    id: doc.id,
+                                    title: data.name || "No Name",
+                                    price: data.salePrice || data.regularPrice || 0,
+                                    description: specsHtml,
+                                    images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                    skus: data.itemCode ? [data.itemCode] : [],
+                                    discount: 0,
+                                    tempSearchMetadata: (
+                                      data.name +
+                                      " " +
+                                      (data.itemCode || "") +
+                                      " " +
+                                      rawSpecsText
+                                    ).toUpperCase()
+                                  };
+                                })
+                                .filter(p => p.tempSearchMetadata.includes(searchUpper));
 
-                                return {
-                                  id: doc.id,
-
-                                  title: data.name || "No Name",
-                                  price: data.salePrice || data.regularPrice || 0,
-                                  description: specsHtml,
-
-                                  images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                  skus: data.itemCode ? [data.itemCode] : [],
-
-                                  discount: 0,
-
-                                  tempSearchMetadata: (
-                                    data.name +
-                                    " " +
-                                    (data.itemCode || "") +
-                                    " " +
-                                    rawSpecsText
-                                  ).toUpperCase()
-                                };
-                              })
-                              .filter(p => p.tempSearchMetadata.includes(searchUpper));
-
-                            setSearchResults(firebaseResults);
+                              setSearchResults(firebaseResults);
+                            }
+                          } catch (err) {
+                            console.error("Search Protocol Failure:", err);
+                          } finally {
+                            setIsSearching(false);
                           }
-                        } catch (err) {
-                          console.error("Search Protocol Failure:", err);
-                        } finally {
-                          setIsSearching(false);
-                        }
-                      }}
-                    />
-                    {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
-                  </>
+                        }}
+                      />
+                      {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
+                    </>
+                  )
                 )}
               </div>
 
-              {!isManualEntry && searchResults.length > 0 && (
+              {/* Search Results — only shown when not in SPF mode */}
+              {!isSpfMode && !isManualEntry && searchResults.length > 0 && (
                 <>
                   <div className="text-xs text-green-600 mb-2">
                     Note: you can choose the same products.
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
-
                     {searchResults.map((item) => (
                       <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
                         <CardHeader className="flex items-center justify-between gap-3">
@@ -1966,9 +2077,7 @@ ${spec.value}
 
                 {selectedProducts.map((item, index) => (
                   <div key={item.uid} className="flex flex-col">
-                    {/* Optional separator except for the first item */}
                     {index !== 0 && <Separator className="my-1" />}
-
                     <label className="flex items-center gap-2 text-xs cursor-pointer font-bold">
                       <input
                         type="checkbox"
@@ -1989,7 +2098,6 @@ ${spec.value}
                     </label>
                   </div>
                 ))}
-
               </div>
             </div>
 
@@ -2002,19 +2110,6 @@ ${spec.value}
                       <h4 className="font-bold text-xs">Selected Products: ({selectedProducts.length})</h4>
 
                       <div className="flex items-center gap-6">
-                        {/* Subject Input - place above the VAT/WHT row */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase text-gray-500 whitespace-nowrap">
-                            Subject:
-                          </span>
-                          <input
-                            type="text"
-                            value={quotationSubject}
-                            onChange={(e) => setQuotationSubject(e.target.value)}
-                            placeholder="For Quotation"
-                            className="flex-1 border border-gray-300 rounded-none px-2 py-1 text-xs font-medium uppercase"
-                          />
-                        </div>
                         {/* 1. VAT SELECTION (REQUIRED) */}
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-bold uppercase text-gray-500">VAT Type:</span>
@@ -2631,144 +2726,130 @@ ${spec.value}
                         {/* --- DETAILED SUMMARY BREAKDOWN --- */}
                         <tr className="border-t-2 border-black bg-white text-gray-900">
                           <td colSpan={4} className="border-r-2 border-black p-4 align-top">
-                            <div className="flex flex-col gap-3 h-full pt-1">
-
-                              {/* VAT Type */}
-                              <div>
-                                <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Tax Type</p>
-                                <div className="flex gap-3 text-[10px] font-black uppercase">
-                                  {["VAT Inc", "VAT Exe", "Zero-Rated"].map((label) => (
-                                    <span
-                                      key={label}
-                                      className={payload.vatTypeLabel === label
-                                        ? "text-gray-900 bg-gray-100 px-2 py-0.5 rounded-sm"
-                                        : "text-gray-300"}
-                                    >
-                                      {payload.vatTypeLabel === label ? "●" : "○"} {label}
-                                    </span>
-                                  ))}
+                            <div className="flex flex-col gap-4 h-full pt-2">
+                              <div className="flex items-center gap-6">
+                                <span className="font-bold text-red-600 italic text-[14px] uppercase whitespace-nowrap tracking-tighter">
+                                  Tax Type:
+                                </span>
+                                <div className="flex gap-4 text-[11px] font-black uppercase tracking-tight">
+                                  <span className={payload.vatTypeLabel === "VAT Inc" ? "text-gray-900" : "text-gray-400"}>
+                                    {payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+                                  </span>
+                                  <span className={payload.vatTypeLabel === "VAT Exe" ? "text-gray-900" : "text-gray-400"}>
+                                    {payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+                                  </span>
+                                  <span className={payload.vatTypeLabel === "Zero-Rated" ? "text-gray-900" : "text-gray-400"}>
+                                    {payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+                                  </span>
                                 </div>
                               </div>
 
-                              {/* Withholding Tax */}
                               {payload.whtType !== "none" && (
-                                <div className="border-t border-gray-100 pt-2">
-                                  <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Withholding Tax (EWT)</p>
-                                  <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 px-2 py-0.5 rounded-sm">
-                                    ● {payload.whtLabel} — Applied on Net of VAT
+                                <div className="flex items-center gap-6 border-t border-gray-100 pt-2">
+                                  <span className="font-bold text-blue-600 italic text-[12px] uppercase whitespace-nowrap tracking-tighter">
+                                    Withholding:
                                   </span>
-                                </div>
-                              )}
-
-                              {/* WHT Base Breakdown (informational) */}
-                              {payload.whtType !== "none" && (
-                                <div className="border-t border-gray-100 pt-2 text-[9px] text-gray-400 space-y-0.5">
-                                  <p>WHT Base: ₱{payload.whtBase.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                  <p>WHT Deducted: - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <span className="text-[10px] font-black uppercase text-blue-800">
+                                    ● {payload.whtLabel} (Applied to Net of VAT)
+                                  </span>
                                 </div>
                               )}
                             </div>
                           </td>
 
-                          {/* Right Side: Computation Table */}
-                          <td colSpan={2} className="p-0 align-top">
-                            <table className="w-full border-collapse text-[10px]">
-                              <tbody>
-
-                                {/* Net Sales */}
+                          <td colSpan={2} className="p-0">
+                            <table className="w-full border-collapse">
+                              <tbody className="text-[10px]">
+                                {/* Row 1: Net Sales */}
                                 <tr className="border-b border-gray-100">
-                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400 w-[58%]">
-                                    Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
+                                    Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{(payload.totalPrice - payload.deliveryFee - payload.restockingFee)
-                                      .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
 
-                                {/* Delivery Fee */}
+                                {/* Row 2: Delivery */}
                                 <tr className="border-b border-gray-100">
-                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400">
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
                                     Delivery Charge
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{payload.deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₱{Number(payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
 
-                                {/* Restocking Fee */}
+                                {/* Row 3: Restocking Fee (RESTORED) */}
                                 <tr className="border-b-2 border-black">
-                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-400">
+                                  <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
                                     Restocking Fee
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{payload.restockingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₱{(restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
 
-                                {/* Total Invoice Amount */}
+                                {/* Row 4: Total Invoice Amount */}
                                 <tr className="bg-gray-50 border-b border-black">
                                   <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
                                     Total Invoice Amount
                                   </td>
                                   <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900">
-                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
 
-                                {/* VAT Inc breakdown */}
+                                {/* VAT & WHT Logic */}
                                 {payload.vatTypeLabel === "VAT Inc" ? (
                                   <>
                                     <tr className="border-b border-gray-100">
-                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
-                                        Less: VAT (12/112)
+                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                        Less: VAT (12%)
                                       </td>
                                       <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                                        ₱{(payload.totalPrice * (12 / 112))
-                                          .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                       </td>
                                     </tr>
                                     <tr className={payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
-                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
+                                      <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
                                         Net of VAT (Tax Base)
                                       </td>
                                       <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                                        ₱{(payload.totalPrice / 1.12)
-                                          .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                       </td>
                                     </tr>
                                     {payload.whtType !== "none" && (
-                                      <tr className="border-b-2 border-black bg-blue-50">
-                                        <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[8px] text-blue-700">
-                                          Less: {payload.whtLabel}
+                                      <tr className="border-b-2 border-black bg-blue-50/50">
+                                        <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
+                                          LESS: {payload.whtLabel}
                                         </td>
                                         <td className="px-3 py-2 text-right font-black text-blue-700">
-                                          − ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
                                       </tr>
                                     )}
                                   </>
                                 ) : (
                                   <tr className="border-b-2 border-black">
-                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[8px] text-gray-400">
+                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
                                       Tax Status
                                     </td>
                                     <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
-                                      {payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}
+                                      {payload.vatTypeLabel === "VAT Exe" ? "Exempted" : "Zero-Rated"}
                                     </td>
                                   </tr>
                                 )}
 
-                                {/* Final Amount */}
-                                <tr className="bg-gray-900 text-white">
-                                  <td className="px-3 py-3 text-right font-black uppercase border-r border-gray-700 text-[10px] tracking-tight">
+                                {/* Final Total */}
+                                <tr className="bg-black text-white">
+                                  <td className="px-3 py-3 text-right font-black uppercase border-r border-white/20 text-[10px] tracking-tight">
                                     {payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
                                   </td>
                                   <td className="px-3 py-3 text-right font-black text-[16px]">
-                                    ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
-
                               </tbody>
                             </table>
                           </td>
