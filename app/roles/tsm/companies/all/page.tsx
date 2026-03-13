@@ -50,22 +50,54 @@ interface UserDetails {
     profilepicture: string;
 }
 
+/* ─── Batched fetch — keeps calling until a batch comes back smaller than the page size ─── */
+const BATCH_SIZE = 1000;
+
+async function fetchAllAccounts(tsmRefId: string): Promise<Account[]> {
+    const all: Account[] = [];
+    let offset = 0;
+
+    while (true) {
+        const res = await fetch(
+            `/api/com-fetch-approval-account?tsm=${encodeURIComponent(tsmRefId)}&limit=${BATCH_SIZE}&offset=${offset}`
+        );
+        if (!res.ok) throw new Error("Failed to fetch accounts");
+
+        const json = await res.json();
+        const batch: Account[] = json.data ?? json ?? [];
+
+        all.push(...batch);
+
+        // If the batch is smaller than BATCH_SIZE there are no more rows
+        if (batch.length < BATCH_SIZE) break;
+        offset += BATCH_SIZE;
+    }
+
+    return all;
+}
+
+/* ─────────────────────────────────────────────────────── */
+
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
 
-    const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "", firstname: "", lastname: "", tsm: "", manager: "", profilepicture: "" });
+    const [userDetails, setUserDetails] = useState<UserDetails>({
+        referenceid: "", firstname: "", lastname: "", tsm: "", manager: "", profilepicture: "",
+    });
     const [posts, setPosts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [agentFilter, setAgentFilter] = useState<string>("all");
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
-    useEffect(() => { if (queryUserId && queryUserId !== userId) setUserId(queryUserId); }, [queryUserId, userId, setUserId]);
+    useEffect(() => {
+        if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
+    }, [queryUserId, userId, setUserId]);
 
+    /* ── Fetch user ── */
     useEffect(() => {
         if (!userId) { setLoadingUser(false); return; }
 
@@ -76,17 +108,26 @@ function DashboardContent() {
                 const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
                 if (!response.ok) throw new Error("Failed to fetch user data");
                 const data = await response.json();
-                setUserDetails({ referenceid: data.ReferenceID || "", firstname: data.FirstName || "", lastname: data.LastName || "", tsm: data.TSM || "", manager: data.Manager || "", profilepicture: data.profilePicture || "" });
+                setUserDetails({
+                    referenceid: data.ReferenceID || "",
+                    firstname: data.FirstName || "",
+                    lastname: data.LastName || "",
+                    tsm: data.TSM || "",
+                    manager: data.Manager || "",
+                    profilepicture: data.profilePicture || "",
+                });
                 sileo.success({ title: "Success", description: "User data loaded successfully!", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-            } catch (err) {
-                sileo.warning({ title: "Failed", description: "Error fetching user data:", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+            } catch {
                 sileo.error({ title: "Failed", description: "Failed to connect to server. Please try again later or refresh your network connection", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-            } finally { setLoadingUser(false); }
+            } finally {
+                setLoadingUser(false);
+            }
         };
 
         fetchUserData();
     }, [userId]);
 
+    /* ── Fetch ALL accounts using batched loop ── */
     useEffect(() => {
         if (!userDetails.referenceid) { setPosts([]); return; }
 
@@ -94,34 +135,47 @@ function DashboardContent() {
             setError(null);
             setLoadingAccounts(true);
             try {
-                const response = await fetch(`/api/com-fetch-approval-account?tsm=${encodeURIComponent(userDetails.referenceid)}`);
-                if (!response.ok) throw new Error("Failed to fetch accounts");
-                const data = await response.json();
-                // Only keep accounts with status === 'Active'
-                const activeAccounts = (data.data || []).filter((item: Account) => item.status === "Active");
-                setPosts(activeAccounts);
-                sileo.success({ title: "Success", description: "Accounts loaded successfully!", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-            } catch (err) {
-                sileo.error({ title: "Failed", description: "Failed to connect to server. Please try again later or refresh your network connection", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-            } finally { setLoadingAccounts(false); }
+                // ✅ Loops until all rows are fetched — no more 1000-row cap
+                const all = await fetchAllAccounts(userDetails.referenceid);
+
+                // ✅ Pass raw data — AccountsTable handles Active filtering internally
+                setPosts(all);
+
+                sileo.success({
+                    title: "Success",
+                    description: `${all.length} accounts loaded.`,
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: { title: "text-white!", description: "text-white" },
+                });
+            } catch {
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: { title: "text-white!", description: "text-white" },
+                });
+            } finally {
+                setLoadingAccounts(false);
+            }
         };
 
         fetchAccounts();
     }, [userDetails.referenceid]);
 
+    /* ── Optional date filter (agent filter removed — table handles it) ── */
     const filteredData = useMemo(() => {
-        let filteredPosts = posts;
-        if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-            const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
-            const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
-            filteredPosts = filteredPosts.filter(item => {
-                const createdDate = new Date(item.date_created).getTime();
-                return createdDate >= fromTime && createdDate <= toTime;
-            });
-        }
-        if (agentFilter !== "all") filteredPosts = filteredPosts.filter(item => item.tsm === agentFilter);
-        return filteredPosts;
-    }, [posts, dateCreatedFilterRange, agentFilter]);
+        if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return posts;
+        const from = new Date(dateCreatedFilterRange.from).setHours(0, 0, 0, 0);
+        const to   = new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999);
+        return posts.filter((item) => {
+            const t = new Date(item.date_created).getTime();
+            return t >= from && t <= to;
+        });
+    }, [posts, dateCreatedFilterRange]);
 
     return (
         <ProtectedPageWrapper>
@@ -158,14 +212,18 @@ function DashboardContent() {
                                     <AlertTitle>{error}</AlertTitle>
                                 </Alert>
                             )}
-
+                            {/* ✅ Pass raw posts — table handles Active filter internally */}
                             <AccountsTable posts={filteredData} userDetails={userDetails} />
                         </>
                     )}
                 </main>
             </SidebarInset>
 
-            <SidebarRight userId={userId ?? undefined} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+            <SidebarRight
+                userId={userId ?? undefined}
+                dateCreatedFilterRange={dateCreatedFilterRange}
+                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+            />
         </ProtectedPageWrapper>
     );
 }

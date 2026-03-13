@@ -1,433 +1,139 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationPrevious,
-  PaginationNext,
-} from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface FB {
-  id: number;
-  quotation_amount?: number;
-  quotation_number?: string;
-  remarks?: string;
-  date_created: string;
-  date_updated?: string;
-  account_reference_number?: string;
-  company_name?: string;
-  contact_number?: string;
-  contact_person: string;
-  source: string;
-  status: string;
-  referenceid: string;
-}
-
-interface UserDetails {
-  referenceid: string;
-  tsm: string;
-  manager: string;
-  firstname: string;
-  lastname: string;
-  profilePicture: string;
-}
-
-interface FBProps {
-  referenceid: string;
-  target_quota?: string;
-  dateCreatedFilterRange: any;
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-  userDetails: UserDetails;
-}
+interface FB { id: number; quotation_amount?: number; quotation_number?: string; remarks?: string; date_created: string; date_updated?: string; company_name?: string; contact_number?: string; contact_person: string; source: string; status: string; referenceid: string; }
+interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
+interface FBProps { referenceid: string; target_quota?: string; dateCreatedFilterRange: any; setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>; userDetails: UserDetails; }
 
 const PAGE_SIZE = 10;
+const fmtPHP = (v: number) => v.toLocaleString(undefined, { style: "currency", currency: "PHP" });
+const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-export const FBTable: React.FC<FBProps> = ({
-  referenceid,
-  target_quota,
-  dateCreatedFilterRange,
-  userDetails,
-  setDateCreatedFilterRangeAction,
-}) => {
+export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
   const [activities, setActivities] = useState<FB[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-
-  // Pagination state
   const [page, setPage] = useState(1);
-
   const [agents, setAgents] = useState<any[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>("all");
+  const [selectedAgent, setSelectedAgent] = useState("all");
 
-  // Fetch activities
   const fetchActivities = useCallback(() => {
-    if (!referenceid) {
-      setActivities([]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    // Prepare date filters (keep as "YYYY-MM-DD" for date-only comparison)
-    let from: string | null = null;
-    let to: string | null = null;
-
-    if (dateCreatedFilterRange?.from) {
-      from = dateCreatedFilterRange.from; // e.g., "2026-03-01"
-    }
-
-    if (dateCreatedFilterRange?.to) {
-      to = dateCreatedFilterRange.to; // e.g., "2026-03-03"
-    }
-
-    // Build API URL
+    if (!referenceid) { setActivities([]); return; }
+    setLoading(true); setError(null);
     const url = new URL("/api/reports/tsm/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-
-    if (from) url.searchParams.append("from", from);
-    if (to) url.searchParams.append("to", to);
-
-    // Fetch data
-    fetch(url.toString())
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch activities");
-        return res.json();
-      })
-      .then((data) => {
-        // Ensure activities array exists
-        setActivities(data.activities || []);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    if (dateCreatedFilterRange?.from) url.searchParams.append("from", dateCreatedFilterRange.from);
+    if (dateCreatedFilterRange?.to) url.searchParams.append("to", dateCreatedFilterRange.to);
+    fetch(url.toString()).then(r => { if (!r.ok) throw new Error("Failed"); return r.json(); })
+      .then(d => setActivities(d.activities || [])).catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
-  // Real-time subscription using Supabase
   useEffect(() => {
     fetchActivities();
-
     if (!referenceid) return;
-
-    const channel = supabase
-      .channel(`public:history:tsm=eq.${referenceid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "history",
-          filter: `tsm=eq.${referenceid}`,
-        },
-        (payload) => {
-          const newRecord = payload.new as FB;
-          const oldRecord = payload.old as FB;
-
-          setActivities((curr) => {
-            switch (payload.eventType) {
-              case "INSERT":
-                if (!curr.some((a) => a.id === newRecord.id)) {
-                  return [...curr, newRecord];
-                }
-                return curr;
-              case "UPDATE":
-                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-              case "DELETE":
-                return curr.filter((a) => a.id !== oldRecord.id);
-              default:
-                return curr;
-            }
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const ch = supabase.channel(`fb:${referenceid}`).on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `tsm=eq.${referenceid}` }, ({ eventType, new: n, old: o }: any) => {
+      setActivities(c => eventType === "INSERT" ? (c.some(a => a.id === n.id) ? c : [...c, n]) : eventType === "UPDATE" ? c.map(a => a.id === n.id ? n : a) : c.filter(a => a.id !== o.id));
+    }).subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [referenceid, fetchActivities]);
-
-  // Filter logic
-  const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-
-    return activities
-      // TYPE FILTER
-      .filter((item) => ["facebook marketplace"].includes(item.source?.toLowerCase() ?? ""))
-      // SEARCH FILTER
-      .filter((item) => {
-        if (!search) return true;
-        return (
-          (item.company_name?.toLowerCase().includes(search) ?? false) ||
-          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
-          (item.remarks?.toLowerCase().includes(search) ?? false)
-        );
-      })
-      // STATUS FILTER
-      .filter((item) => (filterStatus !== "all" && item.status !== filterStatus ? false : true))
-      // AGENT FILTER
-      .filter((item) => (selectedAgent === "all" ? true : item.referenceid === selectedAgent))
-      // DATE CREATED FILTER
-      .filter((item) => {
-        if (
-          !dateCreatedFilterRange ||
-          (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-        ) {
-          return true;
-        }
-
-        const updatedDate = new Date(item.date_created);
-        if (isNaN(updatedDate.getTime())) return false;
-
-        const fromDate = dateCreatedFilterRange.from
-          ? new Date(dateCreatedFilterRange.from)
-          : null;
-        const toDate = dateCreatedFilterRange.to
-          ? new Date(dateCreatedFilterRange.to)
-          : null;
-
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
-
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-          return isSameDay(updatedDate, fromDate);
-        }
-
-        if (fromDate && updatedDate < fromDate) return false;
-        if (toDate && updatedDate > toDate) return false;
-
-        return true;
-      });
-  }, [activities, searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
-
-  // Calculate totals for footer (filteredActivities)
-  const totalQuotationAmount = useMemo(() => {
-    return filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0);
-  }, [filteredActivities]);
-
-  // Count unique quotation_number (non-null)
-  const uniqueQuotationCount = useMemo(() => {
-    const uniqueSet = new Set<string>();
-    filteredActivities.forEach((item) => {
-      if (item.quotation_number) uniqueSet.add(item.quotation_number);
-    });
-    return uniqueSet.size;
-  }, [filteredActivities]);
-
-  // Pagination
-  const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-  const paginatedActivities = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredActivities.slice(start, start + PAGE_SIZE);
-  }, [filteredActivities, page]);
-
-  // Reset to page 1 on filter/search change
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, filterStatus, dateCreatedFilterRange]);
-
-  const agentMap = useMemo(() => {
-    const map: Record<string, { name: string; profilePicture: string }> = {};
-    agents.forEach((agent) => {
-      if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
-        map[agent.ReferenceID.toLowerCase()] = {
-          name: `${agent.Firstname} ${agent.Lastname}`,
-          profilePicture: agent.profilePicture || "",
-        };
-      }
-    });
-    return map;
-  }, [agents]);
 
   useEffect(() => {
     if (!userDetails.referenceid) return;
-
-    const fetchAgents = async () => {
-      try {
-        const response = await fetch(
-          `/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`
-        );
-        if (!response.ok) throw new Error("Failed to fetch agents");
-
-        const data = await response.json();
-        setAgents(data);
-      } catch (err) {
-        console.error("Error fetching agents:", err);
-        setError("Failed to load agents.");
-      }
-    };
-
-    fetchAgents();
+    fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`).then(r => r.json()).then(setAgents).catch(() => {});
   }, [userDetails.referenceid]);
 
+  const agentMap = useMemo(() => {
+    const m: Record<string, { name: string; picture: string }> = {};
+    agents.forEach(a => { if (a.ReferenceID) m[a.ReferenceID.toLowerCase()] = { name: `${a.Firstname} ${a.Lastname}`, picture: a.profilePicture || "" }; });
+    return m;
+  }, [agents]);
+
+  const filtered = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+    return activities
+      .filter(i => i.source?.toLowerCase() === "facebook marketplace")
+      .filter(i => !s || (i.company_name?.toLowerCase().includes(s) || i.quotation_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s)))
+      .filter(i => selectedAgent === "all" || i.referenceid === selectedAgent)
+      .filter(i => {
+        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
+        const d = new Date(i.date_created); if (isNaN(d.getTime())) return false;
+        const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+        const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
+        if (from && to && isSameDay(from, to)) return isSameDay(d, from);
+        if (from && d < from) return false; if (to && d > to) return false; return true;
+      })
+      .sort((a, b) => new Date(b.date_updated ?? b.date_created).getTime() - new Date(a.date_updated ?? a.date_created).getTime());
+  }, [activities, searchTerm, selectedAgent, dateCreatedFilterRange]);
+
+  useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
+  const total = useMemo(() => filtered.reduce((s, i) => s + (i.quotation_amount ?? 0), 0), [filtered]);
+  const uniqueCount = useMemo(() => new Set(filtered.map(i => i.quotation_number).filter(Boolean)).size, [filtered]);
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+
   return (
-    <>
-      {/* Search */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <Input
-          type="text"
-          placeholder="Search company or remarks..."
-          className="max-w-md"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-
-        <Select
-          value={selectedAgent}
-          onValueChange={(value) => {
-            setSelectedAgent(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-[220px] text-xs">
-            <SelectValue placeholder="Filter by Agent" />
-          </SelectTrigger>
-
-          <SelectContent>
-            <SelectItem value="all">All Agents</SelectItem>
-
-            {agents.map((agent) => (
-              <SelectItem className="capitalize" key={agent.ReferenceID} value={agent.ReferenceID}>
-                {agent.Firstname} {agent.Lastname}
-              </SelectItem>
-            ))}
-          </SelectContent>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input placeholder="Search company, quotation no., remarks..." className="max-w-xs text-xs" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <Select value={selectedAgent} onValueChange={v => { setSelectedAgent(v); setPage(1); }}>
+          <SelectTrigger className="w-[200px] text-xs"><SelectValue placeholder="Filter by Agent" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All Agents</SelectItem>{agents.map(a => <SelectItem className="capitalize" key={a.ReferenceID} value={a.ReferenceID}>{a.Firstname} {a.Lastname}</SelectItem>)}</SelectContent>
         </Select>
       </div>
-
-      {/* Total info */}
-      {filteredActivities.length > 0 && (
-        <div className="mb-2 text-xs font-bold">
-          Total Activities: {filteredActivities.length} | Unique Quotation Number: {uniqueQuotationCount}
+      {filtered.length > 0 && (
+        <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
+          <span>Records: <span className="font-semibold text-gray-700">{filtered.length}</span></span>
+          <span className="text-gray-200">|</span>
+          <span>Unique Quotations: <span className="font-semibold text-gray-700">{uniqueCount}</span></span>
+          <span className="text-gray-200">|</span>
+          <span>Total: <span className="font-semibold text-gray-700">{fmtPHP(total)}</span></span>
         </div>
       )}
-
-      {/* Table */}
-      {filteredActivities.length > 0 && (
-        <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Agent</TableHead>
-                <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                <TableHead className="text-xs text-right">Quotation Amount</TableHead>
-                <TableHead className="text-xs">Quotation Number</TableHead>
-                <TableHead className="text-xs">Company Name</TableHead>
-                <TableHead className="text-xs">Contact Person</TableHead>
-                <TableHead className="text-xs">Contact Number</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedActivities.map((item) => {
-                return (
-                  <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                    <TableCell className="flex items-center gap-2 capitalize">
-                      {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
-                        <img
-                          src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
-                          alt={agentMap[item.referenceid?.toLowerCase()]!.name}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                          N/A
-                        </div>
-                      )}
-                      <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
-                    </TableCell>
-                    <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      {item.quotation_amount !== undefined && item.quotation_amount !== null
-                        ? item.quotation_amount.toLocaleString(undefined, {
-                          style: "currency",
-                          currency: "PHP",
-                        })
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="uppercase">{item.quotation_number || "-"}</TableCell>
-                    <TableCell>{item.company_name}</TableCell>
-                    <TableCell>{item.contact_person}</TableCell>
-                    <TableCell>{item.contact_number}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-            <tfoot>
-              <TableRow className="bg-muted font-semibold text-xs">
-                <TableCell colSpan={1} className="text-right pr-4">
-                  Totals:
-                </TableCell>
-                <TableCell className="text-right">
-                  {totalQuotationAmount.toLocaleString(undefined, {
-                    style: "currency",
-                    currency: "PHP",
-                  })}
-                </TableCell>
-                <TableCell colSpan={6}></TableCell>
-              </TableRow>
-            </tfoot>
-          </Table>
-        </div>
-      )}
-
-      {pageCount > 1 && (
-        <Pagination>
-          <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page > 1) setPage(page - 1);
-                }}
-                aria-disabled={page === 1}
-                className={page === 1 ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-
-            {/* Current page / total pages */}
-            <div className="px-4 font-medium select-none">{pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}</div>
-
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page < pageCount) setPage(page + 1);
-                }}
-                aria-disabled={page === pageCount}
-                className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
-    </>
+      {loading ? <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+        : error ? <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+        : filtered.length === 0 ? <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No Facebook Marketplace records found.</div>
+        : (
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 text-[11px]">
+                  <TableHead className="text-gray-500">Agent</TableHead>
+                  <TableHead className="text-gray-500">Date</TableHead>
+                  <TableHead className="text-gray-500 text-right">Amount</TableHead>
+                  <TableHead className="text-gray-500">Quotation No.</TableHead>
+                  <TableHead className="text-gray-500">Company</TableHead>
+                  <TableHead className="text-gray-500">Contact Person</TableHead>
+                  <TableHead className="text-gray-500">Contact No.</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginated.map(item => {
+                  const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                  return (
+                    <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                      <TableCell><div className="flex items-center gap-2">{info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}<span className="capitalize text-gray-700">{info?.name ?? "-"}</span></div></TableCell>
+                      <TableCell className="text-gray-500 whitespace-nowrap">{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right text-gray-700">{item.quotation_amount != null ? fmtPHP(item.quotation_amount) : "-"}</TableCell>
+                      <TableCell className="uppercase text-gray-700">{item.quotation_number || "-"}</TableCell>
+                      <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
+                      <TableCell className="capitalize text-gray-600">{item.contact_person || "-"}</TableCell>
+                      <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+              <TableFooter><TableRow className="bg-gray-50 text-xs font-semibold font-mono"><TableCell colSpan={2} className="text-gray-500">Total</TableCell><TableCell className="text-right text-gray-800">{fmtPHP(total)}</TableCell><TableCell colSpan={4} /></TableRow></TableFooter>
+            </Table>
+          </div>
+        )}
+      {pageCount > 1 && (<Pagination><PaginationContent className="flex items-center space-x-4 justify-center text-xs"><PaginationItem><PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) setPage(page - 1); }} aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : ""} /></PaginationItem><div className="px-4 font-medium select-none text-gray-600">{page} / {pageCount}</div><PaginationItem><PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }} aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : ""} /></PaginationItem></PaginationContent></Pagination>)}
+    </div>
   );
 };
