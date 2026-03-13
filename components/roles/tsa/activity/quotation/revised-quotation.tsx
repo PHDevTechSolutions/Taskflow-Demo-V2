@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, PenIcon, FileSpreadsheet, FileText, MoreVertical } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, PenIcon, MoreVertical } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -81,6 +81,10 @@ interface CompletedProps {
     contact?: string;
     tsmname?: string;
     managername?: string;
+    // ✅ Added: passed down from parent so internal fetch is not needed
+    signature?: string;
+    managerDetails?: SupervisorDetails | null;
+    tsmDetails?: SupervisorDetails | null;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
@@ -94,6 +98,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     contact,
     tsmname,
     managername,
+    signature,
+    managerDetails: managerDetailsProp,
+    tsmDetails: tsmDetailsProp,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
@@ -110,11 +117,49 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const [editOpen, setEditOpen] = useState(false);
 
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-    const [downloadAction, setDownloadAction] = useState<"pdf" | "excel" | null>(null);
 
     // Delete dialog states
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [removeRemarks, setRemoveRemarks] = useState("");
+
+    // ✅ Use prop values as initial state — avoids internal fetch when parent already has the data
+    const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(tsmDetailsProp ?? null);
+    const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(managerDetailsProp ?? null);
+
+    // ✅ Sync if parent props update after mount
+    useEffect(() => {
+        if (tsmDetailsProp !== undefined) setTsmDetails(tsmDetailsProp);
+    }, [tsmDetailsProp]);
+
+    useEffect(() => {
+        if (managerDetailsProp !== undefined) setManagerDetails(managerDetailsProp);
+    }, [managerDetailsProp]);
+
+    // ✅ Only fetch hierarchy internally if props were not provided
+    useEffect(() => {
+        // Guard 1: skip if referenceid is not ready
+        if (!referenceid) return;
+
+        // Guard 2: skip if parent already passed the details down
+        if (managerDetailsProp !== undefined && tsmDetailsProp !== undefined) return;
+
+        const fetchHierarchy = async () => {
+            try {
+                const response = await fetch(`/api/user?id=${encodeURIComponent(referenceid)}`);
+
+                if (!response.ok) throw new Error("Failed to fetch hierarchy details");
+
+                const data = await response.json();
+
+                setTsmDetails(data.tsmDetails ?? null);
+                setManagerDetails(data.managerDetails ?? null);
+            } catch (error) {
+                console.error("Hierarchy fetch error:", error);
+            }
+        };
+
+        fetchHierarchy();
+    }, [referenceid, managerDetailsProp, tsmDetailsProp]);
 
     // Fetch activities from API
     const fetchActivities = useCallback(() => {
@@ -341,7 +386,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "-";
 
-        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000); // seconds
+        let diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000);
         if (diff < 0) diff = 0;
 
         const hours = Math.floor(diff / 3600);
@@ -359,34 +404,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         return parts.join(" ");
     }
 
-    const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(null);
-    const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(null);
-
-    useEffect(() => {
-        if (!referenceid) return;
-
-        const fetchHierarchy = async () => {
-            try {
-                const response = await fetch(`/api/user?id=${encodeURIComponent(referenceid)}`);
-
-                if (!response.ok) throw new Error("Failed to fetch hierarchy details");
-
-                const data = await response.json();
-
-                setTsmDetails(data.tsmDetails ?? null);
-                setManagerDetails(data.managerDetails ?? null);
-
-            } catch (error) {
-                console.error("Hierarchy fetch error:", error);
-            }
-        };
-
-        fetchHierarchy();
-    }, [referenceid]);
-
     return (
         <>
-
             {/* Search + Filter */}
             <div className="mb-4 flex items-center justify-between gap-4">
                 <Input
@@ -501,7 +520,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                 </DropdownMenuTrigger>
 
                                                 <DropdownMenuContent align="end" className="rounded-none text-xs">
-                                                    {/* Edit */}
                                                     <DropdownMenuItem
                                                         onClick={() => openEditDialog(item)}
                                                         className="flex items-center gap-2 cursor-pointer"
@@ -511,7 +529,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-
                                         </TableCell>
 
                                         <TableCell>
@@ -608,7 +625,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                                         <TableCell className="text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
-                                                                                        ${item.quotation_type === "Ecoshift Corporation"
+                                                    ${item.quotation_type === "Ecoshift Corporation"
                                                         ? "bg-green-100 text-green-700"
                                                         : item.quotation_type === "Disruptive Solutions Inc"
                                                             ? "bg-rose-100 text-rose-800"
@@ -657,7 +674,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     ManagerSignature={editItem.manager_signature}
                     ManagerContactNumber={editItem.manager_contact_number}
                     ManagerEmailAddress={editItem.manager_email_address}
-
                     ApprovedStatus={editItem.tsm_approved_status}
                 />
             )}
