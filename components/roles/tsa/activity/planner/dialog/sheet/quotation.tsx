@@ -80,6 +80,8 @@ interface Props {
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
   setItemRemarks: (value: string) => void;
+  quotationSubject: string;
+  setQuotationSubject: (v: string) => void;
 
   // --- ACTIONS ---
   handleBack: () => void;
@@ -240,6 +242,9 @@ export function QuotationSheet(props: Props) {
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
+
+  const [quotationSubject, setQuotationSubject] = useState("For Quotation");
+
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -531,7 +536,7 @@ export function QuotationSheet(props: Props) {
         telNo: safeContactNumber,
         email: safeEmailAddress,
         attention: safeContactPerson ? safeContactPerson : "",
-        subject: "For Quotation",
+        subject: quotationSubject || "For Quotation",
         items,
 
         // --- TAX & WITHHOLDING LOGIC ---
@@ -687,7 +692,7 @@ export function QuotationSheet(props: Props) {
       telNo: contact_number ?? "",
       email: email_address ?? "",
       attention: contact_person ? contact_person : "",
-      subject: "For Quotation",
+      subject: quotationSubject || "For Quotation",
       items,
 
       // --- TAX LOGIC ---
@@ -1997,6 +2002,19 @@ ${spec.value}
                       <h4 className="font-bold text-xs">Selected Products: ({selectedProducts.length})</h4>
 
                       <div className="flex items-center gap-6">
+                        {/* Subject Input - place above the VAT/WHT row */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold uppercase text-gray-500 whitespace-nowrap">
+                            Subject:
+                          </span>
+                          <input
+                            type="text"
+                            value={quotationSubject}
+                            onChange={(e) => setQuotationSubject(e.target.value)}
+                            placeholder="For Quotation"
+                            className="flex-1 border border-gray-300 rounded-none px-2 py-1 text-xs font-medium uppercase"
+                          />
+                        </div>
                         {/* 1. VAT SELECTION (REQUIRED) */}
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-bold uppercase text-gray-500">VAT Type:</span>

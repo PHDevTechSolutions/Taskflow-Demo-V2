@@ -240,6 +240,7 @@ export function CreateActivityDialog({
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
+    const [quotationSubject, setQuotationSubject] = useState("For Quotation");
 
     // AUTO SET DATE CREATED
     useEffect(() => {
@@ -1032,6 +1033,9 @@ export function CreateActivityDialog({
                                         signature={signature}
                                         whtType={whtType}
                                         setWhtType={setWhtType}
+
+                                        quotationSubject={quotationSubject}
+                                        setQuotationSubject={setQuotationSubject}
                                         />
                             )}
 
