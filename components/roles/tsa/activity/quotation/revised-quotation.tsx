@@ -78,6 +78,9 @@ interface Completed {
   tsm_approved_status: string;
   vat_type: string;
   delivery_fee: string;
+  restocking_fee?: string;
+  quotation_vatable?: string;
+  quotation_subject?: string;
   agent_signature: string;
   agent_contact_number: string;
   agent_email_address: string;
@@ -701,6 +704,9 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           }}
           vatType={editItem.vat_type}
           deliveryFee={editItem.delivery_fee}
+          restockingFee={editItem.restocking_fee ?? ""}
+          whtType={editItem.quotation_vatable ?? "none"}
+          quotationSubject={editItem.quotation_subject ?? "For Quotation"}
           agentSignature={editItem.agent_signature}
           agentContactNumber={editItem.agent_contact_number}
           agentEmailAddress={editItem.agent_email_address}

@@ -80,8 +80,8 @@ interface Props {
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
   setItemRemarks: (value: string) => void;
-  quotationSubject: string;     
-  setQuotationSubject: (v: string) => void;
+  quotationSubject: string;
+  setQuotationSubject: (value: string) => void;
 
   // --- ACTIONS ---
   handleBack: () => void;
@@ -139,6 +139,7 @@ interface SelectedProduct extends Product {
   price: number;
   discount: number;
   isDiscounted?: boolean;
+  cloudinaryPublicId?: string;
 }
 
 function extractTsmPrefix(tsm: string): string {
@@ -181,6 +182,7 @@ export function QuotationSheet(props: Props) {
     deliveryFee, setDeliveryFee,
     restockingFee, setRestockingFee,
     itemRemarks, setItemRemarks,
+    quotationSubject, setQuotationSubject,
 
     // --- CRM & STATUS ---
     callType, setCallType,
@@ -240,9 +242,11 @@ export function QuotationSheet(props: Props) {
     "shopify" | "firebase_shopify" | "firebase_taskflow"
   >("shopify");
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
   const [isSpfMode, setIsSpfMode] = useState(false);
+  const [spfUploading, setSpfUploading] = useState(false);
   const [spfManualProduct, setSpfManualProduct] = useState({
     title: "",
     sku: "",
@@ -250,7 +254,22 @@ export function QuotationSheet(props: Props) {
     quantity: 1,
     description: "",
     imageUrl: "",
+    cloudinaryPublicId: "",
   });
+
+  // Delete image from Cloudinary when product is removed
+  const deleteCloudinaryImage = async (publicId: string) => {
+    if (!publicId) return;
+    try {
+      await fetch("/api/cloudinary/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicId }),
+      });
+    } catch (err) {
+      console.error("Failed to delete Cloudinary image:", err);
+    }
+  };
 
   function addDaysToDate(days: number): string {
     const date = new Date();
@@ -542,7 +561,7 @@ export function QuotationSheet(props: Props) {
         telNo: safeContactNumber,
         email: safeEmailAddress,
         attention: safeContactPerson ? safeContactPerson : "",
-        subject: "For Quotation",
+        subject: quotationSubject || "For Quotation",
         items,
 
         // --- TAX & WITHHOLDING LOGIC ---
@@ -698,7 +717,7 @@ export function QuotationSheet(props: Props) {
       telNo: contact_number ?? "",
       email: email_address ?? "",
       attention: contact_person ? contact_person : "",
-      subject: "For Quotation",
+      subject: quotationSubject || "For Quotation",
       items,
 
       // --- TAX LOGIC ---
@@ -1719,94 +1738,173 @@ export function QuotationSheet(props: Props) {
       {/* product selection dialog/modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className={`max-h-[90vh] overflow-y-auto p-6 transition-all duration-300 ${selectedProducts.length === 0
-            ? "w-[60vw]"
-            : "w-[90vw]"
-            }`}
+          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col"
           style={{
             maxWidth: selectedProducts.length === 0 ? "900px" : "1900px",
             width: "100vw",
           }}
         >
+          {/* HEADER */}
+          <div className="flex flex-col border-b border-gray-200 shrink-0">
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-3">
+                <DialogTitle className="font-black text-base tracking-tight">Select Products</DialogTitle>
+                {selectedProducts.length > 0 && (
+                  <span className="hidden lg:inline-flex items-center justify-center bg-[#121212] text-white text-[10px] font-black rounded-full w-5 h-5">
+                    {selectedProducts.length}
+                  </span>
+                )}
+              </div>
+              {/* Desktop: show total in header when products selected */}
+              {selectedProducts.length > 0 && (
+                <div className="hidden lg:flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-lg px-4 py-2">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">Total</span>
+                  <span className="font-black text-xl text-[#121212] tabular-nums">
+                    PHP {Number(quotationAmount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Mobile Tab Switcher */}
+            {selectedProducts.length > 0 && (
+              <div className="flex lg:hidden border-t border-gray-100 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setMobilePanelTab("search")}
+                  className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "search" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
+                >
+                  🔍 Search
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobilePanelTab("products")}
+                  className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
+                >
+                  🛒 Products ({selectedProducts.length})
+                </button>
+              </div>
+            )}
+          </div>
 
-          <DialogHeader>
-            <DialogTitle className="font-bold">Select Products</DialogTitle>
-          </DialogHeader>
-
+          {/* BODY */}
+          <div className="flex-1 overflow-hidden">
           <div
-            className={`grid gap-6 mt-4 max-h-[75vh] overflow-hidden ${selectedProducts.length === 0
+            className={`h-full grid gap-0 lg:gap-4 lg:p-4 p-0 overflow-y-auto ${selectedProducts.length === 0
               ? "grid-cols-1"
-              : "grid-cols-[1fr_2.5fr]"
+              : "grid-cols-1 lg:grid-cols-[300px_1fr] lg:overflow-hidden"
               }`}
           >
 
             {/* Left side: Search + checkbox selected */}
-            <div className="flex flex-col gap-4 overflow-y-auto pr-2">
-              <div className="flex flex-col gap-4 sticky top-0 bg-white z-10 pb-2">
+            <div className={`flex-col gap-3 overflow-y-auto px-3 lg:px-0 pt-3 lg:pt-0 h-full ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+              <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
 
-                {/* Source Switcher: SHOPIFY / CMS / PRODUCT DATABASE / SPF */}
-                <div className="flex border rounded-md overflow-hidden border-gray-300">
-                  <button
-                    type="button"
-                    onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
-                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "shopify" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                  >
-                    SHOPIFY
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setProductSource("firebase_shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
-                    className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === "firebase_shopify" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                  >
-                    CMS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
-                    className={`flex-1 py-2 text-[10px] font-bold transition-colors ${productSource === "firebase_taskflow" && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                  >
-                    PRODUCT DATABASE
-                  </button>
+                {/* Source Switcher */}
+                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  {[
+                    { source: "shopify", label: "Shopify", icon: "🛍️" },
+                    { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                    { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
+                  ].map(({ source: s, label, icon }) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
+                    >
+                      <span className="text-sm mb-0.5">{icon}</span>
+                      <span>{label}</span>
+                    </button>
+                  ))}
                   <button
                     type="button"
                     onClick={() => { setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
-                    className={`flex-1 py-2 text-[10px] font-bold transition-colors border-l border-gray-300 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-600 hover:bg-red-50"}`}
+                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                   >
-                    SPF
+                    <span className="text-sm mb-0.5">📋</span>
+                    <span>SPF</span>
                   </button>
                 </div>
 
                 {/* SPF Manual Entry Form OR Normal Search Input — never both */}
                 {isSpfMode ? (
-                  <div className="flex flex-col gap-3 border border-red-200 bg-red-50 p-3 rounded-sm">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF — Manual Product Entry</span>
-                      <span className="text-[9px] text-red-400 italic">(Special Price Form)</span>
+                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
+                      <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
                     </div>
 
-                    {/* Image URL */}
+                    {/* Cloudinary Image Upload */}
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-500">Image URL (optional)</label>
-                      <Input
-                        type="text"
-                        placeholder="https://..."
-                        value={spfManualProduct.imageUrl}
-                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, imageUrl: e.target.value }))}
-                        className="rounded-none text-xs"
-                      />
+                      <label className="text-[10px] font-bold uppercase text-gray-500">Product Image (optional)</label>
+                      <div className="flex items-center gap-2">
+                        <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                          <ImagePlus className="w-4 h-4 text-red-400" />
+                          <span className="text-[10px] font-bold uppercase text-red-500">
+                            {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change Image" : "Upload Image"}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={spfUploading}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setSpfUploading(true);
+                              try {
+                                // Delete old image if replacing
+                                if (spfManualProduct.cloudinaryPublicId) {
+                                  await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                }
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                const res = await fetch("/api/cloudinary/upload", {
+                                  method: "POST",
+                                  body: formData,
+                                });
+                                const data = await res.json();
+                                if (data.url) {
+                                  setSpfManualProduct(prev => ({
+                                    ...prev,
+                                    imageUrl: data.url,
+                                    cloudinaryPublicId: data.publicId || "",
+                                  }));
+                                }
+                              } catch (err) {
+                                console.error("Upload failed:", err);
+                              } finally {
+                                setSpfUploading(false);
+                              }
+                            }}
+                          />
+                        </label>
+                        {spfManualProduct.imageUrl && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                              setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" }));
+                            }}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Remove image"
+                          >
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       {spfManualProduct.imageUrl && (
                         <img
                           src={spfManualProduct.imageUrl}
                           alt="preview"
-                          className="w-20 h-20 object-cover border border-gray-200 mt-1"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          className="w-20 h-20 object-cover border border-gray-200 mt-1 rounded-sm"
                         />
                       )}
                     </div>
 
                     {/* Product Name */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-500">Product Name *</label>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
                       <Input
                         type="text"
                         placeholder="Enter product name..."
@@ -1817,8 +1915,8 @@ export function QuotationSheet(props: Props) {
                     </div>
 
                     {/* SKU */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-500">Item Code / SKU</label>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
                       <Input
                         type="text"
                         placeholder="Enter item code..."
@@ -1829,9 +1927,9 @@ export function QuotationSheet(props: Props) {
                     </div>
 
                     {/* Quantity & Price */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-gray-500">Quantity</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
                         <Input
                           type="number"
                           min={1}
@@ -1842,7 +1940,7 @@ export function QuotationSheet(props: Props) {
                         />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-gray-500">Unit Price</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
                         <Input
                           type="number"
                           min={0}
@@ -1856,14 +1954,14 @@ export function QuotationSheet(props: Props) {
                     </div>
 
                     {/* Description */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-500">Description / Specs</label>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
                       <Textarea
                         placeholder="Enter product description or specifications..."
                         value={spfManualProduct.description}
                         onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))}
-                        rows={4}
-                        className="rounded-none text-xs"
+                        rows={3}
+                        className="rounded text-xs"
                       />
                     </div>
 
@@ -1885,11 +1983,13 @@ export function QuotationSheet(props: Props) {
                             price: spfManualProduct.price,
                             discount: 0,
                             isDiscounted: false,
+                            cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
                           }
                         ]);
-                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "" });
+                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
+                        setMobilePanelTab("products"); // auto-switch to products view on mobile
                       }}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-none flex items-center justify-center gap-2"
+                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 h-9 mt-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add SPF Product
@@ -2033,6 +2133,7 @@ ${spec.value}
                                     description: item.description || "",
                                   },
                                 ]);
+                                setMobilePanelTab("products"); // auto-switch to products view on mobile
                               }}
                               className="w-6 h-6 p-0 flex items-center justify-center rounded-full cursor-pointer"
                             >
@@ -2070,7 +2171,7 @@ ${spec.value}
               )}
 
               {/* Selected Products checkboxes */}
-              <div className="flex flex-col gap-2 overflow-y-auto max-h-[50vh] border border-dashed p-4 rounded-sm">
+              <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[20vh] lg:max-h-[35vh] border border-dashed p-2 rounded-lg">
                 {selectedProducts.length === 0 && (
                   <p className="text-xs text-gray-500">No products selected.</p>
                 )}
@@ -2084,6 +2185,10 @@ ${spec.value}
                         checked
                         className="accent-blue-500"
                         onChange={() => {
+                          const toRemove = selectedProducts.find((p) => p.uid === item.uid);
+                          if (toRemove?.cloudinaryPublicId) {
+                            deleteCloudinaryImage(toRemove.cloudinaryPublicId);
+                          }
                           setSelectedProducts((prev) =>
                             prev.filter((p) => p.uid !== item.uid)
                           );
@@ -2102,62 +2207,67 @@ ${spec.value}
             </div>
 
             {/* Right side: Selected Products as Table with Image & Editable Description */}
-            <div className="overflow-y-auto max-h-[75vh]">
+            <div className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"}`}>
               {selectedProducts.length > 0 && (
                 <>
-                  <div className="flex flex-col gap-4 mb-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-xs">Selected Products: ({selectedProducts.length})</h4>
+                  {/* Controls bar - desktop horizontal, mobile compact */}
+                  <div className="flex flex-col gap-2 mb-3">
+                    <div className="hidden lg:flex items-center justify-between mb-1">
+                      <h4 className="font-black text-sm tracking-tight">
+                        Product List
+                        <span className="ml-2 text-xs font-normal text-gray-400">({selectedProducts.length} item{selectedProducts.length !== 1 ? "s" : ""})</span>
+                      </h4>
+                    </div>
+                    <h4 className="font-bold text-xs lg:hidden">Selected Products: ({selectedProducts.length})</h4>
 
-                      <div className="flex items-center gap-6">
-                        {/* 1. VAT SELECTION (REQUIRED) */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase text-gray-500">VAT Type:</span>
-                          <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-3">
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="vat_inc" id="v1" />
-                              <label htmlFor="v1" className="text-[10px] font-black uppercase cursor-pointer">VAT Inc</label>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="vat_exe" id="v2" />
-                              <label htmlFor="v2" className="text-[10px] font-black uppercase cursor-pointer">VAT Exe</label>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="zero_rated" id="v3" />
-                              <label htmlFor="v3" className="text-[10px] font-black uppercase cursor-pointer">Zero Rated</label>
-                            </div>
-                          </RadioGroup>
-                        </div>
+                    {/* Subject + VAT + WHT — single compact toolbar */}
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
+                      {/* Subject */}
+                      <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
+                        <input
+                          type="text"
+                          value={quotationSubject}
+                          onChange={(e) => setQuotationSubject(e.target.value)}
+                          placeholder="For Quotation"
+                          className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                        />
+                      </div>
 
-                        <Separator orientation="vertical" className="h-4" />
+                      {/* VAT */}
+                      <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
+                        <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-2">
+                          {[{v:"vat_inc",l:"Inc"},{v:"vat_exe",l:"Exe"},{v:"zero_rated",l:"0%"}].map(({v,l})=>(
+                            <div key={v} className="flex items-center gap-0.5">
+                              <RadioGroupItem value={v} id={`vat-${v}`} />
+                              <label htmlFor={`vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
 
-                        {/* 2. WITHHOLDING TAX (OPTIONAL / INDEPENDENT) */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase text-gray-500">Withholding Tax (EWT):</span>
-                          <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-3">
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="none" id="w0" />
-                              <label htmlFor="w0" className="text-[10px] font-black uppercase cursor-pointer">None</label>
+                      {/* EWT */}
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
+                        <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-2">
+                          {[{v:"none",l:"None"},{v:"wht_1",l:"1%"},{v:"wht_2",l:"2%"}].map(({v,l})=>(
+                            <div key={v} className="flex items-center gap-0.5">
+                              <RadioGroupItem value={v} id={`wht-${v}`} />
+                              <label htmlFor={`wht-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="wht_1" id="w1" />
-                              <label htmlFor="w1" className="text-[10px] font-black uppercase cursor-pointer">1% (Goods)</label>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <RadioGroupItem value="wht_2" id="w2" />
-                              <label htmlFor="w2" className="text-[10px] font-black uppercase cursor-pointer">2% (Services)</label>
-                            </div>
-                          </RadioGroup>
-                        </div>
+                          ))}
+                        </RadioGroup>
                       </div>
                     </div>
                   </div>
 
+                  <div className="overflow-x-auto">
                   <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                     <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border p-4 text-center w-5">
-                          <label className="flex items-center justify-start gap-1 cursor-pointer">
+                      <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                        <th className="border border-gray-700 p-2 text-center w-10">
+                          <label className="flex items-center justify-center gap-1 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={selectedProducts.every((p) => p.isDiscounted)}
@@ -2172,16 +2282,16 @@ ${spec.value}
                                 );
                               }}
                             />
-                            <span className="text-xs font-medium">All</span>
+                            <span className="font-bold">Disc%</span>
                           </label>
                         </th>
-                        <th className="border p-4 text-left w-5">Remarks</th>
-                        <th className="border p-4 text-left w-100">Product</th>
-                        <th className="border p-4 text-center w-5">Quantity</th>
-                        <th className="border p-4 text-center w-15">Price</th>
-                        <th className="border p-4 text-center w-10">-</th>
-                        <th className="border p-4 text-center w-10">Subtotal</th>
-                        <th className="border p-4 text-center w-5">Action</th>
+                        <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
+                        <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-16">Qty</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
+                        <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2245,7 +2355,7 @@ ${spec.value}
                                 </div>
                               </td>
 
-                              <td>
+                              <td className="hidden sm:table-cell">
                                 <Textarea
                                   value={p.itemRemarks || ""}
                                   onChange={(e) => {
@@ -2262,19 +2372,20 @@ ${spec.value}
                                 />
                               </td>
 
-                              <td className="p-2 flex items-center gap-2">
+                              <td className="p-1 sm:p-2">
+                                <div className="flex items-center gap-1 sm:gap-2">
                                 {/* Product Image */}
                                 <img
-                                  src={p.images?.[0]?.src || "/Taskflow.png"} // use default if no image
+                                  src={p.images?.[0]?.src || "/Taskflow.png"}
                                   alt={p.title}
-                                  className="w-12 h-12 object-cover rounded"
+                                  className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
                                 />
 
                                 {/* Product Title (Editable) */}
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  className="flex-1 outline-none"
+                                  className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
                                   onBlur={(e) => {
                                     const html = e.currentTarget.innerHTML; // keep HTML
                                     setSelectedProducts((prev) => {
@@ -2286,9 +2397,10 @@ ${spec.value}
                                 >
                                   {p.title}
                                 </div>
+                                </div>
                               </td>
 
-                              <td className="border border-gray-300 p-2">
+                              <td className="border border-gray-300 p-1 sm:p-2">
                                 <Input
                                   type="number"
                                   min={1}
@@ -2301,11 +2413,11 @@ ${spec.value}
                                       return copy;
                                     });
                                   }}
-                                  className="w-full p-2 rounded-none"
+                                  className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
                                 />
                               </td>
 
-                              <td className="border border-gray-300 p-2">
+                              <td className="border border-gray-300 p-1 sm:p-2">
                                 <Input
                                   type="number"
                                   min={0}
@@ -2319,11 +2431,11 @@ ${spec.value}
                                       return copy;
                                     });
                                   }}
-                                  className="w-full p-2 rounded-none"
+                                  className="w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs"
                                 />
                               </td>
 
-                              <td className="border border-gray-300 p-2 font-semibold text-center">
+                              <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
                                 {isDiscounted && discountedAmount > 0
                                   ? `₱${discountedAmount.toFixed(2)}`
                                   : "₱0.00"}
@@ -2359,17 +2471,17 @@ ${spec.value}
                                   <Button
                                     variant="outline"
                                     onClick={() => toggleRow(p.uid)}
-                                    className="flex items-center rounded-none gap-1"
+                                    className="flex items-center rounded-none gap-1 px-2"
                                   >
                                     {expandedRows[p.uid] ? (
                                       <>
                                         <EyeOff className="w-4 h-4" />
-                                        Hide
+                                        <span className="hidden sm:inline">Hide</span>
                                       </>
                                     ) : (
                                       <>
                                         <Eye className="w-4 h-4" />
-                                        View
+                                        <span className="hidden sm:inline">View</span>
                                       </>
                                     )}
                                   </Button>
@@ -2377,6 +2489,9 @@ ${spec.value}
                                     variant="outline"
                                     className="flex items-center rounded-none gap-1"
                                     onClick={() => {
+                                      if (p.cloudinaryPublicId) {
+                                        deleteCloudinaryImage(p.cloudinaryPublicId);
+                                      }
                                       setSelectedProducts((prev) =>
                                         prev.filter((item) => item.uid !== p.uid)
                                       );
@@ -2439,22 +2554,22 @@ ${spec.value}
                     <tfoot className="bg-gray-100 font-bold text-xs">
                       <tr>
                         <td className="border border-gray-300 p-2 text-center"></td>
-                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
                         <td className="border border-gray-300 p-2"></td>
-                        <td className="border border-gray-300 p-4 text-left">
+                        <td className="border border-gray-300 p-2 text-center font-black">
                           {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
                         </td>
-                        <td className="border border-gray-300 p-4 text-left">
+                        <td className="border border-gray-300 p-2 text-center font-black">
                           {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
                         </td>
-                        <td className="border border-gray-300 p-2 text-center">
+                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
                           ₱{selectedProducts.reduce((acc, p) => {
                             const discount = p.isDiscounted ? p.discount ?? 0 : 0;
                             const baseAmount = p.price * p.quantity;
                             return acc + (baseAmount * discount) / 100;
                           }, 0).toFixed(2)}
                         </td>
-                        <td className="border border-gray-300 p-2 text-center">
+                        <td className="border border-gray-300 p-2 text-center font-black">
                           ₱{selectedProducts.reduce((acc, p) => {
                             const discount = p.isDiscounted ? p.discount ?? 0 : 0;
                             const baseAmount = p.price * p.quantity;
@@ -2464,28 +2579,28 @@ ${spec.value}
                         <td className="border border-gray-300 p-2"></td>
                       </tr>
 
-                      {/* Delivery & Restocking Fee Row */}
-                      <tr>
-                        <td colSpan={6} className="border border-gray-300 p-2"></td>
-                        <td colSpan={2} className="border border-gray-300 p-2">
+                      {/* Delivery & Restocking Fee Row — desktop only inside table */}
+                      <tr className="hidden sm:table-row">
+                        <td colSpan={4} className="border border-gray-300 p-2"></td>
+                        <td colSpan={4} className="border border-gray-300 p-2">
                           <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm whitespace-nowrap">Delivery Fee:</span>
+                              <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
                               <input
                                 type="number"
                                 inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
                                 placeholder="0.00"
                                 value={deliveryFee}
                                 onChange={(e) => setDeliveryFee(e.target.value)}
                               />
                             </div>
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm whitespace-nowrap">Restocking Fee:</span>
+                              <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
                               <input
                                 type="number"
                                 inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
                                 placeholder="0.00"
                                 value={restockingFee}
                                 onChange={(e) => setRestockingFee(e.target.value)}
@@ -2496,42 +2611,75 @@ ${spec.value}
                       </tr>
                     </tfoot>
                   </table>
+                  </div>
+
+                  {/* Delivery & Restocking Fee — mobile only, below table */}
+                  <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
+                    <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
+                      <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                        placeholder="0.00"
+                        value={deliveryFee}
+                        onChange={(e) => setDeliveryFee(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                        placeholder="0.00"
+                        value={restockingFee}
+                        onChange={(e) => setRestockingFee(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </>
               )}
             </div>
           </div>
 
-          {/* Description above the footer */}
-          <div className="text-xs text-red-600 text-right italic border border-red-500 p-2 bg-red-100">
-            <p>Note: Quotation Number is not included in the Preview Sample (only appears on the final downloaded quotation).</p>
+          </div>{/* end BODY */}
+
+          {/* Note bar - compact */}
+          <div className="text-[10px] text-red-500 text-center italic px-3 py-1.5 bg-red-50 border-t border-red-200 shrink-0">
+            ⚠️ Quotation Number only appears on the final downloaded quotation.
           </div>
 
-          <DialogFooter className="flex items-center justify-between">
-            {/* Left side: Close button */}
+          <DialogFooter className="flex flex-col gap-2 px-4 py-3 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+            {/* Mobile total — hidden on desktop (shown in header instead) */}
             {selectedProducts.length > 0 && (
-              <div className="flex items-center gap-4">
-                <div className="text-sm font-semibold">
-                  Overall Total: ₱{quotationAmount}
-                </div>
-                {/* <div className="flex flex-col items-start">
-                  <Button className="bg-orange-500" onClick={handleDownloadQuotation}>
-                    <Download /> Preview Sample
-                  </Button>
-                </div> */}
-                {/* Inside the main selection modal footer */}
-                <Button
-                  className="bg-[#121212] hover:bg-black text-white px-8 flex gap-2 items-center rounded-none"
-                  onClick={() => setIsPreviewOpen(true)} // Changed from handleDownloadQuotation
-                >
-                  <Eye className="w-4 h-4" /> {/* Eye icon for "Preview" */}
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
-                </Button>
+              <div className="flex items-center justify-between lg:hidden">
+                <span className="text-xs text-gray-500 uppercase font-bold tracking-widest">Total:</span>
+                <span className="text-lg font-black text-[#121212] tabular-nums">
+                  PHP {Number(quotationAmount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
             )}
 
-            <Button className="rounded-none" variant="outline" onClick={() => setOpen(false)}>
-              <XCircle /> Close
-            </Button>
+            {/* Action buttons */}
+            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto">
+              {selectedProducts.length > 0 && (
+                <Button
+                  className="flex-1 lg:flex-none bg-[#121212] hover:bg-black text-white flex gap-2 items-center rounded-lg h-10 px-6 shadow-md"
+                  onClick={() => setIsPreviewOpen(true)}
+                >
+                  <Eye className="w-4 h-4" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
+                </Button>
+              )}
+              <Button
+                className="flex-1 lg:flex-none rounded-lg h-10 px-6 border-2"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                <XCircle className="w-4 h-4 mr-1" /> Close
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
