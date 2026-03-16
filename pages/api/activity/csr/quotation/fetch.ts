@@ -3,106 +3,104 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    const { from, to } = req.query;
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const { from, to } = req.query;
 
-    const fromDate = typeof from === "string" ? from : undefined;
-    const toDate = typeof to === "string" ? to : undefined;
+  // ✅ FIX: Use properly formatted ISO strings with time boundaries
+  const fromDate =
+    typeof from === "string"
+      ? new Date(from).toISOString()
+      : undefined;
 
-    try {
-        let allHistory: any[] = [];
-        let fromIndex = 0;
+  const toDate =
+    typeof to === "string"
+      ? new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString()
+      : undefined;
 
-        // -----------------------------
-        // 1️⃣ FETCH HISTORY IN BATCHES
-        // -----------------------------
-        while (true) {
-            let query = supabase
-                .from("history")
-                .select("*")
-                .order("date_created", { ascending: false })
-                .range(fromIndex, fromIndex + BATCH_SIZE - 1);
+  try {
+    let allHistory: any[] = [];
+    let offset = 0;
 
-            if (fromDate && toDate) {
-                query = query.gte("date_created", fromDate).lte("date_created", toDate);
-            }
+    // -----------------------------
+    // Fetch history in batches
+    // -----------------------------
+    while (true) {
+      let query = supabase
+        .from("history")
+        .select("*")
+        .order("date_created", { ascending: false })
+        .range(offset, offset + BATCH_SIZE - 1);
 
-            const { data, error } = await query;
+      // ✅ FIX: Use fromDate / toDate (with time) instead of raw from / to (date-only strings)
+      if (fromDate) query = query.gte("date_created", fromDate);
+      if (toDate) query = query.lte("date_created", toDate);
 
-            if (error) {
-                return res.status(500).json({ message: error.message });
-            }
+      const { data, error } = await query;
+      if (error) return res.status(500).json({ message: error.message });
+      if (!data || data.length === 0) break;
 
-            if (!data || data.length === 0) break;
-
-            allHistory = [...allHistory, ...data];
-
-            if (data.length < BATCH_SIZE) break;
-
-            fromIndex += BATCH_SIZE;
-        }
-
-        if (allHistory.length === 0) {
-            return res.status(200).json({ activities: [] });
-        }
-
-        // -----------------------------
-        // 2️⃣ FETCH SIGNATORIES IN BATCH
-        // -----------------------------
-        const quotationNumbers = allHistory
-            .map((h) => h.quotation_number)
-            .filter(Boolean);
-
-        let allSignatories: any[] = [];
-        let sigIndex = 0;
-
-        while (true) {
-            const slice = quotationNumbers.slice(sigIndex, sigIndex + BATCH_SIZE);
-            if (slice.length === 0) break;
-
-            const { data, error } = await supabase
-                .from("signatories")
-                .select("*")
-                .in("quotation_number", slice);
-
-            if (error) {
-                return res.status(500).json({ message: error.message });
-            }
-
-            if (data) {
-                allSignatories = [...allSignatories, ...data];
-            }
-
-            sigIndex += BATCH_SIZE;
-        }
-
-        // -----------------------------
-        // 3️⃣ MERGE DATA
-        // -----------------------------
-        const mergedData = allHistory.map((h) => {
-            const sig = allSignatories.find(
-                (s) => s.quotation_number === h.quotation_number
-            );
-
-            return {
-                ...h,
-                agent_name: sig?.agent_name || null,
-                agent_signature: sig?.agent_signature || null,
-                agent_contact_number: sig?.agent_contact_number || null,
-                agent_email_address: sig?.agent_email_address || null,
-                tsm_name: sig?.tsm_name || null,
-                tsm_approval_date: sig?.tsm_approval_date || null,
-                tsm_remarks: sig?.tsm_remarks || null,
-            };
-        });
-
-        return res.status(200).json({
-            activities: mergedData,
-            total: mergedData.length,
-        });
-
-    } catch (err) {
-        console.error("Server error:", err);
-        return res.status(500).json({ message: "Server error" });
+      allHistory.push(...data);
+      if (data.length < BATCH_SIZE) break; // last batch
+      offset += BATCH_SIZE;
     }
+
+    if (allHistory.length === 0) {
+      return res.status(200).json({ activities: [], total: 0 });
+    }
+
+    // -----------------------------
+    // Fetch signatories in batches
+    // -----------------------------
+    const quotationNumbers = allHistory
+      .map((h) => h.quotation_number)
+      .filter(Boolean);
+
+    let allSignatories: any[] = [];
+    let sigOffset = 0;
+
+    while (sigOffset < quotationNumbers.length) {
+      const slice = quotationNumbers.slice(sigOffset, sigOffset + BATCH_SIZE);
+      const { data, error } = await supabase
+        .from("signatories")
+        .select("*")
+        .in("quotation_number", slice);
+
+      if (error) return res.status(500).json({ message: error.message });
+      if (data) allSignatories.push(...data);
+      sigOffset += BATCH_SIZE;
+    }
+
+    // -----------------------------
+    // Merge signatories
+    // -----------------------------
+    const sigMap = allSignatories.reduce((acc, s) => {
+      if (s.quotation_number) acc[s.quotation_number] = s;
+      return acc;
+    }, {} as Record<string, any>);
+
+    const mergedData = allHistory.map((h) => {
+      const sig = sigMap[h.quotation_number];
+      return {
+        ...h,
+        agent_name: sig?.agent_name ?? null,
+        agent_signature: sig?.agent_signature ?? null,
+        agent_contact_number: sig?.agent_contact_number ?? null,
+        agent_email_address: sig?.agent_email_address ?? null,
+        tsm_name: sig?.tsm_name ?? null,
+        tsm_approval_date: sig?.tsm_approval_date ?? null,
+        tsm_remarks: sig?.tsm_remarks ?? null,
+      };
+    });
+
+    return res.status(200).json({
+      activities: mergedData,
+      total: mergedData.length,
+    });
+  } catch (err) {
+    console.error("Server error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
 }

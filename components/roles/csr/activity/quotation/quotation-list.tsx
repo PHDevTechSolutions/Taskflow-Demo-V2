@@ -101,25 +101,6 @@ export const Quotation: React.FC<QuotationProps> = ({
     const [agents, setAgents] = useState<any[]>([]);
 
     // -----------------------------
-    // DEBUG: log raw activities to inspect type_activity values
-    // -----------------------------
-    useEffect(() => {
-        if (activities.length > 0) {
-            const uniqueTypeActivities = [
-                ...new Set(activities.map((a) => a.type_activity)),
-            ];
-            console.log("[DEBUG] Unique type_activity values:", uniqueTypeActivities);
-
-            const uniqueStatuses = [
-                ...new Set(activities.map((a) => a.tsm_approved_status)),
-            ];
-            console.log("[DEBUG] Unique tsm_approved_status values:", uniqueStatuses);
-
-            console.log("[DEBUG] Total raw activities fetched:", activities.length);
-        }
-    }, [activities]);
-
-    // -----------------------------
     // FETCH ACTIVITIES
     // -----------------------------
     const fetchActivities = useCallback(async () => {
@@ -127,11 +108,11 @@ export const Quotation: React.FC<QuotationProps> = ({
         setError(null);
 
         const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+            ? new Date(dateCreatedFilterRange.from).toISOString()
             : null;
 
         const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+            ? new Date(new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999)).toISOString()
             : null;
 
         try {
@@ -206,29 +187,14 @@ export const Quotation: React.FC<QuotationProps> = ({
         const search = searchTerm.toLowerCase();
 
         return sortedActivities
-            // ✅ FIX 1: Approved status filter (trim + normalize)
-            .filter((item) => {
-                const status = (item.tsm_approved_status || "").trim().toLowerCase();
-                return (
-                    status === "approved" || status === "approved by sales head"
-                );
-            })
-
-            // ✅ FIX 2: Remove client-side date filter entirely —
-            // already handled by the API. Keeping it causes double-filtering
-            // which can drop records when timezone offsets shift dates.
-
-            // ✅ FIX 3: Looser type_activity check — trim whitespace,
-            // and use a broader match to catch variations like
-            // "Quotation Preparation Form", "Quotation Preparation ", etc.
+            // Only filter by type_activity
             .filter((item) => {
                 const typeActivity = (item.type_activity || "")
                     .trim()
                     .toLowerCase();
                 return typeActivity.includes("quotation preparation");
             })
-
-            // ✅ Search filter (unchanged)
+            // Apply search filter
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
@@ -411,7 +377,7 @@ export const Quotation: React.FC<QuotationProps> = ({
                                                 Company:{" "}
                                             </span>
                                             <span className="font-bold text-gray-800 uppercase">
-                                                {item.company_name || "—"} <br/> {item.contact_person || "—"} <br/> {item.contact_number || "—"}
+                                                {item.company_name || "—"} <br /> {item.contact_person || "—"} <br /> {item.contact_number || "—"}
                                             </span>
                                         </div>
                                         <div>
