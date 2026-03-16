@@ -278,6 +278,15 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         }));
     }
 
+    if (role === "Admin") {
+      return data.workspaces
+        .filter((workspace) => workspace.name === "Work Management")
+        .map((workspace) => ({
+          ...workspace,
+          pages: workspace.pages.filter((p) => p.url?.includes("/csr")),
+        }));
+    }
+
     return data.workspaces
       // TSM cannot see Conversion Rates
       .filter((workspace) => {
@@ -328,6 +337,10 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     const role = userDetails.Role;
 
     if (role === "Staff") {
+      return [];
+    }
+
+    if (role === "Admin") {
       return [];
     }
 
