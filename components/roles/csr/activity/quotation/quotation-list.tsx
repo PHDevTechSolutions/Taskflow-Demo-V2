@@ -2,7 +2,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, Search, Loader2, FileX } from "lucide-react";
+import {
+    AlertCircleIcon,
+    Eye,
+    Search,
+    Loader2,
+    FileX,
+} from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -95,6 +101,25 @@ export const Quotation: React.FC<QuotationProps> = ({
     const [agents, setAgents] = useState<any[]>([]);
 
     // -----------------------------
+    // DEBUG: log raw activities to inspect type_activity values
+    // -----------------------------
+    useEffect(() => {
+        if (activities.length > 0) {
+            const uniqueTypeActivities = [
+                ...new Set(activities.map((a) => a.type_activity)),
+            ];
+            console.log("[DEBUG] Unique type_activity values:", uniqueTypeActivities);
+
+            const uniqueStatuses = [
+                ...new Set(activities.map((a) => a.tsm_approved_status)),
+            ];
+            console.log("[DEBUG] Unique tsm_approved_status values:", uniqueStatuses);
+
+            console.log("[DEBUG] Total raw activities fetched:", activities.length);
+        }
+    }, [activities]);
+
+    // -----------------------------
     // FETCH ACTIVITIES
     // -----------------------------
     const fetchActivities = useCallback(async () => {
@@ -110,7 +135,10 @@ export const Quotation: React.FC<QuotationProps> = ({
             : null;
 
         try {
-            const url = new URL("/api/activity/csr/quotation/fetch", window.location.origin);
+            const url = new URL(
+                "/api/activity/csr/quotation/fetch",
+                window.location.origin
+            );
 
             if (from && to) {
                 url.searchParams.append("from", from);
@@ -118,7 +146,8 @@ export const Quotation: React.FC<QuotationProps> = ({
             }
 
             const res = await fetch(url.toString());
-            if (!res.ok) throw new Error(`Failed to fetch activities (${res.status})`);
+            if (!res.ok)
+                throw new Error(`Failed to fetch activities (${res.status})`);
 
             const data = await res.json();
             setActivities(data.activities || []);
@@ -129,14 +158,12 @@ export const Quotation: React.FC<QuotationProps> = ({
         }
     }, [dateCreatedFilterRange]);
 
-    // Fetch agents
     useEffect(() => {
-        if (!referenceid) return;
-        fetch(`/api/fetch-all-user?id=${encodeURIComponent(referenceid)}`)
+        fetch(`/api/fetch-all-user`)
             .then((res) => res.json())
             .then((data) => setAgents(Array.isArray(data) ? data : []))
             .catch(() => setError("Failed to load agents."));
-    }, [referenceid]);
+    }, []); // no dependency
 
     // Fetch on mount + real-time subscription
     useEffect(() => {
@@ -153,11 +180,15 @@ export const Quotation: React.FC<QuotationProps> = ({
                     schema: "public",
                     table: "history",
                 },
-                () => { fetchActivities(); }
+                () => {
+                    fetchActivities();
+                }
             )
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [referenceid, fetchActivities]);
 
     // -----------------------------
@@ -166,8 +197,8 @@ export const Quotation: React.FC<QuotationProps> = ({
     const sortedActivities = useMemo(() => {
         return [...activities].sort(
             (a, b) =>
-                new Date(b.date_created ?? b.date_created).getTime() -
-                new Date(a.date_created ?? a.date_created).getTime()
+                new Date(b.date_created).getTime() -
+                new Date(a.date_created).getTime()
         );
     }, [activities]);
 
@@ -175,48 +206,47 @@ export const Quotation: React.FC<QuotationProps> = ({
         const search = searchTerm.toLowerCase();
 
         return sortedActivities
-            // Only approved or approved by sales head
-            .filter((item) =>
-                ["approved", "approved by sales head"].includes(
-                    (item.tsm_approved_status || "").toLowerCase()
-                )
-            )
-
-            // Optional date filter
+            // ✅ FIX 1: Approved status filter (trim + normalize)
             .filter((item) => {
-                if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-                const itemDate = new Date(item.date_created);
-                const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : null;
-                const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;
-
-                if (from && to) return itemDate >= from && itemDate <= to;
-                if (from) return itemDate >= from;
-                if (to) return itemDate <= to;
-                return true;
+                const status = (item.tsm_approved_status || "").trim().toLowerCase();
+                return (
+                    status === "approved" || status === "approved by sales head"
+                );
             })
 
-            // Type activity check (case-insensitive, includes "quotation")
-            .filter((item) =>
-                (item.type_activity || "").toLowerCase().includes("quotation preparation")
-            )
+            // ✅ FIX 2: Remove client-side date filter entirely —
+            // already handled by the API. Keeping it causes double-filtering
+            // which can drop records when timezone offsets shift dates.
 
-            // Search filter
+            // ✅ FIX 3: Looser type_activity check — trim whitespace,
+            // and use a broader match to catch variations like
+            // "Quotation Preparation Form", "Quotation Preparation ", etc.
+            .filter((item) => {
+                const typeActivity = (item.type_activity || "")
+                    .trim()
+                    .toLowerCase();
+                return typeActivity.includes("quotation preparation");
+            })
+
+            // ✅ Search filter (unchanged)
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
                     (val) => val && String(val).toLowerCase().includes(search)
                 );
             });
-    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
+    }, [sortedActivities, searchTerm]);
+
     // -----------------------------
     // AGENT MAP
     // -----------------------------
     const agentMap = useMemo(() => {
         const map: Record<string, { name: string; profilePicture: string }> = {};
         agents.forEach((agent) => {
-            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
-                map[agent.ReferenceID.toLowerCase()] = {
-                    name: `${agent.Firstname} ${agent.Lastname}`,
+            if (agent.Firstname && agent.Lastname) {
+                const fullName = `${agent.Firstname} ${agent.Lastname}`;
+                map[fullName.toLowerCase()] = {
+                    name: fullName,
                     profilePicture: agent.profilePicture || "",
                 };
             }
@@ -236,11 +266,16 @@ export const Quotation: React.FC<QuotationProps> = ({
 
     const statusColor = (status: string) => {
         switch (status) {
-            case "Approved": return "bg-emerald-600 text-white";
-            case "Pending": return "bg-amber-500 text-white";
-            case "Decline": return "bg-red-500 text-white";
-            case "Endorsed to Sales Head": return "bg-blue-600 text-white";
-            default: return "bg-gray-400 text-white";
+            case "Approved":
+                return "bg-emerald-600 text-white";
+            case "Pending":
+                return "bg-amber-500 text-white";
+            case "Decline":
+                return "bg-red-500 text-white";
+            case "Endorsed to Sales Head":
+                return "bg-blue-600 text-white";
+            default:
+                return "bg-gray-400 text-white";
         }
     };
 
@@ -268,10 +303,17 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             {/* Error State */}
             {!loading && error && (
-                <Alert variant="destructive" className="rounded-none text-xs mb-4">
+                <Alert
+                    variant="destructive"
+                    className="rounded-none text-xs mb-4"
+                >
                     <AlertCircleIcon className="h-4 w-4" />
-                    <AlertTitle className="text-xs font-bold">Connection Error</AlertTitle>
-                    <AlertDescription className="text-xs">{error}</AlertDescription>
+                    <AlertTitle className="text-xs font-bold">
+                        Connection Error
+                    </AlertTitle>
+                    <AlertDescription className="text-xs">
+                        {error}
+                    </AlertDescription>
                 </Alert>
             )}
 
@@ -279,9 +321,13 @@ export const Quotation: React.FC<QuotationProps> = ({
             {!loading && !error && filteredActivities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                     <FileX className="w-10 h-10 mb-3 opacity-30" />
-                    <p className="text-xs font-semibold uppercase tracking-wide">No pending quotations</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide">
+                        No pending quotations
+                    </p>
                     {searchTerm && (
-                        <p className="text-xs mt-1 text-gray-300">Try adjusting your search</p>
+                        <p className="text-xs mt-1 text-gray-300">
+                            Try adjusting your search
+                        </p>
                     )}
                 </div>
             )}
@@ -290,7 +336,8 @@ export const Quotation: React.FC<QuotationProps> = ({
             {!loading && filteredActivities.length > 0 && (
                 <div className="mb-3 flex items-center justify-between">
                     <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                        {filteredActivities.length} Record{filteredActivities.length !== 1 ? "s" : ""}
+                        {filteredActivities.length} Record
+                        {filteredActivities.length !== 1 ? "s" : ""}
                     </span>
                     <span className="text-[10px] text-amber-600 font-semibold uppercase bg-amber-50 px-2 py-0.5 border border-amber-200">
                         Quotation List
@@ -302,14 +349,22 @@ export const Quotation: React.FC<QuotationProps> = ({
             {!loading && (
                 <div className="h-[500px] overflow-y-auto space-y-3 pr-1">
                     {filteredActivities.map((item) => {
-                        const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                        const agent = agentMap[item.agent_name?.toLowerCase() ?? ""];
                         return (
                             <div
                                 key={item.id}
                                 className="border rounded-sm bg-white hover:shadow-md transition-shadow duration-200 relative overflow-hidden"
                             >
                                 {/* Left accent strip by status */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.tsm_approved_status === "Approved" ? "bg-emerald-500" : item.tsm_approved_status === "Pending" ? "bg-amber-500" : "bg-gray-300"}`} />
+                                <div
+                                    className={`absolute left-0 top-0 bottom-0 w-1 ${item.tsm_approved_status === "Approved"
+                                        ? "bg-emerald-500"
+                                        : item.tsm_approved_status ===
+                                            "Pending"
+                                            ? "bg-amber-500"
+                                            : "bg-gray-300"
+                                        }`}
+                                />
 
                                 <div className="pl-4 pr-3 pt-3 pb-3">
                                     {/* Header Row */}
@@ -323,24 +378,31 @@ export const Quotation: React.FC<QuotationProps> = ({
                                                 />
                                             ) : (
                                                 <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-[9px] text-gray-500 font-bold">
-                                                    {agent?.name?.charAt(0) ?? "?"}
+                                                    {agent?.name?.charAt(0) ??
+                                                        "?"}
                                                 </div>
                                             )}
                                             <span className="font-bold text-[11px] text-gray-800 uppercase tracking-tight">
-                                                {agent?.name || item.referenceid || "—"}
+                                                {agent?.name || item.agent_name || "—"}
                                             </span>
                                         </div>
 
                                         {/* Status + Action */}
                                         <div className="flex items-center gap-1.5">
-                                            <span className={`text-[10px] font-bold px-2 py-1 uppercase tracking-wide ${statusColor(item.tsm_approved_status)}`}>
+                                            <span
+                                                className={`text-[10px] font-bold px-2 py-1 uppercase tracking-wide ${statusColor(
+                                                    item.tsm_approved_status
+                                                )}`}
+                                            >
                                                 {item.tsm_approved_status}
                                             </span>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
                                                 className="rounded-none h-7 text-[10px] px-2 border-gray-300 hover:bg-gray-50"
-                                                onClick={() => openEditDialog(item)}
+                                                onClick={() =>
+                                                    openEditDialog(item)
+                                                }
                                             >
                                                 <Eye className="w-3 h-3 mr-1" />
                                                 View
@@ -351,28 +413,52 @@ export const Quotation: React.FC<QuotationProps> = ({
                                     {/* Body */}
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
                                         <div className="col-span-2">
-                                            <span className="font-semibold text-gray-500">Company: </span>
-                                            <span className="font-bold text-gray-800 uppercase">{item.company_name || "—"}</span>
+                                            <span className="font-semibold text-gray-500">
+                                                Company:{" "}
+                                            </span>
+                                            <span className="font-bold text-gray-800 uppercase">
+                                                {item.company_name || "—"}
+                                            </span>
                                         </div>
                                         <div>
-                                            <span className="font-semibold text-gray-500">Ref #: </span>
-                                            <span className="font-mono text-[10px] text-gray-600">{item.activity_reference_number}</span>
+                                            <span className="font-semibold text-gray-500">
+                                                Ref #:{" "}
+                                            </span>
+                                            <span className="font-mono text-[10px] text-gray-600">
+                                                {item.activity_reference_number}
+                                            </span>
                                         </div>
                                         <div>
-                                            <span className="font-semibold text-gray-500">Quotation #: </span>
-                                            <span className="text-gray-700 uppercase">{item.quotation_number || "—"}</span>
+                                            <span className="font-semibold text-gray-500">
+                                                Quotation #:{" "}
+                                            </span>
+                                            <span className="text-gray-700 uppercase">
+                                                {item.quotation_number || "—"}
+                                            </span>
                                         </div>
                                         <div>
-                                            <span className="font-semibold text-gray-500">Amount: </span>
+                                            <span className="font-semibold text-gray-500">
+                                                Amount:{" "}
+                                            </span>
                                             <span className="font-bold text-emerald-700">
                                                 {item.quotation_amount
-                                                    ? `₱${item.quotation_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                    ? `₱${item.quotation_amount.toLocaleString(
+                                                        undefined,
+                                                        {
+                                                            minimumFractionDigits: 2,
+                                                            maximumFractionDigits: 2,
+                                                        }
+                                                    )}`
                                                     : "—"}
                                             </span>
                                         </div>
                                         <div>
-                                            <span className="font-semibold text-gray-500">Date: </span>
-                                            <span className="font-mono text-[10px] text-gray-600">{item.date_created.slice(0, 10)}</span>
+                                            <span className="font-semibold text-gray-500">
+                                                Date:{" "}
+                                            </span>
+                                            <span className="font-mono text-[10px] text-gray-600">
+                                                {item.date_created.slice(0, 10)}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
