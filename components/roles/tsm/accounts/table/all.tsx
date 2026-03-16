@@ -1,20 +1,16 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent,
-  DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  DownloadCloud, History, Users, ChevronLeft,
-  ChevronRight, X, Search, Layers, Terminal,
-} from "lucide-react";
+import { Terminal, X, Search, History } from "lucide-react";
 
-/* ─────────────────────── Types ─────────────────────── */
+/* ─── Types ───────────────────────────────────────────────────────── */
 
 interface Account {
   id: string;
@@ -23,23 +19,31 @@ interface Account {
   company_name: string;
   type_client: string;
   date_created: string;
-  date_updated: string;
   contact_person: string;
   contact_number: string;
   email_address: string;
-  address: string;
-  delivery_address: string;
+  address?: string;
+  delivery_address?: string;
   region: string;
   industry: string;
   status?: string;
 }
 
+interface Activity {
+  id?: string;
+  company_name?: string;
+  type_activity?: string;
+  remarks?: string;
+  status?: string;
+  date_created?: string;
+}
+
 interface UserDetails {
   referenceid: string;
-  tsm: string;
-  manager: string;
   firstname: string;
   lastname: string;
+  tsm: string;
+  manager: string;
   profilepicture: string;
 }
 
@@ -48,82 +52,52 @@ interface AccountsTableProps {
   userDetails: UserDetails;
 }
 
-interface HistoryRecord {
-  id?: string;
-  company_name?: string;
-  type_activity?: string;
-  remarks?: string;
-  date_created?: string;
-  status?: string;
-  [key: string]: any;
+const ITEMS_PER_PAGE = 20;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const fmtDate = (s: string) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString();
+};
+
+/* ─── Stat Card ───────────────────────────────────────────────────── */
+
+function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
+  return (
+    <div
+      className="relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden"
+      style={{ borderLeft: `3px solid ${accent}` }}
+    >
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{ background: `radial-gradient(circle at 80% 20%, ${accent}, transparent 70%)` }}
+      />
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</span>
+      <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
+    </div>
+  );
 }
 
-/* ─────────────────────── Design Tokens ─────────────────────── */
+/* ─── Terminal Export Dialog ──────────────────────────────────────── */
 
-const TYPE_META: Record<string, { pill: string; dot: string; hex: string }> = {
-  "Top 50":     { pill: "bg-amber-100 text-amber-700",     dot: "bg-amber-400",   hex: "#f59e0b" },
-  "Next 30":    { pill: "bg-sky-100 text-sky-700",         dot: "bg-sky-400",     hex: "#38bdf8" },
-  "Balance 20": { pill: "bg-violet-100 text-violet-700",   dot: "bg-violet-400",  hex: "#a78bfa" },
-  "CSR Client": { pill: "bg-teal-100 text-teal-700",       dot: "bg-teal-400",    hex: "#2dd4bf" },
-  "New Client": { pill: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-400", hex: "#34d399" },
-  "TSA Client": { pill: "bg-rose-100 text-rose-700",       dot: "bg-rose-400",    hex: "#fb7185" },
-};
-
-const TYPE_ORDER = ["Top 50", "Next 30", "Balance 20", "CSR Client", "New Client", "TSA Client"];
-const ITEMS_PER_PAGE = 20;
-
-const typeMeta = (t: string) =>
-  TYPE_META[t] ?? { pill: "bg-slate-100 text-slate-600", dot: "bg-slate-300", hex: "#94a3b8" };
-
-const fmtDate = (d: string) => {
-  try {
-    return new Date(d).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-  } catch { return d ?? "—"; }
-};
-
-/* ─────────────────────── Shared Atoms ─────────────────────── */
-
-const Pill = ({ type }: { type: string }) => {
-  const m = typeMeta(type);
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${m.pill}`}>
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.dot}`} />
-      {type}
-    </span>
-  );
-};
-
-const SegmentBar = ({ counts, total }: { counts: Record<string, number>; total: number }) => (
-  <div className="flex h-1.5 rounded-full overflow-hidden gap-px bg-slate-100">
-    {TYPE_ORDER.filter((t) => counts[t]).map((t) => (
-      <div key={t} title={`${t}: ${counts[t]}`}
-        style={{ width: `${(counts[t] / total) * 100}%`, background: typeMeta(t).hex }}
-        className="h-full" />
-    ))}
-  </div>
-);
-
-/* ═══════════════════════════════════════════════════════════
-   DOWNLOAD CONSOLE  — dark terminal-style animated dialog
-═══════════════════════════════════════════════════════════ */
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-interface DownloadConsoleProps {
+interface ExportDialogProps {
   open: boolean;
   onClose: () => void;
   rows: Account[];
   agentMap: Record<string, string>;
 }
 
-function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps) {
+function ExportDialog({ open, onClose, rows, agentMap }: ExportDialogProps) {
   const [lines, setLines] = useState<{ text: string; color: string }[]>([]);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const cancelledRef = useRef(false);
 
-  /* Reset + kick off animation each time the dialog opens */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines]);
+
   useEffect(() => {
     if (!open) return;
     setLines([]);
@@ -143,36 +117,32 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
       await sleep(180);
       push("> Building CSV headers…", "text-slate-500");
       await sleep(120);
-      push('  ✓ ["Agent","Company","Contact","Phone","Email","Address","Delivery","Region","Type","Industry","Status","Created"]', "text-emerald-400");
+      push('  ✓ ["Agent","Company","Contact","Phone","Email","Region","Type","Industry","Status","Created"]', "text-emerald-400");
       await sleep(180);
       push("> Processing rows…", "text-slate-500");
       await sleep(100);
 
-      const csvLines: string[] = [
-        ["Agent","Company","Contact","Phone","Email","Address","Delivery","Region","Type","Industry","Status","Created"]
-          .map((h) => `"${h}"`).join(","),
-      ];
-
-      /* Log ~25 evenly-spaced sample lines so the console feels alive */
+      const headers = ["Agent", "Company", "Contact", "Phone", "Email", "Address", "Delivery", "Region", "Type", "Industry", "Status", "Created"];
+      const csvLines: string[] = [headers.map((h) => `"${h}"`).join(",")];
       const logEvery = Math.max(1, Math.floor(rows.length / 25));
 
       for (let i = 0; i < rows.length; i++) {
         if (cancelledRef.current) return;
-
         const a = rows[i];
         csvLines.push(
-          [agentMap[a.referenceid?.toLowerCase() ?? ""] ?? "-",
-           a.company_name, a.contact_person, a.contact_number,
-           a.email_address, a.address, a.delivery_address, a.region,
-           a.type_client, a.industry, a.status ?? "-", fmtDate(a.date_created)]
-            .map((f) => `"${String(f ?? "").replace(/"/g, '""')}"`).join(",")
+          [
+            agentMap[a.referenceid?.toLowerCase() ?? ""] ?? "-",
+            a.company_name, a.contact_person, a.contact_number,
+            a.email_address, a.address ?? "", a.delivery_address ?? "",
+            a.region, a.type_client, a.industry,
+            a.status ?? "-", fmtDate(a.date_created),
+          ].map((f) => `"${String(f ?? "").replace(/"/g, '""')}"`).join(",")
         );
-
         if (i % logEvery === 0) {
           const pct = Math.round(((i + 1) / rows.length) * 100);
           setProgress(pct);
           push(
-            `  [${String(i + 1).padStart(5, "0")}/${rows.length}] ${(a.company_name ?? "—").slice(0, 48)}`,
+            `  [${String(i + 1).padStart(5, "0")}/${rows.length}] ${(a.company_name ?? "—").slice(0, 52)}`,
             "text-slate-300"
           );
           await sleep(28);
@@ -181,20 +151,21 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
 
       if (cancelledRef.current) return;
       setProgress(100);
-
       push(`> Serialized ${rows.length} rows.`, "text-slate-500");
       await sleep(150);
       push("> Writing Blob…", "text-slate-500");
       await sleep(120);
 
-      /* Trigger real download */
       const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
       const fname = `accounts-${new Date().toISOString().split("T")[0]}.csv`;
-      a.href = url; a.download = fname;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
+      link.href = url;
+      link.download = fname;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       push(`> ✓ Download triggered → ${fname}`, "text-emerald-400");
       await sleep(80);
@@ -204,22 +175,15 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
 
     run();
     return () => { cancelledRef.current = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* Auto-scroll to bottom as lines appear */
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [lines]);
-
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { cancelledRef.current = true; onClose(); } }}>
       <DialogContent className="max-w-xl w-full p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117] flex flex-col max-h-[68vh]">
 
-        {/* ── Terminal header bar ── */}
+        {/* Terminal header */}
         <div className="flex items-center justify-between px-4 py-3 bg-[#161b22] border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2">
-            {/* Traffic lights */}
             <span className="w-3 h-3 rounded-full bg-rose-500/80" />
             <span className="w-3 h-3 rounded-full bg-amber-400/80" />
             <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
@@ -227,11 +191,9 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
             <DialogTitle className="text-green-400 text-[11px] font-bold font-mono tracking-widest uppercase">
               export-console
             </DialogTitle>
-            <DialogDescription className="sr-only">CSV download progress</DialogDescription>
+            <DialogDescription className="sr-only">CSV export progress console</DialogDescription>
           </div>
-
           <div className="flex items-center gap-3">
-            {/* Progress bar */}
             <div className="flex items-center gap-1.5">
               <div className="w-28 h-1 bg-white/10 rounded-full overflow-hidden">
                 <div
@@ -241,7 +203,6 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
               </div>
               <span className="text-[10px] font-mono text-slate-500 tabular-nums w-8 text-right">{progress}%</span>
             </div>
-
             {done && (
               <button
                 onClick={onClose}
@@ -253,23 +214,20 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
           </div>
         </div>
 
-        {/* ── Console output ── */}
+        {/* Console output */}
         <div className="flex-1 overflow-y-auto px-4 py-3 font-mono text-[11px] space-y-0.5 min-h-[220px]">
           {lines.map((l, i) => (
             <div key={i} className={`leading-relaxed whitespace-pre-wrap break-all ${l.color}`}>
               {l.text}
             </div>
           ))}
-
-          {/* Blinking cursor while running */}
           {!done && (
             <div className="text-green-400 mt-0.5 animate-pulse select-none">█</div>
           )}
-
           <div ref={bottomRef} />
         </div>
 
-        {/* ── Footer close button (only when done) ── */}
+        {/* Footer */}
         {done && (
           <div className="px-4 py-3 bg-[#161b22] border-t border-white/5 shrink-0">
             <button
@@ -280,571 +238,486 @@ function DownloadConsole({ open, onClose, rows, agentMap }: DownloadConsoleProps
             </button>
           </div>
         )}
+
       </DialogContent>
     </Dialog>
   );
 }
 
-/* ─────────────────────── History Dialog ─────────────────────── */
-/* (unchanged from original) */
+/* ─── Activity History Dialog ─────────────────────────────────────── */
 
-function CompanyHistoryDialog({
-  companyName, open, onClose,
-  tsmReferenceId, cachedActivities, onActivitiesLoaded,
-}: {
-  companyName: string | null;
+interface HistoryDialogProps {
   open: boolean;
   onClose: () => void;
-  tsmReferenceId: string;
-  cachedActivities: HistoryRecord[] | null;
-  onActivitiesLoaded: (a: HistoryRecord[]) => void;
-}) {
-  const [loading, setLoading] = useState(false);
+  companyName: string | null;
+  loading: boolean;
+  records: Activity[];
+}
+
+function HistoryDialog({ open, onClose, companyName, loading, records }: HistoryDialogProps) {
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    if (!open || !tsmReferenceId || cachedActivities !== null) return;
-    setLoading(true);
-    fetch(`/api/reports/tsm/fetch?referenceid=${encodeURIComponent(tsmReferenceId)}`)
-      .then((r) => r.ok ? r.json() : { activities: [] })
-      .then((d) => onActivitiesLoaded(d.activities ?? []))
-      .catch(() => onActivitiesLoaded([]))
-      .finally(() => setLoading(false));
-  }, [open, tsmReferenceId, cachedActivities, onActivitiesLoaded]);
-
-  const records = useMemo(() => {
-    if (!cachedActivities || !companyName) return [];
-    return cachedActivities.filter(
-      (r) => (r.company_name ?? "").toLowerCase() === companyName.toLowerCase()
-    );
-  }, [cachedActivities, companyName]);
-
-  const grouped = useMemo(() =>
-    records.reduce<Record<string, number>>((acc, r) => {
-      const k = r.type_activity ?? "Other";
-      acc[k] = (acc[k] ?? 0) + 1;
-      return acc;
-    }, {}), [records]);
+  useEffect(() => { if (!open) setSearch(""); }, [open]);
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
+    const q = search.toLowerCase();
     if (!q) return records;
-    return records.filter((r) =>
-      (r.type_activity ?? "").toLowerCase().includes(q) ||
-      (r.remarks ?? "").toLowerCase().includes(q) ||
-      (r.status ?? "").toLowerCase().includes(q)
+    return records.filter(
+      (r) =>
+        (r.type_activity ?? "").toLowerCase().includes(q) ||
+        (r.remarks ?? "").toLowerCase().includes(q) ||
+        (r.status ?? "").toLowerCase().includes(q)
     );
-  }, [records, search]);
+  }, [search, records]);
+
+  const grouped = useMemo(() => {
+    const g: Record<string, number> = {};
+    records.forEach((r) => {
+      const t = r.type_activity ?? "Other";
+      g[t] = (g[t] ?? 0) + 1;
+    });
+    return g;
+  }, [records]);
+
+  const typeStyles: Record<string, string> = {
+    Call: "bg-sky-500/15 text-sky-300 border-sky-500/20",
+    Email: "bg-violet-500/15 text-violet-300 border-violet-500/20",
+    Meeting: "bg-amber-500/15 text-amber-300 border-amber-500/20",
+    Demo: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
+    Proposal: "bg-rose-500/15 text-rose-300 border-rose-500/20",
+  };
+  const getTypeStyle = (type?: string) =>
+    typeStyles[type ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl w-full max-h-[82vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-white">
-        <div className="px-6 py-5 bg-gradient-to-br from-slate-900 to-slate-700 flex items-start justify-between shrink-0">
-          <div>
-            <DialogTitle className="text-white text-sm font-bold tracking-wide">Activity History</DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs mt-0.5 font-medium">{companyName}</DialogDescription>
+      <DialogContent className="max-w-2xl w-full max-h-[82vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+
+        {/* Header */}
+        <div className="px-6 py-5 bg-[#161b22] border-b border-white/5 flex items-start justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="w-3 h-3 rounded-full bg-rose-500/80" />
+            <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+            <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+            <div className="ml-1">
+              <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">
+                activity_history
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-[10px] mt-0.5 font-mono">
+                {companyName}
+              </DialogDescription>
+            </div>
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all">
-            <X size={13} />
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5"
+          >
+            <X size={12} />
           </button>
         </div>
 
+        {/* Summary pills */}
         {!loading && records.length > 0 && (
-          <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50 shrink-0">
-            <span className="px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-[11px] font-bold">{records.length} total</span>
+          <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-white/5 bg-[#161b22]/50 shrink-0">
+            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold font-mono border border-white/10">
+              {records.length} records
+            </span>
             {Object.entries(grouped).map(([type, count]) => (
-              <span key={type} className="px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-600 text-[11px] font-medium shadow-sm">
+              <span
+                key={type}
+                className={`px-3 py-1 rounded-full text-[11px] font-mono font-medium border ${getTypeStyle(type)}`}
+              >
                 {type} · <strong>{count}</strong>
               </span>
             ))}
           </div>
         )}
 
-        <div className="px-6 py-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
-            <Search size={13} className="text-slate-400 shrink-0" />
-            <input type="text" placeholder="Search activity, remarks, status…" value={search}
+        {/* Search */}
+        <div className="px-6 py-3 border-b border-white/5 shrink-0">
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+            <Search size={13} className="text-slate-500 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search activity, remarks, status…"
+              value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
-            {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
+              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400 transition-colors">
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Records list */}
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-slate-600 animate-spin" />
-              <p className="text-xs text-slate-400 font-medium">Fetching activity history…</p>
+              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
+              <p className="text-xs text-slate-500 font-mono">Fetching records…</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                <History size={20} className="text-slate-400" />
+              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                <History size={20} className="text-slate-600" />
               </div>
-              <p className="text-xs text-slate-400 font-medium">No records found</p>
+              <p className="text-xs text-slate-600 font-mono">no records found</p>
             </div>
-          ) : filtered.map((r, i) => (
-            <div key={r.id ?? i} className="flex gap-3 p-3 rounded-xl bg-slate-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 transition-all duration-150">
-              <div className="shrink-0 pt-0.5">
-                <span className="inline-block px-2 py-1 rounded-lg bg-slate-800 text-white text-[9px] font-bold uppercase tracking-wide whitespace-nowrap">
-                  {r.type_activity ?? "—"}
-                </span>
+          ) : (
+            filtered.map((r, i) => (
+              <div
+                key={r.id ?? i}
+                className="flex gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all duration-150 group"
+              >
+                {/* Badge */}
+                <div className="shrink-0 pt-0.5">
+                  <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wide whitespace-nowrap border font-mono ${getTypeStyle(r.type_activity)}`}>
+                    {r.type_activity ?? "—"}
+                  </span>
+                </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-300 leading-snug font-mono uppercase">
+                    {r.remarks
+                      ? r.remarks
+                      : <span className="text-slate-600 italic">no remarks</span>}
+                  </p>
+                  {r.status && (
+                    <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                      status: {r.status}
+                    </span>
+                  )}
+                </div>
+                {/* Date */}
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap font-mono group-hover:text-slate-500 transition-colors">
+                    {fmtDate(r.date_created ?? "")}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-700 leading-snug">
-                  {r.remarks ? r.remarks : <span className="text-slate-400 italic">No remarks</span>}
-                </p>
-                {r.status && <span className="text-[10px] text-slate-400 font-medium mt-0.5 block">{r.status}</span>}
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap">{fmtDate(r.date_created ?? "")}</p>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
+
       </DialogContent>
     </Dialog>
   );
 }
 
-/* ─────────────────────── Main Component ─────────────────────── */
+/* ─── Main Component ──────────────────────────────────────────────── */
 
-export function AccountsTable({ posts = [], userDetails }: AccountsTableProps) {
+export function AccountsTable({ posts, userDetails }: AccountsTableProps) {
   const [agents, setAgents] = useState<any[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [mergedAgents, setMergedAgents] = useState<Record<string, string[]>>({});
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterTypeClient, setFilterTypeClient] = useState("");
+  const [search, setSearch] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [historyCompany, setHistoryCompany] = useState<string | null>(null);
+
+  /* History */
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [tsmActivitiesCache, setTsmActivitiesCache] = useState<HistoryRecord[] | null>(null);
+  const [historyCompany, setHistoryCompany] = useState<string | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // ── NEW: download console state ──
-  const [downloadOpen, setDownloadOpen] = useState(false);
+  /* Export */
+  const [exportOpen, setExportOpen] = useState(false);
 
-  /* ── Fetch agents ── */
+  /* ─── Fetch users ─── */
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    setTsmActivitiesCache(null);
     fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
-      .then((r) => r.ok ? r.json() : [])
-      .then(setAgents)
-      .catch(() => {});
+      .then((r) => r.json())
+      .then((d) => setAgents(d ?? []))
+      .catch(() => setAgents([]));
   }, [userDetails.referenceid]);
 
+  /* ─── Agent map ─── */
   const agentMap = useMemo(() => {
-    const m: Record<string, string> = {};
+    const map: Record<string, string> = {};
     agents.forEach((a) => {
-      if (a.ReferenceID) m[a.ReferenceID.toLowerCase()] = `${a.Firstname} ${a.Lastname}`;
+      if (a.ReferenceID)
+        map[a.ReferenceID.toLowerCase()] = `${a.Firstname} ${a.Lastname}`;
     });
-    return m;
+    return map;
   }, [agents]);
 
-  /* ── Derived ── */
-  const activePosts = useMemo(() => posts.filter((p) => p.status === "Active"), [posts]);
+  /* ─── Active accounts ─── */
+  const activeAccounts = useMemo(
+    () => posts.filter((a) => a.status?.toLowerCase() === "active"),
+    [posts]
+  );
 
-  const groupedByAgent = useMemo(() => {
-    const g: Record<string, Account[]> = {};
-    activePosts.forEach((p) => {
-      const name = agentMap[p.referenceid?.toLowerCase() ?? ""] ?? "Unassigned";
-      if (!g[name]) g[name] = [];
-      g[name].push(p);
+  /* ─── Unique owners ─── */
+  const ownerOptions = useMemo(() => {
+    const ids = [...new Set(
+      activeAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean)
+    )];
+    return ids.map((id) => ({ value: id, label: agentMap[id] ?? id }));
+  }, [activeAccounts, agentMap]);
+
+  /* ─── type_client counts ─── */
+  const typeClientCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    activeAccounts.forEach((a) => {
+      const t = a.type_client ?? "Unknown";
+      counts[t] = (counts[t] ?? 0) + 1;
     });
-    return g;
-  }, [activePosts, agentMap]);
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [activeAccounts]);
 
-  const totalTypeCounts = useMemo(() => {
-    const t: Record<string, number> = {};
-    activePosts.forEach((a) => { t[a.type_client] = (t[a.type_client] ?? 0) + 1; });
-    return t;
-  }, [activePosts]);
-
-  const getMergedAccounts = useCallback(
-    (name: string) => (mergedAgents[name] ?? [name]).flatMap((n) => groupedByAgent[n] ?? []),
-    [mergedAgents, groupedByAgent]
-  );
-
-  const tableAccounts = useMemo(
-    () => !selectedAgent ? activePosts : getMergedAccounts(selectedAgent),
-    [selectedAgent, activePosts, getMergedAccounts]
-  );
-
-  const typeClientOptions = useMemo(() => {
-    const s = new Set<string>();
-    activePosts.forEach((a) => s.add(a.type_client));
-    return TYPE_ORDER.filter((t) => s.has(t)).concat(Array.from(s).filter((t) => !TYPE_ORDER.includes(t)));
-  }, [activePosts]);
-
+  /* ─── Filtered accounts ─── */
   const filteredAccounts = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return tableAccounts.filter((a) => {
-      const ms = a.company_name.toLowerCase().includes(q) || a.contact_person.toLowerCase().includes(q);
-      const mt = filterTypeClient ? a.type_client === filterTypeClient : true;
-      return ms && mt;
+    const q = search.toLowerCase();
+    return activeAccounts.filter((a) => {
+      const matchSearch =
+        a.company_name.toLowerCase().includes(q) ||
+        a.contact_person.toLowerCase().includes(q) ||
+        a.email_address.toLowerCase().includes(q);
+      const matchOwner =
+        ownerFilter === "all" || a.referenceid?.toLowerCase() === ownerFilter;
+      return matchSearch && matchOwner;
     });
-  }, [tableAccounts, searchQuery, filterTypeClient]);
+  }, [search, ownerFilter, activeAccounts]);
 
+  /* ─── Pagination ─── */
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  useEffect(() => setCurrentPage(1), [search, ownerFilter]);
 
-  useEffect(() => { setCurrentPage(1); }, [filteredAccounts.length, selectedAgent]);
+  /* ─── Fetch history ─── */
+  const openHistory = async (companyName: string) => {
+    setHistoryCompany(companyName);
+    setHistoryOpen(true);
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(
+        `/api/reports/tsm/fetch?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+      );
+      const data = await res.json();
+      const records = (data.activities ?? data ?? []).filter(
+        (a: any) => (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
+      );
+      setActivities(records);
+    } catch {
+      setActivities([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
-  const visibleAgentCards = useMemo(() => {
-    const kids = new Set<string>();
-    Object.entries(mergedAgents).forEach(([, children]) =>
-      children.slice(1).forEach((c) => kids.add(c))
-    );
-    return Object.keys(groupedByAgent).filter((n) => !kids.has(n));
-  }, [groupedByAgent, mergedAgents]);
+  /* ─── Accent colors ─── */
+  const accentColors = [
+    "#6366f1", "#f59e0b", "#10b981", "#ef4444",
+    "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
+  ];
 
-  /* ─────────────────── RENDER ─────────────────── */
+  /* ──────────────────────────────────────── */
+
   return (
     <>
-      {/* ── Download Console (NEW) ── */}
-      <DownloadConsole
-        open={downloadOpen}
-        onClose={() => setDownloadOpen(false)}
+      <ExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
         rows={filteredAccounts}
         agentMap={agentMap}
       />
 
-      <CompanyHistoryDialog
-        companyName={historyCompany}
+      <HistoryDialog
         open={historyOpen}
-        onClose={() => { setHistoryOpen(false); setHistoryCompany(null); }}
-        tsmReferenceId={userDetails.referenceid}
-        cachedActivities={tsmActivitiesCache}
-        onActivitiesLoaded={(a) => setTsmActivitiesCache(a)}
+        onClose={() => setHistoryOpen(false)}
+        companyName={historyCompany}
+        loading={loadingHistory}
+        records={activities}
       />
 
-      <div className="flex gap-4 bg-[#F7F7F5] p-4" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div className="space-y-5">
 
-        {/* ─── LEFT SIDEBAR ─── */}
-        <div className="w-56 shrink-0 space-y-2.5">
-
-          {/* All Accounts summary card */}
-          <button
-            onClick={() => setSelectedAgent(null)}
-            className={`w-full text-left p-4 rounded-2xl transition-all duration-200 ${
-              selectedAgent === null
-                ? "bg-slate-900 shadow-lg shadow-slate-900/20"
-                : "bg-white hover:shadow-md shadow-sm border border-slate-100"
-            }`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                selectedAgent === null ? "bg-white/10" : "bg-slate-100"
-              }`}>
-                <Users size={14} className={selectedAgent === null ? "text-white" : "text-slate-500"} />
-              </div>
-              <span className={`text-2xl font-black tabular-nums ${
-                selectedAgent === null ? "text-white" : "text-slate-900"
-              }`}>
-                {activePosts.length}
-              </span>
-            </div>
-
-            <p className={`text-[11px] font-semibold mb-2.5 ${
-              selectedAgent === null ? "text-slate-400" : "text-slate-500"
-            }`}>
-              All Active Accounts
-            </p>
-
-            <div className="space-y-1.5">
-              {TYPE_ORDER.filter((t) => totalTypeCounts[t]).map((type) => {
-                const m = typeMeta(type);
-                const count = totalTypeCounts[type] ?? 0;
-                const pct = activePosts.length ? Math.round((count / activePosts.length) * 100) : 0;
-                return (
-                  <div key={type} className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.dot}`} />
-                    <span className={`text-[10px] flex-1 ${
-                      selectedAgent === null ? "text-slate-500" : "text-slate-500"
-                    }`}>{type}</span>
-                    <span className={`text-[10px] font-bold tabular-nums ${
-                      selectedAgent === null ? "text-slate-300" : "text-slate-700"
-                    }`}>{count}</span>
-                    <span className={`text-[9px] tabular-nums w-7 text-right ${
-                      selectedAgent === null ? "text-slate-600" : "text-slate-400"
-                    }`}>{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </button>
-
-          {/* Per-agent cards */}
-          {visibleAgentCards.map((agentName) => {
-            const mergedList = mergedAgents[agentName] ?? [agentName];
-            const isMerged = mergedList.length > 1;
-            const allAcc = getMergedAccounts(agentName);
-            const isActive = selectedAgent === agentName;
-            const typeCounts = allAcc.reduce<Record<string, number>>((acc, a) => {
-              acc[a.type_client] = (acc[a.type_client] ?? 0) + 1;
-              return acc;
-            }, {});
-            const pics = mergedList
-              .map((n) => agents.find((ag) => `${ag.Firstname} ${ag.Lastname}` === n)?.profilePicture)
-              .filter(Boolean) as string[];
-
-            return (
-              <div
-                key={agentName}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData("text/plain", agentName)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  const dragged = e.dataTransfer.getData("text/plain");
-                  if (!dragged || dragged === agentName) return;
-                  setMergedAgents((prev) => {
-                    const next = { ...prev };
-                    next[agentName] = Array.from(new Set([
-                      ...(next[agentName] ?? [agentName]),
-                      ...(next[dragged] ?? [dragged]),
-                    ]));
-                    delete next[dragged];
-                    return next;
-                  });
-                  if (selectedAgent === dragged || selectedAgent === agentName) setSelectedAgent(agentName);
-                }}
-                onClick={() => setSelectedAgent(agentName)}
-                className={`relative p-4 rounded-2xl cursor-pointer transition-all duration-200 group ${
-                  isActive
-                    ? "bg-white shadow-lg shadow-slate-200/80 border border-slate-200 ring-2 ring-slate-900/5"
-                    : "bg-white shadow-sm border border-slate-100 hover:shadow-md"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {isMerged ? (
-                      <div className="flex -space-x-1.5">
-                        {pics.slice(0, 3).map((pic, i) => (
-                          <img key={i} src={pic} alt="" className="w-6 h-6 rounded-full object-cover ring-2 ring-white" />
-                        ))}
-                        {pics.length > 3 && (
-                          <span className="w-6 h-6 rounded-full bg-slate-200 ring-2 ring-white text-[8px] font-black text-slate-600 flex items-center justify-center">
-                            +{pics.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    ) : pics[0] ? (
-                      <img src={pics[0]} alt="" className="w-6 h-6 rounded-full object-cover ring-2 ring-slate-100" />
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center">
-                        <span className="text-[9px] font-black text-slate-600">{agentName.charAt(0)}</span>
-                      </div>
-                    )}
-                    <span className="text-xs font-bold text-slate-800 truncate max-w-[80px]">
-                      {isMerged ? `${mergedList.length} agents` : agentName.split(" ")[0]}
-                    </span>
-                  </div>
-                  <span className="text-base font-black tabular-nums text-slate-900">{allAcc.length}</span>
-                </div>
-
-                <SegmentBar counts={typeCounts} total={allAcc.length} />
-
-                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
-                  {TYPE_ORDER.filter((t) => typeCounts[t]).map((t) => (
-                    <span key={t} className="text-[9px] text-slate-500">
-                      <b className="text-slate-700">{typeCounts[t]}</b> {t}
-                    </span>
-                  ))}
-                </div>
-
-                {isMerged && (
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap gap-1 items-center">
-                    {mergedList.map((n) => (
-                      <span key={n} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md font-medium">
-                        {n.split(" ")[0]}
-                      </span>
-                    ))}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMergedAgents((prev) => { const n = { ...prev }; delete n[agentName]; return n; });
-                        if (selectedAgent === agentName) setSelectedAgent(null);
-                      }}
-                      className="ml-auto text-[9px] text-rose-500 hover:text-rose-700 font-semibold transition-colors"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                )}
-
-                <div className="hidden group-hover:flex absolute inset-x-0 bottom-2 justify-center pointer-events-none">
-                  <span className="flex items-center gap-1 text-[9px] text-slate-400 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm border border-slate-200">
-                    <Layers size={9} /> drag to merge
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+        {/* ── STAT CARDS ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <StatCard label="Total Accounts" value={activeAccounts.length} accent="#1e293b" />
+          {typeClientCounts.map(([type, count], i) => (
+            <StatCard key={type} label={type} value={count} accent={accentColors[i % accentColors.length]} />
+          ))}
         </div>
 
-        {/* ─── MAIN TABLE PANEL ─── */}
-        <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden min-h-0">
+        {/* ── TABLE CARD ── */}
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
 
           {/* Toolbar */}
-          <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-3 shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  {selectedAgent ?? "All Active Accounts"}
-                </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {filteredAccounts.length} records
-                  {filterTypeClient && (
-                    <> · <span className="font-semibold text-slate-500">{filterTypeClient}</span></>
-                  )}
-                </p>
-              </div>
+          <div className="px-4 py-3 border-b flex flex-wrap items-center gap-3 bg-gray-50/60">
+            <h2 className="text-sm font-semibold text-gray-700 mr-auto">
+              Company Accounts
+              <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600 border border-indigo-100">
+                {filteredAccounts.length}
+              </span>
+            </h2>
 
-              {/* ── Export button now opens the animated console ── */}
-              <button
-                onClick={() => { if (filteredAccounts.length) setDownloadOpen(true); }}
-                disabled={!filteredAccounts.length}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-colors shadow-sm"
-              >
-                <DownloadCloud size={12} />
-                Export CSV
-              </button>
+            {/* Owner filter */}
+            <select
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-xs text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm"
+            >
+              <option value="all">All Owners</option>
+              {ownerOptions.map((o) => (
+                <option className="capitalize" key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+
+            {/* Search */}
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search company, contact, email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="border rounded-lg pl-8 pr-3 py-1.5 text-xs w-56 focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm"
+              />
             </div>
 
-            <div className="flex gap-2">
-              <div className="flex items-center gap-2 flex-1 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200 focus-within:border-slate-400 transition-colors">
-                <Search size={13} className="text-slate-400 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search by company or contact…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-              <select
-                value={filterTypeClient}
-                onChange={(e) => setFilterTypeClient(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-medium text-slate-600 outline-none cursor-pointer hover:border-slate-300 transition-colors"
-              >
-                <option value="">All Types</option>
-                {typeClientOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            {/* Export — terminal style button */}
+            <button
+              onClick={() => setExportOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-[#161b22] px-3 py-1.5 text-xs font-bold font-mono text-black hover:text-white border border-green-500/20 transition-colors shadow-sm"
+            >
+              Export CSV
+            </button>
           </div>
 
           {/* Table */}
-          <div className="overflow-auto flex-1">
+          <div className="overflow-auto p-2">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/80 hover:bg-slate-50 border-b border-slate-100">
-                  {["Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Created", ""].map((h) => (
-                    <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3 px-4 first:pl-5 whitespace-nowrap">
+                <TableRow className="bg-gray-50 border-b border-gray-100">
+                  {["Owner", "Actions", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
+                    <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">
                       {h}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {paginatedAccounts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-16">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center">
-                          <Users size={18} className="text-slate-400" />
-                        </div>
-                        <p className="text-xs text-slate-400 font-medium">No accounts found</p>
-                      </div>
+                    <TableCell colSpan={10} className="text-center py-14 text-sm text-gray-400">
+                      No accounts found
                     </TableCell>
                   </TableRow>
-                ) : paginatedAccounts.map((account, idx) => (
-                  <TableRow
-                    key={account.id}
-                    className={`border-b border-slate-50 hover:bg-slate-50/70 transition-colors ${
-                      idx % 2 !== 0 ? "bg-slate-50/30" : ""
-                    }`}
-                  >
-                    <TableCell className="py-3 px-4 pl-5 font-semibold text-xs text-slate-900 max-w-[150px]">
-                      <span className="truncate block">{account.company_name}</span>
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-xs text-slate-600 capitalize max-w-[110px]">
-                      <span className="truncate block">{account.contact_person}</span>
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-xs text-slate-500 tabular-nums whitespace-nowrap">
-                      {account.contact_number}
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-xs text-slate-500 max-w-[130px]">
-                      <span className="truncate block">{account.email_address}</span>
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">
-                      {account.region}
-                    </TableCell>
-                    <TableCell className="py-3 px-4">
-                      <Pill type={account.type_client} />
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-xs text-slate-500 max-w-[110px]">
-                      <span className="truncate block">{account.industry}</span>
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-[11px] text-slate-400 tabular-nums whitespace-nowrap">
-                      {fmtDate(account.date_created)}
-                    </TableCell>
-                    <TableCell className="py-3 px-4 pr-5">
-                      <button
-                        onClick={() => {
-                          setHistoryCompany(account.company_name);
-                          setHistoryOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-semibold transition-all whitespace-nowrap"
-                      >
-                        <History size={11} />
-                        History
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                ) : (
+                  paginatedAccounts.map((account) => (
+                    <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors group">
+
+                      <TableCell className="text-xs text-gray-600 font-medium whitespace-nowrap">
+                        {agentMap[account.referenceid?.toLowerCase()] ?? (
+                          <span className="text-gray-300 italic text-[11px]">Unassigned</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <button
+                          onClick={() => openHistory(account.company_name)}
+                          className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700 transition-colors whitespace-nowrap"
+                        >
+                          <History size={11} />
+                          history
+                        </button>
+                      </TableCell>
+
+                      <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-sm">
+                        {account.company_name}
+                      </TableCell>
+
+                      <TableCell className="text-gray-500 whitespace-nowrap text-xs">
+                        {account.contact_person}
+                      </TableCell>
+
+                      <TableCell className="text-gray-500 whitespace-nowrap text-xs">
+                        {account.contact_number}
+                      </TableCell>
+
+                      <TableCell className="text-gray-500 text-xs">
+                        {account.email_address}
+                      </TableCell>
+
+                      <TableCell className="text-gray-500 whitespace-nowrap text-xs">
+                        {account.region}
+                      </TableCell>
+
+                      <TableCell>
+                        <span className="inline-block rounded-md bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600 whitespace-nowrap uppercase tracking-wide">
+                          {account.type_client}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-gray-500 whitespace-nowrap text-xs">
+                        {account.industry}
+                      </TableCell>
+
+                      <TableCell className="text-gray-400 text-[11px] whitespace-nowrap tabular-nums">
+                        {fmtDate(account.date_created)}
+                      </TableCell>
+
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
 
           {/* Pagination */}
-          <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-            <p className="text-[11px] text-slate-400 tabular-nums">
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
+            <span>
               Showing{" "}
-              <span className="font-semibold text-slate-600">
+              <span className="font-semibold text-gray-700">
                 {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredAccounts.length)}–
                 {Math.min(currentPage * ITEMS_PER_PAGE, filteredAccounts.length)}
               </span>{" "}
               of{" "}
-              <span className="font-semibold text-slate-600">{filteredAccounts.length}</span>
-            </p>
-            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-gray-700">{filteredAccounts.length}</span>
+            </span>
+
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
-                className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:border-slate-300 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
-                <ChevronLeft size={13} className="text-slate-600" />
+                ← Prev
               </button>
-              <span className="text-[11px] font-semibold text-slate-600 tabular-nums px-2">
-                {currentPage} / {totalPages}
-              </span>
+
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                const page = Math.max(1, Math.min(currentPage - 2, totalPages - 4)) + i;
+                return page <= totalPages ? (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`rounded-lg px-2.5 py-1 transition-colors font-medium shadow-sm ${page === currentPage
+                      ? "bg-indigo-600 text-white"
+                      : "border hover:bg-white"
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ) : null;
+              })}
+
               <button
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:border-slate-300 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
-                <ChevronRight size={13} className="text-slate-600" />
+                Next →
               </button>
             </div>
           </div>
+
         </div>
       </div>
     </>

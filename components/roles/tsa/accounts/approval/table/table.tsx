@@ -211,7 +211,7 @@ export function RequestTable({
                 {error && (<div className="col-span-full text-red-600 font-semibold">{error}</div>)}
 
                 {filteredData.length > 0 && (
-                    <div className="text-xs font-bold">Total Records: {filteredData.length}</div>
+                    <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Records: {filteredData.length}</div>
                 )}
 
                 {filteredData.length === 0 ? (

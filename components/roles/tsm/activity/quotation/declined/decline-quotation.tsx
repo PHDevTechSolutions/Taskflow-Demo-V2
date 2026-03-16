@@ -51,7 +51,7 @@ interface Completed {
     address: string;
     contact_person: string;
     tsm_approved_status: string;
-    tsm_approved_date: string;
+    tsm_approval_date: string;
     delivery_fee: string;
 
     // Signatories
@@ -364,7 +364,7 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
-                                <TableHead>Date Approved/Decline</TableHead>
+                                <TableHead>Date Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
@@ -446,8 +446,8 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>
-                                            {item.tsm_approved_date
-                                                ? new Date(item.tsm_approved_date).toLocaleDateString("en-PH", {
+                                            {item.tsm_approval_date
+                                                ? new Date(item.tsm_approval_date).toLocaleDateString("en-PH", {
                                                     timeZone: "Asia/Manila",
                                                 })
                                                 : "-"}
