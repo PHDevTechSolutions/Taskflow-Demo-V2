@@ -302,6 +302,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       case "Manager":
         router.push(`/roles/manager/agent?id=${result.userId}`);
         break;
+      case "Staff":
+        router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+        break;  
       case "Super Admin":
         router.push(`/roles/admin/dashboard?id=${result.userId}`);
         break;

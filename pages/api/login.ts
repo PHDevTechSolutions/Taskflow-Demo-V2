@@ -151,7 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      SALES & IT ONLY
   ========================================= */
 
-  if (user.Department !== "Sales" && user.Department !== "IT") {
+  if (user.Department !== "Sales" && user.Department !== "IT" && user.Department !== "CSR") {
     return res.status(403).json({
       message: "Only Sales or IT department users are allowed to log in.",
     });

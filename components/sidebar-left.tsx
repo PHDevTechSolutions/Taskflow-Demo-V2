@@ -115,6 +115,9 @@ const data = {
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
 
+        // CSR
+        { name: "Quotation List", url: "/roles/csr/activity/quotation/quotation-list", icon: Compass },
+
         // Admin
         { name: "Activity Planner", url: "/roles/admin/activity/planner", icon: Target },
         { name: "Historical Data (TaskList)", url: "/roles/admin/activity/tasklist", icon: ClipboardList },
@@ -265,8 +268,18 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     const role = userDetails.Role;
     if (!role) return [];
 
+    // STAFF (CSR) - only show quotation list
+    if (role === "Staff") {
+      return data.workspaces
+        .filter((workspace) => workspace.name === "Work Management")
+        .map((workspace) => ({
+          ...workspace,
+          pages: workspace.pages.filter((p) => p.url?.includes("/csr")),
+        }));
+    }
+
     return data.workspaces
-      // TSM cannot see Conversion Rates at all
+      // TSM cannot see Conversion Rates
       .filter((workspace) => {
         if (role === "Territory Sales Manager" && workspace.name === "Conversion Rates") {
           return false;
@@ -286,21 +299,25 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
                   !p.url?.includes("/admin")
               ),
             };
+
           case "Territory Sales Manager":
             return {
               ...workspace,
               pages: workspace.pages.filter((p) => p.url?.includes("/tsm")),
             };
+
           case "Manager":
             return {
               ...workspace,
               pages: workspace.pages.filter((p) => p.url?.includes("/manager")),
             };
+
           case "Super Admin":
             return {
               ...workspace,
               pages: workspace.pages.filter((p) => p.url?.includes("/admin")),
             };
+
           default:
             return { ...workspace, pages: [] };
         }
@@ -309,6 +326,10 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
 
   const filteredFavorites = React.useMemo(() => {
     const role = userDetails.Role;
+
+    if (role === "Staff") {
+      return [];
+    }
 
     if (role === "Territory Sales Manager") {
       return data.favorites.filter(
