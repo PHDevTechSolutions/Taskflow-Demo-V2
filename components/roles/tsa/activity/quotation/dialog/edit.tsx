@@ -37,6 +37,8 @@ import {
   FileSpreadsheet,
   FileText,
   EyeOff,
+  ImagePlus,
+  Plus,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -78,6 +80,9 @@ interface Completed {
   address?: string;
   region?: string;
   delivery_fee?: string;
+  restocking_fee?: string;
+  quotation_vatable?: string;
+  quotation_subject?: string;
 }
 
 interface ProductItem {
@@ -167,6 +172,9 @@ interface TaskListEditDialogProps {
   quotation_number?: string;
   vatType?: string;
   deliveryFee?: string;
+  restockingFee?: string;
+  whtType?: string;
+  quotationSubject?: string;
   agentSignature?: string;
   agentContactNumber?: string;
   agentEmailAddress?: string;
@@ -201,6 +209,9 @@ export default function TaskListEditDialog({
   managername,
   vatType,
   deliveryFee,
+  restockingFee,
+  whtType,
+  quotationSubject,
   agentSignature,
   agentContactNumber,
   agentEmailAddress,
@@ -235,6 +246,15 @@ export default function TaskListEditDialog({
   const [deliveryFeeState, setDeliveryFeeState] = useState<string>(
     deliveryFee ?? "",
   );
+  const [restockingFeeState, setRestockingFeeState] = useState<string>(
+    restockingFee ?? "",
+  );
+  const [whtTypeState, setWhtTypeState] = useState<string>(
+    whtType ?? "none",
+  );
+  const [quotationSubjectState, setQuotationSubjectState] = useState<string>(
+    quotationSubject ?? "For Quotation",
+  );
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedRevisedQuotation, setSelectedRevisedQuotation] =
     useState<RevisedQuotation | null>(null);
@@ -255,6 +275,32 @@ export default function TaskListEditDialog({
   const [productSource, setProductSource] = useState<
     "shopify" | "firebase_shopify" | "firebase_taskflow"
   >("shopify");
+  const [isSpfMode, setIsSpfMode] = useState(false);
+  const [spfUploading, setSpfUploading] = useState(false);
+  const [spfManualProduct, setSpfManualProduct] = useState({
+    title: "",
+    sku: "",
+    price: 0,
+    quantity: 1,
+    description: "",
+    imageUrl: "",
+    cloudinaryPublicId: "",
+  });
+  const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+
+  const deleteCloudinaryImage = async (publicId: string) => {
+    if (!publicId) return;
+    try {
+      await fetch("/api/cloudinary/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: publicId }),
+      });
+    } catch (err) {
+      console.error("Failed to delete Cloudinary image:", err);
+    }
+  };
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [openDescription, setOpenDescription] = useState<
     Record<number, boolean>
@@ -435,7 +481,8 @@ export default function TaskListEditDialog({
         products.map((p) => p.product_sku),
       );
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
-      const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum;
+      const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+      const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
       const bodyData: Completed & {
         vat_type?: "vat_inc" | "vat_exe" | "zero_rated";
@@ -453,6 +500,9 @@ export default function TaskListEditDialog({
         quotation_number: item.quotation_number,
         vat_type: vatTypeState,
         delivery_fee: deliveryFeeState,
+        restocking_fee: restockingFeeState,
+        quotation_vatable: whtTypeState,
+        quotation_subject: quotationSubjectState,
         activity_reference_number: item.activity_reference_number,
         referenceid: item.referenceid,
         tsm: item.tsm,
@@ -535,7 +585,8 @@ export default function TaskListEditDialog({
     });
 
     const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
-    const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum;
+    const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+    const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
     return {
       referenceNo: quotationNumber ?? "DRAFT-XXXX",
@@ -545,7 +596,7 @@ export default function TaskListEditDialog({
       telNo: contact_number ?? "",
       email: email_address ?? "",
       attention: contact_person ?? "",
-      subject: "For Quotation",
+      subject: quotationSubjectState || "For Quotation",
       items,
       vatTypeLabel:
         vatType === "vat_inc"
@@ -562,7 +613,22 @@ export default function TaskListEditDialog({
       salestsmcontact: tsmcontact ?? "",
       salesmanagername: managername ?? "",
       vatType: vatType ?? null,
-      deliveryFee: deliveryFee ?? "",
+      deliveryFee: deliveryFeeState ?? "",
+      restockingFee: parseFloat(restockingFeeState) || 0,
+      whtType: whtTypeState ?? "none",
+      whtLabel:
+        whtTypeState === "wht_1" ? "EWT 1% (Goods)" :
+        whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
+      whtAmount:
+        whtTypeState !== "none"
+          ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+          : 0,
+      netAmountToCollect:
+        totalPriceWithDelivery - (
+          whtTypeState !== "none"
+            ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+            : 0
+        ),
       agentSignature: agentSignature ?? null,
       agentContactNumber: agentContactNumber ?? null,
       agentEmailAddress: agentEmailAddress ?? null,
@@ -622,7 +688,7 @@ export default function TaskListEditDialog({
       telNo: contact_number,
       email: email_address,
       attention: contact_person,
-      subject: "For Quotation",
+      subject: quotationSubjectState || "For Quotation",
       items,
       vatType: "Vat Inc",
       totalPrice: Number(quotationAmountNum),
@@ -830,63 +896,90 @@ export default function TaskListEditDialog({
           <html>
             <head>
             <style>
-            * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
-            body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background: white; width: 816px; color: ${PRIMARY_CHARCOAL}; overflow: hidden; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background: white; width: 816px; color: ${PRIMARY_CHARCOAL}; overflow: hidden; font-size: 10px; line-height: 1.4; }
             .header-img { width: 100%; display: block; }
-            .content-area { padding: 0px 60px; margin: 0 !important; box-sizing:border-box; }
-            .client-grid { border-left: 1.5px solid black; border-right: 1.5px solid black; background: white; }
-            .grid-row { display: flex; align-items: center; min-height: 20px; padding: 2px 15px; }
-            .border-t { border-top: 1.5px solid black; }
-            .border-b { border-bottom: 1.5px solid black; padding-bottom: 10px;}
-            .label { width: 140px; font-weight: 900; font-size: 10px; flex-shrink: 1; }
-            .value { flex-grow: 1; font-size: 10px; font-weight: bold; color: #374151; padding-left: 15px; text-transform: uppercase; }
-            .intro-text { font-size: 10px; font-style: italic; color: #6b7280; font-weight: 500; padding: 5px 0; }
+            .content-area { padding: 0 50px; margin: 0; box-sizing: border-box; }
+            /* CLIENT GRID */
+            .client-grid { border: 1.5px solid black; background: white; }
+            .grid-row { display: flex; align-items: stretch; border-bottom: 1px solid #e5e7eb; }
+            .grid-row:last-child { border-bottom: none; }
+            .label { width: 130px; font-weight: 900; font-size: 9px; flex-shrink: 0; padding: 4px 10px; background: #f3f4f6; border-right: 1px solid #d1d5db; display: flex; align-items: center; text-transform: uppercase; letter-spacing: 0.02em; }
+            .value { flex-grow: 1; font-size: 9.5px; font-weight: 600; color: #1f2937; padding: 4px 10px; text-transform: uppercase; display: flex; align-items: center; }
+            .intro-text { font-size: 9px; font-style: italic; color: #6b7280; font-weight: 400; padding: 5px 0 3px 0; }
+            /* PRODUCT TABLE */
             .table-container { border: 1.5px solid black; border-bottom: none; background: white; margin: 0; }
             .main-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
-            .main-table thead tr { background: ${OFF_WHITE}; border-bottom: 1.5px; solid black;}
-            .main-table th { padding: 5px 8px; font-size: 9.5px; font-weight: 800; color: ${PRIMARY_CHARCOAL}; text-transform: uppercase; border-right: 1px solid black; }
-            .main-table td { padding: 15px 10px; vertical-align: top; border-right: 1px solid black; border-bottom: 1px solid black; font-size: 10px; }
-            .main-table td:last-child, .main-table th:last-child { border-right: none;}
-            .item-no { color: #9ca3af; font-weight: bold; text-align: center; }
-            .qty-col { font-weight: 900; text-align: center; color: ${PRIMARY_CHARCOAL}; }
-            .ref-photo { mix-blend-mode: multiply; width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
-            .product-title { font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
-            .sku-text { color: #2563eb; font-weight: bold; font-size: 9px; margin-bottom: 10px; letter-spacing: -0.025em; }
-            .desc-text { width: 100%; font-size: 9px; color: #000000; line-height: 1.2; }
-            .desc-remarks { background-color: #f97316; padding: 0.50rem; text-transform: uppercase; color: #801313; display: inline-block; font-weight: bold; }
-            .variance-footnote { margin-top: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 4px; }
-            .logistics-container { margin-top: 15px; border: 1px solid black; font-size: 9.5px; line-height: 1.3; }
-            .logistics-row { display: flex; border-bottom: 1px solid black; }
+            .main-table th { padding: 6px 8px; font-size: 8.5px; font-weight: 900; color: white; background: ${PRIMARY_CHARCOAL}; text-transform: uppercase; border-right: 1px solid #374151; letter-spacing: 0.04em; }
+            .main-table th:last-child { border-right: none; }
+            .main-table td { padding: 8px; vertical-align: top; border-right: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; font-size: 9px; }
+            .main-table td:last-child { border-right: none; }
+            .item-no { color: #9ca3af; font-weight: 700; text-align: center; font-size: 11px; vertical-align: middle; }
+            .qty-col { font-weight: 900; text-align: center; font-size: 12px; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
+            .product-title { font-weight: 900; text-transform: uppercase; font-size: 9.5px; margin: 0 0 2px 0; color: ${PRIMARY_CHARCOAL}; line-height: 1.3; }
+            .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
+            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
+            .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
+            .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; }
+            .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
+            /* LOGISTICS */
+            .variance-footnote { margin-top: 12px; font-size: 9.5px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid black; padding-bottom: 3px; }
+            .logistics-container { margin-top: 10px; border: 1.5px solid black; font-size: 9px; line-height: 1.4; }
+            .logistics-row { display: flex; border-bottom: 1px solid #d1d5db; }
             .logistics-row:last-child { border-bottom: none; }
-            .logistics-label { width: 100px; padding: 8px; font-weight: 900; border-right: 1px solid black; flex-shrink: 0; }
-            .logistics-value { padding: 8px; flex-grow: 1; }
+            .logistics-label { width: 85px; padding: 7px 8px; font-weight: 900; font-size: 8.5px; border-right: 1px solid #d1d5db; flex-shrink: 0; text-transform: uppercase; }
+            .logistics-value { padding: 7px 10px; flex-grow: 1; font-size: 8.5px; }
+            .logistics-value p { margin: 0 0 3px 0; }
             .bg-yellow-header { background-color: #facc15; }
             .bg-yellow-content { background-color: #fef9c3; }
             .bg-yellow-note { background-color: #fefce8; }
-            .text-red-strong { color: #dc2626; font-weight: 900; display: block; margin-top: 4px; }
-            .terms-section { margin-top: 25px; border-top: 2.5px solid black; padding-top: 10px; }
-            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 12px; }
-            .terms-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 9px; line-height: 1.4; }
-            .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 0; }
-            .terms-val { padding: 0px 4px;}
+            .text-red-strong { color: #dc2626; font-weight: 900; display: block; margin-top: 3px; text-decoration: underline; }
+            /* TERMS */
+            .terms-section { margin-top: 14px; border-top: 2px solid black; padding-top: 8px; }
+            .terms-header { background: ${PRIMARY_CHARCOAL}; color: white; padding: 3px 10px; font-size: 9px; font-weight: 900; text-transform: uppercase; display: inline-block; margin-bottom: 8px; letter-spacing: 0.05em; }
+            .terms-grid { display: grid; grid-template-columns: 105px 1fr; gap: 0; font-size: 8.5px; line-height: 1.45; }
+            .terms-label { font-weight: 900; text-transform: uppercase; padding: 4px 4px; font-size: 8.5px; }
+            .terms-val { padding: 4px 6px; font-size: 8.5px; }
+            .terms-val p { margin: 0 0 2px 0; }
             .terms-highlight { background-color: #fef9c3; }
-            .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-            .summary-bar { background-color: #e5e7eb; color: white; height: 35px; }
-            .summary-bar td { border: none; vertical-align: middle; padding: 0 15px; }
-            .tax-label { color: #e60b0d; font-style: italic; font-weight: 900; font-size: 22px; text-transform: uppercase; padding-left: 4px; }
-            .tax-options { display: flex; gap: 15px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-            .tax-active { color: black; }
-            .tax-inactive { color: #a0a5b3; }
-            .grand-total-label { text-align: left; font-weight: 500; font-size: 8px; text-transform: uppercase; white-space: nowrap; color: black; }
-            .grand-total-value { text-align: right; font-weight: 900; color: #058236; }
-            .sig-hierarchy { margin-top: 20px; padding-top: 16px; border-top: 4px solid #1d4ed8; padding-bottom: 10px; }
-            .sig-message { font-size: 9px; margin-bottom: 15px; font-weight: 500; line-height: 1.4; }
-            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-            .sig-side-internal { display: flex; flex-direction: column; gap: 10px; }
-            .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
-            .sig-line { border-bottom: 1px solid black; width: 256px; }
-            .sig-rep-box { width: 150px; height: 25px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 8px; font-weight: 900; color: #dc2626; text-transform: uppercase; padding: 0 8px; }
-            .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+            .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; font-size: 8.5px; line-height: 1.5; }
+            /* SUMMARY */
+            .tax-options { display: flex; gap: 12px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; }
+            .tax-active { color: ${PRIMARY_CHARCOAL}; font-weight: 900; }
+            .tax-inactive { color: #c0c5cf; }
+            .summary-wrap { display: table; width: 100%; border-collapse: collapse; border-top: 2px solid black; }
+            .summary-left { display: table-cell; width: 48%; border-right: 2px solid black; padding: 10px 14px; vertical-align: top; }
+            .summary-right { display: table-cell; width: 52%; vertical-align: top; padding: 0; }
+            .summary-tax-title { color: #e60b0d; font-style: italic; font-weight: 900; font-size: 10px; text-transform: uppercase; margin-bottom: 5px; }
+            .summary-wht { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 8px; font-weight: 900; padding: 2px 7px; margin-top: 5px; text-transform: uppercase; }
+            .sum-tbl { width: 100%; border-collapse: collapse; }
+            .sum-tbl td { padding: 3.5px 10px; }
+            .sum-lbl { text-align: right; font-weight: 700; text-transform: uppercase; color: #6b7280; font-size: 7.5px; border-right: 2px solid black; white-space: nowrap; }
+            .sum-val { text-align: right; font-weight: 900; color: ${PRIMARY_CHARCOAL}; font-size: 9px; white-space: nowrap; min-width: 90px; }
+            .sum-divider td { border-bottom: 2px solid black; }
+            .sum-total-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 9px; border-right: 2px solid black; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; }
+            .sum-total-val { text-align: right; font-weight: 900; color: #1e3a8a; font-size: 12px; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; min-width: 90px; }
+            .sum-gray-lbl { text-align: right; font-weight: 600; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #9ca3af; padding: 3px 10px; white-space: nowrap; }
+            .sum-gray-val { text-align: right; font-weight: 600; color: #9ca3af; font-size: 8px; padding: 3px 10px; white-space: nowrap; }
+            .sum-ewt-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #1d4ed8; background: #eff6ff; padding: 4px 10px; white-space: nowrap; }
+            .sum-ewt-val { text-align: right; font-weight: 900; color: #1d4ed8; background: #eff6ff; font-size: 8.5px; padding: 4px 10px; white-space: nowrap; }
+            .sum-final-row { background: ${PRIMARY_CHARCOAL}; }
+            .sum-final-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 8.5px; border-right: 1px solid #374151; color: white; padding: 7px 10px; white-space: nowrap; }
+            .sum-final-val { text-align: right; font-weight: 900; font-size: 14px; color: white; padding: 7px 10px; white-space: nowrap; }
+            /* SIGNATURE */
+            .sig-hierarchy { margin-top: 14px; padding-top: 12px; border-top: 3px solid #1d4ed8; padding-bottom: 16px; }
+            .sig-message { font-size: 8.5px; margin-bottom: 18px; font-weight: 400; line-height: 1.5; color: #374151; }
+            .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+            .sig-side-internal { display: flex; flex-direction: column; gap: 18px; }
+            .sig-side-client { display: flex; flex-direction: column; align-items: flex-end; gap: 24px; }
+            .sig-line { border-bottom: 1px solid black; width: 230px; }
+            .sig-sub-label { font-size: 8px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+            .sig-italic { font-size: 9px; font-style: italic; font-weight: 700; margin-bottom: 18px; color: ${PRIMARY_CHARCOAL}; }
+            .sig-name { font-size: 9.5px; font-weight: 900; text-transform: uppercase; margin: 0 0 0 0; }
+            .sig-detail { font-size: 8.5px; font-style: italic; margin: 1px 0; color: #374151; }
+            .sig-approved-label { font-size: 8px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 18px; letter-spacing: 0.03em; }
+            .sig-client-label { font-size: 8px; font-weight: 900; text-transform: uppercase; text-align: center; margin-top: 3px; }
+            .sig-client-sub { font-size: 7.5px; font-weight: 600; text-transform: uppercase; text-align: center; margin-top: 1px; color: #6b7280; }
             </style></head><body></body></html>`);
       iframeDoc.close();
 
@@ -903,13 +996,15 @@ export default function TaskListEditDialog({
           }),
         );
         const canvas = await html2canvas(iframeDoc.body, {
-          scale: 2,
+          scale: 2.5,
           useCORS: true,
+          allowTaint: true,
           backgroundColor: "#ffffff",
           logging: false,
+          imageTimeout: 15000,
         });
         return {
-          img: canvas.toDataURL("image/jpeg", 1.0),
+          img: canvas.toDataURL("image/jpeg", 0.97),
           h: (canvas.height * pdfWidth) / canvas.width,
         };
       };
@@ -936,7 +1031,7 @@ export default function TaskListEditDialog({
       currentY = await initiateNewPage();
 
       const clientBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:5;"><div class="client-grid"><div class="grid-row border-t"><div class="label">COMPANY NAME:</div><div class="value">${payload.companyName}</div></div><div class="grid-row"><div class="label">ADDRESS:</div><div class="value">${payload.address}</div></div><div class="grid-row"><div class="label">TEL NO:</div><div class="value">${payload.telNo}</div></div><div class="grid-row border-b"><div class="label">EMAIL ADDRESS:</div><div class="value">${payload.email}</div></div><div class="grid-row"><div class="label">ATTENTION:</div><div class="value">${payload.attention}</div></div><div class="grid-row border-b"><div class="label">SUBJECT:</div><div class="value">${payload.subject}</div></div></div><p class="intro-text">We are pleased to offer you the following products for consideration:</p></div>`,
+        `<div class="content-area" style="padding-top:6px;"><div class="client-grid"><div class="grid-row"><div class="label">Company Name</div><div class="value">${payload.companyName}</div></div><div class="grid-row"><div class="label">Address</div><div class="value">${payload.address}</div></div><div class="grid-row"><div class="label">Tel No</div><div class="value">${payload.telNo}</div></div><div class="grid-row"><div class="label">Email Address</div><div class="value">${payload.email}</div></div><div class="grid-row" style="border-bottom:1.5px solid black;"><div class="label">Attention</div><div class="value">${payload.attention}</div></div><div class="grid-row"><div class="label">Subject</div><div class="value">${payload.subject}</div></div></div><p class="intro-text">We are pleased to offer you the following products for consideration:</p></div>`,
       );
       pdf.addImage(
         clientBlock.img,
@@ -949,7 +1044,7 @@ export default function TaskListEditDialog({
       currentY += clientBlock.h;
 
       const headerBlock = await renderBlock(
-        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:40px;">ITEM NO</th><th style="width:40px;">QTY</th><th style="width:120px;">REFERENCE PHOTO</th><th style="width:200px;">PRODUCT DESCRIPTION</th><th style="width:80px;text-align:right;">UNIT PRICE</th><th style="width:80px;text-align:right;">TOTAL AMOUNT</th></tr></thead></table></div></div>`,
+        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:35px;text-align:center;">NO</th><th style="width:35px;text-align:center;">QTY</th><th style="width:105px;text-align:center;">REF. PHOTO</th><th style="text-align:left;">PRODUCT DESCRIPTION</th><th style="width:90px;text-align:right;">UNIT PRICE</th><th style="width:90px;text-align:right;">TOTAL AMOUNT</th></tr></thead></table></div></div>`,
       );
       pdf.addImage(
         headerBlock.img,
@@ -963,7 +1058,7 @@ export default function TaskListEditDialog({
 
       for (const [index, item] of payload.items.entries()) {
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:40px;" class="item-no">${index + 1}</td><td style="width:40px;" class="qty-col">${item.qty}</td><td style="width:120px;"><img src="${item.photo}" class="ref-photo"></td><td style="width:200px;"><div class="product-title" style="font-size:7px;">${item.title}</div><div class="sku-text">${item.sku}</div><div class="desc-text">${item.product_description} <span class="desc-remarks">${item.remarks}</span></div></td><td style="width:80px;text-align:right;">₱${item.unitPrice.toLocaleString()}</td><td style="width:80px;text-align:right;font-weight:900;">₱${item.totalAmount.toLocaleString()}</td></tr></table></div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           pdf.addPage([612, 936]);
@@ -983,8 +1078,19 @@ export default function TaskListEditDialog({
         currentY += rowBlock.h;
       }
 
+      const _deliveryNum = parseFloat(String(payload.deliveryFee)) || 0;
+      const _restockingNum = payload.restockingFee || 0;
+      const _netSales = payload.totalPrice - _deliveryNum - _restockingNum;
+      const _vatBreak = payload.vatTypeLabel === "VAT Inc"
+        ? `<tr><td class="sum-gray-lbl">Less: VAT (12/112)</td><td class="sum-gray-val">₱${(payload.totalPrice*(12/112)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr${payload.whtType&&payload.whtType!=="none"?"":" class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice/1.12).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>${payload.whtType&&payload.whtType!=="none"?`<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`:""}`
+        : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel==="VAT Exe"?"VAT Exempt":"Zero-Rated"}</td></tr>`;
+      const _whtBadge = payload.whtType&&payload.whtType!=="none"
+        ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>` : "";
+      const _finalLbl = payload.whtType&&payload.whtType!=="none" ? "Net Amount to Collect" : "Total Amount Due";
+      const _finalAmt = (payload.netAmountToCollect??payload.totalPrice).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+
       const footerBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container"><table class="main-table"><tr class="summary-bar"><td colspan="1"></td><td class="tax-label" style="font-size:12px;text-align:left;width:150px">Tax Type:</td><td style="width:300px;"><div class="tax-options" style="margin-left:50px;"><span class="${payload.vatTypeLabel === "VAT Inc" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc</span><span class="${payload.vatTypeLabel === "VAT Exe" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe</span><span class="${payload.vatTypeLabel === "Zero-Rated" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated</span></div></td><td style="width:70px;border-left:1px solid black;text-align:left;font-size:9px" class="grand-total-label">Delivery Fee:</td><td style="width:130px;font-size:15px;" class="grand-total-value">₱${payload.deliveryFee}</td></tr><tr class="summary-bar" style="border-bottom:1px solid black;font-size:10px;border-top:1px solid black;"><td colspan="3"></td><td style="width:70px;border-left:1px solid black;text-align:left;font-size:9px" class="grand-total-label">Grand Total:</td><td style="width:130px;font-size:15px;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td></tr></table></div></div>`,
+        `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container" style="border-bottom:2px solid black;"><div class="summary-wrap"><div class="summary-left"><div class="summary-tax-title">Tax Type:</div><div class="tax-options"><span class="${payload.vatTypeLabel==="VAT Inc"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="VAT Inc"?"●":"○"} VAT Inc</span><span class="${payload.vatTypeLabel==="VAT Exe"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="VAT Exe"?"●":"○"} VAT Exe</span><span class="${payload.vatTypeLabel==="Zero-Rated"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="Zero-Rated"?"●":"○"} Zero-Rated</span></div>${_whtBadge}</div><div class="summary-right"><table class="sum-tbl"><tr><td class="sum-lbl">Net Sales ${payload.vatTypeLabel==="VAT Inc"?"(VAT Inc)":"(Non-VAT)"}</td><td class="sum-val">₱${_netSales.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr><td class="sum-lbl">Delivery Charge</td><td class="sum-val">₱${_deliveryNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr class="sum-divider"><td class="sum-lbl">Restocking Fee</td><td class="sum-val">₱${_restockingNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr><td class="sum-total-lbl">Total Invoice Amount</td><td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>${_vatBreak}<tr class="sum-final-row"><td class="sum-final-lbl">${_finalLbl}</td><td class="sum-final-val">₱${_finalAmt}</td></tr></table></div></div></div></div>`,
       );
       if (currentY + footerBlock.h > pdfHeight - BOTTOM_MARGIN) {
         pdf.addPage([612, 936]);
@@ -1020,7 +1126,7 @@ export default function TaskListEditDialog({
       currentY += logisticsBlock.h;
 
       const termsAndSigBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;"><p style="font-style:italic;font-size:10px;font-weight:900;margin-bottom:25px;">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p><img src="${payload.agentSignature || ""}" class="sig-rep-box" style="position:absolute;top:40px;left:0;width:125px;height:auto;object-fit:contain;z-index:9999;"/><p style="font-size:10px;font-weight:900;text-transform:uppercase;margin-top:50px;">${payload.salesRepresentative}</p><div class="sig-line"></div><p class="sig-sub-label">Sales Representative</p><p style="font-size:10px;font-style:italic;">Mobile: ${payload.agentContactNumber || "N/A"}</p><p style="font-size:10px;font-style:italic;">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;"><p style="font-size:9px;font-weight:900;text-transform:uppercase;color:#9ca3af;margin-bottom:25px;">Approved By:</p><img src="${payload.TsmSignature || ""}" class="sig-rep-box" style="position:absolute;top:40px;left:0;width:125px;height:auto;object-fit:contain;z-index:9999;"/><p style="font-size:10px;font-weight:900;text-transform:uppercase;">${payload.salestsmname}</p><div class="sig-line"></div><p class="sig-sub-label">SALES MANAGER</p><p style="font-size:10px;font-style:italic;">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p style="font-size:10px;font-style:italic;">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;"><p style="font-size:9px;font-weight:900;text-transform:uppercase;color:#9ca3af;margin-bottom:25px;">Noted By:</p><img src="${payload.ManagerSignature || ""}" class="sig-rep-box" style="position:absolute;top:40px;left:0;width:125px;height:auto;object-fit:contain;z-index:9999;"/><p style="font-size:10px;font-weight:900;text-transform:uppercase;">${payload.salesmanagername}</p><div class="sig-line"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div><div class="sig-line" style="margin-top:73px;"></div><p style="font-size:9px;text-align:center;font-weight:900;margin-top:4px;text-transform:uppercase;">Company Authorized Representative</p></div><div style="width:256px;"><div class="sig-line" style="margin-top:68px;"></div><p style="font-size:9px;text-align:center;font-weight:900;margin-top:4px;text-transform:uppercase;">Payment Release Date</p></div><div style="width:256px;"><div class="sig-line" style="margin-top:68px;"></div><p style="font-size:9px;text-align:center;font-weight:900;margin-top:4px;text-transform:uppercase;">Position in the Company</p></div></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p><img src="${payload.agentSignature || ""}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p><img src="${payload.TsmSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p><img src="${payload.ManagerSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
       );
       if (currentY + termsAndSigBlock.h > pdfHeight - BOTTOM_MARGIN) {
         pdf.addPage([612, 936]);
@@ -1066,69 +1172,164 @@ export default function TaskListEditDialog({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent style={{ maxWidth: "90vw", width: "98vw" }}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              Edit Quotation: {item.quotation_number || item.id} -{" "}
-              {item.quotation_type}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold">Duration</label>
-              <div className="date-timestamps p-2 shadow-sm rounded w-40 text-center bg-black text-white font-mono">
-                <span>
-                  {startDate && endDate
-                    ? (() => {
-                        const start = new Date(startDate);
-                        const end = new Date(endDate);
-                        const diffMs = end.getTime() - start.getTime();
-                        if (diffMs <= 0) return "0s";
-                        const diffSeconds = Math.floor(diffMs / 1000) % 60;
-                        const diffMinutes =
-                          Math.floor(diffMs / (1000 * 60)) % 60;
-                        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                        return `${diffHours}h ${diffMinutes}m ${diffSeconds}s`;
-                      })()
-                    : "N/A"}
+        <DialogContent className="h-[95vh] overflow-hidden p-0 w-full flex flex-col" style={{ maxWidth: "90vw", width: "98vw" }}>
+          {/* HEADER */}
+          <div className="flex flex-col border-b border-gray-200 shrink-0">
+            <div className="flex items-center justify-between px-5 py-3">
+              <DialogTitle className="font-black text-sm tracking-tight">
+                Edit Quotation: {item.quotation_number || item.id} — {item.quotation_type}
+              </DialogTitle>
+              <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+                Duration:{" "}
+                <span className="font-mono bg-black text-white px-2 py-0.5 rounded text-[10px]">
+                  {startDate && endDate ? (() => {
+                    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+                    if (diffMs <= 0) return "0s";
+                    const s = Math.floor(diffMs / 1000) % 60;
+                    const m = Math.floor(diffMs / (1000 * 60)) % 60;
+                    const h = Math.floor(diffMs / (1000 * 60 * 60));
+                    return `${h}h ${m}m ${s}s`;
+                  })() : "N/A"}
                 </span>
               </div>
             </div>
+            {/* Mobile tab switcher */}
+            <div className="flex lg:hidden border-t border-gray-100 text-[11px] font-bold">
+              <button type="button" onClick={() => setMobilePanelTab("search")}
+                className={`flex-1 py-2.5 border-b-2 transition-colors ${mobilePanelTab === "search" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}>
+                🔍 Search
+              </button>
+              <button type="button" onClick={() => setMobilePanelTab("products")}
+                className={`flex-1 py-2.5 border-b-2 transition-colors ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}>
+                🛒 Products
+              </button>
+            </div>
           </div>
 
-          <div className="flex space-x-4" style={{ height: "70vh" }}>
+
+          {/* BODY */}
+          <div className="flex-1 overflow-hidden">
+          <div className="h-full grid gap-0 lg:gap-4 lg:p-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[300px_1fr] lg:overflow-hidden">
             {/* Left side: Search + history */}
-            <div className="flex flex-col w-1/3 gap-4 overflow-y-auto pr-2">
-              <div className="flex flex-col gap-4 sticky top-0 bg-white z-10 pb-2">
-                <div className="flex border rounded-md overflow-hidden border-gray-300">
-                  {(
-                    [
-                      "shopify",
-                      "firebase_shopify",
-                      "firebase_taskflow",
-                    ] as const
-                  ).map((src) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => {
-                        setProductSource(src);
-                        setSearchTerm("");
-                        setSearchResults([]);
-                      }}
-                      className={`flex-1 py-4 text-[10px] font-bold transition-colors ${productSource === src ? "bg-[#121212] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+            <div className={`flex-col gap-3 overflow-y-auto px-3 lg:px-0 pt-3 lg:pt-0 h-full ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+              <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
+                {/* Source Switcher with SPF */}
+                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  {[
+                    { source: "shopify", label: "Shopify", icon: "🛍️" },
+                    { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                    { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
+                  ].map(({ source: s, label, icon }) => (
+                    <button key={s} type="button"
+                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
                     >
-                      {src === "shopify"
-                        ? "SHOPIFY"
-                        : src === "firebase_shopify"
-                          ? "CMS"
-                          : "PRODUCT DATABASE"}
+                      <span className="text-sm mb-0.5">{icon}</span>
+                      <span>{label}</span>
                     </button>
                   ))}
+                  <button type="button"
+                    onClick={() => { setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                  >
+                    <span className="text-sm mb-0.5">📋</span>
+                    <span>SPF</span>
+                  </button>
                 </div>
 
-                {!isManualEntry && (
+                {/* SPF Form OR Search */}
+                {isSpfMode ? (
+                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
+                      <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
+                    </div>
+                    {/* Cloudinary Image Upload */}
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Image (optional)</label>
+                      <div className="flex items-center gap-2">
+                        <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                          <ImagePlus className="w-4 h-4 text-red-400" />
+                          <span className="text-[10px] font-bold uppercase text-red-500">
+                            {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change" : "Upload"}
+                          </span>
+                          <input type="file" accept="image/*" className="hidden" disabled={spfUploading}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setSpfUploading(true);
+                              try {
+                                if (spfManualProduct.cloudinaryPublicId) await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                const res = await fetch("/api/cloudinary/upload", { method: "POST", body: formData });
+                                const data = await res.json();
+                                if (data.url) setSpfManualProduct(prev => ({ ...prev, imageUrl: data.url, cloudinaryPublicId: data.publicId || "" }));
+                              } catch (err) { console.error("Upload failed:", err); }
+                              finally { setSpfUploading(false); }
+                            }}
+                          />
+                        </label>
+                        {spfManualProduct.imageUrl && (
+                          <button type="button" onClick={async () => { await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId); setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" })); }} className="p-1 text-red-500 hover:text-red-700">
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      {spfManualProduct.imageUrl && <img src={spfManualProduct.imageUrl} alt="preview" className="w-16 h-16 object-cover border border-gray-200 mt-1 rounded-sm" />}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
+                      <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
+                      <Input type="text" placeholder="Enter item code..." value={spfManualProduct.sku} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))} className="rounded-none text-xs uppercase" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
+                        <Input type="number" min={1} value={spfManualProduct.quantity} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))} className="rounded-none text-xs" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
+                        <Input type="number" min={0} step="0.01" value={spfManualProduct.price} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))} className="rounded-none text-xs" />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
+                      <Textarea placeholder="Enter description..." value={spfManualProduct.description} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))} rows={3} className="rounded text-xs" />
+                    </div>
+                    <Button type="button" disabled={!spfManualProduct.title}
+                      onClick={() => {
+                        const newProduct: any = {
+                          title: spfManualProduct.title.toUpperCase(),
+                          product_title: spfManualProduct.title.toUpperCase(),
+                          product_description: spfManualProduct.description,
+                          product_sku: spfManualProduct.sku,
+                          product_quantity: String(spfManualProduct.quantity),
+                          product_amount: String(spfManualProduct.price),
+                          product_photo: spfManualProduct.imageUrl,
+                          images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
+                          skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
+                          description: spfManualProduct.description,
+                          price: spfManualProduct.price,
+                          quantity: spfManualProduct.quantity,
+                          isDiscounted: false,
+                          discount: 0,
+                          cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
+                        };
+                        setProducts(prev => [...prev, newProduct]);
+                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
+                        setMobilePanelTab("products");
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" /> Add SPF Product
+                    </Button>
+                  </div>
+                ) : (
+                  !isManualEntry && (
                   <>
                     <FieldLabel>Product Name</FieldLabel>
                     <Input
@@ -1222,7 +1423,9 @@ export default function TaskListEditDialog({
                       </p>
                     )}
                   </>
+                  )
                 )}
+                {/* End SPF ternary */}
               </div>
 
               <div className="overflow-auto border rounded p-2 bg-white grow">
@@ -1314,47 +1517,78 @@ export default function TaskListEditDialog({
             </div>
 
             {/* Right side: Products table */}
-            <div className="flex flex-col w-1/1 overflow-auto border rounded p-2 bg-white">
-              <div className="flex items-center gap-4 justify-end border rounded p-4">
-                <span className="text-xs font-medium">VAT Type:</span>
-                <RadioGroup
-                  value={vatTypeState}
-                  onValueChange={(value) => {
-                    const v = value as "vat_inc" | "vat_exe" | "zero_rated";
-                    setVatTypeState(v);
-                    setDiscount(v === "vat_exe" ? 12 : 0);
-                  }}
-                  className="flex items-center gap-3"
-                >
-                  <div className="flex items-center gap-1">
-                    <RadioGroupItem value="vat_inc" id="vat-inc" />
-                    <label htmlFor="vat-inc" className="text-xs cursor-pointer">
-                      VAT Inc
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <RadioGroupItem value="vat_exe" id="vat-exe" />
-                    <label htmlFor="vat-exe" className="text-xs cursor-pointer">
-                      VAT Exe{" "}
-                      <span className="text-red-600 text-[10px]">(12%)</span>
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <RadioGroupItem value="zero_rated" id="zero-rated" />
-                    <label
-                      htmlFor="zero-rated"
-                      className="text-xs cursor-pointer"
+            <div className={`flex-col overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 ${mobilePanelTab === "search" ? "hidden lg:flex" : "flex"}`}>
+              <div className="flex flex-col gap-2 border rounded p-3 bg-gray-50">
+                {/* Subject */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest w-14 shrink-0">Subject</span>
+                  <input
+                    type="text"
+                    value={quotationSubjectState}
+                    onChange={(e) => setQuotationSubjectState(e.target.value)}
+                    placeholder="For Quotation"
+                    className="border border-gray-200 rounded px-2 py-1 text-[10px] font-medium uppercase flex-1 focus:outline-none focus:border-gray-400 bg-white"
+                  />
+                </div>
+                {/* VAT + EWT */}
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">VAT</span>
+                    <RadioGroup
+                      value={vatTypeState}
+                      onValueChange={(value) => {
+                        const v = value as "vat_inc" | "vat_exe" | "zero_rated";
+                        setVatTypeState(v);
+                        setDiscount(v === "vat_exe" ? 12 : 0);
+                      }}
+                      className="flex items-center gap-3"
                     >
-                      Zero Rated
-                    </label>
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="vat_inc" id="vat-inc" />
+                        <label htmlFor="vat-inc" className="text-xs cursor-pointer">VAT Inc</label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="vat_exe" id="vat-exe" />
+                        <label htmlFor="vat-exe" className="text-xs cursor-pointer">
+                          VAT Exe <span className="text-red-600 text-[10px]">(12%)</span>
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="zero_rated" id="zero-rated" />
+                        <label htmlFor="zero-rated" className="text-xs cursor-pointer">Zero Rated</label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                </RadioGroup>
+                  <div className="w-px h-4 bg-gray-300 hidden sm:block" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">EWT</span>
+                    <RadioGroup
+                      value={whtTypeState}
+                      onValueChange={setWhtTypeState}
+                      className="flex items-center gap-3"
+                    >
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="none" id="ewt-none" />
+                        <label htmlFor="ewt-none" className="text-xs cursor-pointer">None</label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="wht_1" id="ewt-1" />
+                        <label htmlFor="ewt-1" className="text-xs cursor-pointer">1% (Goods)</label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <RadioGroupItem value="wht_2" id="ewt-2" />
+                        <label htmlFor="ewt-2" className="text-xs cursor-pointer">2% (Services)</label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </div>
               </div>
 
+              <div className="overflow-x-auto">
               <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                 <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-4 text-center w-5">
+                  <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                    <th className="border border-gray-700 p-2 text-center w-10">
                       <Input
                         type="checkbox"
                         className="w-4 h-4"
@@ -1372,15 +1606,14 @@ export default function TaskListEditDialog({
                               : {},
                           );
                         }}
-                      />{" "}
-                      Check All
+                      />
                     </th>
-                    <th className="border p-4 text-left w-45">Product</th>
-                    <th className="border p-4 text-center w-5">Quantity</th>
-                    <th className="border p-4 text-center w-15">Amount</th>
-                    <th className="border p-4 text-center w-10">-</th>
-                    <th className="border p-4 text-center w-10">Subtotal</th>
-                    <th className="border p-4 text-center w-5">Action</th>
+                    <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
+                    <th className="border border-gray-700 p-2 text-center font-bold w-16">Qty</th>
+                    <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
+                    <th className="border border-gray-700 p-2 text-center font-bold hidden sm:table-cell">Discount</th>
+                    <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
+                    <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1573,20 +1806,36 @@ export default function TaskListEditDialog({
                   })}
                 </tbody>
               </table>
+              </div>
               <div className="border border-gray-300 p-2">
-                <div className="flex items-center justify-end">
-                  <span className="text-sm mr-2 whitespace-nowrap">
-                    Delivery Fee:
-                  </span>
-                  <div className="flex items-center border border-gray-300 px-2 py-1">
-                    <span className="text-sm mr-1">₱</span>
-                    <input
-                      type="text"
-                      className="w-20 text-right outline-none bg-transparent"
-                      placeholder="0.00"
-                      value={deliveryFeeState}
-                      onChange={(e) => setDeliveryFeeState(e.target.value)}
-                    />
+                <div className="flex flex-wrap items-center justify-end gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Delivery Fee:</span>
+                    <div className="flex items-center border border-gray-300 px-2 py-1">
+                      <span className="text-xs mr-1">₱</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-20 text-right outline-none bg-transparent text-xs"
+                        placeholder="0.00"
+                        value={deliveryFeeState}
+                        onChange={(e) => setDeliveryFeeState(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Restocking Fee:</span>
+                    <div className="flex items-center border border-gray-300 px-2 py-1">
+                      <span className="text-xs mr-1">₱</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-20 text-right outline-none bg-transparent text-xs"
+                        placeholder="0.00"
+                        value={restockingFeeState}
+                        onChange={(e) => setRestockingFeeState(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1594,23 +1843,32 @@ export default function TaskListEditDialog({
           </div>
 
           <div className="flex justify-end">
-            <div className="inline-block text-right font-semibold text-sm border border-yellow-500 p-4 bg-yellow-50">
-              <div>
-                Total: ₱
-                {subtotal.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+            <div className="inline-block text-right font-semibold text-sm border border-yellow-500 p-4 bg-yellow-50 space-y-1 min-w-[220px]">
+              <div className="text-gray-500 text-xs">
+                Subtotal: ₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div>
-                Actual Quotation Amount: ₱
-                {quotationAmount.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+              {parseFloat(deliveryFeeState) > 0 && (
+                <div className="text-gray-500 text-xs">
+                  Delivery Fee: ₱{parseFloat(deliveryFeeState).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+              {parseFloat(restockingFeeState) > 0 && (
+                <div className="text-gray-500 text-xs">
+                  Restocking Fee: ₱{parseFloat(restockingFeeState).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+              {whtTypeState !== "none" && (
+                <div className="text-blue-600 text-xs">
+                  EWT ({whtTypeState === "wht_1" ? "1%" : "2%"}): −₱{(
+                    (quotationAmount / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+                  ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+              <div className="border-t border-yellow-400 pt-1 text-sm font-black">
+                Total: ₱{quotationAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-          </div>
+          </div></div>{/* end BODY */}
 
           <DialogFooter className="mt-4 flex justify-between items-center">
             <div className="flex space-x-2">

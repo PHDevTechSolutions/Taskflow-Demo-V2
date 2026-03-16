@@ -67,7 +67,9 @@ interface Activity {
     product_title?: string;
     vat_type: string;
     delivery_fee: string;
-    restocking_fee: string;
+    restocking_fee?: string;
+    wht_type?: string;
+    quotation_subject?: string;
     item_remarks?: string;
 
     project_type?: string;
@@ -474,6 +476,8 @@ export function CreateActivityDialog({
             vat_type: vatType,
             delivery_fee: deliveryFee,
             restocking_fee: restockingFee,
+            wht_type: whtType,
+            quotation_subject: quotationSubject,
             item_remarks: itemRemarks || undefined,
 
             project_type: projectType || undefined,
@@ -962,81 +966,81 @@ export function CreateActivityDialog({
 
                             {typeActivity === "Quotation Preparation" && (
                                 <QuotationSheet
-                                        step={step}
-                                        setStep={setStep}
-                                        source={source}
-                                        setSource={setSource}
-                                        productCat={productCat}
-                                        setProductCat={setProductCat}
-                                        productQuantity={productQuantity}
-                                        setProductQuantity={setProductQuantity}
-                                        productAmount={productAmount}
-                                        setProductAmount={setProductAmount}
-                                        productDescription={productDescription}
-                                        setProductDescription={setProductDescription}
-                                        productPhoto={productPhoto}
-                                        setProductPhoto={setProductPhoto}
-                                        productSku={productSku}
-                                        setProductSku={setProductSku}
-                                        productTitle={productTitle}
-                                        setProductTitle={setProductTitle}
-                                        projectType={projectType}
-                                        setProjectType={setProjectType}
-                                        projectName={projectName}
-                                        setProjectName={setProjectName}
-                                        quotationNumber={quotationNumber}
-                                        setQuotationNumber={setQuotationNumber}
-                                        quotationAmount={quotationAmount}
-                                        setQuotationAmount={setQuotationAmount}
-                                        quotationType={quotationType}
-                                        setQuotationType={setQuotationType}
-                                        quotationStatus={quotationStatus}
-                                        setQuotationStatus={setQuotationStatus}
-                                        callType={callType}
-                                        setCallType={setCallType}
-                                        followUpDate={followUpDate}
-                                        setFollowUpDate={setFollowUpDate}
-                                        remarks={remarks}
-                                        setRemarks={setRemarks}
-                                        status={status}
-                                        setStatus={setStatus}
-                                        vatType={vatType}
-                                        setVatType={setVatType}
-                                        deliveryFee={deliveryFee}
-                                        setDeliveryFee={setDeliveryFee}
-                                        restockingFee={restockingFee}
-                                        setRestockingFee={setRestockingFee}
-                                        itemRemarks={itemRemarks}
-                                        setItemRemarks={setItemRemarks}
-                                        typeClient={typeClient}
-                                        setTypeClient={setTypeClient}
-                                        tsm={tsm}
-                                        setTSM={setTSMState}
-                                        handleBack={handleBack}
-                                        handleNext={handleNext}
-                                        handleSave={handleSave}
+                                    step={step}
+                                    setStep={setStep}
+                                    source={source}
+                                    setSource={setSource}
+                                    productCat={productCat}
+                                    setProductCat={setProductCat}
+                                    productQuantity={productQuantity}
+                                    setProductQuantity={setProductQuantity}
+                                    productAmount={productAmount}
+                                    setProductAmount={setProductAmount}
+                                    productDescription={productDescription}
+                                    setProductDescription={setProductDescription}
+                                    productPhoto={productPhoto}
+                                    setProductPhoto={setProductPhoto}
+                                    productSku={productSku}
+                                    setProductSku={setProductSku}
+                                    productTitle={productTitle}
+                                    setProductTitle={setProductTitle}
+                                    projectType={projectType}
+                                    setProjectType={setProjectType}
+                                    projectName={projectName}
+                                    setProjectName={setProjectName}
+                                    quotationNumber={quotationNumber}
+                                    setQuotationNumber={setQuotationNumber}
+                                    quotationAmount={quotationAmount}
+                                    setQuotationAmount={setQuotationAmount}
+                                    quotationType={quotationType}
+                                    setQuotationType={setQuotationType}
+                                    quotationStatus={quotationStatus}
+                                    setQuotationStatus={setQuotationStatus}
+                                    callType={callType}
+                                    setCallType={setCallType}
+                                    followUpDate={followUpDate}
+                                    setFollowUpDate={setFollowUpDate}
+                                    remarks={remarks}
+                                    setRemarks={setRemarks}
+                                    status={status}
+                                    setStatus={setStatus}
+                                    vatType={vatType}
+                                    setVatType={setVatType}
+                                    deliveryFee={deliveryFee}
+                                    setDeliveryFee={setDeliveryFee}
+                                    restockingFee={restockingFee}
+                                    setRestockingFee={setRestockingFee}
+                                    itemRemarks={itemRemarks}
+                                    setItemRemarks={setItemRemarks}
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
+                                    tsm={tsm}
+                                    setTSM={setTSMState}
+                                    handleBack={handleBack}
+                                    handleNext={handleNext}
+                                    handleSave={handleSave}
 
-                                        // The props you want to pass down:
-                                        firstname={firstname}
-                                        lastname={lastname}
-                                        email={email}
-                                        contact={contact}
-                                        tsmname={tsmname}
-                                        managername={managername}
-                                        company_name={company_name}
-                                        address={address}
-                                        email_address={email_address}
-                                        contact_number={selectedContactNumber}
-                                        contact_person={selectedContactPerson}
-                                        managerDetails={managerDetails ?? null}
-                                        tsmDetails={tsmDetails ?? null}
-                                        signature={signature}
-                                        whtType={whtType}
-                                        setWhtType={setWhtType}
+                                    // The props you want to pass down:
+                                    firstname={firstname}
+                                    lastname={lastname}
+                                    email={email}
+                                    contact={contact}
+                                    tsmname={tsmname}
+                                    managername={managername}
+                                    company_name={company_name}
+                                    address={address}
+                                    email_address={email_address}
+                                    contact_number={selectedContactNumber}
+                                    contact_person={selectedContactPerson}
+                                    managerDetails={managerDetails ?? null}
+                                    tsmDetails={tsmDetails ?? null}
+                                    signature={signature}
+                                    whtType={whtType}
+                                    setWhtType={setWhtType}
 
-                                        quotationSubject={quotationSubject}
-                                        setQuotationSubject={setQuotationSubject}
-                                        />
+                                    quotationSubject={quotationSubject}
+                                    setQuotationSubject={setQuotationSubject}
+                                />
                             )}
 
                             {typeActivity === "Sales Order Preparation" && (
