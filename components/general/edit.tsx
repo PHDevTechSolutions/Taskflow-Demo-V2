@@ -760,7 +760,7 @@ export default function ProfileClient() {
                               onClick={handleGeneratePassword}
                             >
                               <WandSparkles className="w-3 h-3" />
-                              Generate
+                              Generated
                             </Button>
                           </div>
                           <StrengthBar strength={passwordStrength} />
