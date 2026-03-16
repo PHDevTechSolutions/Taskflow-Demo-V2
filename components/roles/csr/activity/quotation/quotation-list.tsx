@@ -268,12 +268,6 @@ export const Quotation: React.FC<QuotationProps> = ({
         switch (status) {
             case "Approved":
                 return "bg-emerald-600 text-white";
-            case "Pending":
-                return "bg-amber-500 text-white";
-            case "Decline":
-                return "bg-red-500 text-white";
-            case "Endorsed to Sales Head":
-                return "bg-blue-600 text-white";
             default:
                 return "bg-gray-400 text-white";
         }
@@ -417,7 +411,7 @@ export const Quotation: React.FC<QuotationProps> = ({
                                                 Company:{" "}
                                             </span>
                                             <span className="font-bold text-gray-800 uppercase">
-                                                {item.company_name || "—"}
+                                                {item.company_name || "—"} <br/> {item.contact_person || "—"} <br/> {item.contact_number || "—"}
                                             </span>
                                         </div>
                                         <div>
