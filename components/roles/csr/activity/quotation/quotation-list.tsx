@@ -172,42 +172,42 @@ export const Quotation: React.FC<QuotationProps> = ({
     }, [activities]);
 
     const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
+        const search = searchTerm.toLowerCase();
 
-    return sortedActivities
-        // Only approved or approved by sales head
-        .filter((item) =>
-            ["approved", "approved by sales head"].includes(
-                (item.tsm_approved_status || "").toLowerCase()
+        return sortedActivities
+            // Only approved or approved by sales head
+            .filter((item) =>
+                ["approved", "approved by sales head"].includes(
+                    (item.tsm_approved_status || "").toLowerCase()
+                )
             )
-        )
 
-        // Optional date filter
-        .filter((item) => {
-            if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-            const itemDate = new Date(item.date_created);
-            const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : null;
-            const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;
+            // Optional date filter
+            .filter((item) => {
+                if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
+                const itemDate = new Date(item.date_created);
+                const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : null;
+                const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : null;
 
-            if (from && to) return itemDate >= from && itemDate <= to;
-            if (from) return itemDate >= from;
-            if (to) return itemDate <= to;
-            return true;
-        })
+                if (from && to) return itemDate >= from && itemDate <= to;
+                if (from) return itemDate >= from;
+                if (to) return itemDate <= to;
+                return true;
+            })
 
-        // Type activity check (case-insensitive, includes "quotation")
-        .filter((item) =>
-            (item.type_activity || "").toLowerCase().includes("quotation")
-        )
+            // Type activity check (case-insensitive, includes "quotation")
+            .filter((item) =>
+                (item.type_activity || "").toLowerCase().includes("quotation preparation")
+            )
 
-        // Search filter
-        .filter((item) => {
-            if (!search) return true;
-            return Object.values(item).some(
-                (val) => val && String(val).toLowerCase().includes(search)
-            );
-        });
-}, [sortedActivities, searchTerm, dateCreatedFilterRange]);
+            // Search filter
+            .filter((item) => {
+                if (!search) return true;
+                return Object.values(item).some(
+                    (val) => val && String(val).toLowerCase().includes(search)
+                );
+            });
+    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
     // -----------------------------
     // AGENT MAP
     // -----------------------------

@@ -739,39 +739,7 @@ export default function TaskListEditDialog({
                     </div>
 
                     {/* Action footer */}
-                    <DialogFooter className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-5 py-3 bg-gray-50">
-                        <Button
-                            onClick={() => openStatusDialog("Approved")}
-                            disabled={isUpdating}
-                            className="rounded-none h-9 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
-                        >
-                            {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                            Approve
-                        </Button>
-                        <Button
-                            onClick={() => openStatusDialog("Endorsed to Sales Head")}
-                            disabled={isUpdating}
-                            className="rounded-none h-9 px-4 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold gap-1.5"
-                        >
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            Endorse to Sales Head
-                        </Button>
-                        <Button
-                            onClick={() => setIsDeclineOpen(true)}
-                            disabled={isUpdating}
-                            className="rounded-none h-9 px-4 text-xs bg-red-600 hover:bg-red-700 text-white font-bold gap-1.5"
-                        >
-                            <XIcon className="w-3.5 h-3.5" />
-                            Decline
-                        </Button>
-                        <Button
-                            onClick={DownloadPDF}
-                            className="rounded-none h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1.5"
-                        >
-                            <FileText className="w-3.5 h-3.5" />
-                            Download PDF
-                        </Button>
-                    </DialogFooter>
+                    
                 </DialogContent>
             </Dialog>
 
