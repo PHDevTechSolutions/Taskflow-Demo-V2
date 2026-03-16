@@ -48,7 +48,7 @@ interface UserDetails {
 interface SIProps {
   referenceid: string;
   target_quota?: string;
-  dateCreatedFilterRange: { from?: string | Date; to?: string | Date };
+  dateCreatedFilterRange: any;
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
   userDetails: UserDetails;
 }
