@@ -170,8 +170,8 @@ export const CSRTable: React.FC<CSRProps> = ({
         return true;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.date_updated ?? a.date_created).getTime();
-        const dateB = new Date(b.date_updated ?? b.date_created).getTime();
+        const dateA = new Date(a.date_created ?? a.date_created).getTime();
+        const dateB = new Date(b.date_created ?? b.date_created).getTime();
         return dateB - dateA;
       });
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);

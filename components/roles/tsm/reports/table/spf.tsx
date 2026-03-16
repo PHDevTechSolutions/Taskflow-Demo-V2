@@ -35,14 +35,37 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
   const [selectedAgent, setSelectedAgent] = useState("all");
 
   const fetchActivities = useCallback(() => {
-    if (!referenceid) { setActivities([]); return; }
-    setLoading(true); setError(null);
+    if (!referenceid) {
+      setActivities([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString()
+      : null;
+
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString()
+      : null;
+
     const url = new URL("/api/reports/tsm/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-    if (dateCreatedFilterRange?.from) url.searchParams.append("from", dateCreatedFilterRange.from);
-    if (dateCreatedFilterRange?.to) url.searchParams.append("to", dateCreatedFilterRange.to);
-    fetch(url.toString()).then(r => { if (!r.ok) throw new Error("Failed"); return r.json(); })
-      .then(d => setActivities(d.activities || [])).catch(e => setError(e.message)).finally(() => setLoading(false));
+
+    if (from) url.searchParams.append("from", from);
+    if (to) url.searchParams.append("to", to);
+
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
@@ -56,7 +79,7 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
 
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`).then(r => r.json()).then(setAgents).catch(() => {});
+    fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`).then(r => r.json()).then(setAgents).catch(() => { });
   }, [userDetails.referenceid]);
 
   const agentMap = useMemo(() => {
@@ -117,43 +140,43 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
       )}
       {loading ? <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
         : error ? <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
-        : filtered.length === 0 ? <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SPF records found.</div>
-        : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 text-[11px]">
-                  <TableHead className="text-gray-500">Agent</TableHead>
-                  <TableHead className="text-gray-500">Date</TableHead>
-                  <TableHead className="text-gray-500 text-right">SO Amount</TableHead>
-                  <TableHead className="text-gray-500">SO Number</TableHead>
-                  <TableHead className="text-gray-500">Company</TableHead>
-                  <TableHead className="text-gray-500">Contact Person</TableHead>
-                  <TableHead className="text-gray-500">Contact No.</TableHead>
-                  <TableHead className="text-gray-500">Type</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map(item => {
-                  const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
-                  return (
-                    <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
-                      <TableCell><div className="flex items-center gap-2">{info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}<span className="capitalize text-gray-700">{info?.name ?? "-"}</span></div></TableCell>
-                      <TableCell className="text-gray-500 whitespace-nowrap">{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right text-gray-700">{item.so_amount != null ? fmtPHP(item.so_amount) : "-"}</TableCell>
-                      <TableCell className="uppercase text-gray-700">{item.so_number || "-"}</TableCell>
-                      <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
-                      <TableCell className="capitalize text-gray-600">{item.contact_person || "-"}</TableCell>
-                      <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
-                      <TableCell className="capitalize text-gray-500">{SPF_LABEL[item.call_type?.toLowerCase()] ?? item.call_type ?? "-"}</TableCell>
+          : filtered.length === 0 ? <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SPF records found.</div>
+            : (
+              <div className="overflow-x-auto rounded-xl border border-gray-100">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 text-[11px]">
+                      <TableHead className="text-gray-500">Agent</TableHead>
+                      <TableHead className="text-gray-500">Date</TableHead>
+                      <TableHead className="text-gray-500 text-right">SO Amount</TableHead>
+                      <TableHead className="text-gray-500">SO Number</TableHead>
+                      <TableHead className="text-gray-500">Company</TableHead>
+                      <TableHead className="text-gray-500">Contact Person</TableHead>
+                      <TableHead className="text-gray-500">Contact No.</TableHead>
+                      <TableHead className="text-gray-500">Type</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-              <TableFooter><TableRow className="bg-gray-50 text-xs font-semibold font-mono"><TableCell colSpan={2} className="text-gray-500">Total</TableCell><TableCell className="text-right text-gray-800">{fmtPHP(total)}</TableCell><TableCell colSpan={5} /></TableRow></TableFooter>
-            </Table>
-          </div>
-        )}
+                  </TableHeader>
+                  <TableBody>
+                    {paginated.map(item => {
+                      const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                      return (
+                        <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                          <TableCell><div className="flex items-center gap-2">{info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}<span className="capitalize text-gray-700">{info?.name ?? "-"}</span></div></TableCell>
+                          <TableCell className="text-gray-500 whitespace-nowrap">{new Date(item.date_created).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right text-gray-700">{item.so_amount != null ? fmtPHP(item.so_amount) : "-"}</TableCell>
+                          <TableCell className="uppercase text-gray-700">{item.so_number || "-"}</TableCell>
+                          <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
+                          <TableCell className="capitalize text-gray-600">{item.contact_person || "-"}</TableCell>
+                          <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
+                          <TableCell className="capitalize text-gray-500">{SPF_LABEL[item.call_type?.toLowerCase()] ?? item.call_type ?? "-"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                  <TableFooter><TableRow className="bg-gray-50 text-xs font-semibold font-mono"><TableCell colSpan={2} className="text-gray-500">Total</TableCell><TableCell className="text-right text-gray-800">{fmtPHP(total)}</TableCell><TableCell colSpan={5} /></TableRow></TableFooter>
+                </Table>
+              </div>
+            )}
       {pageCount > 1 && (<Pagination><PaginationContent className="flex items-center space-x-4 justify-center text-xs"><PaginationItem><PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) setPage(page - 1); }} aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : ""} /></PaginationItem><div className="px-4 font-medium select-none text-gray-600">{page} / {pageCount}</div><PaginationItem><PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }} aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : ""} /></PaginationItem></PaginationContent></Pagination>)}
     </div>
   );

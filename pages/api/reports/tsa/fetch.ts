@@ -47,13 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           quotation_status
         `)
         .eq("referenceid", referenceid)
-        // 🔑 CRITICAL: stable ordering (walang skip / duplicate)
-        .order("date_updated", { ascending: true })
         .order("id", { ascending: true })
         .range(offset, offset + BATCH_SIZE - 1);
 
       if (fromDate && toDate) {
-        query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
+        query = query.gte("date_created", fromDate).lte("date_created", toDate);
       }
 
       const { data, error } = await query;

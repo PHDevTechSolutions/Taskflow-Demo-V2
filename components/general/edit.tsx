@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { UserProvider } from "@/contexts/UserContext";
@@ -10,17 +10,26 @@ import { SidebarRight } from "@/components/sidebar-right";
 import Image from "next/image";
 import SignatureCanvas from "react-signature-canvas";
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
+import {
+  SidebarInset, SidebarProvider, SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-import { Eye, WandSparkles, ImagePlus, Save, PenTool, Eraser, UploadCloud, X } from "lucide-react";
+import {
+  Eye, EyeOff, WandSparkles, ImagePlus, Save,
+  PenTool, Eraser, UploadCloud, X, User, Phone,
+  Mail, MapPin, KeyRound, ShieldCheck, Loader2,
+} from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UserDetails {
   id: string;
@@ -32,17 +41,122 @@ interface UserDetails {
   Status: string;
   ContactNumber: string;
   profilePicture: string;
-  signatureImage?: string; 
+  signatureImage?: string;
   Password?: string;
   ContactPassword?: string;
-
-  // Others
   OtherEmail: string;
   AnotherNumber: string;
   Address: string;
   Birthday: string;
   Gender: string;
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const generatePassword = (): string => {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+  return Array.from({ length: 10 }, () =>
+    chars.charAt(Math.floor(Math.random() * chars.length))
+  ).join("");
+};
+
+const calcPasswordStrength = (
+  pw: string
+): "weak" | "medium" | "strong" | "" => {
+  if (!pw) return "";
+  if (pw.length < 4) return "weak";
+  if (/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(pw)) return "strong";
+  if (/^(?=.*[a-z])(?=.*\d).{6,}$/.test(pw)) return "medium";
+  return "weak";
+};
+
+const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhczsyzcz/image/upload";
+const UPLOAD_PRESET = "Xchire";
+
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+const Section = ({
+  icon: Icon,
+  title,
+  children,
+  className = "",
+}: {
+  icon: React.ElementType;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <div className={`border border-gray-200 bg-white ${className}`}>
+    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
+      <Icon className="w-3.5 h-3.5 text-gray-500" />
+      <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">
+        {title}
+      </span>
+    </div>
+    <div className="p-4">{children}</div>
+  </div>
+);
+
+// ─── Field wrapper ────────────────────────────────────────────────────────────
+
+const Field = ({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <div className={`flex flex-col gap-1.5 ${className}`}>
+    <Label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+      {label}
+    </Label>
+    {children}
+  </div>
+);
+
+// ─── Strength bar ─────────────────────────────────────────────────────────────
+
+const StrengthBar = ({ strength }: { strength: "weak" | "medium" | "strong" | "" }) => {
+  if (!strength) return null;
+  const levels = { weak: 1, medium: 2, strong: 3 };
+  const colors = {
+    weak: "bg-red-500",
+    medium: "bg-amber-500",
+    strong: "bg-emerald-500",
+  };
+  const labels = { weak: "Weak", medium: "Medium", strong: "Strong" };
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <div className="flex gap-1 flex-1">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-all ${
+              i <= levels[strength] ? colors[strength] : "bg-gray-200"
+            }`}
+          />
+        ))}
+      </div>
+      <span
+        className={`text-[10px] font-bold ${
+          strength === "strong"
+            ? "text-emerald-600"
+            : strength === "medium"
+            ? "text-amber-600"
+            : "text-red-600"
+        }`}
+      >
+        {labels[strength]}
+      </span>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfileClient() {
   const searchParams = useSearchParams();
@@ -55,8 +169,7 @@ export default function ProfileClient() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingSignature, setUploadingSignature] = useState(false);
-  
-  // Signature States
+
   const [sigMethod, setSigMethod] = useState<"pad" | "upload">("pad");
   const [sigFilePreview, setSigFilePreview] = useState<string | null>(null);
   const [selectedSigFile, setSelectedSigFile] = useState<File | null>(null);
@@ -66,8 +179,11 @@ export default function ProfileClient() {
   >("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
     useState<DateRange | undefined>(undefined);
+
+  // ─── Fetch user ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!userId) {
@@ -76,11 +192,10 @@ export default function ProfileClient() {
       return;
     }
 
-    async function fetchUser() {
+    const fetchUser = async () => {
       try {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error("Failed to fetch user");
-
         const data = await res.json();
 
         setUserDetails({
@@ -93,7 +208,7 @@ export default function ProfileClient() {
           Status: data.Status || "",
           ContactNumber: data.ContactNumber || "",
           profilePicture: data.profilePicture || "",
-          signatureImage: data.signatureImage || "", 
+          signatureImage: data.signatureImage || "",
           Password: "",
           ContactPassword: "",
           OtherEmail: data.OtherEmail || "",
@@ -108,125 +223,99 @@ export default function ProfileClient() {
       } finally {
         setLoading(false);
       }
-    }
+    };
 
     fetchUser();
   }, [userId]);
 
-  const calculatePasswordStrength = (
-    password: string
-  ): "weak" | "medium" | "strong" | "" => {
-    if (!password) return "";
-    if (password.length < 4) return "weak";
-    if (/^(?=.*[a-z])(?=.*\d).{6,}$/.test(password)) return "medium";
-    if (
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(password)
-    )
-      return "strong";
-    return "weak";
-  };
+  // ─── Handlers ────────────────────────────────────────────────────────────
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!userDetails) return;
     const { name, value } = e.target;
-
-    setUserDetails({
-      ...userDetails,
-      [name]: value,
-    });
-
-    if (name === "Password") {
-      setPasswordStrength(calculatePasswordStrength(value));
-    }
-  };
-
-  const generatePassword = () => {
-    const chars =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let pass = "";
-    for (let i = 0; i < 10; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return pass;
+    setUserDetails((prev) => prev ? { ...prev, [name]: value } : prev);
+    if (name === "Password") setPasswordStrength(calcPasswordStrength(value));
   };
 
   const handleGeneratePassword = () => {
-    const newPass = generatePassword();
+    const pw = generatePassword();
     setUserDetails((prev) =>
-      prev ? { ...prev, Password: newPass, ContactPassword: newPass } : prev
+      prev ? { ...prev, Password: pw, ContactPassword: pw } : prev
     );
-    setPasswordStrength(calculatePasswordStrength(newPass));
+    setPasswordStrength(calcPasswordStrength(pw));
   };
 
-  const handleImageUpload = async (file: File | string, isSignature = false) => {
-    if (isSignature) setUploadingSignature(true);
-    else setUploading(true);
-    
-    const data = new FormData();
-    data.append("file", file);
-    data.append("upload_preset", "Xchire");
+  // Upload to Cloudinary — accepts File or data URL string
+  const handleImageUpload = useCallback(
+    async (file: File | string, isSignature = false) => {
+      if (isSignature) setUploadingSignature(true);
+      else setUploading(true);
 
-    try {
-      const res = await fetch(
-        "https://api.cloudinary.com/v1_1/dhczsyzcz/image/upload",
-        {
-          method: "POST",
-          body: data,
-        }
-      );
-      const json = await res.json();
-      if (json.secure_url) {
-        setUserDetails((prev) =>
-          prev ? { ...prev, [isSignature ? "signatureImage" : "profilePicture"]: json.secure_url } : prev
-        );
-        toast.success(`${isSignature ? "Signature" : "Image"} uploaded successfully`);
-        if (isSignature) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", UPLOAD_PRESET);
+
+      try {
+        const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Cloudinary upload failed");
+        const json = await res.json();
+
+        if (json.secure_url) {
+          setUserDetails((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  [isSignature ? "signatureImage" : "profilePicture"]: json.secure_url,
+                }
+              : prev
+          );
+          toast.success(`${isSignature ? "Signature" : "Photo"} uploaded`);
+          if (isSignature) {
             setSigFilePreview(null);
             setSelectedSigFile(null);
+          }
+        } else {
+          throw new Error("No secure_url in response");
         }
-      } else {
-        toast.error("Failed to upload asset");
+      } catch (err) {
+        console.error(err);
+        toast.error("Upload failed — please try again");
+      } finally {
+        if (isSignature) setUploadingSignature(false);
+        else setUploading(false);
       }
-    } catch (error) {
-      toast.error("Error uploading asset");
-      console.error(error);
-    } finally {
-      if (isSignature) setUploadingSignature(false);
-      else setUploading(false);
-    }
-  };
+    },
+    []
+  );
 
   const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
+    if (!file) return;
     handleImageUpload(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
   };
 
   const onSignatureFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
+    if (!file) return;
     setSelectedSigFile(file);
-    
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setSigFilePreview(reader.result as string);
-    };
+    reader.onloadend = () => setSigFilePreview(reader.result as string);
     reader.readAsDataURL(file);
-  };
-
-  const handleUploadSelectedSignature = () => {
-    if (!selectedSigFile) return;
-    handleImageUpload(selectedSigFile, true);
+    e.target.value = "";
   };
 
   const saveSignatureFromPad = () => {
     if (sigCanvas.current?.isEmpty()) {
-      toast.error("Please provide a signature first");
+      toast.error("Please draw your signature first");
       return;
     }
     const dataUrl = sigCanvas.current?.getTrimmedCanvas().toDataURL("image/png");
     if (dataUrl) handleImageUpload(dataUrl, true);
   };
+
+  // ─── Submit ───────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,7 +326,7 @@ export default function ProfileClient() {
       return;
     }
     if (userDetails.Password !== userDetails.ContactPassword) {
-      toast.error("Password and Confirm Password do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
@@ -261,446 +350,488 @@ export default function ProfileClient() {
 
       if (!res.ok) throw new Error("Failed to update profile");
 
-      toast.success("Profile updated successfully");
-
+      toast.success("Profile saved successfully");
       setUserDetails((prev) =>
-        prev
-          ? {
-            ...prev,
-            Password: "",
-            ContactPassword: "",
-          }
-          : prev
+        prev ? { ...prev, Password: "", ContactPassword: "" } : prev
       );
       setPasswordStrength("");
     } catch (err) {
       console.error(err);
-      toast.error("Error updating profile");
+      toast.error("Error saving profile");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <div>Loading user data...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
+  // ─── Loading / error states ───────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen gap-2 text-gray-500 text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading profile…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen text-red-500 text-sm">
+        {error}
+      </div>
+    );
+  }
+
   if (!userDetails) return null;
 
+  const isBusy = saving || uploading;
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
-    <>
-      <ProtectedPageWrapper>
-        <UserProvider>
-          <FormatProvider>
-            <SidebarProvider>
-              <SidebarLeft />
-              <SidebarInset>
-                <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2">
-                  <div className="flex flex-1 items-center gap-2 px-3">
-                    <SidebarTrigger />
-                    <Separator
-                      orientation="vertical"
-                      className="mr-2 data-[orientation=vertical]:h-4"
-                    />
-                    <Breadcrumb>
-                      <BreadcrumbList>
-                        <BreadcrumbItem>
-                          <BreadcrumbPage className="line-clamp-1">
-                            Profile Information
-                          </BreadcrumbPage>
-                        </BreadcrumbItem>
-                      </BreadcrumbList>
-                    </Breadcrumb>
+    <ProtectedPageWrapper>
+      <UserProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <SidebarLeft />
+
+            <SidebarInset>
+              {/* ── Page header ─────────────────────────────────────── */}
+              <header className="bg-background sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-gray-100">
+                <div className="flex flex-1 items-center gap-2 px-3">
+                  <SidebarTrigger />
+                  <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                  <Breadcrumb>
+                    <BreadcrumbList>
+                      <BreadcrumbItem>
+                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
+                          Profile Settings
+                        </BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </BreadcrumbList>
+                  </Breadcrumb>
+                </div>
+
+                {/* Role badge */}
+                {userDetails.Role && (
+                  <div className="pr-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-gray-900 text-white px-2.5 py-1">
+                      {userDetails.Role}
+                    </span>
                   </div>
-                </header>
+                )}
+              </header>
 
-                <div className="flex flex-1 flex-col gap-2 p-4">
-                  <div className="flex flex-col md:flex-row gap-2">
-                    <div className="w-full md:w-1/2 flex flex-col items-center space-y-4">
-                      <AspectRatio
-                        ratio={16 / 14}
-                        className="w-full bg-muted rounded-lg overflow-hidden border border-gray-300"
-                      >
-                        {userDetails.profilePicture ? (
-                          <Image
-                            src={userDetails.profilePicture}
-                            alt="Profile"
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                            No photo
-                          </div>
-                        )}
-                      </AspectRatio>
+              {/* ── Content ─────────────────────────────────────────── */}
+              <div className="flex flex-col gap-6 p-5 max-w-5xl mx-auto w-full">
 
-                      <input
-                        type="file"
-                        id="profilePicture"
-                        accept="image/*"
-                        onChange={onImageChange}
-                        disabled={uploading}
-                        className="hidden rounded-none p-6"
-                      />
+                {/* Avatar + form side-by-side on md+ */}
+                <div className="flex flex-col md:flex-row gap-5 items-start">
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-auto rounded-none p-6"
-                        onClick={() =>
-                          document.getElementById("profilePicture")?.click()
-                        }
-                        disabled={uploading}
-                      >
-                        <ImagePlus /> {uploading ? "Uploading..." : "Change Photo"}
-                      </Button>
+                  {/* ── Left: Avatar ─────────────────────────────────── */}
+                  <div className="w-full md:w-56 shrink-0 flex flex-col items-center gap-3">
+                    {/* Avatar display */}
+                    <div className="w-full aspect-square relative overflow-hidden border-2 border-gray-200 bg-gray-100">
+                      {userDetails.profilePicture ? (
+                        <Image
+                          src={userDetails.profilePicture}
+                          alt={`${userDetails.Firstname} ${userDetails.Lastname}`}
+                          fill
+                          className="object-cover"
+                          sizes="224px"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-300">
+                          <User className="w-12 h-12" />
+                          <span className="text-[10px] uppercase tracking-wide font-semibold">
+                            No Photo
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex-1">
-                      <form
-                        onSubmit={handleSubmit}
-                        className="space-y-6"
-                        noValidate
-                      >
-                        <fieldset className="border border-gray-300 rounded-md p-4 grid grid-cols-2 gap-4">
-                          <legend className="text-sm font-semibold px-2">User Information</legend>
+                    {/* Upload button */}
+                    <input
+                      type="file"
+                      id="profilePicture"
+                      accept="image/*"
+                      onChange={onImageChange}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-none text-[10px] font-bold uppercase tracking-wider h-8 gap-1.5"
+                      onClick={() => document.getElementById("profilePicture")?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                      ) : (
+                        <><ImagePlus className="w-3 h-3" /> Change Photo</>
+                      )}
+                    </Button>
 
-                          <div className="flex flex-col flex-1 space-y-2">
-                            <Label htmlFor="Firstname">First Name</Label>
-                            <Input
-                              type="text"
-                              id="Firstname"
-                              name="Firstname"
-                              value={userDetails.Firstname}
-                              onChange={handleChange}
-                              autoComplete="given-name"
-                              required
-                              className="rounded-none"
-                            />
-                          </div>
+                    {/* Identity chip */}
+                    <div className="w-full text-center">
+                      <p className="text-sm font-black text-gray-800 uppercase tracking-tight leading-tight">
+                        {userDetails.Firstname} {userDetails.Lastname}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{userDetails.Email}</p>
+                    </div>
+                  </div>
 
-                          <div className="flex flex-col flex-1 space-y-2">
-                            <Label htmlFor="Lastname">Last Name</Label>
-                            <Input
-                              type="text"
-                              id="Lastname"
-                              name="Lastname"
-                              value={userDetails.Lastname}
-                              onChange={handleChange}
-                              autoComplete="family-name"
-                              required
-                              className="rounded-none"
-                            />
-                          </div>
+                  {/* ── Right: Form ───────────────────────────────────── */}
+                  <form
+                    onSubmit={handleSubmit}
+                    className="flex-1 flex flex-col gap-4"
+                    noValidate
+                  >
+                    {/* Personal Info */}
+                    <Section icon={User} title="Personal Information">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="First Name">
+                          <Input
+                            name="Firstname"
+                            value={userDetails.Firstname}
+                            onChange={handleChange}
+                            autoComplete="given-name"
+                            required
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                        <Field label="Last Name">
+                          <Input
+                            name="Lastname"
+                            value={userDetails.Lastname}
+                            onChange={handleChange}
+                            autoComplete="family-name"
+                            required
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                        <Field label="Gender">
+                          <Input
+                            name="Gender"
+                            value={userDetails.Gender}
+                            onChange={handleChange}
+                            className="rounded-none h-8 text-xs capitalize"
+                          />
+                        </Field>
+                        <Field label="Birthday">
+                          <Input
+                            type="date"
+                            name="Birthday"
+                            value={userDetails.Birthday}
+                            onChange={handleChange}
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                      </div>
+                    </Section>
 
-                          <div className="flex flex-col flex-1 space-y-2">
-                            <Label htmlFor="Gender">Gender</Label>
-                            <Input
-                              type="text"
-                              id="Gender"
-                              name="Gender"
-                              value={userDetails.Gender}
-                              onChange={handleChange}
-                              autoComplete="family-name"
-                              className="capitalize rounded-none"
-                            />
-                          </div>
+                    {/* Contact Details */}
+                    <Section icon={Phone} title="Contact Details">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Email Address">
+                          <Input
+                            type="email"
+                            name="Email"
+                            value={userDetails.Email}
+                            disabled
+                            className="rounded-none h-8 text-xs bg-gray-50 text-gray-400"
+                          />
+                        </Field>
+                        <Field label="Other Email (Gmail, Yahoo)">
+                          <Input
+                            type="email"
+                            name="OtherEmail"
+                            value={userDetails.OtherEmail || ""}
+                            onChange={handleChange}
+                            autoComplete="email"
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                        <Field label="Contact Number">
+                          <Input
+                            type="tel"
+                            name="ContactNumber"
+                            value={userDetails.ContactNumber}
+                            onChange={handleChange}
+                            autoComplete="tel"
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                        <Field label="Another Number (Viber etc)">
+                          <Input
+                            type="tel"
+                            name="AnotherNumber"
+                            value={userDetails.AnotherNumber || ""}
+                            onChange={handleChange}
+                            autoComplete="tel"
+                            className="rounded-none h-8 text-xs"
+                          />
+                        </Field>
+                        <Field label="Address / Location" className="col-span-2">
+                          <Input
+                            name="Address"
+                            value={userDetails.Address || ""}
+                            onChange={handleChange}
+                            autoComplete="street-address"
+                            className="rounded-none h-8 text-xs capitalize"
+                          />
+                        </Field>
+                      </div>
+                    </Section>
 
-                          <div className="flex flex-col flex-1 space-y-2">
-                            <Label htmlFor="Birthday">Birthday</Label>
-                            <Input
-                              type="date"
-                              id="Birthday"
-                              name="Birthday"
-                              value={userDetails.Birthday}
-                              onChange={handleChange}
-                              autoComplete="family-name"
-                              className="capitalize rounded-none"
-                            />
-                          </div>
-                        </fieldset>
+                    {/* Signature */}
+                    <Section icon={PenTool} title="Digital Signature">
+                      <div className="space-y-3">
 
-                        <fieldset className="border border-gray-300 rounded-md p-4 grid grid-cols-2 gap-4">
-                          <legend className="text-sm font-semibold px-2 mb-4 col-span-2">
-                            Contact Details
-                          </legend>
+                        {/* Tab toggle */}
+                        <div className="flex border-b border-gray-200">
+                          {(["pad", "upload"] as const).map((method) => (
+                            <button
+                              key={method}
+                              type="button"
+                              onClick={() => setSigMethod(method)}
+                              className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                sigMethod === method
+                                  ? "border-b-2 border-gray-900 text-gray-900"
+                                  : "text-gray-400 hover:text-gray-600"
+                              }`}
+                            >
+                              {method === "pad" ? "Draw Pad" : "Upload File"}
+                            </button>
+                          ))}
+                        </div>
 
-                          <div className="flex flex-col space-y-2">
-                            <Label htmlFor="Email">Email Address</Label>
-                            <Input
-                              type="email"
-                              id="Email"
-                              name="Email"
-                              value={userDetails.Email}
-                              onChange={handleChange}
-                              autoComplete="email"
-                              disabled
-                              className="rounded-none"
-                            />
-                          </div>
-
-                          <div className="flex flex-col space-y-2">
-                            <Label htmlFor="OtherEmail">Other Email (Gmail, Yahoo)</Label>
-                            <Input
-                              type="email"
-                              id="OtherEmail"
-                              name="OtherEmail"
-                              value={userDetails.OtherEmail || ""}
-                              onChange={handleChange}
-                              autoComplete="email"
-                              className="rounded-none"
-                            />
-                          </div>
-
-                          <div className="flex flex-col space-y-2">
-                            <Label htmlFor="ContactNumber">Contact Number</Label>
-                            <Input
-                              type="tel"
-                              id="ContactNumber"
-                              name="ContactNumber"
-                              value={userDetails.ContactNumber}
-                              onChange={handleChange}
-                              autoComplete="tel"
-                              className="rounded-none"
-                            />
-                          </div>
-
-                          <div className="flex flex-col space-y-2">
-                            <Label htmlFor="AnotherNumber">Another Number (Viber etc)</Label>
-                            <Input
-                              type="tel"
-                              id="AnotherNumber"
-                              name="AnotherNumber"
-                              value={userDetails.AnotherNumber || ""}
-                              onChange={handleChange}
-                              autoComplete="tel"
-                              className="rounded-none"
-                            />
-                          </div>
-
-                          <div className="flex flex-col space-y-2 col-span-2">
-                            <Label htmlFor="Address">Address / Location</Label>
-                            <Input
-                              type="text"
-                              id="Address"
-                              name="Address"
-                              value={userDetails.Address || ""}
-                              onChange={handleChange}
-                              autoComplete="street-address"
-                              className="capitalize rounded-none"
-                              
-                            />
-                          </div>
-                        </fieldset>
-
-                        {/* SIGNATURE SECTION - ENHANCED WITH CHOICE AND PREVIEW */}
-                        <fieldset className="border border-gray-300 rounded-md p-4 bg-[#F9FAFA]">
-                          <legend className="text-sm font-semibold px-2 mb-4">Digital Signature Authorization</legend>
-                          <div className="flex flex-col space-y-4">
-                            
-                            <div className="flex border-b border-gray-200">
-                              <button
-                                type="button"
-                                onClick={() => setSigMethod("pad")}
-                                className={`px-4 py-2 text-xs font-medium transition-colors ${sigMethod === "pad" ? "border-b-2 border-[#121212] text-[#121212]" : "text-gray-400"}`}
-                              >
-                                SIGNATURE PAD
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setSigMethod("upload")}
-                                className={`px-4 py-2 text-xs font-medium transition-colors ${sigMethod === "upload" ? "border-b-2 border-[#121212] text-[#121212]" : "text-gray-400"}`}
-                              >
-                                UPLOAD IMAGE
-                              </button>
+                        {/* Draw pad */}
+                        {sigMethod === "pad" && (
+                          <div className="space-y-3">
+                            <div className="border border-dashed border-gray-300 bg-white">
+                              <SignatureCanvas
+                                ref={sigCanvas}
+                                penColor="#121212"
+                                canvasProps={{
+                                  className: "w-full h-28 cursor-crosshair block",
+                                }}
+                              />
                             </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8"
+                                onClick={() => sigCanvas.current?.clear()}
+                              >
+                                <Eraser className="w-3 h-3" />
+                                Clear
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 bg-gray-900 hover:bg-gray-800"
+                                onClick={saveSignatureFromPad}
+                                disabled={uploadingSignature}
+                              >
+                                {uploadingSignature ? (
+                                  <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>
+                                ) : (
+                                  <><PenTool className="w-3 h-3" /> Save Signature</>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
-                            {sigMethod === "pad" ? (
-                              <div className="space-y-4">
-                                <div className="border border-dashed border-gray-400 rounded-md bg-white">
-                                  <SignatureCanvas 
-                                    ref={sigCanvas}
-                                    penColor="black"
-                                    canvasProps={{ className: "w-full h-32 rounded-md cursor-crosshair" }}
+                        {/* Upload file */}
+                        {sigMethod === "upload" && (
+                          <div className="space-y-3">
+                            <Field label="Select Signature File (PNG recommended)">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={onSignatureFileSelect}
+                                disabled={uploadingSignature}
+                                className="rounded-none h-8 text-xs"
+                              />
+                            </Field>
+
+                            {sigFilePreview && (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                                  Preview
+                                </p>
+                                <div className="relative w-48 h-24 border-2 border-blue-200 bg-white flex items-center justify-center overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setSigFilePreview(null); setSelectedSigFile(null); }}
+                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 z-10 hover:bg-red-600 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                  <Image
+                                    src={sigFilePreview}
+                                    alt="Signature preview"
+                                    fill
+                                    className="object-contain p-2"
                                   />
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <Button type="button" variant="outline" className="rounded-none p-6" onClick={() => sigCanvas.current?.clear()}>
-                                    <Eraser className="w-4 h-4 mr-2" /> Clear Pad
-                                  </Button>
-                                  <Button type="button" onClick={saveSignatureFromPad} disabled={uploadingSignature} className="bg-[#121212] text-white rounded-none p-6">
-                                    <PenTool className="w-4 h-4 mr-2" /> {uploadingSignature ? "Syncing..." : "Confirm Signature"}
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                <div className="flex flex-col space-y-2">
-                                  <Label htmlFor="sigUpload" className="text-xs text-muted-foreground">Select Signature File (PNG/JPG)</Label>
-                                  <Input 
-                                    id="sigUpload"
-                                    type="file" 
-                                    accept="image/*" 
-                                    onChange={onSignatureFileSelect}
-                                    disabled={uploadingSignature}
-                                    className="bg-white rounded-none"
-                                  />
-                                </div>
-                                
-                                {sigFilePreview && (
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] text-blue-600 font-bold uppercase">Selection Preview</Label>
-                                        <div className="relative w-48 h-24 border-2 border-blue-200 rounded-md bg-white flex items-center justify-center overflow-hidden">
-                                            <button 
-                                                type="button" 
-                                                onClick={() => { setSigFilePreview(null); setSelectedSigFile(null); }}
-                                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full z-10"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                            <Image src={sigFilePreview} alt="Preview" fill className="object-contain p-2" />
-                                        </div>
-                                        <Button type="button" size="sm" onClick={handleUploadSelectedSignature} disabled={uploadingSignature} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                            <UploadCloud className="w-4 h-4 mr-2" /> {uploadingSignature ? "Uploading..." : "Confirm & Upload Preview"}
-                                        </Button>
-                                    </div>
-                                )}
-
-                                {!sigFilePreview && (
-                                    <p className="text-[10px] italic text-gray-500 flex items-center gap-1">
-                                      <UploadCloud className="w-3 h-3" /> Recommended: Transparent PNG for professional protocol alignment.
-                                    </p>
-                                )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 bg-blue-600 hover:bg-blue-700"
+                                  onClick={() => selectedSigFile && handleImageUpload(selectedSigFile, true)}
+                                  disabled={uploadingSignature || !selectedSigFile}
+                                >
+                                  {uploadingSignature ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                                  ) : (
+                                    <><UploadCloud className="w-3 h-3" /> Upload Signature</>
+                                  )}
+                                </Button>
                               </div>
                             )}
 
-                            {userDetails.signatureImage && (
-                              <div className="mt-2 pt-4 border-t border-gray-100">
-                                <Label className="text-xs text-muted-foreground">Active Signature Asset:</Label>
-                                <div className="relative w-40 h-20 border rounded mt-1 bg-white shadow-sm">
-                                  <Image src={userDetails.signatureImage} alt="Signature" fill className="object-contain" />
-                                </div>
-                              </div>
+                            {!sigFilePreview && (
+                              <p className="text-[10px] italic text-gray-400 flex items-center gap-1.5">
+                                <UploadCloud className="w-3 h-3 shrink-0" />
+                                Transparent PNG recommended for best quality on documents
+                              </p>
                             )}
                           </div>
-                        </fieldset>
+                        )}
 
-                        <fieldset className="flex flex-col md:flex-row border border-gray-300 rounded-md p-4">
-                          <legend className="text-sm font-semibold px-2 mb-4 md:mb-0 md:mr-8 self-start">
-                            Password Credentials
-                          </legend>
+                        {/* Active signature preview */}
+                        {userDetails.signatureImage && (
+                          <div className="pt-3 border-t border-gray-100">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                              Active Signature
+                            </p>
+                            <div className="relative w-44 h-20 border border-gray-200 bg-white shadow-sm">
+                              <Image
+                                src={userDetails.signatureImage}
+                                alt="Current signature"
+                                fill
+                                className="object-contain p-1"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Section>
 
-                          <div className="flex flex-col flex-1 space-y-4">
-                            <div className="flex items-center space-x-4">
-                              <Label
-                                htmlFor="Password"
-                                className="flex-shrink-0 w-24"
-                              >
-                                Password
-                              </Label>
-
+                    {/* Password */}
+                    <Section icon={KeyRound} title="Password Credentials">
+                      <div className="space-y-4">
+                        {/* New password */}
+                        <Field label="New Password">
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                id="Password"
                                 name="Password"
                                 value={userDetails.Password || ""}
                                 onChange={handleChange}
                                 maxLength={10}
                                 autoComplete="new-password"
-                                className="flex-1 rounded-none"
+                                className="rounded-none h-8 text-xs pr-8"
+                                placeholder="Leave blank to keep current"
                               />
-
-                              <div className="flex space-x-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="rounded-none"
-                                  onClick={() => setShowPassword(!showPassword)}
-                                >
-                                  <Eye /> {showPassword ? "Hide" : "Show"}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="rounded-none"
-                                  onClick={handleGeneratePassword}
-                                >
-                                  <WandSparkles /> Generate
-                                </Button>
-                              </div>
-                            </div>
-
-                            {passwordStrength && (
-                              <p
-                                className={`text-sm ${passwordStrength === "strong"
-                                  ? "text-green-600"
-                                  : passwordStrength === "medium"
-                                    ? "text-yellow-600"
-                                    : "text-red-600"
-                                  }`}
+                              <button
+                                type="button"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                onClick={() => setShowPassword((v) => !v)}
                               >
-                                Password strength: {passwordStrength}
-                              </p>
-                            )}
-
-                            <div className="flex items-center space-x-4">
-                              <Label
-                                htmlFor="ContactPassword"
-                                className="flex-shrink-0 w-24"
-                              >
-                                Confirm Password
-                              </Label>
-
-                              <Input
-                                type={showConfirmPassword ? "text" : "password"}
-                                id="ContactPassword"
-                                name="ContactPassword"
-                                value={userDetails.ContactPassword || ""}
-                                onChange={handleChange}
-                                maxLength={10}
-                                autoComplete="new-password"
-                                className="flex-1 rounded-none"
-                              />
-
-                              <div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="rounded-none"
-                                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                >
-                                  <Eye /> {showConfirmPassword ? "Hide" : "Show"}
-                                </Button>
-                              </div>
+                                {showPassword
+                                  ? <EyeOff className="w-3.5 h-3.5" />
+                                  : <Eye className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
-
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 shrink-0"
+                              onClick={handleGeneratePassword}
+                            >
+                              <WandSparkles className="w-3 h-3" />
+                              Generate
+                            </Button>
                           </div>
-                        </fieldset>
+                          <StrengthBar strength={passwordStrength} />
+                        </Field>
 
-                        <Button
-                          type="submit"
-                          disabled={saving || uploading}
-                          className="w-full md:w-auto bg-[#121212] text-white rounded-none p-6"
-                        >
-                          <Save /> {saving
-                            ? "Saving..."
-                            : uploading
-                              ? "Uploading..."
-                              : "Save Changes"}
-                        </Button>
-                      </form>
+                        {/* Confirm password */}
+                        <Field label="Confirm Password">
+                          <div className="relative">
+                            <Input
+                              type={showConfirmPassword ? "text" : "password"}
+                              name="ContactPassword"
+                              value={userDetails.ContactPassword || ""}
+                              onChange={handleChange}
+                              maxLength={10}
+                              autoComplete="new-password"
+                              className="rounded-none h-8 text-xs pr-8"
+                              placeholder="Re-enter new password"
+                            />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              onClick={() => setShowConfirmPassword((v) => !v)}
+                            >
+                              {showConfirmPassword
+                                ? <EyeOff className="w-3.5 h-3.5" />
+                                : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                          {/* Match indicator */}
+                          {userDetails.Password && userDetails.ContactPassword && (
+                            <p className={`text-[10px] font-bold mt-1 ${
+                              userDetails.Password === userDetails.ContactPassword
+                                ? "text-emerald-600"
+                                : "text-red-500"
+                            }`}>
+                              {userDetails.Password === userDetails.ContactPassword
+                                ? "✓ Passwords match"
+                                : "✗ Passwords do not match"}
+                            </p>
+                          )}
+                        </Field>
+                      </div>
+                    </Section>
+
+                    {/* Submit */}
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        type="submit"
+                        disabled={isBusy}
+                        className="rounded-none h-9 px-6 text-[11px] font-black uppercase tracking-wider bg-gray-900 hover:bg-gray-800 gap-2"
+                      >
+                        {saving ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                        ) : (
+                          <><Save className="w-3.5 h-3.5" /> Save Changes</>
+                        )}
+                      </Button>
                     </div>
-                  </div>
+                  </form>
                 </div>
-              </SidebarInset>
-              <SidebarRight
-                userId={userId ?? undefined}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-              />
-            </SidebarProvider>
-          </FormatProvider>
-        </UserProvider>
-      </ProtectedPageWrapper>
-    </>
+              </div>
+            </SidebarInset>
+
+            <SidebarRight
+              userId={userId || undefined}
+              dateCreatedFilterRange={dateCreatedFilterRange}
+              setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+            />
+          </SidebarProvider>
+        </FormatProvider>
+      </UserProvider>
+    </ProtectedPageWrapper>
   );
 }

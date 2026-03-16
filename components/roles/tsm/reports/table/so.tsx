@@ -56,15 +56,37 @@ export const SOTable: React.FC<SOProps> = ({ referenceid, dateCreatedFilterRange
   const [selectedAgent, setSelectedAgent] = useState("all");
 
   const fetchActivities = useCallback(() => {
-    if (!referenceid) { setActivities([]); return; }
-    setLoading(true); setError(null);
+    if (!referenceid) {
+      setActivities([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString()
+      : null;
+
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString()
+      : null;
+
     const url = new URL("/api/reports/tsm/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-    if (dateCreatedFilterRange?.from) url.searchParams.append("from", dateCreatedFilterRange.from);
-    if (dateCreatedFilterRange?.to) url.searchParams.append("to", dateCreatedFilterRange.to);
-    fetch(url.toString()).then(r => { if (!r.ok) throw new Error("Failed"); return r.json(); })
-      .then(d => setActivities(d.activities || []))
-      .catch(e => setError(e.message)).finally(() => setLoading(false));
+
+    if (from) url.searchParams.append("from", from);
+    if (to) url.searchParams.append("to", to);
+
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
@@ -86,7 +108,7 @@ export const SOTable: React.FC<SOProps> = ({ referenceid, dateCreatedFilterRange
   useEffect(() => {
     if (!userDetails.referenceid) return;
     fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
-      .then(r => r.json()).then(setAgents).catch(() => {});
+      .then(r => r.json()).then(setAgents).catch(() => { });
   }, [userDetails.referenceid]);
 
   const agentMap = useMemo(() => {

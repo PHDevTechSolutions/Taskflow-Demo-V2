@@ -3,8 +3,14 @@
 import * as React from "react";
 import { DatePicker } from "@/components/rightbar/date-picker";
 import { NavUser } from "@/components/nav/user";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarSeparator, } from "@/components/ui/sidebar";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
+import { Card, CardContent } from "@/components/ui/card";
 import { useFormat } from "@/contexts/FormatContext";
 import { type DateRange } from "react-day-picker";
 
@@ -14,10 +20,14 @@ import { BreachesTSMDialog } from "@/components/popup/breaches-tsm";
 import { BreachesManagerDialog } from "@/components/popup/breaches-manager";
 import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
   userId?: string;
   dateCreatedFilterRange: DateRange | undefined;
-  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+  setDateCreatedFilterRangeAction: React.Dispatch<
+    React.SetStateAction<DateRange | undefined>
+  >;
 };
 
 type TimeLog = {
@@ -28,6 +38,75 @@ type TimeLog = {
   PhotoURL: string;
 };
 
+type UserDetails = {
+  ReferenceID: string;
+  TSM: string;
+  Manager: string;
+  Firstname: string;
+  Lastname: string;
+  Position: string;
+  Email: string;
+  profilePicture: string;
+  Role: string;
+};
+
+const DEFAULT_USER: UserDetails = {
+  ReferenceID: "",
+  TSM: "",
+  Manager: "",
+  Firstname: "",
+  Lastname: "",
+  Position: "",
+  Email: "",
+  profilePicture: "",
+  Role: "",
+};
+
+// ─── Clock helpers ────────────────────────────────────────────────────────────
+
+function useFormattedClock(timeFormat: string, dateFormat: string) {
+  const [time, setTime] = React.useState("");
+  const [date, setDate] = React.useState("");
+
+  React.useEffect(() => {
+    const update = () => {
+      const now = new Date();
+
+      setTime(
+        now.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: timeFormat === "12h",
+        })
+      );
+
+      if (dateFormat === "short") {
+        setDate(now.toLocaleDateString("en-US"));
+      } else if (dateFormat === "iso") {
+        setDate(now.toISOString().split("T")[0]);
+      } else {
+        setDate(
+          now.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        );
+      }
+    };
+
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [timeFormat, dateFormat]);
+
+  return { time, date };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function SidebarRight({
   userId,
   dateCreatedFilterRange,
@@ -35,64 +114,24 @@ export function SidebarRight({
   ...props
 }: SidebarRightProps) {
   const { timeFormat, dateFormat } = useFormat();
-  const [time, setTime] = React.useState("");
-  const [date, setDate] = React.useState("");
+  const { time, date } = useFormattedClock(timeFormat, dateFormat);
 
+  const [userDetails, setUserDetails] = React.useState<UserDetails>(DEFAULT_USER);
   const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
   const [loadingLogs, setLoadingLogs] = React.useState(false);
   const [errorLogs, setErrorLogs] = React.useState<string | null>(null);
 
-  const [userDetails, setUserDetails] = React.useState({
-    ReferenceID: "",
-    TSM: "",
-    Manager: "",
-    Firstname: "",
-    Lastname: "",
-    Position: "",
-    Email: "",
-    profilePicture: "",
-    Role: "",
-  });
-
-  React.useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-
-      const formattedTime = now.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: timeFormat === "12h",
-      });
-
-      let formattedDate = "";
-      if (dateFormat === "short") {
-        formattedDate = now.toLocaleDateString("en-US");
-      } else if (dateFormat === "iso") {
-        formattedDate = now.toISOString().split("T")[0];
-      } else {
-        formattedDate = now.toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        });
-      }
-
-      setTime(formattedTime);
-      setDate(formattedDate);
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [timeFormat, dateFormat]);
+  // ─── Fetch user ─────────────────────────────────────────────────────────
 
   React.useEffect(() => {
     if (!userId) return;
+
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-      .then((res) => res.json())
-      .then((data) => {
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch user");
+        return res.json();
+      })
+      .then((data) =>
         setUserDetails({
           ReferenceID: data.ReferenceID || "",
           TSM: data.TSM || "",
@@ -103,10 +142,12 @@ export function SidebarRight({
           Email: data.Email || "",
           profilePicture: data.profilePicture || "",
           Role: data.Role || "",
-        });
-      })
-      .catch((err) => console.error(err));
+        })
+      )
+      .catch((err) => console.error("User fetch error:", err));
   }, [userId]);
+
+  // ─── Fetch time logs ────────────────────────────────────────────────────
 
   React.useEffect(() => {
     if (!userDetails.Email) {
@@ -118,7 +159,10 @@ export function SidebarRight({
     setErrorLogs(null);
 
     fetch(`/api/fetch-timelogs?Email=${encodeURIComponent(userDetails.Email)}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch timelogs");
+        return res.json();
+      })
       .then((data) => {
         if (data.success) {
           setTimeLogs(data.data);
@@ -131,14 +175,26 @@ export function SidebarRight({
         setErrorLogs("Error fetching logs");
         setTimeLogs([]);
       })
-      .finally(() => {
-        setLoadingLogs(false);
-      });
+      .finally(() => setLoadingLogs(false));
   }, [userDetails.Email]);
 
-  function handleDateRangeSelect(range: DateRange | undefined) {
-    setDateCreatedFilterRangeAction(range);
-  }
+  // ─── Derived ────────────────────────────────────────────────────────────
+
+  const isTSM = userDetails.Role === "Territory Sales Manager";
+  const isTSA = userDetails.Role === "Territory Sales Associate";
+  const isManager = userDetails.Role === "Manager";
+
+  const navUser = {
+    name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
+    position: userDetails.Position,
+    email: userDetails.Email,
+    ReferenceID: userDetails.ReferenceID,
+    TSM: userDetails.TSM,
+    Manager: userDetails.Manager,
+    avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
     <Sidebar
@@ -146,47 +202,26 @@ export function SidebarRight({
       className="sticky top-0 hidden h-svh border-l lg:flex"
       {...props}
     >
-      <SidebarHeader className="border-sidebar-border h-16 border-b">
-        {userId ? (
-          <NavUser
-            user={{
-              name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
-              position: userDetails.Position,
-              email: userDetails.Email,
-              ReferenceID: userDetails.ReferenceID,
-              TSM: userDetails.TSM,
-              Manager: userDetails.Manager,
-              avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
-            }}
-            userId={userId}
-          />
-        ) : (
-          <NavUser
-            user={{
-              name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
-              position: userDetails.Position,
-              email: userDetails.Email,
-              ReferenceID: userDetails.ReferenceID,
-              TSM: userDetails.TSM,
-              Manager: userDetails.Manager,
-              avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
-            }}
-            userId={userId ?? ""}
-          />
-        )}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
+        <NavUser user={navUser} userId={userId ?? ""} />
       </SidebarHeader>
 
-      <SidebarContent className="custom-scrollbar">
+      {/* ── Content ────────────────────────────────────────────────────── */}
+      <SidebarContent className="custom-scrollbar overflow-y-auto">
+
+        {/* Date range picker */}
         <DatePicker
           selectedDateRange={dateCreatedFilterRange}
-          onDateSelectAction={handleDateRangeSelect}
+          onDateSelectAction={setDateCreatedFilterRangeAction}
         />
 
         <SidebarSeparator className="mx-0" />
 
-        {userDetails.Role !== "Territory Sales Manager" && (
-          <Card className="rounded-xs shadow-none border-0">
-            <CardContent className="space-y-2">
+        {/* Meeting + Time Logs — hidden for TSM */}
+        {!isTSM && (
+          <Card className="rounded-none shadow-none border-0">
+            <CardContent className="space-y-2 px-3 py-2">
               <Meeting
                 referenceid={userDetails.ReferenceID}
                 tsm={userDetails.TSM}
@@ -201,18 +236,21 @@ export function SidebarRight({
           </Card>
         )}
       </SidebarContent>
-      {/*Territory Sales Associate*/}
-      {userDetails.Role === "Territory Sales Associate" && <BreachesDialog />}
 
-      {/*Territory Sales Manager*/}
-      {userDetails.Role === "Territory Sales Manager" && <BreachesTSMDialog />}
+      {/* ── Floating breach dialogs ─────────────────────────────────────── */}
+      {isTSA && <BreachesDialog />}
+      {isTSM && <BreachesTSMDialog />}
+      {isManager && <BreachesManagerDialog />}
 
-      {/*Head Manager*/}
-      {userDetails.Role === "Manager" && <BreachesManagerDialog />}
+      {/* ── Footer clock ───────────────────────────────────────────────── */}
       <SidebarFooter>
-        <div className="border-t border-sidebar-border mt-2 pt-2 text-center text-xs">
-          <div>{time}</div>
-          <div className="text-[11px]">{date}</div>
+        <div className="border-t border-sidebar-border pt-2 pb-1 text-center select-none">
+          <div className="text-xs font-mono font-semibold text-gray-700 tabular-nums tracking-tight">
+            {time}
+          </div>
+          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+            {date}
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

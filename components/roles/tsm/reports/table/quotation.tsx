@@ -99,9 +99,9 @@ const ALL_STATUSES = [
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
 const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  HOT:  { badge: "bg-red-50 text-red-600 border border-red-200",    dot: "bg-red-500"    },
+  HOT: { badge: "bg-red-50 text-red-600 border border-red-200", dot: "bg-red-500" },
   WARM: { badge: "bg-amber-50 text-amber-600 border border-amber-200", dot: "bg-amber-400" },
-  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200",  dot: "bg-blue-400"  },
+  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200", dot: "bg-blue-400" },
   DONE: { badge: "bg-green-50 text-green-600 border border-green-200", dot: "bg-green-500" },
 };
 
@@ -129,23 +129,37 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
   /* ---- Fetch activities ---- */
   const fetchActivities = useCallback(() => {
-    if (!referenceid) { setActivities([]); return; }
+    if (!referenceid) {
+      setActivities([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    let from: string | null = dateCreatedFilterRange?.from ?? null;
-    let to: string | null = dateCreatedFilterRange?.to ?? null;
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString()
+      : null;
+
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString()
+      : null;
 
     const url = new URL("/api/reports/tsm/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
+
     if (from) url.searchParams.append("from", from);
     if (to) url.searchParams.append("to", to);
 
     fetch(url.toString())
-      .then(async (res) => { if (!res.ok) throw new Error("Failed to fetch activities"); return res.json(); })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
       .then((data) => setActivities(data.activities || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
   }, [referenceid, dateCreatedFilterRange]);
 
   /* ---- Realtime subscription ---- */

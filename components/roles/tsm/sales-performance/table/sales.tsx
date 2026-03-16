@@ -586,10 +586,8 @@ export const SalesTable: React.FC<SalesProps> = ({
             <TableRow>
               <TableHead className="text-xs">Agent</TableHead>
               <TableHead className="text-xs">Target Quota</TableHead>
-              <TableHead className="text-xs">SO Amount</TableHead>
-              <TableHead className="text-xs text-right">
-                Total Sales Invoice
-              </TableHead>
+              {/*<TableHead className="text-xs">SO Amount</TableHead>*/}
+              <TableHead className="text-xs text-right">Total Sales Invoice</TableHead>
               <TableHead className="text-xs">Variance</TableHead>
               <TableHead className="text-xs">Achievement</TableHead>
               <TableHead className="text-xs">Par</TableHead>
@@ -640,12 +638,12 @@ export const SalesTable: React.FC<SalesProps> = ({
                         })}
                       </TableCell>
                       {/* SO Amount */}
-                      <TableCell>
+                      {/*<TableCell>
                         {totalSoAmount.toLocaleString(undefined, {
                           style: "currency",
                           currency: "PHP",
                         })}
-                      </TableCell>
+                      </TableCell>*/}
                       <TableCell className="text-right">
                         {totalActualSales.toLocaleString(undefined, {
                           style: "currency",
@@ -682,12 +680,12 @@ export const SalesTable: React.FC<SalesProps> = ({
                   currency: "PHP",
                 })}
               </TableCell>
-              <TableCell className="text-xs">
+              {/* <TableCell className="text-xs">
                 {columnTotals.totalSoAmount.toLocaleString(undefined, {
                   style: "currency",
                   currency: "PHP",
                 })}
-              </TableCell>
+              </TableCell> */}
               <TableCell className="text-xs text-right">
                 {columnTotals.totalActualSales.toLocaleString(undefined, {
                   style: "currency",
@@ -744,8 +742,8 @@ export const SalesTable: React.FC<SalesProps> = ({
                   v >= 1000000
                     ? `₱${(v / 1000000).toFixed(1)}M`
                     : v >= 1000
-                    ? `₱${(v / 1000).toFixed(0)}K`
-                    : `₱${v}`
+                      ? `₱${(v / 1000).toFixed(0)}K`
+                      : `₱${v}`
                 }
               />
               <Tooltip content={<CustomDailyTooltip />} />
