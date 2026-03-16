@@ -3,30 +3,28 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
 
+// Helper: format Date → "YYYY-MM-DD"
+function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   const { from, to } = req.query;
 
-  // ✅ FIX: Use properly formatted ISO strings with time boundaries
+  // Use plain date strings since date_created is a DATE column, not TIMESTAMPTZ
   const fromDate =
-    typeof from === "string"
-      ? new Date(from).toISOString()
-      : undefined;
+    typeof from === "string" ? toDateStr(new Date(from)) : undefined;
 
   const toDate =
-    typeof to === "string"
-      ? new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString()
-      : undefined;
+    typeof to === "string" ? toDateStr(new Date(to)) : undefined;
 
   try {
     let allHistory: any[] = [];
     let offset = 0;
 
-    // -----------------------------
-    // Fetch history in batches
-    // -----------------------------
     while (true) {
       let query = supabase
         .from("history")
@@ -34,16 +32,15 @@ export default async function handler(
         .order("date_created", { ascending: false })
         .range(offset, offset + BATCH_SIZE - 1);
 
-      // ✅ FIX: Use fromDate / toDate (with time) instead of raw from / to (date-only strings)
       if (fromDate) query = query.gte("date_created", fromDate);
-      if (toDate) query = query.lte("date_created", toDate);
+      if (toDate)   query = query.lte("date_created", toDate);
 
       const { data, error } = await query;
       if (error) return res.status(500).json({ message: error.message });
       if (!data || data.length === 0) break;
 
       allHistory.push(...data);
-      if (data.length < BATCH_SIZE) break; // last batch
+      if (data.length < BATCH_SIZE) break;
       offset += BATCH_SIZE;
     }
 
@@ -51,9 +48,7 @@ export default async function handler(
       return res.status(200).json({ activities: [], total: 0 });
     }
 
-    // -----------------------------
     // Fetch signatories in batches
-    // -----------------------------
     const quotationNumbers = allHistory
       .map((h) => h.quotation_number)
       .filter(Boolean);
@@ -73,9 +68,6 @@ export default async function handler(
       sigOffset += BATCH_SIZE;
     }
 
-    // -----------------------------
-    // Merge signatories
-    // -----------------------------
     const sigMap = allSignatories.reduce((acc, s) => {
       if (s.quotation_number) acc[s.quotation_number] = s;
       return acc;
@@ -85,13 +77,13 @@ export default async function handler(
       const sig = sigMap[h.quotation_number];
       return {
         ...h,
-        agent_name: sig?.agent_name ?? null,
-        agent_signature: sig?.agent_signature ?? null,
+        agent_name:           sig?.agent_name          ?? null,
+        agent_signature:      sig?.agent_signature     ?? null,
         agent_contact_number: sig?.agent_contact_number ?? null,
-        agent_email_address: sig?.agent_email_address ?? null,
-        tsm_name: sig?.tsm_name ?? null,
-        tsm_approval_date: sig?.tsm_approval_date ?? null,
-        tsm_remarks: sig?.tsm_remarks ?? null,
+        agent_email_address:  sig?.agent_email_address ?? null,
+        tsm_name:             sig?.tsm_name            ?? null,
+        tsm_approval_date:    sig?.tsm_approval_date   ?? null,
+        tsm_remarks:          sig?.tsm_remarks         ?? null,
       };
     });
 
