@@ -26,12 +26,11 @@ export default async function handler(
     let offset = 0;
 
     while (true) {
-let query = supabase
-  .from("history")
-  .select("*")
-  .eq("type_activity", "Quotation Preparation") // ✅ ADD THIS FILTER
-  .order("date_created", { ascending: false })
-  .range(offset, offset + BATCH_SIZE - 1);
+      let query = supabase
+        .from("history")
+        .select("*")
+        .order("date_created", { ascending: false })
+        .range(offset, offset + BATCH_SIZE - 1);
 
       if (fromDate) query = query.gte("date_created", fromDate);
       if (toDate)   query = query.lte("date_created", toDate);
