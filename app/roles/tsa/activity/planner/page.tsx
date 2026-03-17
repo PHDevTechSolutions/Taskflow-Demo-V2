@@ -739,7 +739,7 @@ function DashboardContent() {
                     count: completedCount,
                   },
                   done: {
-                    label: "Done",
+                    label: "Pending Task",
                     icon: <ClipboardCheck className="w-4 h-4" />,
                     count: doneCount,
                   },

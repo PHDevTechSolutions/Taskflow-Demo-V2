@@ -102,7 +102,7 @@ export function OutboundTouchbaseCard({ activities }: Props) {
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
-                    <PhoneOutgoing size={14} /> Outbound - Touchbase
+                    <PhoneOutgoing size={14} />Total Outbound - Touchbase
                   </ItemTitle>
                   <ItemDescription>
                     <Badge className="bg-blue-500 text-white">{touchbaseTotal}</Badge>
@@ -135,7 +135,7 @@ export function OutboundTouchbaseCard({ activities }: Props) {
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
-                    <PhoneForwarded size={14} /> Outbound - Follow Up
+                    <PhoneForwarded size={14} />Total Outbound - Follow Up
                   </ItemTitle>
                   <ItemDescription>
                     <Badge className="bg-blue-500 text-white">{followupTotal}</Badge>

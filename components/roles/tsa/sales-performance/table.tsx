@@ -271,10 +271,6 @@ export const SalesTable: React.FC<SalesProps> = ({
                             </TableCell>
                         </TableRow>
                         <TableRow>
-                            <TableCell>Achievement</TableCell>
-                            <TableCell className="text-right">{achievement.toFixed(2)}%</TableCell>
-                        </TableRow>
-                        <TableRow>
                             <TableCell>Par</TableCell>
                             <TableCell className="text-right">{parPercentage.toFixed(2)}%</TableCell>
                         </TableRow>
@@ -290,11 +286,6 @@ export const SalesTable: React.FC<SalesProps> = ({
             <div className="rounded-md border p-4 bg-white shadow-sm">
                 <h2 className="font-semibold text-sm mb-4">Computation Explanation</h2>
                 <div className="text-xs space-y-3 text-gray-700">
-                    <p>
-                        <strong>Achievement:</strong> Calculated as the total actual sales divided by the target quota, multiplied by 100 to get a percentage.
-                        <br />
-                        <code>Achievement = (Total Actual Sales / Target Quota) × 100%</code>
-                    </p>
                     <p>
                         <strong>Par:</strong> A benchmark percentage to track progress based on the number of working days (Monday to Saturday) passed in the month, excluding Sundays.
                         <br />

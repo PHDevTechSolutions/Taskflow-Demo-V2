@@ -192,7 +192,7 @@ export function OutboundCallsCard({
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-center">OB Target</TableHead>
-                <TableHead className="text-center">Total OB</TableHead>
+                <TableHead className="text-center">Successful OB</TableHead>
                 <TableHead className="text-center">Achievement</TableHead>
                 <TableHead className="text-center">Calls → Quote</TableHead>
                 <TableHead className="text-center">Quote → SO</TableHead>
