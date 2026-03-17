@@ -30,7 +30,7 @@ let query = supabase
   .from("history")
   .select("*")
   .eq("type_activity", "Quotation Preparation") 
-  .not("quotation_number", "is", null)
+  .not("quotation_number", "is", null) 
   .order("date_created", { ascending: false })
   .range(offset, offset + BATCH_SIZE - 1);
 
@@ -51,9 +51,13 @@ let query = supabase
     }
 
     // Fetch signatories in batches
-    const quotationNumbers = allHistory
+const quotationNumbers = [
+  ...new Set(
+    allHistory
       .map((h) => h.quotation_number)
-      .filter(Boolean);
+      .filter(Boolean)
+  ),
+];
 
     let allSignatories: any[] = [];
     let sigOffset = 0;
