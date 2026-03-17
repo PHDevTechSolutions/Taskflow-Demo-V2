@@ -270,7 +270,7 @@ function DashboardContent() {
           {/* Row 2 — Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SourceCard {...cardProps} />
-            <CSRMetricsCard dateRange={dateCreatedFilterRange} />
+            <CSRMetricsCard referenceId={userDetails.referenceid} dateRange={dateCreatedFilterRange} />
           </div>
 
           {/* Row 3 — Lists & Map */}
