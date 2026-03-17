@@ -157,6 +157,11 @@ export const Quotation: React.FC<QuotationProps> = ({
                 { event: "*", schema: "public", table: "history" },
                 () => fetchActivities()
             )
+    .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "signatories" },
+        () => fetchActivities()
+    )
             .subscribe();
 
         return () => {
