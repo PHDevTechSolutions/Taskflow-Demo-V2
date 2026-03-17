@@ -295,22 +295,30 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Redirect based on role
-    switch (result.Role) {
-      case "Territory Sales Manager":
-        router.push(`/roles/tsm/agent?id=${result.userId}`);
-        break;
-      case "Manager":
-        router.push(`/roles/manager/agent?id=${result.userId}`);
-        break;
-      case "Staff":
-        router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
-        break;  
-      case "Super Admin":
-        router.push(`/roles/admin/dashboard?id=${result.userId}`);
-        break;
-      default:
-        router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
-    }
+if (result.Department === "CSR") {
+  router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+  return;
+}
+
+switch (result.Role) {
+  case "Territory Sales Manager":
+    router.push(`/roles/tsm/agent?id=${result.userId}`);
+    break;
+  case "Manager":
+    router.push(`/roles/manager/agent?id=${result.userId}`);
+    break;
+  case "Staff":
+    router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+    break;  
+  case "Admin":
+    router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+    break;  
+  case "Super Admin":
+    router.push(`/roles/admin/dashboard?id=${result.userId}`);
+    break;
+  default:
+    router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
+}
 
     setPendingLoginData(null);
     setLoadingRedirect(false); // stop loading (just in case)
