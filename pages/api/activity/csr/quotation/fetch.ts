@@ -29,7 +29,7 @@ export default async function handler(
 let query = supabase
   .from("history")
   .select("*")
-  .eq("type_activity", "Quotation Preparation") // 🔥 FILTER NA
+  .eq("type_activity", "Quotation Preparation") // ✅ ADD THIS FILTER
   .order("date_created", { ascending: false })
   .range(offset, offset + BATCH_SIZE - 1);
 
