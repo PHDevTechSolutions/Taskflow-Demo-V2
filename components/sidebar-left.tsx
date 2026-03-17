@@ -166,29 +166,6 @@ const data = {
         { name: "FB Marketplace Summary", url: "/roles/admin/reports/fb", icon: ShoppingBag },
       ],
     },
-    {
-      name: "Conversion Rates",
-      icon: TrendingUp,
-      // TSM is intentionally excluded from this workspace
-      pages: [
-        { name: "Calls to Quote", url: "/roles/tsa/conversion/calls-to-quote", icon: PhoneCall },
-        { name: "Quote To SO", url: "/roles/tsa/conversion/quote-to-so", icon: FileText },
-        { name: "SO To SI", url: "/roles/tsa/conversion/so-to-si", icon: CreditCard },
-        { name: "Calls to SI", url: "/roles/tsa/conversion/calls-to-si", icon: Rocket },
-
-        // Manager
-        { name: "Calls to Quote", url: "/roles/manager/conversion/calls-to-quote", icon: PhoneCall },
-        { name: "Quote To SO", url: "/roles/manager/conversion/quote-to-so", icon: FileText },
-        { name: "SO To SI", url: "/roles/manager/conversion/so-to-si", icon: CreditCard },
-        { name: "Calls to SI", url: "/roles/manager/conversion/calls-to-si", icon: Rocket },
-
-        // Admin
-        { name: "Calls to Quote", url: "/roles/admin/conversion/calls-to-quote", icon: PhoneCall },
-        { name: "Quote To SO", url: "/roles/admin/conversion/quote-to-so", icon: FileText },
-        { name: "SO To SI", url: "/roles/admin/conversion/so-to-si", icon: CreditCard },
-        { name: "Calls to SI", url: "/roles/admin/conversion/calls-to-si", icon: Rocket },
-      ],
-    },
   ],
 };
 

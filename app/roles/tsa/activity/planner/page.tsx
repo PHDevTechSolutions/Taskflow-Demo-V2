@@ -41,6 +41,7 @@ import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
 import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
 import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
+import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
 import { Done } from "@/components/roles/tsa/activity/planner/done/done";
 import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue";
 
@@ -482,6 +483,7 @@ function DashboardContent() {
   const [collapseState, setCollapseState] = useState({
     inProgress: true,
     scheduled: true,
+    delivered: true,
     completed: true,
     done: true,
     overdue: true,
@@ -489,6 +491,7 @@ function DashboardContent() {
 
   const [progressCount, setProgressCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [deliveredCount, setDeliveredCount] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
   const [doneCount, setDoneCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
@@ -704,6 +707,7 @@ function DashboardContent() {
                 [
                   "inProgress",
                   "scheduled",
+                  "delivered",
                   "completed",
                   "done",
                   "overdue",
@@ -723,6 +727,11 @@ function DashboardContent() {
                     label: "Scheduled",
                     icon: <Calendar className="w-4 h-4" />,
                     count: scheduledCount,
+                  },
+                  delivered: {
+                    label: "Delivered",
+                    icon: <CheckCircle className="w-4 h-4" />,
+                    count: deliveredCount,
                   },
                   completed: {
                     label: "Completed",
@@ -811,9 +820,29 @@ function DashboardContent() {
                           signature={userDetails.signature}
                         />
                       )}
+                      {key === "delivered" && (
+                        <Delivered
+                          referenceid={userDetails.referenceid}
+                          dateCreatedFilterRange={dateCreatedFilterRange}
+                          setDateCreatedFilterRangeAction={
+                            setDateCreatedFilterRangeAction
+                          }
+                          onCountChange={setDeliveredCount}
+                          managerDetails={userDetails.managerDetails ?? null}
+                          tsmDetails={userDetails.tsmDetails ?? null}
+                          signature={userDetails.signature}
+                        />
+                      )}
                       {key === "completed" && (
                         <Completed
                           referenceid={userDetails.referenceid}
+                          firstname={userDetails.firstname}
+                          lastname={userDetails.lastname}
+                          email={userDetails.email}
+                          contact={userDetails.contact}
+                          tsmname={userDetails.tsmname}
+                          managername={userDetails.managername}
+                          target_quota={userDetails.target_quota}
                           dateCreatedFilterRange={dateCreatedFilterRange}
                           setDateCreatedFilterRangeAction={
                             setDateCreatedFilterRangeAction

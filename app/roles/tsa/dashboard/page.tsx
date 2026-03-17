@@ -6,11 +6,18 @@ import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
-import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
-
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-
 import { type DateRange } from "react-day-picker";
 import { sileo } from "sileo";
 
@@ -23,12 +30,14 @@ import { ActivityCard } from "@/components/roles/tsa/dashboard/card/other-activi
 import { SourceCard } from "@/components/roles/tsa/dashboard/chart/source";
 import { CSRMetricsCard } from "@/components/roles/tsa/dashboard/chart/csr";
 // Lists
-import { OutboundCard } from "@/components/roles/tsa/dashboard/list/outbound";
+import { OutboundCallsCard } from "@/components/roles/tsa/dashboard/list/outbound";
 import { QuotationCard } from "@/components/roles/tsa/dashboard/list/quotation";
 import { SOCard } from "@/components/roles/tsa/dashboard/list/so";
 // Maps
 import { SiteVisitCard } from "@/components/roles/tsa/dashboard/maps/site-visit";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+
+/* ================= TYPES ================= */
 
 interface UserDetails {
   referenceid: string;
@@ -40,7 +49,7 @@ interface Activity {
   referenceid: string;
   source?: string;
   call_status?: string;
-  date_created?: string;
+  date_created: string;
   start_date?: string;
   end_date?: string;
   type_activity: string;
@@ -52,27 +61,46 @@ interface Activity {
   so_amount: string;
   type_client: string;
   activity_reference_number: string;
+  company_name?: string;
 }
 
+/* ================= HELPERS ================= */
+
+/** Narrows DateRange (optional from/to) into a strict { from, to } object. */
+function toStrictRange(
+  range: DateRange | undefined
+): { from: Date; to: Date } | undefined {
+  if (range?.from && range?.to) return { from: range.from, to: range.to };
+  return undefined;
+}
+
+/* ================= MAIN CONTENT ================= */
+
 function DashboardContent() {
-  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
-    DateRange | undefined
-  >(undefined);
+  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
+    React.useState<DateRange | undefined>(undefined);
 
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
 
+  /* Default to today on first load */
   useEffect(() => {
     if (!dateCreatedFilterRange) {
       const today = new Date();
-      const from = new Date(today);
-      from.setHours(0, 0, 0, 0);
-      const to = new Date(today);
-      to.setHours(23, 59, 59, 999);
-      setDateCreatedFilterRangeAction({ from, to });
+      setDateCreatedFilterRangeAction({
+        from: new Date(today.setHours(0, 0, 0, 0)),
+        to: new Date(new Date().setHours(23, 59, 59, 999)),
+      });
     }
   }, [dateCreatedFilterRange]);
 
+  /* Sync userId from URL */
+  const queryUserId = searchParams?.get("id") ?? "";
+  useEffect(() => {
+    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
+  }, [queryUserId, userId, setUserId]);
+
+  /* ---- User ---- */
   const [userDetails, setUserDetails] = useState<UserDetails>({
     referenceid: "",
     tsm: "",
@@ -80,18 +108,6 @@ function DashboardContent() {
   });
   const [loadingUser, setLoadingUser] = useState(false);
   const [errorUser, setErrorUser] = useState<string | null>(null);
-
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  const [errorActivities, setErrorActivities] = useState<string | null>(null);
-
-  const queryUserId = searchParams?.get("id") ?? "";
-
-  useEffect(() => {
-    if (queryUserId && queryUserId !== userId) {
-      setUserId(queryUserId);
-    }
-  }, [queryUserId, userId, setUserId]);
 
   useEffect(() => {
     if (!userId) {
@@ -103,9 +119,9 @@ function DashboardContent() {
       setErrorUser(null);
       setLoadingUser(true);
       try {
-        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!response.ok) throw new Error("Failed to fetch user data");
-        const data = await response.json();
+        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!res.ok) throw new Error("Failed to fetch user data");
+        const data = await res.json();
 
         setUserDetails({
           referenceid: data.ReferenceID || "",
@@ -119,33 +135,17 @@ function DashboardContent() {
           duration: 4000,
           position: "top-right",
           fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
+          styles: { title: "text-white!", description: "text-white" },
         });
-      } catch (err) {
-        sileo.warning({
-          title: "Failed",
-          description: "Error fetching user data:",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
-        });
+      } catch {
         sileo.error({
           title: "Failed",
-          description: "Failed to connect to server. Please try again later or refresh your network connection",
+          description:
+            "Failed to connect to server. Please try again later or refresh your network connection.",
           duration: 4000,
           position: "top-right",
           fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
+          styles: { title: "text-white!", description: "text-white" },
         });
       } finally {
         setLoadingUser(false);
@@ -155,9 +155,13 @@ function DashboardContent() {
     fetchUserData();
   }, [userId]);
 
-  const fetchActivities = useCallback(() => {
-    const referenceid = userDetails.referenceid; // <- add this line
+  /* ---- Activities ---- */
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [errorActivities, setErrorActivities] = useState<string | null>(null);
 
+  const fetchActivities = useCallback(() => {
+    const { referenceid } = userDetails;
     if (!referenceid) {
       setActivities([]);
       return;
@@ -166,18 +170,17 @@ function DashboardContent() {
     setLoadingActivities(true);
     setErrorActivities(null);
 
-    // Prepare date params (convert to YYYY-MM-DD)
-    const from =
-      dateCreatedFilterRange?.from
-        ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-        : null;
-    const to =
-      dateCreatedFilterRange?.to
-        ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-        : null;
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
 
-    // Build URL with query params
-    const url = new URL("/api/activity/tsa/dashboard/fetch", window.location.origin);
+    const url = new URL(
+      "/api/activity/tsa/dashboard/fetch",
+      window.location.origin
+    );
     url.searchParams.append("referenceid", referenceid);
     if (from && to) {
       url.searchParams.append("from", from);
@@ -198,132 +201,106 @@ function DashboardContent() {
     fetchActivities();
   }, [fetchActivities]);
 
-  const isInDateRange = (dateString: string | undefined): boolean => {
-    if (!dateString) return true;
-    if (!dateCreatedFilterRange) return true;
-
-    const date = new Date(dateString);
-    const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-    const to = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
-
-    if (from && date < from) return false;
-    if (to) {
-      const toEnd = new Date(to);
-      toEnd.setHours(23, 59, 59, 999);
-      if (date > toEnd) return false;
-    }
-    return true;
-  };
-
+  /* ---- Client-side date filter ---- */
   const filteredActivities = useMemo(() => {
-    return activities.filter((activity) => isInDateRange(activity.date_created));
+    if (!dateCreatedFilterRange?.from) return activities;
+
+    const from = new Date(dateCreatedFilterRange.from);
+    from.setHours(0, 0, 0, 0);
+    const to = dateCreatedFilterRange.to
+      ? new Date(new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999))
+      : null;
+
+    return activities.filter((a) => {
+      if (!a.date_created) return true;
+      const d = new Date(a.date_created);
+      if (d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
   }, [activities, dateCreatedFilterRange]);
 
+  /* Shared props passed to many cards */
+  const cardProps = {
+    activities: filteredActivities,
+    loading: loadingActivities,
+    error: errorActivities,
+  };
+
   return (
-    <>
-      <ProtectedPageWrapper>
-        <SidebarLeft />
-        <SidebarInset>
-          <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 z-[50]">
-            <div className="flex flex-1 items-center gap-2 px-3">
-              <SidebarTrigger />
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
-              />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbPage className="line-clamp-1">Dashboard</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-            </div>
-          </header>
-
-          <div className="flex flex-col gap-4 p-4">
-            {/* Cards container: 4 cards in a row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <div
-                className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none"
-              />
-
-              <AccountCard referenceid={userDetails.referenceid} />
-
-              <OutboundTouchbaseCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-              />
-
-              <TimemotionCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-                referenceid={userDetails.referenceid}
-                dateRange={dateCreatedFilterRange}
-              />
-
-              <ActivityCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-              />
-            </div>
-
-            {/* New: Two large cards side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Large Card 1 */}
-              <SourceCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-              />
-
-              <CSRMetricsCard
-                dateRange={dateCreatedFilterRange}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-              <OutboundCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-                dateRange={dateCreatedFilterRange}
-              />
-
-              <QuotationCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-                dateRange={dateCreatedFilterRange}
-              />
-
-              <SOCard
-                activities={filteredActivities}
-                loading={loadingActivities}
-                error={errorActivities}
-                dateRange={dateCreatedFilterRange}
-              />
-
-              <SiteVisitCard
-                referenceid={userDetails.referenceid}
-                dateRange={dateCreatedFilterRange}
-              />
-            </div>
-
+    <ProtectedPageWrapper>
+      <SidebarLeft />
+      <SidebarInset>
+        {/* Top bar */}
+        <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 z-[50]">
+          <div className="flex flex-1 items-center gap-2 px-3">
+            <SidebarTrigger />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-[orientation=vertical]:h-4"
+            />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="line-clamp-1">
+                    Dashboard
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
-        </SidebarInset>
-        <SidebarRight
-          userId={userId ?? undefined}
-          dateCreatedFilterRange={dateCreatedFilterRange}
-          setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-        />
-      </ProtectedPageWrapper>
-    </>
+        </header>
+
+        <div className="flex flex-col gap-4 p-4">
+          {/* Background grid */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-10 pointer-events-none" />
+
+          {/* Row 1 — Summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <AccountCard referenceid={userDetails.referenceid} />
+            <OutboundTouchbaseCard {...cardProps} />
+            <TimemotionCard
+              {...cardProps}
+              referenceid={userDetails.referenceid}
+              dateRange={dateCreatedFilterRange}
+            />
+            <ActivityCard {...cardProps} />
+          </div>
+
+          {/* Row 2 — Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SourceCard {...cardProps} />
+            <CSRMetricsCard dateRange={dateCreatedFilterRange} />
+          </div>
+
+          {/* Row 3 — Lists & Map */}
+          <div className="grid grid-cols-1 gap-4">
+            <OutboundCallsCard
+              history={filteredActivities}
+              loading={loadingActivities}
+              error={errorActivities}
+              dateCreatedFilterRange={toStrictRange(dateCreatedFilterRange)}
+            />
+            <QuotationCard {...cardProps} dateRange={dateCreatedFilterRange} />
+            <SOCard {...cardProps} dateRange={dateCreatedFilterRange} />
+            <SiteVisitCard
+              referenceid={userDetails.referenceid}
+              dateRange={dateCreatedFilterRange}
+            />
+          </div>
+        </div>
+      </SidebarInset>
+
+      <SidebarRight
+        userId={userId ?? undefined}
+        dateCreatedFilterRange={dateCreatedFilterRange}
+        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+      />
+    </ProtectedPageWrapper>
   );
 }
+
+/* ================= PAGE ================= */
 
 export default function Page() {
   return (

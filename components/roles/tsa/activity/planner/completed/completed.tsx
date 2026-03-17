@@ -1,20 +1,37 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
+  CheckCircle2Icon,
+  AlertCircleIcon,
+  Check,
+  LoaderPinwheel,
+  PhoneOutgoing,
+  PackageCheck,
+  ReceiptText,
+  Activity,
+  Lock,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { supabase } from "@/utils/supabase";
+import { CreateActivityDialog } from "../dialog/create";
+import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Truck, FileText } from "lucide-react";
-import { AlertCircleIcon } from "lucide-react";
-import { supabase } from "@/utils/supabase";
-import { type DateRange } from "react-day-picker";
-
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
+import { checkCompanyBlocked, BLOCK_DONE } from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -25,59 +42,58 @@ interface SupervisorDetails {
   contact: string | null;
 }
 
-/* ================= TYPES ================= */
+interface Activity {
+  id: string;
+  referenceid: string;
+  target_quota?: string;
+  tsm: string;
+  manager: string;
+  activity_reference_number: string;
+  account_reference_number: string;
+  ticket_reference_number: string;
+  agent: string;
+  status: string;
+  date_updated: string;
+  scheduled_date: string;
+  date_created: string;
+
+  company_name: string;
+  contact_number: string;
+  type_client: string;
+  email_address: string;
+  address: string;
+  contact_person: string;
+}
 
 interface HistoryItem {
   id: string;
-  referenceid: string;
   activity_reference_number: string;
-
-  // Companies
-  company_name?: string;
-  contact_number?: string;
-  contact_person?: string;
-  email_address?: string;
-
-  // Outbound History
-  call_status?: string;
-  call_type?: string;
-
-  // Quotation History
-  quotation_number?: string;
+  callback?: string | null;
+  date_followup?: string | null;
+  quotation_number?: string | null;
   quotation_amount?: number | null;
-  product_title?: string;
-  product_description?: string;
-  product_photo?: string;
-  product_sku?: string;
-  product_amount?: string;
-  product_quantity?: string;
-  quotation_type?: string;
-
-  // SO History
   so_number?: string | null;
   so_amount?: number | null;
-
-  // Delivered History
-  actual_sales?: number | null;
-  dr_number?: string;
-  payment_terms?: string;
-  si_date?: string;
-  delivery_date?: string;
-
-  status: string;
+  call_type?: string;
   ticket_reference_number?: string;
   source?: string;
-  type_activity?: string;
-  remarks: string;
-  date_created: string;
+  call_status?: string;
+  type_activity: string;
+  tsm_approved_status: string;
+  status?: string; // Added for delivery/completion check
 }
 
-/* ================= PROPS ================= */
-
-interface CompletedProps {
+interface NewTaskProps {
   referenceid: string;
+  target_quota?: string;
+  firstname: string;
+  lastname: string;
+  email: string;
+  contact: string;
+  tsmname: string;
+  managername: string;
   dateCreatedFilterRange: DateRange | undefined;
-  setDateCreatedFilterRangeAction?: React.Dispatch<
+  setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
   managerDetails: SupervisorDetails | null;
@@ -86,59 +102,101 @@ interface CompletedProps {
   onCountChange?: (count: number) => void;
 }
 
-/* ================= COMPONENT ================= */
-
-export const Completed: React.FC<CompletedProps> = ({
+export const Completed: React.FC<NewTaskProps> = ({
   referenceid,
+  target_quota,
+  firstname,
+  lastname,
+  email,
+  contact,
+  tsmname,
+  managername,
   dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
   tsmDetails,
   managerDetails,
   signature,
-  onCountChange
+  onCountChange,
 }) => {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
   const [searchTerm, setSearchTerm] = useState("");
 
-  /* ================= FETCH HISTORY ================= */
-
-  const fetchHistory = useCallback(async () => {
+  const fetchAllData = useCallback(() => {
     if (!referenceid) {
+      setActivities([]);
       setHistory([]);
       return;
     }
 
-    setLoading(true);
+    setActivitiesLoading(true);
+    setHistoryLoading(true);
     setError(null);
 
-    try {
-      const res = await fetch(
-        `/api/act-fetch-history?referenceid=${encodeURIComponent(referenceid)}`
-      );
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
 
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error || "Failed to fetch history");
-      }
-
-      const json = await res.json();
-      setHistory(json.activities || []);
-    } catch (err: any) {
-      setError(err.message || "Error fetching history");
-    } finally {
-      setLoading(false);
+    const url = new URL(
+      "/api/activity/tsa/planner/fetch",
+      window.location.origin,
+    );
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
     }
-  }, [referenceid]);
 
-  /* ================= REALTIME ================= */
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities and history");
+        return res.json();
+      })
+      .then((data) => {
+        setActivities(data.activities || []);
+        setHistory(data.history || []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => {
+        setActivitiesLoading(false);
+        setHistoryLoading(false);
+      });
+  }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
-    fetchHistory();
-
     if (!referenceid) return;
 
-    const channel = supabase
+    // Initial fetch
+    fetchAllData();
+
+    // Subscribe realtime for activities
+    const activityChannel = supabase
+      .channel(`activity-${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "activity",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        (payload) => {
+          console.log("Activity realtime update:", payload);
+          fetchAllData();
+        },
+      )
+      .subscribe();
+
+    // Subscribe realtime for history
+    const historyChannel = supabase
       .channel(`history-${referenceid}`)
       .on(
         "postgres_changes",
@@ -148,117 +206,99 @@ export const Completed: React.FC<CompletedProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => fetchHistory()
+        (payload) => {
+          console.log("History realtime update:", payload);
+          fetchAllData();
+        },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      activityChannel.unsubscribe();
+      supabase.removeChannel(activityChannel);
+
+      historyChannel.unsubscribe();
+      supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchHistory]);
+  }, [referenceid, fetchAllData]);
 
-  /* ================= HELPERS ================= */
-
-  const isDateInRange = (dateStr: string): boolean => {
-    if (!dateCreatedFilterRange) return true;
+  const isDateInRange = (
+    dateStr: string,
+    range: DateRange | undefined,
+  ): boolean => {
+    if (!range) return true;
     const date = new Date(dateStr);
-    const { from, to } = dateCreatedFilterRange;
+    if (isNaN(date.getTime())) return false;
+    const { from, to } = range;
     if (from && date < from) return false;
     if (to && date > to) return false;
     return true;
   };
 
-  const uniqueValues = (values: (string | undefined | null)[]) =>
-    Array.from(new Set(values.filter((v) => v && v !== "-"))) as string[];
+  const allowedStatuses = ["Completed"];
 
-  /* ================= GROUP HISTORY ================= */
-
-  const groupedData = useMemo(() => {
-    const map = new Map<string, HistoryItem[]>();
-
-    history
-      .filter((h) => isDateInRange(h.date_created))
-      .forEach((h) => {
-        if (!map.has(h.activity_reference_number)) {
-          map.set(h.activity_reference_number, []);
-        }
-        map.get(h.activity_reference_number)!.push(h);
-      });
-
-    return Array.from(map.entries())
-      .map(([activity_reference_number, items]) => {
-        // Kunin ang pinaka-latest sa group by date_created
-        const latest = items.reduce((a, b) =>
-          new Date(a.date_created) > new Date(b.date_created) ? a : b
-        );
-
-        return {
-          id: activity_reference_number,
-          activity_reference_number,
-          company_name: latest.company_name ?? "Unknown Company",
-          contact_number: latest.contact_number ?? "-",
-          status: latest.status,
-          date_created: latest.date_created,
-          relatedHistoryItems: items,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
+  const mergedData = activities
+    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
+    .map((activity) => {
+      const relatedHistoryItems = history.filter(
+        (h) =>
+          h.activity_reference_number === activity.activity_reference_number,
       );
-  }, [history, dateCreatedFilterRange]);
 
-  /* ================= SEARCH ================= */
+      return {
+        ...activity,
+        relatedHistoryItems,
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
+    );
 
-  const filteredData = groupedData.filter((item) => {
-    const term = searchTerm.toLowerCase();
-
+  const filteredData = mergedData.filter((item) => {
+    const lowerSearch = searchTerm.toLowerCase();
     return (
-      item.company_name.toLowerCase().includes(term) ||
+      (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
+      (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
+        false) ||
       item.relatedHistoryItems.some(
         (h) =>
-          h.quotation_number?.toLowerCase().includes(term) ||
-          h.so_number?.toLowerCase().includes(term) ||
-          h.ticket_reference_number?.toLowerCase().includes(term)
+          (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
+          (h.so_number?.toLowerCase().includes(lowerSearch) ?? false),
       )
     );
   });
 
-  /* ================= STATUS SORT PRIORITY ================= */
-
-  const statusPriority = [
-    "Delivered",
-    "SO-Done",
-    "Quote-Done",
-    "Assisted",
-    "Not Assisted",
-    "Cancelled",
-  ];
-
-  const deliveredData = filteredData.filter(
-    (item) => item.status === "Delivered"
-  );
-
   useEffect(() => {
-    onCountChange?.(deliveredData.length);
-  }, [deliveredData.length]);
-
-  /* ================= UI ================= */
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <Spinner className="size-8" />
-      </div>
-    );
-  }
+    onCountChange?.(filteredData.length);
+  }, [filteredData.length]);
 
   if (error) {
     return (
-      <Alert variant="destructive" className="p-4 text-xs">
-        <AlertCircleIcon className="h-5 w-5" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
+      <Alert
+        variant="destructive"
+        className="flex flex-col space-y-4 p-4 text-xs"
+      >
+        <div className="flex items-center space-x-3">
+          <AlertCircleIcon className="h-6 w-6 text-red-600" />
+          <div>
+            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
+            <AlertDescription className="text-xs">
+              Please check your internet connection or try again later.
+            </AlertDescription>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <CheckCircle2Icon className="h-6 w-6 text-green-600" />
+          <div>
+            <AlertTitle className="text-black">Add New Data</AlertTitle>
+            <AlertDescription className="text-xs">
+              You can start by adding new entries to populate your database.
+            </AlertDescription>
+          </div>
+        </div>
       </Alert>
     );
   }
@@ -274,259 +314,370 @@ export const Completed: React.FC<CompletedProps> = ({
         aria-label="Search accounts"
       />
 
-      <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
-        <Accordion type="single" collapsible>
-          {deliveredData.map((item) => {
-            const histories = item.relatedHistoryItems;
+      <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
+        <Accordion type="single" collapsible className="w-full">
+          {filteredData.map((item) => {
+            // Define bg colors base sa status
+            let badgeClass = "bg-gray-200 text-gray-800";
 
-            // Sort histories by status priority inside each item
-            const sortedHistories = [...histories].sort((a, b) => {
-              const aIndex = statusPriority.indexOf(a.status);
-              const bIndex = statusPriority.indexOf(b.status);
-              const aPriority = aIndex === -1 ? statusPriority.length : aIndex;
-              const bPriority = bIndex === -1 ? statusPriority.length : bIndex;
-              return aPriority - bPriority;
-            });
+            if (item.status === "Done") {
+              badgeClass = "bg-gray-400 text-white";
+            }
+
+            // ─── Company Block Check ───────────────────────────────────────
+            // Uses all fetched activities (not just the filtered ones) to
+            // determine if this company already has an active activity within
+            // Block only if the company already has another "Done" activity within 30 days that hasn't been delivered yet.
+            const blockCheck = checkCompanyBlocked(
+              item.account_reference_number,
+              activities,
+              history,
+              BLOCK_DONE.statuses,
+              BLOCK_DONE.checkScheduled,
+              item.id, // exclude the current activity
+            );
 
             return (
-              <AccordionItem key={item.id} value={item.id} className="border rounded-none shadow-sm bg-green-100 mb-2">
-                <div className="p-2">
+              <AccordionItem
+                key={item.id}
+                value={item.id}
+                className="w-full border rounded-none shadow-sm mt-2"
+              >
+                <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
-                    <AccordionTrigger className="text-xs font-semibold font-mono uppercase cursor-pointer">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
                       {item.company_name}
                     </AccordionTrigger>
 
-                    {/* VIEW RECORDS BUTTON & DIALOG */}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="outline" className="rounded-none"
-                        >
-                          <FileText /> View Records
-                        </Button>
-                      </DialogTrigger>
-
-                      <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
-                        <DialogHeader>
-                          <DialogTitle className="text-sm">
-                            Records – {item.company_name}
-                          </DialogTitle>
-                        </DialogHeader>
-
-                        <div className="space-y-4 text-xs">
-                          {sortedHistories.map((h, idx) => (
-                            <div
-                              key={h.id}
-                              className="border rounded-md p-3 space-y-1 bg-muted/40 uppercase"
+                    <div className="flex gap-2 ml-4">
+                      {/* ─── Block Guard ───────────────────────────── */}
+                      {blockCheck.blocked ? (
+                        <HoverCard>
+                          <HoverCardTrigger asChild>
+                            <Button
+                              disabled
+                              variant="outline"
+                              className="rounded-none cursor-not-allowed opacity-60 text-xs"
                             >
-                              <div className="flex justify-between">
-                                <span className="font-mono font-semibold">
-                                  Record #{idx + 1}
-                                </span>
-                                <Badge variant="secondary">{h.status}</Badge>
-                              </div>
-
-                              <Separator />
-
-                              {/* COMPANY */}
-                              {h.contact_person && (
-                                <p>
-                                  <strong>Contact Person:</strong> {h.contact_person}
-                                </p>
-                              )}
-                              {h.email_address && (
-                                <p>
-                                  <strong>Email:</strong> {h.email_address}
-                                </p>
-                              )}
-                              {h.contact_number && (
-                                <p>
-                                  <strong>Contact No:</strong> {h.contact_number}
-                                </p>
-                              )}
-
-                              {/* OUTBOUND */}
-                              {h.call_status && (
-                                <p>
-                                  <strong>Call Status:</strong> {h.call_status}
-                                </p>
-                              )}
-
-
-                              {/* QUOTATION */}
-                              {h.quotation_number && (
-                                <p>
-                                  <strong>Quotation No:</strong> {h.quotation_number}
-                                </p>
-                              )}
-                              {h.quotation_type && (
-                                <p>
-                                  <strong>Quotation Type:</strong> {h.quotation_type}
-                                </p>
-                              )}
-                              {h.quotation_amount !== null &&
-                                h.quotation_amount !== undefined && (
-                                  <p>
-                                    <strong>Quotation Amount:</strong>{" "}
-                                    {h.quotation_amount.toLocaleString("en-PH", {
-                                      style: "currency",
-                                      currency: "PHP",
-                                    })}
-                                  </p>
-                                )}
-
-                              {h.product_title && (
-                                <p>
-                                  <strong>Product:</strong> {h.product_title}
-                                </p>
-                              )}
-
-                              {h.product_sku && (
-                                <p>
-                                  <strong>SKU:</strong> {h.product_sku}
-                                </p>
-                              )}
-                              {(h.product_quantity || h.product_amount) && (
-                                <p>
-                                  <strong>Qty:</strong> {h.product_quantity} |{" "}
-                                  <strong>Price:</strong> {h.product_amount}
-                                </p>
-                              )}
-
-                              {/* SO */}
-                              {h.so_number && (
-                                <>
-                                  <p>
-                                    <strong>SO No:</strong> {h.so_number}
-                                  </p>
-                                  {h.so_amount !== null &&
-                                    h.so_amount !== undefined && (
-                                      <p>
-                                        <strong>SO Amount:</strong>{" "}
-                                        {h.so_amount.toLocaleString("en-PH", {
-                                          style: "currency",
-                                          currency: "PHP",
-                                        })}
-                                      </p>
-                                    )}
-                                </>
-                              )}
-
-                              {/* DELIVERY */}
-                              {h.actual_sales !== null && h.actual_sales !== undefined && (
-                                <>
-                                  <p>
-                                    <strong>Sales Invoice:</strong>{" "}
-                                    {h.actual_sales.toLocaleString("en-PH", {
-                                      style: "currency",
-                                      currency: "PHP",
-                                    })}
-                                  </p>
-                                  {h.dr_number && (
-                                    <p>
-                                      <strong>DR No:</strong> {h.dr_number}
-                                    </p>
-                                  )}
-                                  {h.payment_terms && (
-                                    <p>
-                                      <strong>Payment Terms:</strong> {h.payment_terms}
-                                    </p>
-                                  )}
-                                  {h.si_date && (
-                                    <p>
-                                      <strong>SI Date:</strong> {h.si_date}
-                                    </p>
-                                  )}
-                                  {h.delivery_date && (
-                                    <p>
-                                      <strong>Delivery Date:</strong> {h.delivery_date}
-                                    </p>
-                                  )}
-                                </>
-                              )}
-
-                              <Separator />
-
-                              {h.type_activity && (
-                                <p>
-                                  <strong>Type of Activity:</strong> {h.type_activity}
-                                </p>
-                              )}
-                              {h.call_type && (
-                                <p>
-                                  <strong>Type:</strong> {h.call_type}
-                                </p>
-                              )}
-
-                              <Separator />
-                              {h.remarks && (
-                                <p className="border rounded-sm p-2">
-                                  <strong>Remarks / Message:</strong> {h.remarks}
-                                </p>
-                              )}
-                              <p className="text-muted-foreground">
-                                Created: {new Date(h.date_created).toLocaleString()}
+                              <Lock size={13} className="mr-1" />
+                              Locked
+                            </Button>
+                          </HoverCardTrigger>
+                          <HoverCardContent
+                            side="top"
+                            align="end"
+                            className="text-xs max-w-xs leading-relaxed"
+                          >
+                            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
+                              <Lock size={12} /> Activity Locked
+                            </p>
+                            <p>{blockCheck.reason}</p>
+                            {blockCheck.daysRemaining !== undefined && (
+                              <p className="mt-1 text-muted-foreground">
+                                Unlocks in{" "}
+                                <strong>
+                                  {blockCheck.daysRemaining} day
+                                  {blockCheck.daysRemaining !== 1 ? "s" : ""}
+                                </strong>{" "}
+                                or when marked as Delivered.
                               </p>
-                            </div>
-                          ))}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                            )}
+                          </HoverCardContent>
+                        </HoverCard>
+                      ) : (
+                        <CreateActivityDialog
+                          firstname={firstname}
+                          lastname={lastname}
+                          target_quota={target_quota}
+                          email={email}
+                          contact={contact}
+                          tsmname={tsmname}
+                          managername={managername}
+                          referenceid={item.referenceid}
+                          tsm={item.tsm}
+                          manager={item.manager}
+                          type_client={item.type_client}
+                          contact_number={item.contact_number}
+                          email_address={item.email_address}
+                          activityReferenceNumber={
+                            item.activity_reference_number
+                          }
+                          ticket_reference_number={item.ticket_reference_number}
+                          agent={item.agent}
+                          company_name={item.company_name}
+                          contact_person={item.contact_person}
+                          address={item.address}
+                          accountReferenceNumber={item.account_reference_number}
+                          onCreated={() => {
+                            fetchAllData();
+                          }}
+                          managerDetails={managerDetails ?? null}
+                          tsmDetails={tsmDetails ?? null}
+                          signature={signature}
+                        />
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-1 uppercase">
-                    <Badge className="bg-green-500 font-mono flex items-center gap-2 rounded-sm shadow-md p-2 whitespace-nowrap text-[10px]">
-                      <Truck /> {item.status}
+                  <div className="ml-1 flex flex-wrap gap-1 uppercase">
+                    {/* MAIN STATUS BADGE */}
+                    <Badge
+                      className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap rounded-sm shadow-md p-2 text-[10px]`}
+                    >
+                      <LoaderPinwheel size={14} className="animate-spin" />
+                      {item.status.replace("-", " ")}
                     </Badge>
+
+                    {/* ACTIVITY ICON BADGES */}
+                    {item.relatedHistoryItems.some(
+                      (h: HistoryItem) =>
+                        !!h.type_activity &&
+                        h.type_activity !== "-" &&
+                        h.type_activity.trim() !== "",
+                    ) &&
+                      Array.from(
+                        new Set(
+                          item.relatedHistoryItems
+                            .map(
+                              (h: HistoryItem) => h.type_activity?.trim() ?? "",
+                            )
+                            .filter((v) => v && v !== "-"),
+                        ),
+                      ).map((activity) => {
+                        const getIcon = (act: string) => {
+                          const lowerAct = act.toLowerCase();
+                          if (
+                            lowerAct.includes("outbound") ||
+                            lowerAct.includes("call")
+                          ) {
+                            return <PhoneOutgoing size={14} />;
+                          }
+                          if (
+                            lowerAct.includes("sales order") ||
+                            lowerAct.includes("so prep")
+                          ) {
+                            return <PackageCheck size={14} />;
+                          }
+                          if (
+                            lowerAct.includes("quotation") ||
+                            lowerAct.includes("quote")
+                          ) {
+                            return <ReceiptText size={14} />;
+                          }
+                          return <Activity size={14} />;
+                        };
+
+                        return (
+                          <HoverCard key={activity}>
+                            <HoverCardTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className="flex items-center justify-center w-8 h-8 p-0 cursor-default"
+                              >
+                                {getIcon(activity)}
+                              </Badge>
+                            </HoverCardTrigger>
+
+                            <HoverCardContent
+                              side="top"
+                              align="center"
+                              className="text-xs font-medium px-3 py-2 w-auto"
+                            >
+                              {activity.toUpperCase()}
+                            </HoverCardContent>
+                          </HoverCard>
+                        );
+                      })}
                   </div>
                 </div>
 
-                <AccordionContent className="text-xs px-4 py-2 space-y-1 uppercase">
+                <AccordionContent className="text-xs px-4 py-2 uppercase">
                   <p>
-                    <strong>Contact Number:</strong> {item.contact_number}
+                    <strong>Contact Number:</strong>{" "}
+                    {item.contact_number || "-"}
+                  </p>
+                  <p>
+                    <strong>Contact Person:</strong>{" "}
+                    {item.contact_person || "-"}
+                  </p>
+                  <p>
+                    <strong>Email Address:</strong> {item.email_address || "-"}
+                  </p>
+                  <p>
+                    <strong>Address:</strong> {item.address || "-"}
                   </p>
 
-                  {histories.some((h) => h.activity_reference_number) && (
-                    <p>
-                      <strong>ID:</strong>{" "}
-                      {uniqueValues(histories.map((h) => h.activity_reference_number)).join(", ")}
-                    </p>
+                  <Separator className="mb-2 mt-2" />
+
+                  {item.relatedHistoryItems.length === 0 ? (
+                    <p>No quotation or SO history available.</p>
+                  ) : (
+                    <>
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.ticket_reference_number &&
+                          h.ticket_reference_number !== "-",
+                      ) && (
+                        <p>
+                          <strong>Ticket Reference Number:</strong>{" "}
+                          <span>
+                            {Array.from(
+                              new Set(
+                                item.relatedHistoryItems
+                                  .map((h) => h.ticket_reference_number ?? "-")
+                                  .filter((v) => v !== "-"),
+                              ),
+                            ).join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.call_type && h.call_type !== "-",
+                      ) && (
+                        <p>
+                          <strong>Type:</strong>{" "}
+                          <span>
+                            {item.relatedHistoryItems
+                              .map((h) => h.call_type ?? "-")
+                              .filter((v) => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.type_activity && h.type_activity !== "-",
+                      ) && (
+                        <p>
+                          <strong>Type of Activity:</strong>{" "}
+                          <span>
+                            {Array.from(
+                              new Set(
+                                item.relatedHistoryItems
+                                  .map((h) => h.type_activity ?? "-")
+                                  .filter((v) => v !== "-"),
+                              ),
+                            ).join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {item.relatedHistoryItems.some(
+                        (h) => h.source && h.source !== "-",
+                      ) && (
+                        <p>
+                          <strong>Source:</strong>{" "}
+                          <span>
+                            {Array.from(
+                              new Set(
+                                item.relatedHistoryItems
+                                  .map((h) => h.source ?? "-")
+                                  .filter((v) => v !== "-"),
+                              ),
+                            ).join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {/* Quotation Number */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.quotation_number && h.quotation_number !== "-",
+                      ) && (
+                        <p>
+                          <strong>Quotation Number:</strong>{" "}
+                          <span>
+                            {item.relatedHistoryItems
+                              .map((h) => h.quotation_number ?? "-")
+                              .filter((v) => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {/* TOTAL Quotation Amount */}
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.quotation_amount !== null &&
+                          h.quotation_amount !== undefined,
+                      ) && (
+                        <p>
+                          <strong>Total Quotation Amount:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .reduce((total, h) => {
+                              return total + (h.quotation_amount ?? 0);
+                            }, 0)
+                            .toLocaleString("en-PH", {
+                              style: "currency",
+                              currency: "PHP",
+                            })}
+                        </p>
+                      )}
+
+                      {/* SO Number */}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.so_number && h.so_number !== "-",
+                      ) && (
+                        <p>
+                          <strong>SO Number:</strong>{" "}
+                          <span className="uppercase">
+                            {item.relatedHistoryItems
+                              .map((h) => h.so_number ?? "-")
+                              .filter((v) => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {/* TOTAL SO Amount */}
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.so_amount !== null && h.so_amount !== undefined,
+                      ) && (
+                        <p>
+                          <strong>Total SO Amount:</strong>{" "}
+                          {item.relatedHistoryItems
+                            .reduce((total, h) => {
+                              return total + (h.so_amount ?? 0);
+                            }, 0)
+                            .toLocaleString("en-PH", {
+                              style: "currency",
+                              currency: "PHP",
+                            })}
+                        </p>
+                      )}
+                      {item.relatedHistoryItems.some(
+                        (h) => h.call_status && h.call_status !== "-",
+                      ) && (
+                        <p>
+                          <strong>Call Status:</strong>{" "}
+                          <span className="uppercase">
+                            {item.relatedHistoryItems
+                              .map((h) => h.call_status ?? "-")
+                              .filter((v) => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+                      <Separator className="mb-2 mt-2" />
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.tsm_approved_status &&
+                          h.tsm_approved_status !== "-",
+                      ) && (
+                        <p>
+                          <strong>TSM Feedback:</strong>{" "}
+                          <span className="uppercase">
+                            {item.relatedHistoryItems
+                              .map((h) => h.tsm_approved_status ?? "-")
+                              .filter((v) => v !== "-")
+                              .join(", ")}
+                          </span>
+                        </p>
+                      )}
+                    </>
                   )}
 
-                  {uniqueValues(histories.map((h) => h.ticket_reference_number)).length > 0 && (
-                    <p>
-                      <strong>Ticket Ref:</strong>{" "}
-                      {uniqueValues(histories.map((h) => h.ticket_reference_number)).join(", ")}
-                    </p>
-                  )}
-
-                  {histories.some((h) => h.quotation_number) && (
-                    <p>
-                      <strong>Quotation No:</strong>{" "}
-                      {uniqueValues(histories.map((h) => h.quotation_number)).join(", ")}
-                    </p>
-                  )}
-
-                  {uniqueValues(histories.map((h) => h.so_number)).length > 0 && (
-                    <p>
-                      <strong>SO No:</strong>{" "}
-                      {uniqueValues(histories.map((h) => h.so_number)).join(", ")}
-                    </p>
-                  )}
-
-                  {histories.some((h) => h.actual_sales) && (
-                    <p>
-                      <strong>Total Sales:</strong>{" "}
-                      {histories
-                        .reduce((t, h) => t + (h.actual_sales ?? 0), 0)
-                        .toLocaleString("en-PH", {
-                          style: "currency",
-                          currency: "PHP",
-                        })}
-                    </p>
-                  )}
-
-                  <Separator className="my-2" />
                   <p>
                     <strong>Date Created:</strong>{" "}
                     {new Date(item.date_created).toLocaleDateString()}

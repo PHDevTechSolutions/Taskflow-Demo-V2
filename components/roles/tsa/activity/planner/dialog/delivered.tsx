@@ -4,14 +4,14 @@ import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-interface DoneDialogProps {
+interface DeliveredDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   loading?: boolean;
 }
 
-export const DoneDialog: React.FC<DoneDialogProps> = ({
+export const DeliveredDialog: React.FC<DeliveredDialogProps> = ({
   open,
   onOpenChange,
   onConfirm,
@@ -21,9 +21,9 @@ export const DoneDialog: React.FC<DoneDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-none">
         <DialogHeader>
-          <DialogTitle>Mark Transaction as Pending</DialogTitle>
+          <DialogTitle>Mark Transaction as Completed</DialogTitle>
           <DialogDescription>
-            Are you sure you want to mark this transaction as Pending? It will be removed from
+            Are you sure you want to mark this transaction as Completed? It will be removed from
             the In Progress list and moved to the Historical list.
           </DialogDescription>
         </DialogHeader>
