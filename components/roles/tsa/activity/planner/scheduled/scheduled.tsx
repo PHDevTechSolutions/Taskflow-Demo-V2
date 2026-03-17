@@ -98,10 +98,11 @@ interface ScheduledProps {
   onCountChange?: (count: number) => void;
 }
 
-// ─── Helper: normalize a date to YYYY-MM-DD local string ─────────────────────
-function toLocalDateString(date: Date | string): string {
+function toLocalDateString(date: Date | string | null | undefined): string {
+  if (!date) return ""; // ← dito nasosolve — kung null o undefined, ibalik na lang ""
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-CA"); // "en-CA" gives YYYY-MM-DD
+  if (isNaN(d.getTime())) return ""; // ← pati invalid date strings
+  return d.toLocaleDateString("en-CA");
 }
 
 export const Scheduled: React.FC<ScheduledProps> = ({

@@ -420,14 +420,6 @@ export const Done: React.FC<NewTaskProps> = ({
                   </div>
 
                   <div className="ml-1 flex flex-wrap gap-1 uppercase">
-                    {/* MAIN STATUS BADGE */}
-                    <Badge
-                      className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap rounded-sm shadow-md p-2 text-[10px]`}
-                    >
-                      <LoaderPinwheel size={14} className="animate-spin" />
-                      {item.status.replace("-", " ")}
-                    </Badge>
-
                     {/* ACTIVITY ICON BADGES */}
                     {item.relatedHistoryItems.some(
                       (h: HistoryItem) =>

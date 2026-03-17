@@ -529,8 +529,8 @@ export const Progress: React.FC<NewTaskProps> = ({
                               openDoneDialog(item.id);
                             }}
                           >
-                            <Check className="mr-2 text-green-500" /> Mark as
-                            Done
+                            <Check className="mr-2 text-red-500" /> Mark as
+                            Pending
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
