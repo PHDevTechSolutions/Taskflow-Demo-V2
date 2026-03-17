@@ -46,46 +46,46 @@ function Speedometer({
   maxHours?: number;
 }) {
   /* ================= SMOOTH ANIMATION STATE ================= */
-const previousValueRef = React.useRef(0);
+  const previousValueRef = React.useRef(0);
   const [displayValue, setDisplayValue] = useState(0);
 
-useEffect(() => {
+  useEffect(() => {
 
-  let start = previousValueRef.current;
+    let start = previousValueRef.current;
 
-  let end = value;
+    let end = value;
 
-  let startTime: number | null = null;
+    let startTime: number | null = null;
 
-  const duration = 800;
+    const duration = 800;
 
-  function animate(timestamp: number) {
+    function animate(timestamp: number) {
 
-    if (!startTime) startTime = timestamp;
+      if (!startTime) startTime = timestamp;
 
-    const progress = Math.min((timestamp - startTime) / duration, 1);
+      const progress = Math.min((timestamp - startTime) / duration, 1);
 
-    const eased = 1 - Math.pow(1 - progress, 3);
+      const eased = 1 - Math.pow(1 - progress, 3);
 
-    const current = start + (end - start) * eased;
+      const current = start + (end - start) * eased;
 
-    setDisplayValue(current);
+      setDisplayValue(current);
 
-    if (progress < 1) {
+      if (progress < 1) {
 
-      requestAnimationFrame(animate);
+        requestAnimationFrame(animate);
 
-    } else {
+      } else {
 
-      previousValueRef.current = end;
+        previousValueRef.current = end;
+
+      }
 
     }
 
-  }
+    requestAnimationFrame(animate);
 
-  requestAnimationFrame(animate);
-
-}, [value]);
+  }, [value]);
 
 
   /* ================= COMPUTE USING DISPLAY VALUE ================= */
@@ -114,9 +114,9 @@ useEffect(() => {
 
         <div
           className="absolute bottom-0 left-1/2 origin-bottom"
-style={{
-  transform: `rotate(${angle - 90}deg)`
-}}
+          style={{
+            transform: `rotate(${angle - 90}deg)`
+          }}
         >
           <div className="w-1 h-16 bg-red-500"></div>
         </div>
@@ -150,7 +150,7 @@ export function CSRMetricsCard({
 
   const today = new Date().toISOString().split("T")[0];
 
-  const [referenceId, setReferenceId] = useState("AE-NCR-555756");
+  const [referenceId, setReferenceId] = useState("");
 
   const [targetDate, setTargetDate] = useState(today);
 
@@ -337,7 +337,7 @@ export function CSRMetricsCard({
       </CardHeader>
 
       <CardContent>
-        
+
         {/* DEBUG PANEL remain this as a comment
 
         <div className="p-3 mb-4 bg-[#F9FAFA] border border-gray-200 rounded-md">
