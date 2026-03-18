@@ -100,7 +100,6 @@ export const Quotation: React.FC<QuotationProps> = ({
             })
             .then((data) => setAgents(Array.isArray(data) ? data : []))
             .catch(() => {
-                // Non-blocking — agents are supplementary (avatars/names)
                 setAgents([]);
             });
     }, []);
@@ -144,10 +143,8 @@ export const Quotation: React.FC<QuotationProps> = ({
         }
     }, [dateCreatedFilterRange]);
 
-    // Fetch on mount + real-time subscription
+    // Fetch on mount + when date range changes + real-time subscription
     useEffect(() => {
-        if (!referenceid) return;
-
         fetchActivities();
 
         const channel = supabase
@@ -157,17 +154,12 @@ export const Quotation: React.FC<QuotationProps> = ({
                 { event: "*", schema: "public", table: "history" },
                 () => fetchActivities()
             )
-    .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "signatories" },
-        () => fetchActivities()
-    )
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [referenceid, fetchActivities]);
+    }, [fetchActivities]);
 
     // -----------------------------
     // SORT & FILTER
@@ -183,15 +175,14 @@ export const Quotation: React.FC<QuotationProps> = ({
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase().trim();
 
-        return sortedActivities
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) =>
-                        val != null &&
-                        String(val).toLowerCase().includes(search)
-                );
-            });
+        return sortedActivities.filter((item) => {
+            if (!search) return true;
+            return Object.values(item).some(
+                (val) =>
+                    val != null &&
+                    String(val).toLowerCase().includes(search)
+            );
+        });
     }, [sortedActivities, searchTerm]);
 
     // -----------------------------
@@ -229,6 +220,56 @@ export const Quotation: React.FC<QuotationProps> = ({
         if (status === "Approved") return "bg-emerald-500";
         if (status === "Pending") return "bg-amber-400";
         return "bg-gray-300";
+    };
+
+    // -----------------------------
+    // DOWNLOAD CSV
+    // -----------------------------
+    const handleDownloadCSV = () => {
+        if (!filteredActivities.length) return;
+
+        const headers = [
+            "Agent Name",
+            "Company Name",
+            "Contact Person",
+            "Contact Number",
+            "Quotation Number",
+            "Amount",
+            "Status",
+            "Date Created",
+        ];
+
+        const rows = filteredActivities.map((item) => [
+            item.agent_name || "",
+            item.company_name || "",
+            item.contact_person || "",
+            item.contact_number || "",
+            item.quotation_number || "",
+            item.quotation_amount || "",
+            item.tsm_approved_status || "",
+            item.date_created?.slice(0, 10) || "",
+        ]);
+
+        const csvContent =
+            [headers, ...rows]
+                .map((row) =>
+                    row
+                        .map((field) =>
+                            `"${String(field).replace(/"/g, '""')}"`
+                        )
+                        .join(",")
+                )
+                .join("\n");
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "quotation_list.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const getBadgeClass = (status: string) => {
@@ -316,9 +357,19 @@ export const Quotation: React.FC<QuotationProps> = ({
                         {filteredActivities.length} Record
                         {filteredActivities.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="text-[10px] font-medium text-amber-700 uppercase tracking-wide bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                        Quotation List
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleDownloadCSV}
+                            className="text-[10px] font-medium px-2 py-1 rounded border border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                        >
+                            Download
+                        </button>
+
+                        <span className="text-[10px] font-medium text-amber-700 uppercase tracking-wide bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                            Quotation List
+                        </span>
+                    </div>
                 </div>
             )}
 

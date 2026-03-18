@@ -425,7 +425,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
             <tfoot>
               <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                <TableCell colSpan={2} className="text-gray-500">Total</TableCell>
+                <TableCell colSpan={3} className="text-gray-500">Total</TableCell>
                 <TableCell className="text-right text-gray-800">
                   {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                 </TableCell>

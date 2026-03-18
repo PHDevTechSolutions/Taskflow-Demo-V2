@@ -162,7 +162,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">CCG - Client Coverage Guide</BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Daily Activity Logs</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>

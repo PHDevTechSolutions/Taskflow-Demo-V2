@@ -1,412 +1,578 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Badge } from "@/components/ui/badge";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ChevronLeft, ChevronRight, Clock, Search, CalendarDays, SlidersHorizontal } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CCGItem {
-    id: number;
-    activity_reference_number: string;
-    referenceid: string;
-    tsm: string;
-    manager: string;
-    type_activity?: string;
-    date_updated: string;
-    status: string;
-    company_name: string;
-    remarks: string;
+  id: number;
+  activity_reference_number: string;
+  referenceid: string;
+  tsm: string;
+  manager: string;
+  type_activity?: string;
+  date_updated: string;
+  status: string;
+  company_name: string;
+  remarks: string;
 }
 
-// Helpers: date formatting & grouping
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatDateLocal(date: Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-function formatTimeFromDate(date: Date) {
-    let hours = date.getHours();
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    if (hours === 0) hours = 12;
-    return `${hours}:${minutes} ${ampm}`;
+function formatTime(date: Date) {
+  let h = date.getHours();
+  const min = String(date.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${min} ${ampm}`;
 }
 
-function formatHourLabel(hour24: number) {
-    const ampm = hour24 >= 12 ? "PM" : "AM";
-    let hour12 = hour24 % 12;
-    if (hour12 === 0) hour12 = 12;
-    return `${hour12} ${ampm}`;
+function formatHourLabel(h: number) {
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:00 ${ampm}`;
 }
 
-function parseDateCreated(value?: string) {
-    if (!value) return null;
-    const normalized = value.includes("T") ? value : value.replace(" ", "T");
-    const d = new Date(normalized);
-    return isNaN(d.getTime()) ? null : d;
+function parseDate(value?: string): Date | null {
+  if (!value) return null;
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-function eventsByHour(items: CCGItem[]) {
-    const map: Record<number, CCGItem[]> = {};
-    for (let i = 0; i < 24; i++) map[i] = [];
-    items.forEach((it) => {
-        const d = parseDateCreated(it.date_updated);
-        if (!d) return;
-        const hour = d.getHours();
-        map[hour].push(it);
-    });
-    for (let h = 0; h < 24; h++) {
-        map[h].sort(
-            (a, b) =>
-                parseDateCreated(a.date_updated)!.getTime() - parseDateCreated(b.date_updated)!.getTime()
-        );
-    }
-    return map;
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
 }
+
+function getFirstWeekday(year: number, month: number) {
+  return new Date(year, month, 1).getDay();
+}
+
+function groupByHour(items: CCGItem[]): Record<number, CCGItem[]> {
+  const map: Record<number, CCGItem[]> = {};
+  for (let i = 0; i < 24; i++) map[i] = [];
+  items.forEach((it) => {
+    const d = parseDate(it.date_updated);
+    if (!d) return;
+    map[d.getHours()].push(it);
+  });
+  // Sort each hour bucket by time ascending
+  for (let h = 0; h < 24; h++) {
+    map[h].sort(
+      (a, b) =>
+        parseDate(a.date_updated)!.getTime() -
+        parseDate(b.date_updated)!.getTime()
+    );
+  }
+  return map;
+}
+
+// Status badge styling
+const STATUS_STYLES: Record<string, string> = {
+  Completed:  "bg-emerald-100 text-emerald-700 border-emerald-200",
+  Pending:    "bg-amber-100  text-amber-700  border-amber-200",
+  Cancelled:  "bg-red-100    text-red-700    border-red-200",
+  Active:     "bg-blue-100   text-blue-700   border-blue-200",
+};
+
+// ─── Event Card ───────────────────────────────────────────────────────────────
+
+const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
+  const dt = parseDate(ev.date_updated);
+  const statusClass =
+    STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
+
+  return (
+    <div className="group relative rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-150">
+      {/* Left accent bar */}
+      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-slate-800 truncate">
+            {ev.company_name || "—"}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+            {ev.type_activity ?? ev.activity_reference_number}
+          </p>
+          {ev.remarks && (
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 capitalize">
+              {ev.remarks}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          {dt && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+              <Clock size={10} />
+              {formatTime(dt)}
+            </span>
+          )}
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}>
+            {ev.status || "—"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export const CCG: React.FC<{
-    referenceid: string;
-    target_quota?: string;
-    dateCreatedFilterRange: any;
-    setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-}> = ({ referenceid, target_quota, dateCreatedFilterRange, setDateCreatedFilterRangeAction }) => {
-    const [activities, setActivities] = useState<CCGItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  referenceid: string;
+  target_quota?: string;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+}> = ({ referenceid, dateCreatedFilterRange, setDateCreatedFilterRangeAction }) => {
 
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
-    const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
+  const [activities, setActivities] = useState<CCGItem[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-    const today = useMemo(() => new Date(), []);
-    const [currentYear, setCurrentYear] = useState(today.getFullYear());
-    const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-    const [selectedDate, setSelectedDate] = useState<Date | null>(today);
+  const [searchTerm,          setSearchTerm]          = useState("");
+  const [filterStatus,        setFilterStatus]        = useState("all");
+  const [filterTypeActivity,  setFilterTypeActivity]  = useState("all");
+  const [showFilters,         setShowFilters]         = useState(false);
 
-    // Fetch activities only (history includes company info)
-    const fetchActivities = useCallback(() => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
+  const today = useMemo(() => new Date(), []);
+  const [currentYear,  setCurrentYear]  = useState(today.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(today);
 
-        setLoading(true);
-        setError(null);
+  const currentHourRef    = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-            : null;
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-            : null;
+  // ── Fetch ──────────────────────────────────────────────────────────────────
 
-        const url = new URL("/api/activity/tsa/calendar/fetch", window.location.origin);
-        url.searchParams.append("referenceid", referenceid);
-        if (from && to) {
-            url.searchParams.append("from", from);
-            url.searchParams.append("to", to);
-        }
+  const fetchActivities = useCallback(() => {
+    if (!referenceid) { setActivities([]); return; }
 
-        fetch(url.toString())
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [referenceid, dateCreatedFilterRange]);
+    setLoading(true);
+    setError(null);
 
-    useEffect(() => {
-        fetchActivities();
+    const from = dateCreatedFilterRange?.from
+      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+      : null;
+    const to = dateCreatedFilterRange?.to
+      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+      : null;
 
-        if (!referenceid) return;
-
-        const chan = supabase
-            .channel(`public:history:referenceid=eq.${referenceid}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "history",
-                    filter: `referenceid=eq.${referenceid}`,
-                },
-                (payload) => {
-                    const newRecord = payload.new as CCGItem;
-                    const oldRecord = payload.old as CCGItem;
-
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) return [...curr, newRecord];
-                                return curr;
-                            case "UPDATE":
-                                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
-                    });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(chan);
-        };
-    }, [referenceid, fetchActivities]);
-
-    // No company merge needed anymore
-    const mergedActivities = useMemo(() => {
-        return activities.sort(
-            (a, b) =>
-                new Date(b.date_updated ?? b.date_updated).getTime() -
-                new Date(a.date_updated ?? a.date_updated).getTime()
-        );
-    }, [activities]);
-
-    const hasMeaningfulData = (item: CCGItem) => {
-        return Object.values(item).some((val) => {
-            if (val === null || val === undefined) return false;
-            if (typeof val === "string") return val.trim() !== "";
-            if (typeof val === "number") return !isNaN(val);
-            if (val instanceof Date) return !isNaN(val.getTime());
-            return Boolean(val);
-        });
-    };
-
-    const filteredActivities = useMemo(() => {
-        const s = searchTerm.toLowerCase();
-
-        return mergedActivities
-            .filter((item) => {
-                if (!s) return true;
-                return Object.values(item).some((val) => val && String(val).toLowerCase().includes(s));
-            })
-            .filter((item) => {
-                if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
-                return true;
-            })
-            .filter(hasMeaningfulData);
-    }, [mergedActivities, searchTerm, filterStatus, filterTypeActivity]);
-
-    const eventsByDateMap = useMemo(() => {
-        const map: Record<string, CCGItem[]> = {};
-        for (const item of filteredActivities) {
-            const d = parseDateCreated(item.date_updated);
-            if (!d) continue;
-            const key = formatDateLocal(d);
-            if (!map[key]) map[key] = [];
-            map[key].push(item);
-        }
-        Object.keys(map).forEach((k) =>
-            map[k].sort(
-                (a, b) =>
-                    parseDateCreated(a.date_updated)!.getTime() - parseDateCreated(b.date_updated)!.getTime()
-            )
-        );
-        return map;
-    }, [filteredActivities]);
-
-    // Calendar helpers
-    function getDaysInMonth(year: number, month: number) {
-        return new Date(year, month + 1, 0).getDate();
-    }
-    function getWeekdayOfFirstDay(year: number, month: number) {
-        return new Date(year, month, 1).getDay();
+    const url = new URL("/api/activity/tsa/calendar/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (from && to) {
+      url.searchParams.append("from", from);
+      url.searchParams.append("to", to);
     }
 
-    const daysInMonth = useMemo(() => getDaysInMonth(currentYear, currentMonth), [currentYear, currentMonth]);
-    const firstWeekday = useMemo(() => getWeekdayOfFirstDay(currentYear, currentMonth), [currentYear, currentMonth]);
+    fetch(url.toString())
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch activities");
+        return res.json();
+      })
+      .then((data) => setActivities(data.activities || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
-    const selectedDateStr = selectedDate ? formatDateLocal(selectedDate) : null;
-    const selectedDayEvents = selectedDateStr ? eventsByDateMap[selectedDateStr] || [] : [];
-    const groupedByHour = useMemo(() => eventsByHour(selectedDayEvents), [selectedDayEvents]);
+  // ── Realtime ───────────────────────────────────────────────────────────────
 
-    const statusOptions = useMemo(() => Array.from(new Set(mergedActivities.map(a => a.status).filter(Boolean))).sort(), [mergedActivities]);
-    const typeActivityOptions = useMemo(() => Array.from(new Set(mergedActivities.map(a => a.type_activity).filter(Boolean))).sort(), [mergedActivities]);
+  useEffect(() => {
+    fetchActivities();
+    if (!referenceid) return;
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const isToday =
-        selectedDate &&
-        selectedDate.getDate() === now.getDate() &&
-        selectedDate.getMonth() === now.getMonth() &&
-        selectedDate.getFullYear() === now.getFullYear();
-
-    const currentHourRef = useRef<HTMLDivElement>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (isToday && currentHourRef.current && scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = currentHourRef.current.offsetTop - 10;
+    const chan = supabase
+      .channel(`public:history:referenceid=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
+        (payload) => {
+          const newRec = payload.new as CCGItem;
+          const oldRec = payload.old as CCGItem;
+          setActivities((curr) => {
+            switch (payload.eventType) {
+              case "INSERT":
+                return curr.some((a) => a.id === newRec.id) ? curr : [...curr, newRec];
+              case "UPDATE":
+                return curr.map((a) => (a.id === newRec.id ? newRec : a));
+              case "DELETE":
+                return curr.filter((a) => a.id !== oldRec.id);
+              default:
+                return curr;
+            }
+          });
         }
-    }, [selectedDate, isToday, currentHour]);
+      )
+      .subscribe();
 
-    return (
-        <div className="flex flex-col md:flex-row gap-6 min-h-[600px]">
-            {/* Left: Calendar */}
-            <Card className="w-full md:w-2/5">
-                <CardHeader className="flex items-center justify-between mb-3">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                            if (currentMonth === 0) {
-                                setCurrentYear((y) => y - 1);
-                                setCurrentMonth(11);
-                            } else setCurrentMonth((m) => m - 1);
-                            setSelectedDate(null);
-                        }}
-                    >
-                        Prev
-                    </Button>
-                    <CardTitle className="text-sm font-semibold">
-                        {new Date(currentYear, currentMonth).toLocaleString("default", { month: "long", year: "numeric" })}
-                    </CardTitle>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                            if (currentMonth === 11) {
-                                setCurrentYear((y) => y + 1);
-                                setCurrentMonth(0);
-                            } else setCurrentMonth((m) => m + 1);
-                            setSelectedDate(null);
-                        }}
-                    >
-                        Next
-                    </Button>
-                </CardHeader>
+    return () => { supabase.removeChannel(chan); };
+  }, [referenceid, fetchActivities]);
 
-                {/* Weekday headings */}
-                <div className="grid grid-cols-7 text-center font-semibold text-gray-600 mb-2 select-none px-4">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((wd) => (
-                        <div key={wd} className="text-sm">{wd}</div>
-                    ))}
-                </div>
+  // ── Derived Data ───────────────────────────────────────────────────────────
 
-                {/* Days grid */}
-                <div className="grid grid-cols-7 gap-1 px-6" style={{ "--cell-size": "4rem" } as React.CSSProperties}>
-                    {(() => {
-                        const arr: (number | null)[] = [];
-                        for (let i = 0; i < firstWeekday; i++) arr.push(null);
-                        for (let d = 1; d <= daysInMonth; d++) arr.push(d);
-                        return arr.map((day, idx) =>
-                            day ? (
-                                <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => {
-                                        const date = new Date(currentYear, currentMonth, day);
-                                        setSelectedDate(date);
-                                    }}
-                                    className={`relative flex items-center justify-center rounded-md text-lg font-semibold cursor-pointer
-                    ${selectedDate && selectedDate.getDate() === day && selectedDate.getMonth() === currentMonth && selectedDate.getFullYear() === currentYear
-                                            ? "bg-primary text-primary-foreground"
-                                            : "hover:bg-primary/10"
-                                        }`}
-                                    style={{
-                                        height: "var(--cell-size)",
-                                        minWidth: "var(--cell-size)",
-                                        aspectRatio: "1 / 1",
-                                    }}
-                                >
-                                    {day}
-                                    {/* dot if events exist */}
-                                    {eventsByDateMap[
-                                        `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                                    ] && (
-                                            <Badge variant="secondary" className="absolute bottom-2 right-2 rounded-full h-3 w-3 p-0" />
-                                        )}
-                                </button>
-                            ) : (
-                                <div key={idx} className="h-[4rem]" />
-                            )
-                        );
-                    })()}
-                </div>
-            </Card>
+  // All activities sorted newest-first (for filter options)
+  const sortedActivities = useMemo(
+    () => [...activities].sort(
+      (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+    ),
+    [activities]
+  );
 
-            {/* Right: Hourly schedule for selected date */}
-            <Card className="w-full md:w-2/3 max-h-[700px] border-none shadow-none">
-                <CardContent
-                    className="p-2 overflow-auto custom-scrollbar"
-                    ref={scrollContainerRef}
+  const statusOptions = useMemo(
+    () => Array.from(new Set(sortedActivities.map((a) => a.status).filter(Boolean))).sort(),
+    [sortedActivities]
+  );
+
+  const typeOptions = useMemo(
+    () => Array.from(new Set(sortedActivities.map((a) => a.type_activity).filter(Boolean) as string[])).sort(),
+    [sortedActivities]
+  );
+
+  // Filtered activities (search + dropdowns) — used for the timeline
+  const filteredActivities = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+    return sortedActivities.filter((item) => {
+      if (filterStatus !== "all" && item.status !== filterStatus) return false;
+      if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
+      if (s) {
+        const haystack = [
+          item.company_name, item.type_activity, item.status,
+          item.remarks, item.activity_reference_number,
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(s)) return false;
+      }
+      return true;
+    });
+  }, [sortedActivities, searchTerm, filterStatus, filterTypeActivity]);
+
+  // Dot map: all activities (unfiltered) so calendar dots don't disappear on search
+  const allEventsByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const item of sortedActivities) {
+      const d = parseDate(item.date_updated);
+      if (!d) continue;
+      const key = formatDateLocal(d);
+      map[key] = (map[key] ?? 0) + 1;
+    }
+    return map;
+  }, [sortedActivities]);
+
+  // Filtered events for the selected date
+  const selectedDateStr = selectedDate ? formatDateLocal(selectedDate) : null;
+
+  const selectedDayEvents = useMemo(() => {
+    if (!selectedDateStr) return [];
+    return filteredActivities.filter((item) => {
+      const d = parseDate(item.date_updated);
+      return d ? formatDateLocal(d) === selectedDateStr : false;
+    });
+  }, [filteredActivities, selectedDateStr]);
+
+  const groupedByHour = useMemo(() => groupByHour(selectedDayEvents), [selectedDayEvents]);
+
+  // ── Calendar helpers ───────────────────────────────────────────────────────
+
+  const daysInMonth  = useMemo(() => getDaysInMonth(currentYear, currentMonth),  [currentYear, currentMonth]);
+  const firstWeekday = useMemo(() => getFirstWeekday(currentYear, currentMonth), [currentYear, currentMonth]);
+
+  const prevMonth = () => {
+    if (currentMonth === 0) { setCurrentYear((y) => y - 1); setCurrentMonth(11); }
+    else setCurrentMonth((m) => m - 1);
+    setSelectedDate(null);
+  };
+
+  const nextMonth = () => {
+    if (currentMonth === 11) { setCurrentYear((y) => y + 1); setCurrentMonth(0); }
+    else setCurrentMonth((m) => m + 1);
+    setSelectedDate(null);
+  };
+
+  // ── Scroll to current hour ─────────────────────────────────────────────────
+
+  const nowDate     = new Date();
+  const currentHour = nowDate.getHours();
+  const isToday =
+    selectedDate &&
+    selectedDate.getDate()     === nowDate.getDate()  &&
+    selectedDate.getMonth()    === nowDate.getMonth() &&
+    selectedDate.getFullYear() === nowDate.getFullYear();
+
+  useEffect(() => {
+    if (isToday && currentHourRef.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = currentHourRef.current.offsetTop - 40;
+    }
+  }, [selectedDate, isToday]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white min-h-[680px]">
+
+      {/* ── LEFT: Calendar panel ── */}
+      <div className="lg:w-[320px] shrink-0 border-r border-slate-100 bg-slate-50 flex flex-col">
+
+        {/* Month nav */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <button
+            onClick={prevMonth}
+            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="text-center">
+            <p className="text-sm font-bold text-slate-800 tracking-wide">
+              {new Date(currentYear, currentMonth).toLocaleString("default", { month: "long" })}
+            </p>
+            <p className="text-xs text-slate-400">{currentYear}</p>
+          </div>
+          <button
+            onClick={nextMonth}
+            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 px-4 mb-1">
+          {["S","M","T","W","T","F","S"].map((d, i) => (
+            <div key={i} className="text-center text-[11px] font-bold text-slate-400 py-1">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Days */}
+        <div className="grid grid-cols-7 gap-y-0.5 px-4 pb-5">
+          {/* Empty cells */}
+          {Array.from({ length: firstWeekday }).map((_, i) => (
+            <div key={`empty-${i}`} />
+          ))}
+          {/* Day cells */}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const isSelected =
+              selectedDate &&
+              selectedDate.getDate() === day &&
+              selectedDate.getMonth() === currentMonth &&
+              selectedDate.getFullYear() === currentYear;
+            const isTodayCell =
+              day === today.getDate() &&
+              currentMonth === today.getMonth() &&
+              currentYear === today.getFullYear();
+            const eventCount = allEventsByDate[dateKey] ?? 0;
+
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => setSelectedDate(new Date(currentYear, currentMonth, day))}
+                className={`relative flex flex-col items-center justify-center rounded-xl h-10 w-full text-xs font-semibold transition-all duration-100
+                  ${isSelected
+                    ? "bg-green-600 text-white shadow-md shadow-green-200"
+                    : isTodayCell
+                    ? "bg-green-50 text-green-700 ring-1 ring-green-300"
+                    : "text-slate-700 hover:bg-slate-200"
+                  }`}
+              >
+                {day}
+                {eventCount > 0 && (
+                  <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-white/70" : "bg-green-400"}`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Month summary */}
+        <div className="mt-auto border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <CalendarDays size={13} />
+            <span className="text-xs">
+              {new Date(currentYear, currentMonth).toLocaleString("default", { month: "long" })} total
+            </span>
+          </div>
+          <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
+            {Object.entries(allEventsByDate)
+              .filter(([k]) => k.startsWith(`${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`))
+              .reduce((acc, [, v]) => acc + v, 0)}{" "}
+            events
+          </Badge>
+        </div>
+      </div>
+
+      {/* ── RIGHT: Timeline panel ── */}
+      <div className="flex-1 flex flex-col min-h-0">
+
+        {/* Panel header */}
+        <div className="border-b border-slate-100 px-5 pt-4 pb-3 flex flex-col gap-3">
+          {/* Title row */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">
+                {selectedDate
+                  ? selectedDate.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+                  : "Select a date"}
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {selectedDate ? `${selectedDayEvents.length} event${selectedDayEvents.length !== 1 ? "s" : ""}` : "No date selected"}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors
+                ${showFilters
+                  ? "bg-green-600 text-white border-green-600"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-green-300 hover:text-green-600"
+                }`}
+            >
+              <SlidersHorizontal size={12} />
+              Filters
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search company, activity, remarks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white focus:border-green-300"
+            />
+          </div>
+
+          {/* Expandable filters */}
+          {showFilters && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statusOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterTypeActivity} onValueChange={setFilterTypeActivity}>
+                <SelectTrigger className="h-7 w-[170px] text-xs border-slate-200">
+                  <SelectValue placeholder="All Activity Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Activity Types</SelectItem>
+                  {typeOptions.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(filterStatus !== "all" || filterTypeActivity !== "all" || searchTerm) && (
+                <button
+                  onClick={() => { setFilterStatus("all"); setFilterTypeActivity("all"); setSearchTerm(""); }}
+                  className="h-7 px-3 text-[11px] font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg transition-colors"
                 >
-                    {/* Search + Filters */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                        <div className="flex items-center gap-2">
-                            <Input
-                                placeholder="Search activities..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-56"
-                            />
-                        </div>
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
-                        <div className="flex flex-col items-end text-xs text-muted-foreground">
-                            <div>Events for {selectedDate ? selectedDate.toLocaleDateString() : "No date selected"}</div>
-                            <div>Total: {selectedDayEvents.length}</div>
-                        </div>
+        {/* Timeline body */}
+        <div className="flex-1 overflow-auto" ref={scrollContainerRef}>
+          {loading ? (
+            <div className="flex items-center justify-center h-full py-20 text-slate-400 text-xs gap-2">
+              <span className="animate-spin text-lg">⏳</span> Loading...
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center h-full py-20 text-red-400 text-xs">
+              {error}
+            </div>
+          ) : !selectedDate ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-300 py-20">
+              <CalendarDays size={40} strokeWidth={1} />
+              <p className="text-sm font-medium">Pick a day on the calendar</p>
+            </div>
+          ) : (
+            <div className="px-4 py-3 space-y-0">
+              {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
+                const isCurrentHour = !!isToday && hour === currentHour;
+                const events = groupedByHour[hour] ?? [];
+                const hasEvents = events.length > 0;
+
+                return (
+                  <div
+                    key={hour}
+                    ref={isCurrentHour ? currentHourRef : null}
+                    className={`flex gap-3 min-h-[48px] group
+                      ${isCurrentHour ? "relative" : ""}
+                    `}
+                  >
+                    {/* Hour label + timeline line */}
+                    <div className="flex flex-col items-center w-14 shrink-0 pt-1">
+                      <span className={`text-[10px] font-bold leading-none select-none
+                        ${isCurrentHour ? "text-green-600" : "text-slate-400"}
+                      `}>
+                        {formatHourLabel(hour)}
+                      </span>
+                      <div className={`flex-1 w-px mt-1.5
+                        ${isCurrentHour ? "bg-green-400" : hasEvents ? "bg-slate-300" : "bg-slate-100"}
+                      `} />
                     </div>
 
-                    {selectedDate ? (
-                        (() => {
-                            const hours = Array.from({ length: 24 }, (_, i) => i);
-                            return (
-                                <div>
-                                    {hours.map((hour) => {
-                                        const isCurrentHour = isToday && hour === currentHour;
-                                        return (
-                                            <div
-                                                key={hour}
-                                                ref={isCurrentHour ? currentHourRef : null}
-                                                className={`flex border-b border-gray-100 min-h-[1rem] items-start gap-2 px-2 py-1
-                    ${isCurrentHour ? "bg-yellow-100" : ""}
-                  `}
-                                            >
-                                                <div className="w-12 text-xs text-gray-500 select-none">
-                                                    {formatHourLabel(hour)}
-                                                </div>
-                                                <div className="flex-1 space-y-1 p-1">
-                                                    {groupedByHour[hour].length === 0 ? (
-                                                        <div className="text-xs text-muted-foreground italic">—</div>
-                                                    ) : (
-                                                        groupedByHour[hour].map((ev) => {
-                                                            const dt = parseDateCreated(ev.date_updated)!;
-                                                            return (
-                                                                <div key={ev.id} className="rounded-md p-5 bg-muted hover:bg-muted/80 cursor-pointer">
-                                                                    <p className="font-semibold text-xs">
-                                                                        {formatTimeFromDate(dt)} - {ev.type_activity ?? ev.activity_reference_number}
-                                                                    </p>
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        {ev.company_name} • <span className="capitalize">{ev.remarks ?? "—"}</span>
-                                                                    </p>
-                                                                </div>
-                                                            );
-                                                        })
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()
-                    ) : (
-                        <div className="text-xs text-muted-foreground p-4">Select a date to see events</div>
-                    )}
-                </CardContent>
-            </Card>
+                    {/* Events */}
+                    <div className="flex-1 pb-2 pt-0.5 space-y-1.5">
+                      {/* Current time indicator */}
+                      {isCurrentHour && (
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="w-2 h-2 rounded-full bg-green-500 shadow-md shadow-green-300 animate-pulse" />
+                          <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase">
+                            Now · {formatTime(nowDate)}
+                          </span>
+                        </div>
+                      )}
+
+                      {hasEvents ? (
+                        events.map((ev) => <EventCard key={ev.id} ev={ev} />)
+                      ) : (
+                        <div className="text-[11px] text-slate-200 pt-1 select-none">—</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-    );
+      </div>
+    </div>
+  );
 };

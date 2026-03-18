@@ -162,7 +162,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Personal Notes</BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Daily Admin Task</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
