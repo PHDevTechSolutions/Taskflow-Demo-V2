@@ -907,7 +907,7 @@ export function BreachesDialog() {
 
       {/* Floating Action Button */}
       <button
-        className="fixed bottom-16 right-16 z-50 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 border border-gray-200 overflow-hidden bg-white"
+        className="fixed bottom-16 right-22 z-50 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 border border-gray-200 overflow-hidden bg-white"
         onClick={() => setOpen(true)}
         title="Open End of Day Report"
       >
