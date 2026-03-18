@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, Suspense, useCallback } from "react";
+import React, { useEffect, useState, Suspense, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -9,30 +9,16 @@ import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
+  Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
+  Card, CardHeader, CardTitle, CardContent, CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,62 +35,30 @@ import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 import {
-  PlusCircle,
-  Loader2,
-  Calendar,
-  CheckCircle,
-  ClipboardCheck,
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Bell,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  Download,
+  PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck,
+  AlertCircle, ChevronDown, ChevronRight, Bell, CheckCircle2,
+  XCircle, Eye, Download,
 } from "lucide-react";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface Account {
-  id: string;
-  referenceid: string;
-  company_name: string;
-  type_client: string;
-  date_created: string;
-  date_updated: string;
-  contact_person: string;
-  contact_number: string;
-  email_address: string;
-  address: string;
-  delivery_address: string;
-  region: string;
-  industry: string;
-  status?: string;
-  company_group?: string;
+  id: string; referenceid: string; company_name: string; type_client: string;
+  date_created: string; date_updated: string; contact_person: string;
+  contact_number: string; email_address: string; address: string;
+  delivery_address: string; region: string; industry: string;
+  status?: string; company_group?: string;
 }
 
 interface SupervisorDetails {
-  firstname: string;
-  lastname: string;
-  email: string;
-  profilePicture: string;
-  signatureImage: string;
-  contact: string;
+  firstname: string; lastname: string; email: string;
+  profilePicture: string; signatureImage: string; contact: string;
 }
 
 interface UserDetails {
-  referenceid: string;
-  tsm: string;
-  manager: string;
-  target_quota: string;
-  firstname: string;
-  lastname: string;
-  email: string;
-  contact: string;
-  tsmname: string;
-  managername: string;
-  signature: string;
+  referenceid: string; tsm: string; manager: string; target_quota: string;
+  firstname: string; lastname: string; email: string; contact: string;
+  tsmname: string; managername: string; signature: string;
   managerDetails: SupervisorDetails | null;
   tsmDetails: SupervisorDetails | null;
 }
@@ -124,7 +78,6 @@ interface QuotationNotification {
   date_created: string;
 }
 
-// ─── Route where RevisedQuotation lives ──────────────────────────────────────
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
 
 // ─── Notification Dropdown ────────────────────────────────────────────────────
@@ -138,15 +91,21 @@ function NotificationDropdown({
 }) {
   const router = useRouter();
 
-  const [notifications, setNotifications] = useState<QuotationNotification[]>(
-    [],
-  );
+  const [notifications, setNotifications] = useState<QuotationNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
 
+  // ── Sound refs ──
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Tracks IDs from the PREVIOUS fetch so we can detect genuinely NEW ones
+  const prevIdsRef = useRef<Set<number>>(new Set());
+  // Prevents playing sound on the very first load (page mount)
+  const isFirstLoad = useRef(true);
+
   const READ_KEY = `notif_read_${referenceid}`;
 
+  // Load persisted read IDs
   useEffect(() => {
     if (!referenceid) return;
     try {
@@ -157,14 +116,27 @@ function NotificationDropdown({
     }
   }, [referenceid]);
 
+  const playSound = () => {
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio("/alert-notification.mp3");
+        audioRef.current.volume = 0.6;
+      }
+      // Reset so it plays from the start even if called rapidly
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {
+        // Autoplay blocked by browser policy — silently ignore
+      });
+    } catch {
+      // Ignore any audio errors
+    }
+  };
+
   const fetchNotifications = useCallback(async () => {
     if (!referenceid) return;
     setLoading(true);
     try {
-      const url = new URL(
-        "/api/activity/tsa/quotation/fetch",
-        window.location.origin,
-      );
+      const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
       url.searchParams.append("referenceid", referenceid);
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed");
@@ -172,25 +144,29 @@ function NotificationDropdown({
 
       const filtered = (data.activities || []).filter(
         (a: QuotationNotification) =>
-          a.tsm_approved_status === "Approved" ||
-          a.tsm_approved_status === "Decline",
+          a.tsm_approved_status === "Approved" || a.tsm_approved_status === "Decline"
       );
 
       filtered.sort((a: QuotationNotification, b: QuotationNotification) => {
-        const dateA = new Date(
-          a.manager_approval_date ??
-            a.tsm_approval_date ??
-            a.date_updated ??
-            a.date_created,
-        ).getTime();
-        const dateB = new Date(
-          b.manager_approval_date ??
-            b.tsm_approval_date ??
-            b.date_updated ??
-            b.date_created,
-        ).getTime();
+        const dateA = new Date(a.manager_approval_date ?? a.tsm_approval_date ?? a.date_updated ?? a.date_created).getTime();
+        const dateB = new Date(b.manager_approval_date ?? b.tsm_approval_date ?? b.date_updated ?? b.date_created).getTime();
         return dateB - dateA;
       });
+
+      // ── Detect new notifications ──────────────────────────────────────────
+      const newIds = new Set<number>(filtered.map((n: QuotationNotification) => n.id as number));
+
+      if (!isFirstLoad.current) {
+        // Find IDs that weren't in the previous fetch
+        const brandNewIds = [...newIds].filter((id) => !prevIdsRef.current.has(id));
+        if (brandNewIds.length > 0) {
+          playSound();
+        }
+      }
+
+      prevIdsRef.current = newIds;
+      isFirstLoad.current = false;
+      // ─────────────────────────────────────────────────────────────────────
 
       setNotifications(filtered);
     } catch {
@@ -211,7 +187,7 @@ function NotificationDropdown({
       setReadIds(allIds);
       try {
         localStorage.setItem(READ_KEY, JSON.stringify(Array.from(allIds)));
-      } catch {}
+      } catch { }
     }
   };
 
@@ -220,39 +196,17 @@ function NotificationDropdown({
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return null;
     return new Date(dateStr).toLocaleString("en-PH", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+      timeZone: "Asia/Manila", year: "numeric", month: "short",
+      day: "2-digit", hour: "2-digit", minute: "2-digit",
     });
   };
 
   const formatAmount = (amount?: number) => {
     if (amount === undefined || amount === null) return null;
-    return `₱${parseFloat(String(amount)).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    return `₱${parseFloat(String(amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  /**
-   * Navigate to the RevisedQuotation page.
-   *
-   * URL params consumed by RevisedQuotation / TaskListEditDialog:
-   *   ?id=<userId>          — required by the page to load user details
-   *   ?highlight=<arn>      — scroll + pulse the matching row
-   *   ?openEdit=<arn>       — auto-open the edit dialog for this row
-   *   ?action=preview|download
-   *                         — once the edit dialog is mounted, auto-fire
-   *                           "Review Quotation" (preview) or DownloadPDF()
-   *                           exactly as if the user clicked those buttons
-   */
-  const buildUrl = (
-    notif: QuotationNotification,
-    action?: "preview" | "download",
-  ) => {
+  const buildUrl = (notif: QuotationNotification, action?: "preview" | "download") => {
     const params: Record<string, string> = {
       id: userId,
       highlight: notif.activity_reference_number,
@@ -262,32 +216,17 @@ function NotificationDropdown({
     return `${REVISED_QUOTATION_ROUTE}?${new URLSearchParams(params).toString()}`;
   };
 
-  /** Plain row click — just navigate + highlight */
   const handleNotifClick = (notif: QuotationNotification) => {
     setOpen(false);
-    router.push(
-      `${REVISED_QUOTATION_ROUTE}?${new URLSearchParams({
-        id: userId,
-        highlight: notif.activity_reference_number,
-      }).toString()}`,
-    );
+    router.push(`${REVISED_QUOTATION_ROUTE}?${new URLSearchParams({ id: userId, highlight: notif.activity_reference_number }).toString()}`);
   };
 
-  /** "View PDF" — open edit dialog then auto-open the Preview modal */
   const handleViewPdf = (e: React.MouseEvent, notif: QuotationNotification) => {
-    e.stopPropagation();
-    setOpen(false);
-    router.push(buildUrl(notif, "preview"));
+    e.stopPropagation(); setOpen(false); router.push(buildUrl(notif, "preview"));
   };
 
-  /** "Download PDF" — open edit dialog then auto-trigger jsPDF download */
-  const handleDownloadPdf = (
-    e: React.MouseEvent,
-    notif: QuotationNotification,
-  ) => {
-    e.stopPropagation();
-    setOpen(false);
-    router.push(buildUrl(notif, "download"));
+  const handleDownloadPdf = (e: React.MouseEvent, notif: QuotationNotification) => {
+    e.stopPropagation(); setOpen(false); router.push(buildUrl(notif, "download"));
   };
 
   return (
@@ -303,25 +242,17 @@ function NotificationDropdown({
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent
-        align="end"
-        className="w-[380px] max-h-[520px] overflow-y-auto rounded-none p-0"
-      >
+      <DropdownMenuContent align="end" className="w-[380px] max-h-[520px] overflow-y-auto rounded-none p-0">
         <div className="sticky top-0 bg-background z-10 px-4 py-3 border-b flex items-center justify-between">
-          <DropdownMenuLabel className="p-0 text-sm font-semibold">
-            Quotation Notifications
-          </DropdownMenuLabel>
+          <DropdownMenuLabel className="p-0 text-sm font-semibold">Quotation Notifications</DropdownMenuLabel>
           {notifications.length > 0 && (
-            <Badge variant="secondary" className="text-xs rounded-sm">
-              {notifications.length} total
-            </Badge>
+            <Badge variant="secondary" className="text-xs rounded-sm">{notifications.length} total</Badge>
           )}
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center p-6 text-muted-foreground text-xs gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading...
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading...
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-6 text-muted-foreground text-xs gap-1">
@@ -343,96 +274,43 @@ function NotificationDropdown({
                     ${isUnread ? "bg-muted/40" : "bg-background"}`}
                   onClick={() => handleNotifClick(notif)}
                 >
-                  {/* Company + status badge */}
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-sm leading-tight flex-1">
-                      {notif.company_name}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold ${
-                        isApproved
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {isApproved ? (
-                        <CheckCircle2 className="w-3 h-3" />
-                      ) : (
-                        <XCircle className="w-3 h-3" />
-                      )}
+                    <span className="font-semibold text-sm leading-tight flex-1">{notif.company_name}</span>
+                    <span className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold ${isApproved ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {isApproved ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                       {notif.tsm_approved_status}
                     </span>
                   </div>
 
-                  {/* Quotation number + amount */}
                   <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
-                    {notif.quotation_number && (
-                      <span className="uppercase font-mono">
-                        {notif.quotation_number}
-                      </span>
-                    )}
-                    {formatAmount(notif.quotation_amount) && (
-                      <span className="font-semibold text-foreground">
-                        {formatAmount(notif.quotation_amount)}
-                      </span>
-                    )}
+                    {notif.quotation_number && <span className="uppercase font-mono">{notif.quotation_number}</span>}
+                    {formatAmount(notif.quotation_amount) && <span className="font-semibold text-foreground">{formatAmount(notif.quotation_amount)}</span>}
                   </div>
 
                   {notif.tsm_approval_date && (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <CheckCircle className="w-3 h-3 shrink-0 text-green-600" />
-                      <span>
-                        <span className="font-medium text-foreground">
-                          TSM {isApproved ? "Approved" : "Declined"}:
-                        </span>{" "}
-                        {formatDate(notif.tsm_approval_date)}
-                      </span>
+                      <span><span className="font-medium text-foreground">TSM {isApproved ? "Approved" : "Declined"}:</span> {formatDate(notif.tsm_approval_date)}</span>
                     </div>
                   )}
 
                   {approvedByManager && (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
-                      <span>
-                        <span className="font-medium text-foreground">
-                          {isApproved ? "Approved" : "Declined"} by Manager:
-                        </span>{" "}
-                        {formatDate(notif.manager_approval_date)}
-                      </span>
+                      <span><span className="font-medium text-foreground">{isApproved ? "Approved" : "Declined"} by Manager:</span> {formatDate(notif.manager_approval_date)}</span>
                     </div>
                   )}
 
-                  {notif.tsm_remarks && (
-                    <p className="text-muted-foreground italic">
-                      TSM: &ldquo;{notif.tsm_remarks}&rdquo;
-                    </p>
-                  )}
-                  {notif.manager_remarks && (
-                    <p className="text-muted-foreground italic">
-                      Manager: &ldquo;{notif.manager_remarks}&rdquo;
-                    </p>
-                  )}
+                  {notif.tsm_remarks && <p className="text-muted-foreground italic">TSM: &ldquo;{notif.tsm_remarks}&rdquo;</p>}
+                  {notif.manager_remarks && <p className="text-muted-foreground italic">Manager: &ldquo;{notif.manager_remarks}&rdquo;</p>}
 
-                  {/* PDF actions — Approved only */}
                   {isApproved && (
                     <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer"
-                        onClick={(e) => handleViewPdf(e, notif)}
-                      >
-                        <Eye className="w-3 h-3" />
-                        View PDF
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleViewPdf(e, notif)}>
+                        <Eye className="w-3 h-3" /> View PDF
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer"
-                        onClick={(e) => handleDownloadPdf(e, notif)}
-                      >
-                        <Download className="w-3 h-3" />
-                        Download PDF
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleDownloadPdf(e, notif)}>
+                        <Download className="w-3 h-3" /> Download PDF
                       </Button>
                     </div>
                   )}
@@ -459,19 +337,10 @@ function DashboardContent() {
   const { userId, setUserId } = useUser();
 
   const [userDetails, setUserDetails] = useState<UserDetails>({
-    referenceid: "",
-    tsm: "",
-    manager: "",
-    target_quota: "",
-    firstname: "",
-    lastname: "",
-    email: "",
-    contact: "",
-    tsmname: "",
-    managername: "",
-    signature: "",
-    managerDetails: null,
-    tsmDetails: null,
+    referenceid: "", tsm: "", manager: "", target_quota: "",
+    firstname: "", lastname: "", email: "", contact: "",
+    tsmname: "", managername: "", signature: "",
+    managerDetails: null, tsmDetails: null,
   });
 
   const [posts, setPosts] = useState<Account[]>([]);
@@ -481,12 +350,8 @@ function DashboardContent() {
     React.useState<DateRange | undefined>(undefined);
 
   const [collapseState, setCollapseState] = useState({
-    inProgress: true,
-    scheduled: true,
-    delivered: true,
-    completed: true,
-    done: true,
-    overdue: true,
+    inProgress: true, scheduled: true, delivered: true,
+    completed: true, done: true, overdue: true,
   });
 
   const [progressCount, setProgressCount] = useState(0);
@@ -503,18 +368,11 @@ function DashboardContent() {
   }, [queryUserId, userId, setUserId]);
 
   useEffect(() => {
-    if (!userId) {
-      setLoadingUser(false);
-      return;
-    }
-
+    if (!userId) { setLoadingUser(false); return; }
     const fetchUserData = async () => {
-      setError(null);
-      setLoadingUser(true);
+      setError(null); setLoadingUser(true);
       try {
-        const response = await fetch(
-          `/api/user?id=${encodeURIComponent(userId)}`,
-        );
+        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!response.ok) throw new Error("Failed to fetch user data");
         const data = await response.json();
         setUserDetails({
@@ -532,118 +390,59 @@ function DashboardContent() {
           managerDetails: data.managerDetails || null,
           tsmDetails: data.tsmDetails || null,
         });
-        sileo.success({
-          title: "Success",
-          description: "User data loaded successfully!",
-          duration: 4000,
-          position: "top-center",
-          fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
       } catch {
         sileo.error({
           title: "Failed",
-          description:
-            "Failed to connect to server. Please try again later or refresh your network connection",
-          duration: 4000,
-          position: "top-center",
-          fill: "black",
+          description: "Failed to connect to server. Please try again later or refresh your network connection",
+          duration: 4000, position: "top-center", fill: "black",
           styles: { title: "text-white!", description: "text-white" },
         });
       } finally {
         setLoadingUser(false);
       }
     };
-
     fetchUserData();
   }, [userId]);
 
   async function handleSaveAccount(data: Account & UserDetails) {
     const payload = {
       ...data,
-      contactperson: Array.isArray(data.contact_person)
-        ? data.contact_person
-        : typeof data.contact_person === "string"
-          ? data.contact_person.split(",").map((v) => v.trim())
-          : [],
-      contactnumber: Array.isArray(data.contact_number)
-        ? data.contact_number
-        : typeof data.contact_number === "string"
-          ? data.contact_number.split(",").map((v) => v.trim())
-          : [],
-      emailaddress: Array.isArray(data.email_address)
-        ? data.email_address
-        : typeof data.email_address === "string"
-          ? data.email_address.split(",").map((v) => v.trim())
-          : [],
+      contactperson: Array.isArray(data.contact_person) ? data.contact_person : typeof data.contact_person === "string" ? data.contact_person.split(",").map((v) => v.trim()) : [],
+      contactnumber: Array.isArray(data.contact_number) ? data.contact_number : typeof data.contact_number === "string" ? data.contact_number.split(",").map((v) => v.trim()) : [],
+      emailaddress: Array.isArray(data.email_address) ? data.email_address : typeof data.email_address === "string" ? data.email_address.split(",").map((v) => v.trim()) : [],
     };
     try {
       const isEdit = Boolean(payload.id);
-      const response = await fetch(
-        isEdit ? "/api/com-edit-account" : "/api/com-save-account",
-        {
-          method: isEdit ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-      if (!response.ok) throw new Error("Failed to save account");
-      sileo.success({
-        title: "Success",
-        description: `Account ${isEdit ? "updated" : "created"} successfully!`,
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
+      const response = await fetch(isEdit ? "/api/com-edit-account" : "/api/com-save-account", {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+      if (!response.ok) throw new Error("Failed to save account");
+      sileo.success({ title: "Success", description: `Account ${isEdit ? "updated" : "created"} successfully!`, duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       await refreshAccounts();
     } catch {
-      sileo.error({
-        title: "Failed",
-        description: "Failed to save account.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
+      sileo.error({ title: "Failed", description: "Failed to save account.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     }
   }
 
   async function refreshAccounts() {
     try {
-      const response = await fetch(
-        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`,
-      );
+      const response = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`);
       if (!response.ok) throw new Error("Failed to fetch accounts");
       const data = await response.json();
       setPosts(data.data || []);
     } catch {
-      sileo.error({
-        title: "Failed",
-        description:
-          "Failed to connect to server. Please try again later or refresh your network connection",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
+      sileo.error({ title: "Failed", description: "Failed to connect to server.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     }
   }
 
   const COLLAPSE_KEY = "activity_planner_collapsible_state";
   useEffect(() => {
     const saved = localStorage.getItem(COLLAPSE_KEY);
-    if (saved) {
-      try {
-        setCollapseState(JSON.parse(saved));
-      } catch {
-        localStorage.removeItem(COLLAPSE_KEY);
-      }
-    }
+    if (saved) { try { setCollapseState(JSON.parse(saved)); } catch { localStorage.removeItem(COLLAPSE_KEY); } }
   }, []);
-  useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState));
-  }, [collapseState]);
+  useEffect(() => { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState)); }, [collapseState]);
   const toggleCollapse = (key: keyof typeof collapseState) =>
     setCollapseState((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -655,26 +454,16 @@ function DashboardContent() {
           <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
             <div className="flex flex-1 items-center gap-2 px-3">
               <SidebarTrigger />
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
-              />
+              <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
               <Breadcrumb>
                 <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbPage className="line-clamp-1">
-                      Activity Planners
-                    </BreadcrumbPage>
-                  </BreadcrumbItem>
+                  <BreadcrumbItem><BreadcrumbPage className="line-clamp-1">Activity Planners</BreadcrumbPage></BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
             <div className="flex items-center gap-2 px-3">
               {userDetails.referenceid && (
-                <NotificationDropdown
-                  referenceid={userDetails.referenceid}
-                  userId={userId ?? ""}
-                />
+                <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}
             </div>
           </header>
@@ -684,13 +473,10 @@ function DashboardContent() {
               <Card className="rounded-none h-auto transition-all duration-300">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
-                    <PlusCircle className="w-5 h-5" />
-                    <span>New Task</span>
+                    <PlusCircle className="w-5 h-5" /><span>New Task</span>
                   </CardTitle>
                   <CardDescription>
-                    Manage your latest Endorsed Tickets and Outbound Calls
-                    efficiently. Stay updated with pending tasks and streamline
-                    your workflow.
+                    Manage your latest Endorsed Tickets and Outbound Calls efficiently. Stay updated with pending tasks and streamline your workflow.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -703,195 +489,47 @@ function DashboardContent() {
                 </CardContent>
               </Card>
 
-              {(
-                [
-                  "inProgress",
-                  "scheduled",
-                  "delivered",
-                  "completed",
-                  "done",
-                  "overdue",
-                ] as const
-              ).map((key) => {
+              {(["inProgress", "scheduled", "delivered", "completed", "done", "overdue"] as const).map((key) => {
                 const meta = {
-                  inProgress: {
-                    label: "In Progress",
-                    icon: (
-                      <Loader2
-                        className={`w-4 h-4 ${progressCount > 0 ? "" : ""}`}
-                      />
-                    ),
-                    count: progressCount,
-                  },
-                  scheduled: {
-                    label: "Scheduled",
-                    icon: <Calendar className="w-4 h-4" />,
-                    count: scheduledCount,
-                  },
-                  delivered: {
-                    label: "Delivered",
-                    icon: <CheckCircle className="w-4 h-4" />,
-                    count: deliveredCount,
-                  },
-                  completed: {
-                    label: "Completed",
-                    icon: <CheckCircle className="w-4 h-4" />,
-                    count: completedCount,
-                  },
-                  done: {
-                    label: "Pending Task",
-                    icon: <ClipboardCheck className="w-4 h-4" />,
-                    count: doneCount,
-                  },
-                  overdue: {
-                    label: "Overdue",
-                    icon: <AlertCircle className="w-4 h-4" />,
-                    count: overdueCount,
-                  },
+                  inProgress: { label: "In Progress", icon: <Loader2 className="w-4 h-4" />, count: progressCount },
+                  scheduled: { label: "Scheduled", icon: <Calendar className="w-4 h-4" />, count: scheduledCount },
+                  delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
+                  completed: { label: "Completed", icon: <CheckCircle className="w-4 h-4" />, count: completedCount },
+                  done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
+                  overdue: { label: "Overdue", icon: <AlertCircle className="w-4 h-4" />, count: overdueCount },
                 }[key];
 
                 return (
-                  <Card
-                    key={key}
-                    className={`rounded-none h-auto transition-all duration-300 ${key === "overdue" ? "border-3 border-red-400 shadow-lg" : ""}`}
-                  >
-                    <CardHeader
-                      className="cursor-pointer"
-                      onClick={() => toggleCollapse(key)}
-                    >
+                  <Card key={key} className={`rounded-none h-auto transition-all duration-300 ${key === "overdue" ? "border-3 border-red-400 shadow-lg" : ""}`}>
+                    <CardHeader className="cursor-pointer" onClick={() => toggleCollapse(key)}>
                       <CardTitle className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          {meta.icon}
-                          <span>{meta.label}</span>
-                          <span className="text-xs text-red-600 font-bold">
-                            ({meta.count})
-                          </span>
+                          {meta.icon}<span>{meta.label}</span>
+                          <span className="text-xs text-red-600 font-bold">({meta.count})</span>
                         </div>
                         <span className="text-xs rounded-sm border p-1">
-                          {collapseState[key] ? (
-                            <ChevronRight />
-                          ) : (
-                            <ChevronDown />
-                          )}
+                          {collapseState[key] ? <ChevronRight /> : <ChevronDown />}
                         </span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent
-                      className={`transition-all duration-300 overflow-hidden ${collapseState[key] ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}
-                    >
+                    <CardContent className={`transition-all duration-300 overflow-hidden ${collapseState[key] ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}>
                       {key === "inProgress" && (
-                        <Progress
-                          referenceid={userDetails.referenceid}
-                          firstname={userDetails.firstname}
-                          lastname={userDetails.lastname}
-                          email={userDetails.email}
-                          contact={userDetails.contact}
-                          tsmname={userDetails.tsmname}
-                          managername={userDetails.managername}
-                          target_quota={userDetails.target_quota}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          onCountChange={setProgressCount}
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                        />
+                        <Progress referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setProgressCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "scheduled" && (
-                        <Scheduled
-                          referenceid={userDetails.referenceid}
-                          firstname={userDetails.firstname}
-                          lastname={userDetails.lastname}
-                          email={userDetails.email}
-                          contact={userDetails.contact}
-                          tsmname={userDetails.tsmname}
-                          tsm={userDetails.tsm}
-                          managername={userDetails.managername}
-                          target_quota={userDetails.target_quota}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          onCountChange={setScheduledCount}
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                        />
+                        <Scheduled referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} tsm={userDetails.tsm} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setScheduledCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "delivered" && (
-                        <Delivered
-                          referenceid={userDetails.referenceid}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          onCountChange={setDeliveredCount}
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                        />
+                        <Delivered referenceid={userDetails.referenceid} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDeliveredCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "completed" && (
-                        <Completed
-                          referenceid={userDetails.referenceid}
-                          firstname={userDetails.firstname}
-                          lastname={userDetails.lastname}
-                          email={userDetails.email}
-                          contact={userDetails.contact}
-                          tsmname={userDetails.tsmname}
-                          managername={userDetails.managername}
-                          target_quota={userDetails.target_quota}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          onCountChange={setCompletedCount}
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                        />
+                        <Completed referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setCompletedCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "done" && (
-                        <Done
-                          referenceid={userDetails.referenceid}
-                          firstname={userDetails.firstname}
-                          lastname={userDetails.lastname}
-                          email={userDetails.email}
-                          contact={userDetails.contact}
-                          tsmname={userDetails.tsmname}
-                          managername={userDetails.managername}
-                          target_quota={userDetails.target_quota}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          onCountChange={setDoneCount}
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                        />
+                        <Done referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDoneCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "overdue" && (
-                        <Overdue
-                          referenceid={userDetails.referenceid}
-                          firstname={userDetails.firstname}
-                          lastname={userDetails.lastname}
-                          email={userDetails.email}
-                          contact={userDetails.contact}
-                          tsmname={userDetails.tsmname}
-                          managername={userDetails.managername}
-                          target_quota={userDetails.target_quota}
-                          dateCreatedFilterRange={dateCreatedFilterRange}
-                          setDateCreatedFilterRangeAction={
-                            setDateCreatedFilterRangeAction
-                          }
-                          managerDetails={userDetails.managerDetails ?? null}
-                          tsmDetails={userDetails.tsmDetails ?? null}
-                          signature={userDetails.signature}
-                          onCountChange={setOverdueCount}
-                        />
+                        <Overdue referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} onCountChange={setOverdueCount} />
                       )}
                     </CardContent>
                   </Card>
