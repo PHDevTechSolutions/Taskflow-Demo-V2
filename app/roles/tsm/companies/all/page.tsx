@@ -61,35 +61,20 @@ async function fetchAllAccounts(tsmRefId: string): Promise<Account[]> {
   while (true) {
     batchNum++;
     const url = `/api/com-fetch-approval-account?tsm=${encodeURIComponent(tsmRefId)}&limit=${BATCH_SIZE}&offset=${offset}`;
-
-    console.log(`[fetchAllAccounts] batch ${batchNum} → offset=${offset}`, url);
-
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
 
     const json = await res.json();
-
-    // ✅ Handle both { data: [...] } and plain array responses
     let batch: Account[] = [];
-    if (Array.isArray(json)) {
-      batch = json;
-    } else if (Array.isArray(json.data)) {
-      batch = json.data;
-    } else {
-      // Unexpected shape — log it so you can diagnose
-      console.warn("[fetchAllAccounts] unexpected response shape:", json);
-      break;
-    }
+    if (Array.isArray(json))            batch = json;
+    else if (Array.isArray(json.data))  batch = json.data;
+    else break;
 
-    console.log(`[fetchAllAccounts] batch ${batchNum} → got ${batch.length} rows`);
     all.push(...batch);
-
-    // If the batch is smaller than BATCH_SIZE there are no more rows
     if (batch.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
   }
 
-  console.log(`[fetchAllAccounts] TOTAL fetched: ${all.length} rows across ${batchNum} batch(es)`);
   return all;
 }
 
@@ -102,11 +87,13 @@ function DashboardContent() {
   const [userDetails, setUserDetails] = useState<UserDetails>({
     referenceid: "", firstname: "", lastname: "", tsm: "", manager: "", profilepicture: "",
   });
-  const [posts, setPosts] = useState<Account[]>([]);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [posts,           setPosts]           = useState<Account[]>([]);
+  const [loadingUser,     setLoadingUser]     = useState(true);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
+  const [error,           setError]           = useState<string | null>(null);
+
+  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
+    useState<DateRange | undefined>(undefined);
 
   const queryUserId = searchParams?.get("id") ?? "";
 
@@ -118,45 +105,39 @@ function DashboardContent() {
   useEffect(() => {
     if (!userId) { setLoadingUser(false); return; }
 
-    const fetchUserData = async () => {
+    (async () => {
       setError(null);
       setLoadingUser(true);
       try {
-        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!response.ok) throw new Error("Failed to fetch user data");
-        const data = await response.json();
+        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+        if (!res.ok) throw new Error("Failed to fetch user data");
+        const data = await res.json();
         setUserDetails({
-          referenceid: data.ReferenceID || "",
-          firstname: data.FirstName || "",
-          lastname: data.LastName || "",
-          tsm: data.TSM || "",
-          manager: data.Manager || "",
-          profilepicture: data.profilePicture || "",
-        });
-        sileo.success({
-          title: "Success", description: "User data loaded successfully!",
-          duration: 4000, position: "top-right", fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
+          referenceid:    data.ReferenceID   || "",
+          firstname:      data.FirstName     || "",
+          lastname:       data.LastName      || "",
+          tsm:            data.TSM           || "",
+          manager:        data.Manager       || "",
+          profilepicture: data.profilePicture|| "",
         });
       } catch {
         sileo.error({
-          title: "Failed", description: "Failed to connect to server. Please try again later or refresh your network connection",
+          title: "Failed",
+          description: "Failed to connect to server. Please try again later.",
           duration: 4000, position: "top-right", fill: "black",
           styles: { title: "text-white!", description: "text-white" },
         });
       } finally {
         setLoadingUser(false);
       }
-    };
-
-    fetchUserData();
+    })();
   }, [userId]);
 
   /* ── Fetch ALL accounts ── */
   useEffect(() => {
     if (!userDetails.referenceid) { setPosts([]); return; }
 
-    const fetchAccounts = async () => {
+    (async () => {
       setError(null);
       setLoadingAccounts(true);
       try {
@@ -164,31 +145,23 @@ function DashboardContent() {
         setPosts(all);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        console.error("[fetchAccounts] error:", msg);
         setError(msg);
         sileo.error({
-          title: "Failed", description: "Failed to load accounts. Check the console for details.",
+          title: "Failed",
+          description: "Failed to load accounts.",
           duration: 4000, position: "top-right", fill: "black",
           styles: { title: "text-white!", description: "text-white" },
         });
       } finally {
         setLoadingAccounts(false);
       }
-    };
-
-    fetchAccounts();
+    })();
   }, [userDetails.referenceid]);
 
-  /* ── Optional date filter ── */
-  const filteredData = useMemo(() => {
-    if (!dateCreatedFilterRange?.from || !dateCreatedFilterRange?.to) return posts;
-    const from = new Date(dateCreatedFilterRange.from).setHours(0, 0, 0, 0);
-    const to   = new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999);
-    return posts.filter((item) => {
-      const t = new Date(item.date_created).getTime();
-      return t >= from && t <= to;
-    });
-  }, [posts, dateCreatedFilterRange]);
+  // NOTE: Do NOT filter posts by date here.
+  // All active accounts are always shown in the table.
+  // The date range only affects activity counts (With/No Activities)
+  // which is handled inside AccountsTable via /api/reports/tsm/fetch.
 
   return (
     <ProtectedPageWrapper>
@@ -231,7 +204,13 @@ function DashboardContent() {
                   <AlertTitle>{error}</AlertTitle>
                 </Alert>
               )}
-              <AccountsTable posts={filteredData} userDetails={userDetails} />
+              {/* Pass dateCreatedFilterRange so AccountsTable can filter activities by date */}
+              <AccountsTable
+                posts={posts}
+                userDetails={userDetails}
+                dateCreatedFilterRange={dateCreatedFilterRange}
+                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+              />
             </>
           )}
         </main>
@@ -251,7 +230,7 @@ export default function Page() {
     <UserProvider>
       <FormatProvider>
         <SidebarProvider>
-          <Suspense fallback={<div>Loading…</div>}>
+          <Suspense fallback={<div />}>
             <DashboardContent />
           </Suspense>
         </SidebarProvider>

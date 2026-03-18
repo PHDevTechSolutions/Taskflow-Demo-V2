@@ -6,20 +6,26 @@ import { useUser } from "@/contexts/UserContext";
 import { sileo } from "sileo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel, FieldSeparator, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
-import { Globe, Calendar } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader,
+  DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Globe, Calendar, MapPin, MapPinOff,
+  Lock, Loader2, CheckCircle2, Send,
+} from "lucide-react";
 import Link from "next/link";
-import { X, Check } from "lucide-react";
-import { Progress } from "@/components/ui/progress"
 
-// Firestore imports
+// Firestore
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-// Supabase import
+// Supabase
 import { supabase } from "@/utils/supabase-ticket";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Ticket = {
   ticket_id: string;
@@ -31,541 +37,462 @@ type Ticket = {
   date_created: string;
 };
 
+// ─── Loading overlay ──────────────────────────────────────────────────────────
+
+function LoadingOverlay() {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let val = 0;
+    const id = setInterval(() => {
+      val += 1.5;
+      if (val >= 95) { clearInterval(id); val = 95; }
+      setProgress(val);
+    }, 80);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {/* Blurred backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+      {/* Card */}
+      <div className="relative z-10 flex flex-col items-center gap-5 bg-white rounded-2xl shadow-2xl px-10 py-8 min-w-[260px]
+        animate-in fade-in-0 zoom-in-95 duration-300">
+        {/* Spinner */}
+        <div className="relative flex items-center justify-center">
+          <span className="absolute w-14 h-14 rounded-full border-4 border-indigo-100" />
+          <Loader2 size={32} className="text-indigo-600 animate-spin" />
+        </div>
+
+        <div className="text-center space-y-1">
+          <p className="text-sm font-bold text-slate-800">Signing you in</p>
+          <p className="text-[11px] text-slate-400">Please wait a moment...</p>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div
+            className="h-full bg-indigo-500 rounded-full transition-all duration-200 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {/* Bouncing dots */}
+        <div className="flex items-center gap-1.5">
+          {[0, 150, 300].map((delay) => (
+            <span
+              key={delay}
+              className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
+              style={{ animationDelay: `${delay}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
-  const [Email, setEmail] = useState("");
+  const [Email,    setEmail]    = useState("");
   const [Password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const [showLocationDialog, setShowLocationDialog] = useState(false);
-  const [pendingLoginData, setPendingLoginData] = useState<any | null>(null);
+  const [pendingLoginData,   setPendingLoginData]   = useState<any | null>(null);
+  const [loadingRedirect,    setLoadingRedirect]    = useState(false);
 
-  const [loadingRedirect, setLoadingRedirect] = useState(false);
   const [showTicketDialog, setShowTicketDialog] = useState(false);
-  const [remarks, setRemarks] = useState("");
+  const [remarks,          setRemarks]          = useState("");
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [ticketDone,       setTicketDone]       = useState(false);
 
   const [ticket, setTicket] = useState<Ticket[]>([]);
 
-  const router = useRouter();
+  const router    = useRouter();
   const { setUserId } = useUser();
 
-  // ---------------- Device ID ----------------
+  // ── Device ID ──────────────────────────────────────────────────────────────
   const getDeviceId = () => {
-    let deviceId = localStorage.getItem("deviceId");
-    if (!deviceId) {
-      deviceId = crypto.randomUUID();
-      localStorage.setItem("deviceId", deviceId);
-    }
-    return deviceId;
+    let id = localStorage.getItem("deviceId");
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem("deviceId", id); }
+    return id;
   };
 
-  // ---------------- Location ----------------
+  // ── Location ───────────────────────────────────────────────────────────────
   const getLocation = async () => {
     if (!navigator.geolocation) return null;
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject)
+      const pos = await new Promise<GeolocationPosition>((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej)
       );
-      return {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      };
-    } catch {
-      console.warn("User denied location access");
-      return null;
-    }
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    } catch { return null; }
   };
 
-  // ---------------- Fetch Tickets ----------------
+  // ── Fetch tickets ──────────────────────────────────────────────────────────
   const fetchTicket = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from("tickets")
-        .select("*")
-        .order("date_created", { ascending: false });
+        .from("tickets").select("*").order("date_created", { ascending: false });
       if (error) throw error;
       setTicket(data ?? []);
-    } catch (error: any) {
-      sileo.error({
-        title: "Failed",
-        description: error.message || "Error fetching tickets",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
+    } catch (err: any) {
+      sileo.error({ title: "Failed", description: err.message || "Error fetching tickets", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     }
   }, []);
 
-  useEffect(() => {
-    fetchTicket();
-  }, [fetchTicket]);
+  useEffect(() => { fetchTicket(); }, [fetchTicket]);
 
-  // ---------------- Generate Ticket ID ----------------
-  function generateTicketID(existingTicketIds: string[]): string {
+  // ── Generate ticket ID ─────────────────────────────────────────────────────
+  function generateTicketID(existingIds: string[]): string {
     const prefix = "DSI";
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const datePart = `${year}-${month}-${day}`;
-
-    const todayIds = existingTicketIds.filter((id) => id.startsWith(`${prefix}-${datePart}`));
-
-    let maxSeq = 0;
+    const now  = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const todayIds = existingIds.filter((id) => id.startsWith(`${prefix}-${date}`));
+    let max = 0;
     for (const id of todayIds) {
-      const parts = id.split("-");
-      const seqStr = parts[3]; // format: DSI-YYYY-MM-DD-###
-      const seqNum = parseInt(seqStr, 10);
-      if (!isNaN(seqNum) && seqNum > maxSeq) maxSeq = seqNum;
+      const seq = parseInt(id.split("-")[3], 10);
+      if (!isNaN(seq) && seq > max) max = seq;
     }
-
-    const nextSeq = String(maxSeq + 1).padStart(3, "0");
-    return `${prefix}-${datePart}-${nextSeq}`;
+    return `${prefix}-${date}-${String(max + 1).padStart(3, "0")}`;
   }
 
-  // ---------------- Submit Ticket ----------------
-  const submitTicketFromDialog = async () => {
+  // ── Submit ticket ──────────────────────────────────────────────────────────
+  const submitTicket = async () => {
     if (!remarks.trim()) {
-      sileo.error({
-        title: "Failed",
-        description: "Remarks is required.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
+      sileo.error({ title: "Required", description: "Please enter your remarks.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
-
     setTicketSubmitting(true);
-
     try {
-      const existingTicketIds = ticket.map((t) => t.ticket_id);
-      let newTicketID = generateTicketID(existingTicketIds);
-
-      const { error } = await supabase.from("tickets").insert([
-        {
-          ticket_id: newTicketID,
-          department: "Sales",
-          requestor_name: Email || "Taskflow User",
-          mode: "System Directory",
-          status: "Pending",
-          ticket_subject: `Account Locked - ${Email}`,
-          date_created: new Date().toISOString(),
-        },
-      ]);
-
+      const newId = generateTicketID(ticket.map((t) => t.ticket_id));
+      const { error } = await supabase.from("tickets").insert([{
+        ticket_id:      newId,
+        department:     "Sales",
+        requestor_name: Email || "Taskflow User",
+        mode:           "System Directory",
+        status:         "Pending",
+        ticket_subject: `Account Locked - ${Email}`,
+        date_created:   new Date().toISOString(),
+      }]);
       if (error) throw error;
-
-      sileo.success({
-        title: "Success",
-        description: "Ticket submitted successfully.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
+      setTicketDone(true);
       setRemarks("");
       fetchTicket();
-      setShowTicketDialog(false);
     } catch (err: any) {
-      sileo.error({
-        title: "Success",
-        description: err.message || "Failed to submit ticket.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
+      sileo.error({ title: "Failed", description: err.message || "Failed to submit ticket.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     } finally {
       setTicketSubmitting(false);
     }
   };
 
-  // ---------------- Login Handler ----------------
-  const handleLoginSubmit = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      if (!Email || !Password) {
-        sileo.warning({
-          title: "Warning",
-          description: "All fields are required!",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
-        });
+  // ── Login ──────────────────────────────────────────────────────────────────
+  const handleLoginSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!Email || !Password) {
+      sileo.warning({ title: "Required", description: "All fields are required.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      return;
+    }
+    setLoading(true);
+    try {
+      const deviceId = getDeviceId();
+      const res      = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Email, Password, deviceId }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        if (result.locked) {
+          setTicketDone(false);
+          setShowTicketDialog(true);
+        } else {
+          sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+        }
+        setLoading(false);
         return;
       }
 
-      setLoading(true);
-      try {
-        const deviceId = getDeviceId();
-        const response = await fetch("/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ Email, Password, deviceId }),
-        });
+      setPendingLoginData({ Email, deviceId, result });
+      setShowLocationDialog(true);
+    } catch {
+      sileo.error({ title: "Error", description: "An unexpected error occurred.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+    } finally {
+      setLoading(false);
+    }
+  }, [Email, Password]);
 
-        const result = await response.json();
-
-        if (!response.ok) {
-          // <-- IF ACCOUNT LOCKED
-          if (result.locked) {
-            setShowTicketDialog(true); // show the ticket submission dialog
-          } else {
-            sileo.error({
-              title: "Failed",
-              description: result.message || "Login failed.",
-              duration: 4000,
-              position: "top-right",
-              fill: "black",
-              styles: {
-                title: "text-white!",
-                description: "text-white",
-              },
-            });
-          }
-          setLoading(false);
-          return;
-        }
-
-        setPendingLoginData({ Email, deviceId, result });
-        setShowLocationDialog(true);
-      } catch (error) {
-        console.error(error);
-        sileo.error({
-          title: "Failed",
-          description: "Login error occurred.",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [Email, Password]
-  );
-
-  // ---------------- After Location Permission ----------------
+  // ── Post-login redirect ────────────────────────────────────────────────────
   const handlePostLogin = async (location: any) => {
     if (!pendingLoginData) return;
-    setLoadingRedirect(true); // start loading
-
+    setLoadingRedirect(true);
     const { Email, deviceId, result } = pendingLoginData;
 
     await addDoc(collection(db, "activity_logs"), {
-      email: Email,
-      status: "login",
-      deviceId,
-      location,
-      browser: navigator.userAgent,
-      os: navigator.platform,
-      userId: result.userId,
-      ReferenceID: result.ReferenceID,
-      TSM: result.TSM ?? null,
-      Manager: result.Manager ?? null,
+      email: Email, status: "login", deviceId, location,
+      browser: navigator.userAgent, os: navigator.platform,
+      userId: result.userId, ReferenceID: result.ReferenceID,
+      TSM: result.TSM ?? null, Manager: result.Manager ?? null,
       date_created: serverTimestamp(),
     });
 
     setUserId(result.userId);
+    await new Promise((r) => setTimeout(r, 500));
 
-    // simulate small delay for animation (optional)
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (result.Department === "CSR") {
+      router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+      return;
+    }
 
-    // Redirect based on role
-if (result.Department === "CSR") {
-  router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
-  return;
-}
-
-switch (result.Role) {
-  case "Territory Sales Manager":
-    router.push(`/roles/tsm/agent?id=${result.userId}`);
-    break;
-  case "Manager":
-    router.push(`/roles/manager/agent?id=${result.userId}`);
-    break;
-  case "Staff":
-    router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
-    break;  
-  case "Admin":
-    router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
-    break;  
-  case "Super Admin":
-    router.push(`/roles/admin/dashboard?id=${result.userId}`);
-    break;
-  default:
-    router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
-}
+    switch (result.Role) {
+      case "Territory Sales Manager":
+        router.push(`/roles/tsm/agent?id=${result.userId}`); break;
+      case "Manager":
+        router.push(`/roles/manager/agent?id=${result.userId}`); break;
+      case "Staff":
+      case "Admin":
+        router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); break;
+      case "Super Admin":
+        router.push(`/roles/admin/dashboard?id=${result.userId}`); break;
+      default:
+        router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
+    }
 
     setPendingLoginData(null);
-    setLoadingRedirect(false); // stop loading (just in case)
+    setLoadingRedirect(false);
   };
 
-  const onAllowLocation = async () => {
-    setShowLocationDialog(false);
-    const location = await getLocation();
-    await handlePostLogin(location);
-  };
+  const onAllowLocation = async () => { setShowLocationDialog(false); const loc = await getLocation(); await handlePostLogin(loc); };
+  const onDenyLocation  = async () => { setShowLocationDialog(false); await handlePostLogin(null); };
 
-  const onDenyLocation = async () => {
-    setShowLocationDialog(false);
-    await handlePostLogin(null);
-  };
-
-  function ProgressBar() {
-    const [progress, setProgress] = React.useState(0);
-
-    React.useEffect(() => {
-      let start = 0;
-      const interval = setInterval(() => {
-        start += 2; // slower increment
-        if (start >= 100) {
-          start = 100;
-          clearInterval(interval);
-        }
-        setProgress(start);
-      }, 100); // 100ms per increment
-      return () => clearInterval(interval);
-    }, []);
-
-    return (
-      <div className="w-64">
-        <Progress
-          value={progress}
-          className="h-4 rounded-full transition-all duration-200 ease-in-out"
-        />
-      </div>
-    );
-  }
-
-  // ---------------- Render ----------------
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className={cn("flex flex-col gap-6", className)} {...props}>
-        <div
-          className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] 
-                 bg-[size:24px_24px] z-10 pointer-events-none"
-        />
+      {/* Grid background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-0 pointer-events-none" />
 
-        <Card className="overflow-hidden p-0 rounded-none z-20 shadow-md">
-          <CardContent className="grid p-0 md:grid-cols-2">
-            <form onSubmit={handleLoginSubmit} className="p-6 md:p-8">
-              <FieldGroup>
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <h1 className="text-2xl font-bold">Welcome back</h1>
-                  <p className="text-muted-foreground text-balance">
-                    Login to your Taskflow account
-                  </p>
+      <div className={cn("relative z-10 w-full max-w-4xl mx-auto", className)} {...props}>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-2xl bg-white grid md:grid-cols-2">
+
+          {/* ── Left: form ── */}
+          <form onSubmit={handleLoginSubmit} className="flex flex-col justify-between p-8 gap-6">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight">Welcome back</h1>
+              <p className="text-xs text-slate-400">Sign in to your Taskflow account to continue.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Email */}
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@taskflow.com"
+                  required
+                  value={Email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 transition-all"
+                />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-xs font-semibold text-slate-700">Password</Label>
+                  <a href="/auth/forgot-password" className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline transition-colors">
+                    Forgot password?
+                  </a>
                 </div>
-
-                <Field>
-                  <FieldLabel htmlFor="email">Email</FieldLabel>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="m@taskflow.com"
-                    required
-                    value={Email}
-                    className="rounded-xs p-6"
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </Field>
-
-                <Field>
-                  <div className="flex items-center">
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
-                    <a
-                      href="/auth/forgot-password"
-                      className="ml-auto text-sm underline-offset-2 hover:underline"
-                    >
-                      Forgot your password?
-                    </a>
-                  </div>
+                <div className="relative">
                   <Input
                     id="password"
-                    type="password"
+                    type={showPass ? "text" : "password"}
                     placeholder="••••••••"
                     required
                     value={Password}
-                    className="rounded-xs p-6"
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 pr-10 transition-all"
                   />
-                </Field>
-
-                <Field>
-                  <Button type="submit" disabled={loading} className="w-full rounded-none p-6">
-                    {loading ? "Signing in..." : "Login"}
-                  </Button>
-                </Field>
-              </FieldGroup>
-
-              <div className="text-xs space-y-2 mt-4 text-center">
-                <p className="flex items-center justify-center gap-1">
-                  <Globe size={16} />
-                  Official Website:{" "}
-                  <Link
-                    href="https://www.ecoshiftcorp.com/"
-                    className="underline text-green-700 hover:text-green-800"
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-[10px] font-semibold transition-colors select-none"
                   >
-                    ecoshiftcorp.com
-                  </Link>
-                </p>
-                <p className="flex items-center justify-center gap-1">
-                  <Calendar size={16} />
-                  For Site & Client Visit:{" "}
-                  <Link
-                    href="https://acculog-hris.vercel.app/"
-                    className="underline text-green-700 hover:text-green-800"
-                  >
-                    Acculog
-                  </Link>
-                </p>
+                    {showPass ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
 
-              {/* ---------------- Ticket Submission ---------------- */}
-            </form>
-
-            <div className="bg-muted relative hidden md:block">
-              <img
-                src="/ecoshift-wallpaper.jpg"
-                alt="Image"
-                className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
-              />
+              {/* Submit */}
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full h-10 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-150 gap-2"
+              >
+                {loading ? (
+                  <><Loader2 size={14} className="animate-spin" /> Signing in...</>
+                ) : "Sign In"}
+              </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <FieldDescription className="px-6 text-center">
-          By clicking continue, you agree to our{" "}
-          <Link
-            href="/terms"
-            className="underline text-green-700 hover:text-green-800"
-          >
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link
-            href="/privacy"
-            className="underline text-green-700 hover:text-green-800"
-          >
-            Privacy Policy
-          </Link>.
-        </FieldDescription>
+            {/* Footer links */}
+            <div className="space-y-1.5 text-center">
+              <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                <Globe size={12} />
+                <Link href="https://www.ecoshiftcorp.com/" className="text-emerald-600 hover:text-emerald-800 hover:underline transition-colors font-medium">
+                  ecoshiftcorp.com
+                </Link>
+              </p>
+              <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                <Calendar size={12} />
+                Site & Client Visit:
+                <Link href="https://acculog-hris.vercel.app/" className="text-emerald-600 hover:text-emerald-800 hover:underline transition-colors font-medium">
+                  Acculog
+                </Link>
+              </p>
+              <p className="text-[10px] text-slate-300 pt-1">
+                By signing in, you agree to our{" "}
+                <Link href="/terms" className="underline text-slate-400 hover:text-slate-600">Terms</Link>
+                {" "}and{" "}
+                <Link href="/privacy" className="underline text-slate-400 hover:text-slate-600">Privacy Policy</Link>.
+              </p>
+            </div>
+          </form>
 
-      </div>
-
-      {/* ---------------- Wait Dialog ---------------- */}
-      <Dialog open={showTicketDialog} onOpenChange={setShowTicketDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Account Locked</DialogTitle>
-            <DialogDescription>
-              Your account has been locked due to (5) failed login attempts. Submit a ticket to IT Department.
-            </DialogDescription>
-          </DialogHeader>
-
-          <Field className="mt-4">
-            <FieldLabel htmlFor="remarks">Remarks</FieldLabel>
-            <Input
-              id="remarks"
-              type="text"
-              placeholder="Enter remarks..."
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
+          {/* ── Right: wallpaper ── */}
+          <div className="relative hidden md:block">
+            <img
+              src="/ecoshift-wallpaper.jpg"
+              alt="Ecoshift"
+              className="absolute inset-0 h-full w-full object-cover"
             />
-          </Field>
-
-          <Button
-            onClick={submitTicketFromDialog}
-            disabled={ticketSubmitting || !remarks.trim()}
-            className="mt-4 w-full"
-          >
-            {ticketSubmitting ? "Submitting..." : "Submit Ticket"}
-          </Button>
-
-          <DialogFooter>
-            <Button onClick={() => setShowTicketDialog(false)} className="w-full mt-2">
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------------- Location Permission Dialog ---------------- */}
-      <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
-        <DialogContent className="rounded-none">
-          <DialogHeader>
-            <DialogTitle>Allow Location Access?</DialogTitle>
-
-            {/* GIF */}
-            <div className="flex justify-center my-4">
-              <iframe src="https://lottie.host/embed/2cbdf7c4-ad28-4a75-8bfd-68e4cd759a26/9PTYn6qNh6.lottie"></iframe>
-            </div>
-
-            <DialogDescription className="text-center">
-              Would you like to share your location for login activity tracking?
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="flex justify-end gap-2">
-            <Button variant="outline" className="rounded-none p-6" onClick={onDenyLocation}>
-              <X /> Deny
-            </Button>
-            <Button className="rounded-none p-6" onClick={onAllowLocation}>
-              Allow <Check />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {loadingRedirect && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          {/* Blurred background overlay */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-500" />
-
-          {/* Progress card */}
-          <div className="relative z-[10000] flex flex-col items-center gap-6 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl animate-fadeIn">
-
-            {/* Animated progress bar */}
-            <ProgressBar />
-
-            {/* Status text with subtle bounce */}
-            <p className="text-gray-900 dark:text-white font-semibold animate-bounceSlow">
-              Logging in...
-            </p>
-
-            {/* Animated dots */}
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow"></span>
-              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow animation-delay-200"></span>
-              <span className="w-3 h-3 bg-green-500 rounded-full animate-pingSlow animation-delay-400"></span>
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+            <div className="absolute bottom-6 left-6 right-6">
+              <p className="text-white text-sm font-bold drop-shadow">Taskflow</p>
+              <p className="text-white/70 text-[11px] mt-0.5 drop-shadow">Sales Operations Platform</p>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Account Locked / Ticket Dialog ── */}
+      <Dialog open={showTicketDialog} onOpenChange={(v) => { if (!ticketSubmitting) setShowTicketDialog(v); }}>
+        <DialogContent className="max-w-sm w-full">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-red-50 border border-red-100 shrink-0">
+                <Lock size={14} className="text-red-500" />
+              </span>
+              Account Locked
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Your account has been locked after 5 failed login attempts. Submit a ticket to unlock it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {ticketDone ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <CheckCircle2 size={40} className="text-emerald-500" />
+              <p className="text-sm font-bold text-slate-800">Ticket Submitted!</p>
+              <p className="text-xs text-slate-400">Our IT team will review your request shortly.</p>
+              <Button size="sm" variant="outline" className="text-xs mt-2" onClick={() => setShowTicketDialog(false)}>
+                Close
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-1.5 py-1">
+                <Label className="text-xs font-semibold text-slate-700">Remarks</Label>
+                <Textarea
+                  placeholder="Briefly describe why your account was locked..."
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  rows={3}
+                  className="text-xs resize-none border-slate-200 bg-slate-50 focus:border-indigo-400"
+                />
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs flex-1"
+                  onClick={() => setShowTicketDialog(false)}
+                  disabled={ticketSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                  onClick={submitTicket}
+                  disabled={ticketSubmitting || !remarks.trim()}
+                >
+                  {ticketSubmitting ? (
+                    <><Loader2 size={12} className="animate-spin" /> Submitting...</>
+                  ) : (
+                    <><Send size={12} /> Submit Ticket</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Location Dialog ── */}
+      <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
+        <DialogContent className="max-w-sm w-full">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
+                <MapPin size={14} className="text-indigo-500" />
+              </span>
+              Allow Location Access?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Your location will be recorded for login activity tracking and security purposes.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Lottie animation */}
+          <div className="flex justify-center my-2 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+            <iframe
+              src="https://lottie.host/embed/2cbdf7c4-ad28-4a75-8bfd-68e4cd759a26/9PTYn6qNh6.lottie"
+              className="w-48 h-48"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs flex-1 gap-1.5"
+              onClick={onDenyLocation}
+            >
+              <MapPinOff size={13} /> Deny
+            </Button>
+            <Button
+              size="sm"
+              className="text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+              onClick={onAllowLocation}
+            >
+              <MapPin size={13} /> Allow
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Loading overlay ── */}
+      {loadingRedirect && <LoadingOverlay />}
     </>
   );
 }

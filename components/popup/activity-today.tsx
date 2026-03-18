@@ -2,114 +2,96 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader,
+  DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/utils/supabase";
+import { CalendarCheck, CheckCheck, X, Building2 } from "lucide-react";
 
-/* ================= TYPES ================= */
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Activity {
   id: string;
   scheduled_date: string;
   account_reference_number: string;
-  company_name: string; // ⬅️ galing na mismo sa activity
+  company_name: string;
   status: string;
   date_updated: string;
   activity_reference_number: string;
 }
 
-interface UserDetails {
-  referenceid: string;
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const allowedStatuses = ["Assisted", "Quote-Done"];
+const ALLOWED_STATUSES   = ["Assisted", "Quote-Done"];
+const DISMISSED_KEY      = "dismissedActivities";
 
-/* ================= HELPERS ================= */
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const isScheduledToday = (dateStr: string) => {
+const isToday = (dateStr: string) => {
   const today = new Date();
-  const date = new Date(dateStr);
-
+  const d     = new Date(dateStr);
   return (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth()    === today.getMonth()    &&
+    d.getDate()     === today.getDate()
   );
 };
 
-const getDismissedActivities = (): string[] => {
+const getDismissed = (): string[] => {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem("dismissedActivities") || "[]");
+  return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
 };
 
-/* ================= COMPONENT ================= */
+const STATUS_STYLES: Record<string, string> = {
+  "Assisted":   "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "Quote-Done": "bg-indigo-50  text-indigo-700  border-indigo-200",
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ActivityToday() {
-  const searchParams = useSearchParams();
+  const searchParams  = useSearchParams();
   const { userId, setUserId } = useUser();
 
-  const [userDetails, setUserDetails] = useState<UserDetails>({
-    referenceid: "",
-  });
-  const [activities, setActivities] = useState<Activity[]>([]);
-
-  const [open, setOpen] = useState(false);
-  const [showDismissConfirm, setShowDismissConfirm] = useState(false);
+  const [referenceid,  setReferenceid]  = useState("");
+  const [activities,   setActivities]   = useState<Activity[]>([]);
+  const [open,         setOpen]         = useState(false);
+  const [confirmOpen,  setConfirmOpen]  = useState(false);
 
   const queryUserId = searchParams?.get("id") ?? "";
-  const referenceid = userDetails.referenceid;
 
-  /* ================= SYNC USER ID ================= */
-
+  // ── Sync userId from URL ───────────────────────────────────────────────────
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) {
-      setUserId(queryUserId);
-    }
+    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
-  /* ================= FETCH USER ================= */
-
+  // ── Fetch user ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error();
-
-        const data = await res.json();
-        setUserDetails({ referenceid: data.ReferenceID });
-      } catch {
-        toast.error("Failed to load user");
-      }
-    })();
+    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setReferenceid(data.ReferenceID || ""))
+      .catch(() => {/* silently fail */});
   }, [userId]);
 
-  /* ================= FETCH ACTIVITIES ================= */
-
+  // ── Fetch activities ───────────────────────────────────────────────────────
   const fetchActivities = useCallback(async () => {
     if (!referenceid) return;
-
-    const res = await fetch(
-      `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
-      { cache: "no-store" }
-    );
-
-    const json = await res.json();
-    setActivities(json.data || []);
+    try {
+      const res  = await fetch(
+        `/api/act-fetch-activity?referenceid=${encodeURIComponent(referenceid)}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      setActivities(json.data || []);
+    } catch {/* silently fail */}
   }, [referenceid]);
 
-  /* ================= REALTIME ================= */
-
+  // ── Realtime subscription ──────────────────────────────────────────────────
   useEffect(() => {
     if (!referenceid) return;
 
@@ -119,98 +101,122 @@ export function ActivityToday() {
       .channel(`activity-${referenceid}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "activity",
-          filter: `referenceid=eq.${referenceid}`,
-        },
+        { event: "*", schema: "public", table: "activity", filter: `referenceid=eq.${referenceid}` },
         fetchActivities
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [referenceid, fetchActivities]);
 
-  /* ================= FILTER ONLY (NO MERGE) ================= */
+  // ── Filter activities ──────────────────────────────────────────────────────
+  const filtered = activities
+    .filter((a) => isToday(a.scheduled_date))
+    .filter((a) => ALLOWED_STATUSES.includes(a.status))
+    .filter((a) => !getDismissed().includes(a.id));
 
-  const dismissedIds = getDismissedActivities();
-
-  const filteredActivities = activities
-    .filter((a) => isScheduledToday(a.scheduled_date))
-    .filter((a) => allowedStatuses.includes(a.status))
-    .filter((a) => !dismissedIds.includes(a.id));
-
-  /* ================= AUTO OPEN ================= */
-
+  // ── Auto-open when new activities appear ───────────────────────────────────
   useEffect(() => {
-    setOpen(filteredActivities.length > 0);
-  }, [filteredActivities]);
+    setOpen(filtered.length > 0);
+  }, [filtered.length]);
 
-  /* ================= DISMISS ================= */
-
-  function handleDismiss() {
-    setShowDismissConfirm(true);
-  }
-
-  function confirmDismiss() {
-    const stored = getDismissedActivities();
-    const updated = Array.from(
-      new Set([...stored, ...filteredActivities.map((a) => a.id)])
-    );
-
-    localStorage.setItem("dismissedActivities", JSON.stringify(updated));
-    setShowDismissConfirm(false);
+  // ── Dismiss ────────────────────────────────────────────────────────────────
+  const confirmDismiss = () => {
+    const prev    = getDismissed();
+    const updated = Array.from(new Set([...prev, ...filtered.map((a) => a.id)]));
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(updated));
+    setConfirmOpen(false);
     setOpen(false);
-  }
+  };
 
-  /* ================= RENDER ================= */
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* MAIN DIALOG */}
+      {/* ── Main dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="rounded-none">
+        <DialogContent className="max-w-md w-full">
           <DialogHeader>
-            <DialogTitle>Activities Scheduled for Today</DialogTitle>
-            <DialogDescription>
-              <ul className="list-disc pl-6 space-y-2 mt-3 max-h-60 overflow-y-auto uppercase">
-                {filteredActivities.map((a) => (
-                  <li key={a.id}>
-                    <strong>{a.company_name}</strong>
-                    <br />
-                    Scheduled today
-                  </li>
-                ))}
-              </ul>
+            <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
+                <CalendarCheck size={15} className="text-indigo-500" />
+              </span>
+              {filtered.length} {filtered.length === 1 ? "Activity" : "Activities"} Scheduled Today
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-0.5">
+              The following {filtered.length === 1 ? "activity requires" : "activities require"} your attention today.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button className="rounded-none p-6" onClick={handleDismiss}>Dismiss</Button>
+
+          {/* Activity list */}
+          <div className="max-h-[320px] overflow-y-auto space-y-2 mt-1 pr-0.5">
+            {filtered.map((a) => (
+              <div
+                key={a.id}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Building2 size={12} className="text-slate-400 shrink-0" />
+                    <p className="text-xs font-bold text-slate-800 truncate uppercase">
+                      {a.company_name || "No company name"}
+                    </p>
+                  </div>
+                  {/* Status badge */}
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0
+                    ${STATUS_STYLES[a.status] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                    {a.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Ref: <span className="font-medium text-slate-600">{a.activity_reference_number || "—"}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button
+              size="sm"
+              className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 rounded-xl"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <CheckCheck size={13} /> Acknowledge
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* CONFIRM DISMISS */}
-      <Dialog open={showDismissConfirm} onOpenChange={setShowDismissConfirm}>
-        <DialogContent>
+      {/* ── Confirm dismiss dialog ── */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm w-full">
           <DialogHeader>
-            <DialogTitle>Confirm Dismiss</DialogTitle>
-            <DialogDescription>
-              This alert will only reappear if new activities are scheduled today.
+            <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-50 border border-amber-100 shrink-0">
+                <X size={14} className="text-amber-500" />
+              </span>
+              Confirm Dismiss
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              This alert will only reappear if new activities are scheduled for today.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
-              className="rounded-none p-6"
-              onClick={() => setShowDismissConfirm(false)}
+              size="sm"
+              className="text-xs flex-1"
+              onClick={() => setConfirmOpen(false)}
             >
               Cancel
             </Button>
-            <Button className="rounded-none p-6" onClick={confirmDismiss}>Confirm</Button>
+            <Button
+              size="sm"
+              className="text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+              onClick={confirmDismiss}
+            >
+              <CheckCheck size={12} /> Confirm
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
