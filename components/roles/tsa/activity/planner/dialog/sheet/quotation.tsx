@@ -1598,13 +1598,19 @@ export function QuotationSheet(props: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-                    <SelectItem value="Declined / Dissaproved">Declined / Dissaproved</SelectItem>
-                    <SelectItem value="Pending PD">Pending PD</SelectItem>
-                    <SelectItem value="Pending Procurement">Pending Procurement</SelectItem>
                     <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-                    <SelectItem value="Wait Bid Results">Wait Bid Results</SelectItem>
+                    <SelectItem value="For Bidding">For Bidding</SelectItem>
+                    <SelectItem value="Nego">Nego</SelectItem>
+                    <SelectItem value="Order Completed">Order Completed</SelectItem>
+                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
+                    <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
+                    <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
+                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
                     <SelectItem value="Lost Bid">Lost Bid</SelectItem>
+                    <SelectItem value="Canvass Only">Canvass Only</SelectItem>
+                    <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
+                    <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

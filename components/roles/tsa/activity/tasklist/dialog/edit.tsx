@@ -89,13 +89,19 @@ const editableFields: (keyof Completed)[] = [
 ];
 
 const quotationStatusOptions = [
-  "Convert to SO",
-  "Declined / Dissaproved",
-  "Pending PD",
-  "Pending Procurement",
   "Pending Client Approval",
-  "Wait Bid Results",
+  "For Bidding",
+  "Nego",
+  "Order Complete",
+  "Convert to SO",
+  "Loss Price is Too High",
+  "Lead Time Issue",
+  "Out of Stock",
+  "Insufficient Stock",
   "Lost Bid",
+  "Canvass Only",
+  "Did Not Meet the Specs",
+  "Declined / Disapproved",
 ];
 
 export default function TaskListEditDialog({

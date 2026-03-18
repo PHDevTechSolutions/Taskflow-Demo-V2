@@ -436,10 +436,10 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 <TableHead className="text-gray-500">Date</TableHead>
                 <TableHead className="text-gray-500">Quotation No.</TableHead>
                 <TableHead className="text-gray-500 text-right">Amount</TableHead>
+                <TableHead className="text-gray-500">Status</TableHead>
                 <TableHead className="text-gray-500">Company</TableHead>
                 <TableHead className="text-gray-500">Contact</TableHead>
                 <TableHead className="text-gray-500">Priority</TableHead>
-                <TableHead className="text-gray-500">Status</TableHead>
                 <TableHead className="text-gray-500">Remarks</TableHead>
               </TableRow>
             </TableHeader>
@@ -482,6 +482,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         : "-"}
                     </TableCell>
 
+                    {/* Quotation Status */}
+                    <TableCell className="uppercase text-gray-900 font-bold text-[10px]">
+                      {item.quotation_status || "-"}
+                    </TableCell>
+
                     {/* Company */}
                     <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
 
@@ -498,11 +503,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}
-                    </TableCell>
-
-                    {/* Quotation Status */}
-                    <TableCell className="uppercase text-gray-600 text-[10px]">
-                      {item.quotation_status || "-"}
                     </TableCell>
 
                     {/* Remarks */}

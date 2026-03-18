@@ -26,6 +26,8 @@ interface OutboundSheetProps {
     setStatus: React.Dispatch<React.SetStateAction<string>>;
     remarks: string;
     setRemarks: React.Dispatch<React.SetStateAction<string>>;
+    typeClient: string;
+    setTypeClient: React.Dispatch<React.SetStateAction<string>>;
     loading: boolean;
 
     contact_number: string;
@@ -44,6 +46,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
         followUpDate,
         status,
         remarks,
+        typeClient,
         // handlers
         handleNext,
     } = props;
@@ -55,6 +58,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
     const [useToday, setUseToday] = useState(false);
     const [editNumber, setEditNumber] = useState(false);
     const [editedNumber, setEditedNumber] = useState(props.contact_number);
+    const isCSR = typeClient === "CSR Client" || typeClient === "CSR Endorsement";
 
     useEffect(() => {
         if (!callType) {
@@ -173,6 +177,14 @@ export function OutboundSheet(props: OutboundSheetProps) {
         }
     }
 
+    useEffect(() => {
+        if (isCSR) {
+            if (source !== "CSR Endorsement") {
+                props.setSource("CSR Endorsement");
+            }
+        }
+    }, [typeClient]);
+
     return (
         <>
             {/* STEP 2 */}
@@ -190,20 +202,27 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                 onValueChange={props.setSource}
                                 className="space-y-4"
                             >
-                                {[
-                                    {
-                                        value: "Outbound - Touchbase",
-                                        title: "Outbound - Touchbase",
-                                        desc:
-                                            "Initial call to reconnect or update the client about ongoing concerns.",
-                                    },
-                                    {
-                                        value: "Outbound - Follow-up",
-                                        title: "Outbound - Follow-up",
-                                        desc:
-                                            "Follow-up call to check progress or request additional requirements.",
-                                    },
-                                ].map((item) => (
+                                {(isCSR
+                                    ? [
+                                        {
+                                            value: "CSR Endorsement",
+                                            title: "CSR Endorsement",
+                                            desc: "Client endorsed by CSR team.",
+                                        },
+                                    ]
+                                    : [
+                                        {
+                                            value: "Outbound - Touchbase",
+                                            title: "Outbound - Touchbase",
+                                            desc: "Initial call to reconnect or update the client.",
+                                        },
+                                        {
+                                            value: "Outbound - Follow-up",
+                                            title: "Outbound - Follow-up",
+                                            desc: "Follow-up call for progress or requirements.",
+                                        },
+                                    ]
+                                ).map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             <FieldContent className="flex-1">
@@ -211,7 +230,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
                                                 {source === item.value && (
-                                                    <div className="mt-4 flex gap-2 flex">
+                                                    <div className="mt-4 flex gap-2">
                                                         <Button variant="outline" className="rounded-none" onClick={props.handleBack}>
                                                             <ArrowLeft /> Back
                                                         </Button>
@@ -329,7 +348,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             </div>
                         </div>
                     </Alert>
-                    
+
                     {/* Edit Number Dialog */}
 
                     <FieldGroup className="mt-4">

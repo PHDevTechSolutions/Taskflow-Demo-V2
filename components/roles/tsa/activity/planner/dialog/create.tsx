@@ -936,6 +936,8 @@ export function CreateActivityDialog({
                                     setStatus={setStatus}
                                     remarks={remarks}
                                     setRemarks={setRemarks}
+                                    typeClient={typeClient}
+                                    setTypeClient={setTypeClient}
                                     loading={loading}
                                     handleBack={handleBack}
                                     handleNext={handleNext}

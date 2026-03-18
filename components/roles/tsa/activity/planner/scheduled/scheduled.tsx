@@ -133,7 +133,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
-
+  const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
   const [dialogTransferOpen, setDialogTransferOpen] = useState(false);
 
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
@@ -440,6 +440,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setDialogDoneOpen(true);
   };
 
+  const openDeliveredDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogDeliveredOpen(true);
+  };
+
   const handleConfirmDone = async () => {
     if (!selectedActivityId) return;
 
@@ -499,7 +504,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDoneOpen(false);
+      setDialogDeliveredOpen(false);
 
       const res = await fetch("/api/act-update-status-delivered", {
         method: "POST",
@@ -860,7 +865,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                 disabled={updatingId === item.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openDoneDialog(item.id);
+                                  openDeliveredDialog(item.id);
                                 }}
                               >
                                 <Check className="mr-2 h-4 w-4 text-green-600" />
@@ -1253,9 +1258,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         loading={updatingId !== null}
       />
 
+      {/* ✅ FIXED: was incorrectly using dialogDoneOpen instead of dialogDeliveredOpen */}
       <DeliveredDialog
-        open={dialogDoneOpen}
-        onOpenChange={setDialogDoneOpen}
+        open={dialogDeliveredOpen}
+        onOpenChange={setDialogDeliveredOpen}
         onConfirm={handleConfirmDelivered}
         loading={updatingId !== null}
       />
