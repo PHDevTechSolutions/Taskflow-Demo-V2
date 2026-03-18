@@ -29,6 +29,7 @@ export default async function handler(
       let query = supabase
         .from("history")
         .select("*")
+        .eq("type_activity", "Quotation Preparation")
         .order("date_created", { ascending: false })
         .range(offset, offset + BATCH_SIZE - 1);
 
@@ -77,13 +78,13 @@ export default async function handler(
       const sig = sigMap[h.quotation_number];
       return {
         ...h,
-        agent_name:           sig?.agent_name          ?? null,
-        agent_signature:      sig?.agent_signature     ?? null,
+        agent_name:           sig?.agent_name           ?? null,
+        agent_signature:      sig?.agent_signature      ?? null,
         agent_contact_number: sig?.agent_contact_number ?? null,
-        agent_email_address:  sig?.agent_email_address ?? null,
-        tsm_name:             sig?.tsm_name            ?? null,
-        tsm_approval_date:    sig?.tsm_approval_date   ?? null,
-        tsm_remarks:          sig?.tsm_remarks         ?? null,
+        agent_email_address:  sig?.agent_email_address  ?? null,
+        tsm_name:             sig?.tsm_name             ?? null,
+        tsm_approval_date:    sig?.tsm_approval_date    ?? null,
+        tsm_remarks:          sig?.tsm_remarks          ?? null,
       };
     });
 
