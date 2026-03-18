@@ -30,11 +30,12 @@ interface SiteVisitCardProps {
   dateRange?: DateRange;
 }
 
+// Convert ISO date string to PH local date string (YYYY-MM-DD)
 function toLocalDateString(date: Date | string | null | undefined): string {
   if (!date) return "";
   const d = typeof date === "string" ? new Date(date) : date;
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-CA");
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 }
 
 export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
@@ -63,12 +64,22 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
   }, [referenceid]);
 
   // Filter by date range if provided
+  // MongoDB dates are ISO strings with UTC offset (e.g. 2026-03-17T02:48:29.951+00:00)
+  // dateRange.from/to are local midnight — extend `to` to end of day so the full day is included
   const filteredVisits = siteVisits.filter((visit) => {
-    if (!dateRange || !dateRange.from || !dateRange.to) return true;
-    if (!visit.date_created) return false;
-    const visitDate = new Date(visit.date_created);
-    return visitDate >= dateRange.from && visitDate <= dateRange.to;
+  if (!dateRange || !dateRange.from || !dateRange.to) return true;
+  if (!visit.date_created) return false;
+
+  // Convert visit date to PH local date string for comparison
+  const visitDateStr = new Date(visit.date_created).toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila",
   });
+
+  const fromStr = toLocalDateString(dateRange.from);
+  const toStr = toLocalDateString(dateRange.to);
+
+  return visitDateStr >= fromStr && visitDateStr <= toStr;
+});
 
   // Today's visits only (Login or Logout status)
   const todayStr = toLocalDateString(new Date());
