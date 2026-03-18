@@ -718,7 +718,7 @@ function DashboardContent() {
                     label: "In Progress",
                     icon: (
                       <Loader2
-                        className={`w-4 h-4 ${progressCount > 0 ? "animate-spin" : ""}`}
+                        className={`w-4 h-4 ${progressCount > 0 ? "" : ""}`}
                       />
                     ),
                     count: progressCount,

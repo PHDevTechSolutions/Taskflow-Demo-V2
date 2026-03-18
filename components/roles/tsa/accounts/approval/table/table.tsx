@@ -26,6 +26,7 @@ interface Account {
     date_removed: string;
     industry: string;
     status?: string;
+    remarks?: string;
 }
 
 interface UserDetails {
@@ -266,6 +267,9 @@ export function RequestTable({
                                     </div>
                                     <div>
                                         <span className="text-gray-500">Address:</span> {account.address}
+                                    </div>
+                                    <div className="border border-red-300 p-2 rounded">
+                                        <span className="text-gray-500">Remarks of Deletion:</span> {account.remarks}
                                     </div>
                                 </div>
 
