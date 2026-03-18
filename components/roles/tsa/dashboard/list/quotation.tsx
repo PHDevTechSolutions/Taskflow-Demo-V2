@@ -155,12 +155,6 @@ export function QuotationCard({
                   </span>
                 </TableHead>
                 <TableHead className="text-gray-900 text-center">
-                  Total SO Amount
-                </TableHead>
-                <TableHead className="text-gray-900 text-center">
-                  Total Sales Invoice
-                </TableHead>
-                <TableHead className="text-gray-900 text-center">
                   Quotation → SI
                   <span className="block text-[9px] font-normal text-gray-400">
                     (SI ÷ Quot. Amount)
@@ -196,16 +190,6 @@ export function QuotationCard({
                   <span className="ml-1 text-green-600 text-[10px] font-medium">
                     ({stats.totalSOPreparationCount})
                   </span>
-                </TableCell>
-
-                {/* Total SO Amount */}
-                <TableCell className="text-center text-gray-700">
-                  ₱ {fmt(stats.totalSOAmount)}
-                </TableCell>
-
-                {/* Total Sales Invoice */}
-                <TableCell className="text-center font-semibold text-gray-800">
-                  ₱ {fmt(stats.totalSalesInvoice)}
                 </TableCell>
 
                 {/* Quotation → SI */}

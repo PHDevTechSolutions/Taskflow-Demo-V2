@@ -137,9 +137,6 @@ export function SOCard({
                   Total SO Amount
                 </TableHead>
                 <TableHead className="text-gray-900 text-center">
-                  Total Delivered
-                </TableHead>
-                <TableHead className="text-gray-900 text-center">
                   Total Sales Invoice
                 </TableHead>
                 <TableHead className="text-gray-900 text-center">
@@ -147,6 +144,9 @@ export function SOCard({
                   <span className="block text-[9px] font-normal text-gray-400">
                     (Delivered ÷ SO-Done)
                   </span>
+                </TableHead>
+                <TableHead className="text-gray-900 text-center">
+                  Total Delivered
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -162,11 +162,6 @@ export function SOCard({
                   ₱ {fmt(stats.totalSOAmount)}
                 </TableCell>
 
-                {/* Total Delivered */}
-                <TableCell className="text-center text-gray-700">
-                  {stats.totalDeliveredCount}
-                </TableCell>
-
                 {/* Total Sales Invoice */}
                 <TableCell className="text-center font-semibold text-gray-800">
                   ₱ {fmt(stats.totalSalesInvoice)}
@@ -175,19 +170,23 @@ export function SOCard({
                 {/* SO → SI */}
                 <TableCell className="text-center">
                   <span
-                    className={`font-semibold ${
-                      stats.soToSIVal >= 70
+                    className={`font-semibold ${stats.soToSIVal >= 70
                         ? "text-green-600"
                         : stats.soToSIVal >= 40
-                        ? "text-amber-500"
-                        : "text-red-500"
-                    }`}
+                          ? "text-amber-500"
+                          : "text-red-500"
+                      }`}
                   >
                     {stats.soToSI}
                   </span>
                   <span className="ml-1 text-green-600 text-[10px] font-medium">
                     ({stats.totalDeliveredCount})
                   </span>
+                </TableCell>
+
+                {/* Total Delivered */}
+                <TableCell className="text-center text-gray-700">
+                  {stats.totalDeliveredCount}
                 </TableCell>
               </TableRow>
             </TableBody>

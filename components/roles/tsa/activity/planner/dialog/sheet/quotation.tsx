@@ -1746,7 +1746,7 @@ export function QuotationSheet(props: Props) {
         <DialogContent
           className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col"
           style={{
-            maxWidth: selectedProducts.length === 0 ? "900px" : "1900px",
+            maxWidth: selectedProducts.length === 0 ? "900px" : "2300px",
             width: "100vw",
           }}
         >
@@ -2121,7 +2121,7 @@ ${spec.value}
                     Note: you can choose the same products.
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-4">
                     {searchResults.map((item) => (
                       <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
                         <CardHeader className="flex items-center justify-between gap-3">
@@ -2293,7 +2293,7 @@ ${spec.value}
                         </th>
                         <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
                         <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
-                        <th className="border border-gray-700 p-2 text-center font-bold w-16">Qty</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
                         <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
                         <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
                         <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
