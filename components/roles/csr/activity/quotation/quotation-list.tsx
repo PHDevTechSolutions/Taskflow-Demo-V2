@@ -72,6 +72,46 @@ interface QuotationProps {
 
 const PAGE_SIZE = 20;
 
+// -----------------------------
+// PAGINATION COMPONENT
+// -----------------------------
+const PaginationControls = ({
+    currentPage,
+    totalPages,
+    goToPage,
+}: {
+    currentPage: number;
+    totalPages: number;
+    goToPage: (page: number) => void;
+}) => {
+    if (totalPages <= 1) return null;
+    return (
+        <div className="flex items-center justify-center gap-2">
+            <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded border border-gray-200 text-[11px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Prev
+            </button>
+
+            <span className="text-[11px] text-gray-400">
+                {currentPage} / {totalPages}
+            </span>
+
+            <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded border border-gray-200 text-[11px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+                Next
+                <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+        </div>
+    );
+};
+
 export const Quotation: React.FC<QuotationProps> = ({
     referenceid,
     firstname,
@@ -139,7 +179,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             const data = await res.json();
             setActivities(data.activities || []);
-            setCurrentPage(1); // reset to first page on new fetch
+            setCurrentPage(1);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
         } finally {
@@ -178,7 +218,6 @@ export const Quotation: React.FC<QuotationProps> = ({
 
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase().trim();
-        // reset to page 1 when search changes
         return sortedActivities.filter((item) => {
             if (!search) return true;
             return Object.values(item).some(
@@ -208,27 +247,6 @@ export const Quotation: React.FC<QuotationProps> = ({
         if (page < 1 || page > totalPages) return;
         setCurrentPage(page);
     };
-
-    // Generate page numbers to show (max 5 visible)
-    const pageNumbers = useMemo(() => {
-        const delta = 2;
-        const range: number[] = [];
-        const left = Math.max(1, currentPage - delta);
-        const right = Math.min(totalPages, currentPage + delta);
-
-        for (let i = left; i <= right; i++) range.push(i);
-
-        if (left > 1) {
-            range.unshift(-1); // ellipsis
-            range.unshift(1);
-        }
-        if (right < totalPages) {
-            range.push(-2); // ellipsis
-            range.push(totalPages);
-        }
-
-        return range;
-    }, [currentPage, totalPages]);
 
     // -----------------------------
     // AGENT MAP
@@ -346,9 +364,9 @@ export const Quotation: React.FC<QuotationProps> = ({
     // RENDER
     // -----------------------------
     return (
-        <>
+        <div className="flex flex-col h-full">
             {/* Search Bar */}
-            <div className="mb-4 relative">
+            <div className="mb-4 relative flex-shrink-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 <input
                     type="text"
@@ -361,7 +379,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             {/* Loading State */}
             {loading && (
-                <div className="flex items-center justify-center py-14 text-gray-400 gap-2">
+                <div className="flex items-center justify-center py-14 text-gray-400 gap-2 flex-shrink-0">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-xs">Loading quotations…</span>
                 </div>
@@ -369,7 +387,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             {/* Error State */}
             {!loading && error && (
-                <div className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 mb-4">
+                <div className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 mb-4 flex-shrink-0">
                     <AlertCircleIcon className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                     <div>
                         <p className="text-xs font-semibold text-red-700">
@@ -382,7 +400,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             {/* Empty State */}
             {!loading && !error && filteredActivities.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2 flex-shrink-0">
                     <FileX className="w-9 h-9 opacity-25" />
                     <p className="text-xs font-semibold uppercase tracking-widest">
                         No quotations found
@@ -395,35 +413,46 @@ export const Quotation: React.FC<QuotationProps> = ({
                 </div>
             )}
 
-            {/* Record Count */}
+            {/* Record Count + Pagination TOP */}
             {!loading && filteredActivities.length > 0 && (
-                <div className="mb-3 flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                        {filteredActivities.length} Record
-                        {filteredActivities.length !== 1 ? "s" : ""}
-                        <span className="ml-1 text-gray-300">
-                            · Page {currentPage} of {totalPages}
+                <div className="flex-shrink-0">
+                    <div className="mb-3 flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                            {filteredActivities.length} Record
+                            {filteredActivities.length !== 1 ? "s" : ""}
+                            <span className="ml-1 text-gray-300">
+                                · Page {currentPage} of {totalPages}
+                            </span>
                         </span>
-                    </span>
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleDownloadCSV}
-                            className="text-[10px] font-medium px-2 py-1 rounded border border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
-                        >
-                            Download
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleDownloadCSV}
+                                className="text-[10px] font-medium px-2 py-1 rounded border border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                            >
+                                Download
+                            </button>
 
-                        <span className="text-[10px] font-medium text-amber-700 uppercase tracking-wide bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                            Quotation List
-                        </span>
+                            <span className="text-[10px] font-medium text-amber-700 uppercase tracking-wide bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                                Quotation List
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Pagination — TOP */}
+                    <div className="mb-3">
+                        <PaginationControls
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            goToPage={goToPage}
+                        />
                     </div>
                 </div>
             )}
 
-            {/* Cards */}
+            {/* Cards — scrollable area */}
             {!loading && (
-                <div className="space-y-2.5">
+                <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
                     {paginatedActivities.map((item) => {
                         const agentKey = item.agent_name?.toLowerCase() ?? "";
                         const agent = agentMap[agentKey];
@@ -540,47 +569,14 @@ export const Quotation: React.FC<QuotationProps> = ({
                 </div>
             )}
 
-            {/* Pagination */}
-            {!loading && totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-center gap-1">
-                    <button
-                        onClick={() => goToPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-
-                    {pageNumbers.map((page, idx) =>
-                        page < 0 ? (
-                            <span
-                                key={`ellipsis-${idx}`}
-                                className="px-1 text-[11px] text-gray-300"
-                            >
-                                …
-                            </span>
-                        ) : (
-                            <button
-                                key={page}
-                                onClick={() => goToPage(page)}
-                                className={`min-w-[28px] h-7 rounded border text-[11px] font-medium transition-colors ${
-                                    page === currentPage
-                                        ? "bg-blue-500 border-blue-500 text-white"
-                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                }`}
-                            >
-                                {page}
-                            </button>
-                        )
-                    )}
-
-                    <button
-                        onClick={() => goToPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
+            {/* Pagination — BOTTOM */}
+            {!loading && filteredActivities.length > 0 && (
+                <div className="mt-4 flex-shrink-0">
+                    <PaginationControls
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        goToPage={goToPage}
+                    />
                 </div>
             )}
 
@@ -616,6 +612,6 @@ export const Quotation: React.FC<QuotationProps> = ({
                     vatType={editItem.vat_type}
                 />
             )}
-        </>
+        </div>
     );
 };
