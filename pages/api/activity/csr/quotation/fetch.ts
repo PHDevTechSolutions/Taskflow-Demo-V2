@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000;
 
 // Helper: format Date → "YYYY-MM-DD"
 function toDateStr(d: Date): string {
