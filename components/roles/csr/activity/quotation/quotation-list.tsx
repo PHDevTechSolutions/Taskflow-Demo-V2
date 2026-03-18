@@ -157,11 +157,6 @@ export const Quotation: React.FC<QuotationProps> = ({
                 { event: "*", schema: "public", table: "history" },
                 () => fetchActivities()
             )
-    .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "signatories" },
-        () => fetchActivities()
-    )
             .subscribe();
 
         return () => {
@@ -184,6 +179,11 @@ export const Quotation: React.FC<QuotationProps> = ({
         const search = searchTerm.toLowerCase().trim();
 
         return sortedActivities
+            .filter((item) =>
+                (item.type_activity || "")
+                    .trim()
+                    .includes("Quotation Preparation")
+            )
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
