@@ -175,24 +175,18 @@ export const Quotation: React.FC<QuotationProps> = ({
         );
     }, [activities]);
 
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
+const filteredActivities = useMemo(() => {
+    const search = searchTerm.toLowerCase().trim();
 
-        return sortedActivities
-            .filter((item) =>
-                (item.type_activity || "")
-                    .trim()
-                    .includes("Quotation Preparation")
-            )
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) =>
-                        val != null &&
-                        String(val).toLowerCase().includes(search)
-                );
-            });
-    }, [sortedActivities, searchTerm]);
+    return sortedActivities.filter((item) => {
+        if (!search) return true;
+        return Object.values(item).some(
+            (val) =>
+                val != null &&
+                String(val).toLowerCase().includes(search)
+        );
+    });
+}, [sortedActivities, searchTerm]);
 
     // -----------------------------
     // AGENT MAP
