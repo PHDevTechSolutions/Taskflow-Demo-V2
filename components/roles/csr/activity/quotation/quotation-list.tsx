@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { AlertCircleIcon, Eye, Search, Loader2, FileX } from "lucide-react";
+import { AlertCircleIcon, Eye, Search, Loader2, FileX, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import TaskListEditDialog from "./dialog/edit";
 
@@ -70,6 +70,8 @@ interface QuotationProps {
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
+const PAGE_SIZE = 20;
+
 export const Quotation: React.FC<QuotationProps> = ({
     referenceid,
     firstname,
@@ -88,6 +90,7 @@ export const Quotation: React.FC<QuotationProps> = ({
     const [editItem, setEditItem] = useState<Quotation | null>(null);
     const [editOpen, setEditOpen] = useState(false);
     const [agents, setAgents] = useState<any[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // -----------------------------
     // FETCH AGENTS
@@ -136,6 +139,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             const data = await res.json();
             setActivities(data.activities || []);
+            setCurrentPage(1); // reset to first page on new fetch
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
         } finally {
@@ -174,7 +178,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase().trim();
-
+        // reset to page 1 when search changes
         return sortedActivities.filter((item) => {
             if (!search) return true;
             return Object.values(item).some(
@@ -184,6 +188,47 @@ export const Quotation: React.FC<QuotationProps> = ({
             );
         });
     }, [sortedActivities, searchTerm]);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
+    // -----------------------------
+    // PAGINATION
+    // -----------------------------
+    const totalPages = Math.ceil(filteredActivities.length / PAGE_SIZE);
+
+    const paginatedActivities = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return filteredActivities.slice(start, start + PAGE_SIZE);
+    }, [filteredActivities, currentPage]);
+
+    const goToPage = (page: number) => {
+        if (page < 1 || page > totalPages) return;
+        setCurrentPage(page);
+    };
+
+    // Generate page numbers to show (max 5 visible)
+    const pageNumbers = useMemo(() => {
+        const delta = 2;
+        const range: number[] = [];
+        const left = Math.max(1, currentPage - delta);
+        const right = Math.min(totalPages, currentPage + delta);
+
+        for (let i = left; i <= right; i++) range.push(i);
+
+        if (left > 1) {
+            range.unshift(-1); // ellipsis
+            range.unshift(1);
+        }
+        if (right < totalPages) {
+            range.push(-2); // ellipsis
+            range.push(totalPages);
+        }
+
+        return range;
+    }, [currentPage, totalPages]);
 
     // -----------------------------
     // AGENT MAP
@@ -356,6 +401,9 @@ export const Quotation: React.FC<QuotationProps> = ({
                     <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
                         {filteredActivities.length} Record
                         {filteredActivities.length !== 1 ? "s" : ""}
+                        <span className="ml-1 text-gray-300">
+                            · Page {currentPage} of {totalPages}
+                        </span>
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -375,8 +423,8 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             {/* Cards */}
             {!loading && (
-                <div className="h-[500px] overflow-y-auto space-y-2.5 pr-0.5">
-                    {filteredActivities.map((item) => {
+                <div className="space-y-2.5">
+                    {paginatedActivities.map((item) => {
                         const agentKey = item.agent_name?.toLowerCase() ?? "";
                         const agent = agentMap[agentKey];
                         const displayName =
@@ -489,6 +537,50 @@ export const Quotation: React.FC<QuotationProps> = ({
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Pagination */}
+            {!loading && totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-1">
+                    <button
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+
+                    {pageNumbers.map((page, idx) =>
+                        page < 0 ? (
+                            <span
+                                key={`ellipsis-${idx}`}
+                                className="px-1 text-[11px] text-gray-300"
+                            >
+                                …
+                            </span>
+                        ) : (
+                            <button
+                                key={page}
+                                onClick={() => goToPage(page)}
+                                className={`min-w-[28px] h-7 rounded border text-[11px] font-medium transition-colors ${
+                                    page === currentPage
+                                        ? "bg-blue-500 border-blue-500 text-white"
+                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                {page}
+                            </button>
+                        )
+                    )}
+
+                    <button
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                 </div>
             )}
 
