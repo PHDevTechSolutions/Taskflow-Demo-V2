@@ -150,9 +150,8 @@ export const Quotation: React.FC<QuotationProps> = ({
     // -----------------------------
     // FETCH ACTIVITIES
     // -----------------------------
-    // isBackground = true → silent refresh (no full-page spinner)
-    const fetchActivities = useCallback(async (isBackground = false) => {
-        if (!isBackground) setLoading(true);
+    const fetchActivities = useCallback(async () => {
+        setLoading(true);
         setError(null);
 
         const from = dateCreatedFilterRange?.from
@@ -180,7 +179,7 @@ export const Quotation: React.FC<QuotationProps> = ({
 
             const data = await res.json();
             setActivities(data.activities || []);
-            if (!isBackground) setCurrentPage(1);
+            setCurrentPage(1);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
         } finally {
@@ -190,14 +189,14 @@ export const Quotation: React.FC<QuotationProps> = ({
 
     // Fetch on mount + when date range changes + real-time subscription
     useEffect(() => {
-        fetchActivities(false); // initial load → show spinner
+        fetchActivities();
 
         const channel = supabase
             .channel("history-all")
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "history" },
-                () => fetchActivities(true) // background refresh → no spinner
+                () => fetchActivities()
             )
             .subscribe();
 
@@ -378,8 +377,8 @@ export const Quotation: React.FC<QuotationProps> = ({
                 />
             </div>
 
-            {/* Initial Loading State — only shown when no data yet */}
-            {loading && activities.length === 0 && (
+            {/* Loading State */}
+            {loading && (
                 <div className="flex items-center justify-center py-14 text-gray-400 gap-2 flex-shrink-0">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-xs">Loading quotations…</span>
@@ -414,8 +413,8 @@ export const Quotation: React.FC<QuotationProps> = ({
                 </div>
             )}
 
-            {/* Record Count + Download + inline loading indicator */}
-            {filteredActivities.length > 0 && (
+            {/* Record Count + Pagination TOP */}
+            {!loading && filteredActivities.length > 0 && (
                 <div className="flex-shrink-0">
                     <div className="mb-3 flex items-center justify-between">
                         <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
@@ -427,14 +426,6 @@ export const Quotation: React.FC<QuotationProps> = ({
                         </span>
 
                         <div className="flex items-center gap-2">
-                            {/* Inline loading indicator — shows beside Download on background refresh */}
-                            {loading && (
-                                <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    Refreshing…
-                                </span>
-                            )}
-
                             <button
                                 onClick={handleDownloadCSV}
                                 className="text-[10px] font-medium px-2 py-1 rounded border border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
@@ -460,124 +451,126 @@ export const Quotation: React.FC<QuotationProps> = ({
             )}
 
             {/* Cards — scrollable area */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
-                {paginatedActivities.map((item) => {
-                    const agentKey = item.agent_name?.toLowerCase() ?? "";
-                    const agent = agentMap[agentKey];
-                    const displayName =
-                        agent?.name || item.agent_name || "Unknown";
+            {!loading && (
+                <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
+                    {paginatedActivities.map((item) => {
+                        const agentKey = item.agent_name?.toLowerCase() ?? "";
+                        const agent = agentMap[agentKey];
+                        const displayName =
+                            agent?.name || item.agent_name || "Unknown";
 
-                    return (
-                        <div
-                            key={item.id}
-                            className="flex border border-gray-100 rounded-lg bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-150 overflow-hidden"
-                        >
-                            {/* Left accent strip */}
+                        return (
                             <div
-                                className={`w-1 flex-shrink-0 ${getAccentClass(item.tsm_approved_status)}`}
-                            />
+                                key={item.id}
+                                className="flex border border-gray-100 rounded-lg bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-150 overflow-hidden"
+                            >
+                                {/* Left accent strip */}
+                                <div
+                                    className={`w-1 flex-shrink-0 ${getAccentClass(item.tsm_approved_status)}`}
+                                />
 
-                            <div className="flex-1 px-3.5 py-3 min-w-0">
-                                {/* Header */}
-                                <div className="flex items-center justify-between mb-2.5">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        {agent?.profilePicture ? (
-                                            <img
-                                                src={agent.profilePicture}
-                                                alt={displayName}
-                                                className="w-7 h-7 rounded-full object-cover border border-gray-100 flex-shrink-0"
-                                            />
-                                        ) : (
-                                            <div className="w-7 h-7 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[9px] font-semibold text-blue-500 flex-shrink-0">
-                                                {getInitials(displayName)}
-                                            </div>
-                                        )}
-                                        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-tight truncate">
-                                            {displayName}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <span
-                                            className={`text-[10px] font-medium px-2 py-0.5 rounded uppercase tracking-wide ${getBadgeClass(item.tsm_approved_status)}`}
-                                        >
-                                            {item.tsm_approved_status}
-                                        </span>
-                                        <button
-                                            onClick={() =>
-                                                openEditDialog(item)
-                                            }
-                                            className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
-                                        >
-                                            <Eye className="w-3 h-3" />
-                                            View
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Divider */}
-                                <div className="border-t border-gray-100 mb-2.5" />
-
-                                {/* Company Info */}
-                                <div className="mb-2">
-                                    <p className="text-[12px] font-semibold text-gray-800 leading-tight">
-                                        {item.company_name || "—"}
-                                    </p>
-                                    <p className="text-[11px] text-gray-400 mt-0.5">
-                                        {[
-                                            item.contact_person,
-                                            item.contact_number,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" · ") || "—"}
-                                    </p>
-                                </div>
-
-                                {/* Detail Grid */}
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                    <div>
-                                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
-                                            Ref #
-                                        </p>
-                                        <p className="font-mono text-[10px] text-gray-500">
-                                            {item.activity_reference_number}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
-                                            Quotation #
-                                        </p>
-                                        <p className="font-mono text-[10px] text-gray-500">
-                                            {item.quotation_number || "—"}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
-                                            Amount
-                                        </p>
-                                        <p className="text-[12px] font-semibold text-emerald-600">
-                                            {formatAmount(
-                                                item.quotation_amount
+                                <div className="flex-1 px-3.5 py-3 min-w-0">
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between mb-2.5">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {agent?.profilePicture ? (
+                                                <img
+                                                    src={agent.profilePicture}
+                                                    alt={displayName}
+                                                    className="w-7 h-7 rounded-full object-cover border border-gray-100 flex-shrink-0"
+                                                />
+                                            ) : (
+                                                <div className="w-7 h-7 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[9px] font-semibold text-blue-500 flex-shrink-0">
+                                                    {getInitials(displayName)}
+                                                </div>
                                             )}
+                                            <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-tight truncate">
+                                                {displayName}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            <span
+                                                className={`text-[10px] font-medium px-2 py-0.5 rounded uppercase tracking-wide ${getBadgeClass(item.tsm_approved_status)}`}
+                                            >
+                                                {item.tsm_approved_status}
+                                            </span>
+                                            <button
+                                                onClick={() =>
+                                                    openEditDialog(item)
+                                                }
+                                                className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                                            >
+                                                <Eye className="w-3 h-3" />
+                                                View
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="border-t border-gray-100 mb-2.5" />
+
+                                    {/* Company Info */}
+                                    <div className="mb-2">
+                                        <p className="text-[12px] font-semibold text-gray-800 leading-tight">
+                                            {item.company_name || "—"}
+                                        </p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            {[
+                                                item.contact_person,
+                                                item.contact_number,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" · ") || "—"}
                                         </p>
                                     </div>
-                                    <div>
-                                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
-                                            Date
-                                        </p>
-                                        <p className="font-mono text-[10px] text-gray-500">
-                                            {item.date_created.slice(0, 10)}
-                                        </p>
+
+                                    {/* Detail Grid */}
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                        <div>
+                                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+                                                Ref #
+                                            </p>
+                                            <p className="font-mono text-[10px] text-gray-500">
+                                                {item.activity_reference_number}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+                                                Quotation #
+                                            </p>
+                                            <p className="font-mono text-[10px] text-gray-500">
+                                                {item.quotation_number || "—"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+                                                Amount
+                                            </p>
+                                            <p className="text-[12px] font-semibold text-emerald-600">
+                                                {formatAmount(
+                                                    item.quotation_amount
+                                                )}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+                                                Date
+                                            </p>
+                                            <p className="font-mono text-[10px] text-gray-500">
+                                                {item.date_created.slice(0, 10)}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Pagination — BOTTOM */}
-            {filteredActivities.length > 0 && (
+            {!loading && filteredActivities.length > 0 && (
                 <div className="mt-4 flex-shrink-0">
                     <PaginationControls
                         currentPage={currentPage}
@@ -593,7 +586,7 @@ export const Quotation: React.FC<QuotationProps> = ({
                     item={editItem}
                     onClose={closeEditDialog}
                     onSave={() => {
-                        fetchActivities(true);
+                        fetchActivities();
                         closeEditDialog();
                     }}
                     firstname={firstname}
