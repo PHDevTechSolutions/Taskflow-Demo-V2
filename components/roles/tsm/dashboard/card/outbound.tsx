@@ -1,5 +1,6 @@
 "use client";
 
+<<<<<<< HEAD
 import React, { useMemo, useState } from "react";
 import {
   Card, CardContent, CardHeader,
@@ -12,11 +13,30 @@ import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
 
 /* ================= TYPES ================= */
+=======
+import React, { useMemo } from "react";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
 
 interface HistoryItem {
   referenceid: string;
-  source: string;
-  call_status: string;
+  source: string; // "Outbound - Touchbase" | "Outbound - Follow-up"
+  call_status: string; // "Successful" | "Unsuccessful"
   type_activity: string;
   start_date: string;
   end_date: string;
@@ -44,18 +64,28 @@ function formatDurationMs(ms: number) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   const parts = [];
+<<<<<<< HEAD
   if (hours > 0) parts.push(`${hours}h`);
   if (minutes > 0) parts.push(`${minutes}m`);
   if (seconds > 0) parts.push(`${seconds}s`);
   return parts.join(" ") || "0s";
+=======
+  if (hours > 0) parts.push(`${hours} hr${hours > 1 ? "s" : ""}`);
+  if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? "s" : ""}`);
+  if (seconds > 0) parts.push(`${seconds} sec${seconds > 1 ? "s" : ""}`);
+  return parts.join(" ") || "0 sec";
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
 }
 
 /* ================= COMPONENT ================= */
 
 export function OutboundCard({ history, agents }: OutboundCardProps) {
+<<<<<<< HEAD
   const [showComputation, setShowComputation] = useState(false);
 
   /* ---- Agent map ---- */
+=======
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
   const agentMap = useMemo(() => {
     const map = new Map<string, { name: string; picture: string }>();
     agents.forEach((a) =>
@@ -67,7 +97,18 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return map;
   }, [agents]);
 
+<<<<<<< HEAD
   /* ---- Per-agent stats ---- */
+=======
+  const agentPictureMap = useMemo(() => {
+    const map = new Map<string, string>();
+    agents.forEach((a) => {
+      map.set(a.ReferenceID.toLowerCase(), a.profilePicture);
+    });
+    return map;
+  }, [agents]);
+
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
   const statsByAgent = useMemo(() => {
     type AgentStats = {
       agentID: string;
@@ -113,7 +154,10 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return Array.from(map.values());
   }, [history]);
 
+<<<<<<< HEAD
   /* ---- Outbound calls duration ---- */
+=======
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
   const outboundCalls = useMemo(
     () => history.filter((item) => item.type_activity === "Outbound Calls"),
     [history]
@@ -121,23 +165,37 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
 
   const totalOutboundDurationMs = useMemo(() => {
     return outboundCalls.reduce((total, item) => {
+<<<<<<< HEAD
       if (!item.start_date || !item.end_date) return total;
       const start = new Date(item.start_date.replace(" ", "T")).getTime();
       const end = new Date(item.end_date.replace(" ", "T")).getTime();
+=======
+      if (!item.start_date || !item.end_date) return total; // skip if null/undefined
+
+      const start = new Date(item.start_date.replace(" ", "T")).getTime();
+      const end = new Date(item.end_date.replace(" ", "T")).getTime();
+
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
       if (!isNaN(start) && !isNaN(end) && end > start) return total + (end - start);
       return total;
     }, 0);
   }, [outboundCalls]);
 
+<<<<<<< HEAD
   /* ---- Grand totals ---- */
   const grandTotals = useMemo(() => {
     const t = {
+=======
+  const grandTotals = useMemo(() => {
+    const totals = {
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
       touchbaseCount: 0,
       touchbaseSuccessful: 0,
       touchbaseUnsuccessful: 0,
       followupCount: 0,
       followupSuccessful: 0,
       followupUnsuccessful: 0,
+<<<<<<< HEAD
     };
     statsByAgent.forEach((s) => {
       t.touchbaseCount += s.touchbaseCount;
@@ -212,6 +270,60 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                 {statsByAgent.map((stat) => {
                   const info = agentMap.get(stat.agentID);
                   const subtotal = stat.touchbaseCount + stat.followupCount;
+=======
+      subtotal: 0,
+      totalOutbound: 0,
+    };
+
+    statsByAgent.forEach((s) => {
+      totals.touchbaseCount += s.touchbaseCount;
+      totals.touchbaseSuccessful += s.touchbaseSuccessful;
+      totals.touchbaseUnsuccessful += s.touchbaseUnsuccessful;
+      totals.followupCount += s.followupCount;
+      totals.followupSuccessful += s.followupSuccessful;
+      totals.followupUnsuccessful += s.followupUnsuccessful;
+    });
+
+    totals.subtotal = totals.touchbaseCount + totals.followupCount;
+    totals.totalOutbound = totals.subtotal;
+
+    return totals;
+  }, [statsByAgent]);
+
+  return (
+    <>
+      {outboundCalls.length > 0 && (
+        <Card className="flex flex-col h-full bg-white text-black rounded-none">
+          <CardHeader>
+            <CardTitle>Outbound History</CardTitle>
+          </CardHeader>
+
+          <CardContent className="flex-1 overflow-auto">
+            {statsByAgent.length === 0 ? (
+              <p className="text-center text-sm italic text-gray-500">
+                No records found.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="font-mono">
+                    <TableHead className="text-xs">Agent</TableHead>
+                    <TableHead className="text-xs text-center bg-yellow-100">Touchbase</TableHead>
+                    <TableHead className="text-xs text-center bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center bg-blue-100">Follow-up</TableHead>
+                    <TableHead className="text-xs text-center bg-green-100">Success</TableHead>
+                    <TableHead className="text-xs text-center bg-red-200">Unsuccess</TableHead>
+                    <TableHead className="text-xs text-center bg-gray-200">Subtotal</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {statsByAgent.map((stat) => {
+                    const agentName = agentMap.get(stat.agentID) || stat.agentID;
+                    const profilePicture = agentPictureMap.get(stat.agentID);
+                    const subtotal = stat.touchbaseCount + stat.followupCount;
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
 
                   return (
                     <TableRow key={stat.agentID} className="text-xs hover:bg-gray-50/50 font-mono">
@@ -233,6 +345,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                         </div>
                       </TableCell>
 
+<<<<<<< HEAD
                       {/* Touchbase */}
                       <TableCell className="text-center font-semibold text-amber-700 bg-amber-50/40 border-l">{stat.touchbaseCount}</TableCell>
                       <TableCell className="text-center text-green-600 font-semibold bg-amber-50/40">{stat.touchbaseSuccessful}</TableCell>
@@ -291,5 +404,46 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
         )}
       </CardContent>
     </Card>
+=======
+                        <TableCell className="text-center bg-yellow-100 font-bold">{stat.touchbaseCount}</TableCell>
+                        <TableCell className="text-center bg-green-100 font-bold">{stat.touchbaseSuccessful}</TableCell>
+                        <TableCell className="text-center bg-red-200 font-bold">{stat.touchbaseUnsuccessful}</TableCell>
+                        <TableCell className="text-center bg-blue-100 font-bold">{stat.followupCount}</TableCell>
+                        <TableCell className="text-center bg-green-100 font-bold">{stat.followupSuccessful}</TableCell>
+                        <TableCell className="text-center bg-red-200 font-bold">{stat.followupUnsuccessful}</TableCell>
+                        <TableCell className="text-center bg-gray-200 font-bold">{subtotal}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+
+                <tfoot>
+                  <TableRow className="text-xs font-semibold border-t">
+                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="text-center bg-yellow-200 font-bold">{grandTotals.touchbaseCount}</TableCell>
+                    <TableCell className="text-center bg-green-200 font-bold">{grandTotals.touchbaseSuccessful}</TableCell>
+                    <TableCell className="text-center bg-red-300 font-bold">{grandTotals.touchbaseUnsuccessful}</TableCell>
+                    <TableCell className="text-center bg-blue-200 font-bold">{grandTotals.followupCount}</TableCell>
+                    <TableCell className="text-center bg-green-200 font-bold">{grandTotals.followupSuccessful}</TableCell>
+                    <TableCell className="text-center bg-red-300 font-bold">{grandTotals.followupUnsuccessful}</TableCell>
+                    <TableCell className="text-center bg-gray-300 font-bold">{grandTotals.totalOutbound}</TableCell>
+                  </TableRow>
+                </tfoot>
+              </Table>
+            )}
+          </CardContent>
+
+          <CardFooter className="flex justify-between border-t bg-white">
+            <p className="text-xs italic">
+              Total Duration of Outbound Calls: {formatDurationMs(totalOutboundDurationMs)}
+            </p>
+            <Badge className="rounded-none px-6 py-4 font-mono">
+              Total Outbound Calls: {grandTotals.totalOutbound}
+            </Badge>
+          </CardFooter>
+        </Card>
+      )}
+    </>
+>>>>>>> 5f746a8e50b4c421f4879ea8192c5cab4a450f07
   );
 }
