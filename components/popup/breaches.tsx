@@ -764,7 +764,7 @@ export function BreachesDialog() {
                 {/* Database Coverage */}
                 <SectionCard
                   title="Database Coverage"
-                  badge={
+                > {/*badge={
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setCoverageDialogSource("covered")}
@@ -781,8 +781,7 @@ export function BreachesDialog() {
                         Not Reached
                       </button>
                     </div>
-                  }
-                >
+                  }*/}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
