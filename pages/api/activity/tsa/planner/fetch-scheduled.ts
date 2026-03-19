@@ -2,27 +2,27 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BATCH_SIZE = 1000;  // FIX: lowered from 5000 — avoids timeouts on large datasets
-const IN_CHUNK_SIZE = 500; // FIX: Supabase .in() is unreliable beyond ~500 values
+const BATCH_SIZE = 1000; // FIX: lowered from 5000 — large batches cause timeouts on 15k rows
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIX 1: Cursor does not advance when a partial batch is returned.
-//   Old code: always set lastId = last row's id, even on partial batches,
-//   which caused an extra empty round-trip and potential row skipping when
-//   date filters were combined with cursor.
+// BUG FIX 1: Activity batch generator now filters by `scheduled_date` (not
+// `date_created`). The Scheduled component filters on scheduled_date client-
+// side, so the API must expose ALL activities for the agent regardless of date.
+// Date-range params (from/to) remain optional and filter on scheduled_date when
+// provided.
 //
-// FIX 2: Date filter applied correctly with cursor.
-//   Old code: date filter only applied when BOTH fromISO and toISO exist.
-//   New code: each param is applied independently so a from-only or to-only
-//   filter works correctly.
+// BUG FIX 2: Cursor-based pagination uses `id` correctly. Previously the date
+// filter was applied alongside the cursor which caused rows to be skipped when
+// `date_created` didn't match even though `scheduled_date` was in range.
 //
-// FIX 3: `if (lastId)` was falsy when lastId = 0 (first row id).
-//   New code: `if (lastId !== null)` is an explicit null check.
+// BUG FIX 3: History now uses cursor-based pagination (lastId) instead of
+// offset-based, which was unreliable on large datasets with concurrent writes.
 // ─────────────────────────────────────────────────────────────────────────────
+
 async function* fetchActivityBatches(
   referenceid: string,
-  fromISO?: string,
-  toISO?: string,
+  scheduledFrom?: string, // YYYY-MM-DD or ISO — filter on scheduled_date
+  scheduledTo?: string,   // YYYY-MM-DD or ISO — filter on scheduled_date (inclusive end)
 ) {
   let lastId: number | null = null;
 
@@ -34,12 +34,12 @@ async function* fetchActivityBatches(
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
-    // FIX 3: was `if (lastId)` — fails when lastId is 0
+    // Cursor: only fetch rows after the last seen id
     if (lastId !== null) query = query.gt("id", lastId);
 
-    // FIX 2: apply each date bound independently
-    if (fromISO) query = query.gte("date_created", fromISO);
-    if (toISO)   query = query.lt("date_created", toISO);
+    // FIX: filter on scheduled_date — NOT date_created
+    if (scheduledFrom) query = query.gte("scheduled_date", scheduledFrom);
+    if (scheduledTo)   query = query.lte("scheduled_date", scheduledTo);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -47,31 +47,21 @@ async function* fetchActivityBatches(
 
     yield data;
 
-    // FIX 1: stop if partial batch — no more rows
+    // FIX: only advance cursor if we got a full batch — if partial, we're done
     if (data.length < BATCH_SIZE) break;
     lastId = data[data.length - 1].id;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX 4: History was using offset-based pagination — unreliable on large
-//   datasets and concurrent writes (rows can shift between pages).
-//   New code: cursor-based using `id`, same pattern as activities.
-//
-// FIX 5: Supabase .in() with thousands of values causes query plan issues
-//   or silent truncation. New code: chunks refs into groups of 500 and
-//   paginates each chunk with a cursor.
-// ─────────────────────────────────────────────────────────────────────────────
+// FIX: cursor-based pagination for history (was offset-based → unreliable)
 async function* fetchHistoryBatches(activityReferenceNumbers: string[]) {
   if (!activityReferenceNumbers.length) return;
 
-  // Deduplicate first to minimize query size
-  const uniqueRefs = [...new Set(activityReferenceNumbers)];
-
-  // Split into chunks to avoid Supabase .in() limits
+  // Supabase `.in()` has a practical limit — chunk into groups of 500
+  const CHUNK_SIZE = 500;
   const chunks: string[][] = [];
-  for (let i = 0; i < uniqueRefs.length; i += IN_CHUNK_SIZE) {
-    chunks.push(uniqueRefs.slice(i, i + IN_CHUNK_SIZE));
+  for (let i = 0; i < activityReferenceNumbers.length; i += CHUNK_SIZE) {
+    chunks.push(activityReferenceNumbers.slice(i, i + CHUNK_SIZE));
   }
 
   for (const chunk of chunks) {
@@ -110,29 +100,37 @@ export default async function handler(
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  // Parse date range — filter is on date_created for this endpoint
-  const fromISO =
-    typeof from === "string" && from
-      ? new Date(from).toISOString()
-      : undefined;
+  // FIX: parse scheduled_date range — NOT date_created
+  // from/to should be YYYY-MM-DD strings (as sent by the Scheduled component)
+  let scheduledFrom: string | undefined;
+  let scheduledTo: string | undefined;
 
-  let toISO: string | undefined;
+  if (typeof from === "string" && from) {
+    // Normalize to date-only string for scheduled_date comparison
+    scheduledFrom = from.length > 10 ? from.slice(0, 10) : from;
+  }
+
   if (typeof to === "string" && to) {
-    const toDay = new Date(to);
-    toDay.setDate(toDay.getDate() + 1); // include full 'to' day
-    toISO = toDay.toISOString();
+    scheduledTo = to.length > 10 ? to.slice(0, 10) : to;
   }
 
   try {
     res.setHeader("Content-Type", "application/json");
+
+    // Stream JSON manually — avoids loading all 15k rows into memory at once
     res.write(`{"activities":[`);
 
     let firstActivity = true;
     const allActivityReferenceNumbers: string[] = [];
     let totalActivities = 0;
 
-    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO)) {
+    for await (const batch of fetchActivityBatches(
+      referenceid,
+      scheduledFrom,
+      scheduledTo,
+    )) {
       for (const row of batch) {
+        // Collect activity_reference_number for history lookup
         if (row.activity_reference_number) {
           allActivityReferenceNumbers.push(row.activity_reference_number);
         }
@@ -149,7 +147,10 @@ export default async function handler(
     let firstHistory = true;
     let totalHistory = 0;
 
-    for await (const batch of fetchHistoryBatches(allActivityReferenceNumbers)) {
+    // Deduplicate refs before querying history
+    const uniqueRefs = [...new Set(allActivityReferenceNumbers)];
+
+    for await (const batch of fetchHistoryBatches(uniqueRefs)) {
       for (const row of batch) {
         const json = JSON.stringify(row);
         res.write(firstHistory ? json : `,${json}`);
@@ -163,7 +164,7 @@ export default async function handler(
     );
     res.end();
   } catch (err: any) {
-    console.error("[fetch] Server error:", err);
+    console.error("[planner/fetch] Server error:", err);
     if (!res.writableEnded) {
       res.status(500).json({ message: err.message || "Server error" });
     }

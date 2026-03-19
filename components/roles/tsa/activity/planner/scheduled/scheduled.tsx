@@ -157,7 +157,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     // that we always get the full dataset and apply scheduled_date filtering
     // on the client side (see filteredActivities below).
     const url = new URL(
-      "/api/activity/tsa/planner/fetch",
+      "/api/activity/tsa/planner/fetch-scheduled",
       window.location.origin,
     );
     url.searchParams.append("referenceid", referenceid);
