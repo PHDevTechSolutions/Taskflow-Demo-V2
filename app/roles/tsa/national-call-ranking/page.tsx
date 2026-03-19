@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 
-import { NationalRanking } from "@/components/national-ranking";
+import { NationalRanking } from "@/components/national-race-ranking";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 

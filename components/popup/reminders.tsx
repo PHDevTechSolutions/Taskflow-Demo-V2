@@ -5,7 +5,6 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   query,
-  orderBy,
   onSnapshot,
   Timestamp,
   where,
@@ -21,7 +20,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
+import { Bell, LogOut, Clock, CalendarClock } from "lucide-react";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Meeting {
   id: string;
   title: string;
@@ -32,7 +33,18 @@ interface Meeting {
 type DismissedByDate = Record<string, string[]>;
 type DismissedLogoutByDate = Record<string, boolean>;
 
-function formatTime(date: Date) {
+interface UserDetails {
+  referenceid: string;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MEETINGS_KEY = "dismissedMeetings";
+const LOGOUT_KEY = "dismissedLogoutReminders";
+const THIRTY_MINUTES = 30 * 60 * 1000;
+const FIVE_MINUTES = 5 * 60 * 1000;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatTime(date: Date): string {
   let h = date.getHours();
   const m = date.getMinutes().toString().padStart(2, "0");
   const ap = h >= 12 ? "PM" : "AM";
@@ -40,7 +52,7 @@ function formatTime(date: Date) {
   return `${h}:${m} ${ap}`;
 }
 
-function isSameDay(a: Date, b: Date) {
+function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -53,9 +65,6 @@ function toDate(v: any): Date {
   if (v instanceof Date) return v;
   return new Date(v);
 }
-
-const MEETINGS_KEY = "dismissedMeetings";
-const LOGOUT_KEY = "dismissedLogoutReminders";
 
 const todayKey = () => new Date().toISOString().split("T")[0];
 
@@ -74,92 +83,64 @@ function writeLS(key: string, value: unknown) {
   }
 }
 
-interface UserDetails {
-  referenceid: string;
+/** Returns minutes until meeting starts (negative = already started) */
+function minutesUntil(date: Date, now: Date): number {
+  return Math.round((date.getTime() - now.getTime()) / 60000);
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function Reminders() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
 
   const [loadingUser, setLoadingUser] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [referenceId, setReferenceId] = useState<string>("");
-
   const [now, setNow] = useState(new Date());
-
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [currentMeeting, setCurrentMeeting] = useState<Meeting | null>(null);
-
   const [showMeeting, setShowMeeting] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
-
   const [dismissedMeetings, setDismissedMeetings] = useState<string[]>([]);
   const [dismissedLogout, setDismissedLogout] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
-  const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "", });
 
   const queryUserId = searchParams?.get("id") ?? "";
 
-  // Sync URL query param with userId context
+  // ── Sync URL param with userId context ──────────────────────────────────────
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) {
-      setUserId(queryUserId);
-    }
+    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
-  // Fetch user details including referenceId
+  // ── Fetch user details ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!userId) {
-      setLoadingUser(false);
-      return;
-    }
-
-    const fetchUserData = async () => {
-      setError(null);
-      setLoadingUser(true);
-      try {
-        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!response.ok) throw new Error("Failed to fetch user data");
-        const data = await response.json();
-
-        setUserDetails({
-          referenceid: data.ReferenceID || "",
-        });
-
-      } catch (err) {
-        console.error("Error fetching user data:", err);
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-
-    fetchUserData();
+    if (!userId) return;
+    setLoadingUser(true);
+    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch user");
+        return res.json();
+      })
+      .then((data) => setReferenceId(data.ReferenceID || ""))
+      .catch(console.error)
+      .finally(() => setLoadingUser(false));
   }, [userId]);
 
-  useEffect(() => {
-    if (userDetails.referenceid) {
-      setReferenceId(userDetails.referenceid);
-    }
-  }, [userDetails.referenceid]);
-
+  // ── Initialize audio + localStorage ────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     audioRef.current = new Audio("/reminder-notification.mp3");
 
     const meetingsLS = readLS<DismissedByDate>(MEETINGS_KEY, {});
     const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
-
     setDismissedMeetings(meetingsLS[todayKey()] || []);
     setDismissedLogout(!!logoutLS[todayKey()]);
 
+    // FCM setup
     (async () => {
       try {
         const messaging = await import("@/firebase/firebase-messaging");
-
         const token = await messaging.requestFirebaseNotificationPermission?.();
         if (token) console.log("FCM Token:", token);
 
@@ -173,9 +154,8 @@ export function Reminders() {
               body: payload.notification.body || "",
             });
           }
-          audioRef.current?.play().catch(() => { });
+          audioRef.current?.play().catch(() => {});
         });
-
         return () => typeof unsub === "function" && unsub();
       } catch {
         console.warn("FCM not supported");
@@ -183,69 +163,59 @@ export function Reminders() {
     })();
   }, []);
 
-  // Fetch meetings once we have referenceId
+  // ── Subscribe to meetings ───────────────────────────────────────────────────
   useEffect(() => {
     if (!referenceId) return;
-
     const q = query(
       collection(db, "meetings"),
-      where("referenceid", "==", referenceId)
+      where("referenceid", "==", referenceId),
     );
-
-    const unsubMeetings = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, (snap) => {
       setMeetings(
         snap.docs.map((d) => ({
           id: d.id,
           title: d.data().type_activity,
           remarks: d.data().remarks,
           start_date: d.data().start_date,
-        }))
+        })),
       );
     });
-
-    return () => {
-      unsubMeetings();
-    };
+    return unsub;
   }, [referenceId]);
 
+  // ── Clock tick ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 10000);
     return () => clearInterval(t);
   }, []);
 
+  // ── Evaluate reminders ──────────────────────────────────────────────────────
   useEffect(() => {
-    const THIRTY_MINUTES = 30 * 60 * 1000;
-    const FIVE_MINUTES = 5 * 60 * 1000;
-
-    // Check current meeting
     const meeting = meetings.find((m) => {
       if (dismissedMeetings.includes(m.id)) return false;
       const d = toDate(m.start_date);
       const diff = d.getTime() - now.getTime();
-
       return isSameDay(now, d) && diff <= THIRTY_MINUTES && diff >= -FIVE_MINUTES;
     });
 
-    setCurrentMeeting(meeting || null);
+    setCurrentMeeting(meeting ?? null);
     setShowMeeting(!!meeting);
 
-    // Logout reminder ONLY at 6:30 PM
     if (now.getHours() === 18 && now.getMinutes() === 30 && !dismissedLogout) {
       setShowLogout(true);
     }
   }, [now, meetings, dismissedMeetings, dismissedLogout]);
 
+  // ── Play audio on new meeting ────────────────────────────────────────────────
   useEffect(() => {
-    const newMeeting = showMeeting && !prevMeeting.current;
-
-    if (newMeeting && audioRef.current) {
+    if (showMeeting && !prevMeeting.current && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => { });
+      audioRef.current.play().catch(() => {});
     }
-
     prevMeeting.current = showMeeting;
   }, [showMeeting]);
 
+  // ── Dismiss handlers ────────────────────────────────────────────────────────
   function dismissMeeting() {
     if (!currentMeeting) return;
     const data = readLS<DismissedByDate>(MEETINGS_KEY, {});
@@ -263,42 +233,117 @@ export function Reminders() {
     setShowLogout(false);
   }
 
-  if (loadingUser) {
-    return <div>Loading user data...</div>;
-  }
+  // FIX: removed loading/error full-page returns — reminders are background,
+  // they should never block the page render
+  if (loadingUser || !referenceId) return null;
 
-  if (error) {
-    return <div className="text-red-600">Error: {error}</div>;
-  }
+  const meetingDate = currentMeeting ? toDate(currentMeeting.start_date) : null;
+  const minsUntil = meetingDate ? minutesUntil(meetingDate, now) : 0;
 
   return (
     <>
+      {/* ── Meeting Reminder Dialog ──────────────────────────────────────── */}
       <Dialog open={showMeeting} onOpenChange={setShowMeeting}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{currentMeeting?.title} at {formatTime(toDate(currentMeeting?.start_date))}</DialogTitle>
-          </DialogHeader>
-          <div className="my-4 text-center">
-            <p className="text-lg uppercase">
-              {currentMeeting?.remarks}
-            </p>
+        <DialogContent className="rounded-none p-0 overflow-hidden max-w-sm gap-0">
+
+          {/* Header */}
+          <div className="bg-zinc-900 px-6 pt-5 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="bg-white/10 rounded-full p-1.5">
+                  <Bell className="h-4 w-4 text-yellow-300 animate-bounce" />
+                </div>
+                <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                  Meeting Reminder
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-zinc-400 text-xs">
+                {minsUntil > 0
+                  ? `Starting in ${minsUntil} minute${minsUntil !== 1 ? "s" : ""}`
+                  : "This meeting has already started"}
+              </DialogDescription>
+            </DialogHeader>
           </div>
-          <DialogFooter>
-            <Button onClick={dismissMeeting}>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="bg-zinc-100 rounded-full p-2 flex-shrink-0 mt-0.5">
+                <CalendarClock className="h-4 w-4 text-zinc-600" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-900 uppercase">
+                  {currentMeeting?.title}
+                </p>
+                {meetingDate && (
+                  <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3" />
+                    {formatTime(meetingDate)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {currentMeeting?.remarks && (
+              <div className="bg-zinc-50 border border-zinc-200 px-4 py-3">
+                <p className="text-xs text-zinc-600 uppercase leading-relaxed">
+                  {currentMeeting.remarks}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <DialogFooter className="px-6 py-4 border-t border-zinc-100">
+            <Button
+              className="rounded-none w-full text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              onClick={dismissMeeting}
+            >
               Dismiss
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ── Logout Reminder Dialog ───────────────────────────────────────── */}
       <Dialog open={showLogout} onOpenChange={setShowLogout}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Logout Reminder</DialogTitle>
-            <DialogDescription>Don&apos;t forget to logout Taskflow.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={dismissLogout}>Dismiss</Button>
+        <DialogContent className="rounded-none p-0 overflow-hidden max-w-sm gap-0">
+
+          {/* Header */}
+          <div className="bg-zinc-900 px-6 pt-5 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="bg-white/10 rounded-full p-1.5">
+                  <LogOut className="h-4 w-4 text-blue-300" />
+                </div>
+                <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                  Logout Reminder
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-zinc-400 text-xs">
+                It&apos;s 6:30 PM — time to wrap up for the day.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 px-4 py-3">
+              <LogOut className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+              <p className="text-xs text-zinc-600">
+                Don&apos;t forget to <strong>logout of Taskflow</strong> before you leave.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <DialogFooter className="px-6 py-4 border-t border-zinc-100">
+            <Button
+              className="rounded-none w-full text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              onClick={dismissLogout}
+            >
+              Got it, logging out
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
