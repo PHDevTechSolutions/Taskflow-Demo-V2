@@ -1,6 +1,4 @@
 // utils/activityBlockUtils.ts
-// Per-stage block check: each stage only blocks if the same company
-// already has an active activity in THAT stage's specific statuses.
 
 export interface ActivityBlockCheck {
   blocked: boolean;
@@ -22,27 +20,17 @@ export interface HistoryForBlock {
   status?: string;
 }
 
+/* ───────────────── CONSTANTS ───────────────── */
+
 const BLOCK_DURATION_DAYS = 30;
-const DELIVERED_STATUS = "Delivered";
+
+/** ✅ FINAL statuses (no longer blocking) */
+const FINAL_STATUSES = ["delivered", "completed"];
+
+/* ───────────────── MAIN FUNCTION ───────────────── */
 
 /**
  * Checks if a company is blocked from new activity creation FOR A SPECIFIC STAGE.
- *
- * Each stage passes its own `blockingStatuses` so the check is scoped to that stage only:
- *
- *   NewTask   → ["On-Progress", "Assisted", "Quote-Done", "SO-Done"] + checkScheduled
- *   Progress  → ["On-Progress", "Assisted", "Quote-Done", "SO-Done"]
- *   Scheduled → checkScheduled only (scheduled_date presence)
- *   Done      → ["Done"]
- *   Overdue   → checkScheduled only
- *
- * Rules:
- * 1. Find any activity for the same account_reference_number within the last 30 days
- *    whose status matches one of `blockingStatuses` (or has a non-empty scheduled_date
- *    when `checkScheduled` is true).
- * 2. Skip if that activity has a "Delivered" history entry (it's completed).
- * 3. Skip the activity identified by `excludeActivityId` (the current card's own record).
- * 4. Match found → BLOCKED.
  */
 export function checkCompanyBlocked(
   accountRefNumber: string,
@@ -53,17 +41,24 @@ export function checkCompanyBlocked(
   excludeActivityId?: string,
 ): ActivityBlockCheck {
   const now = new Date();
+
   const cutoffDate = new Date();
   cutoffDate.setDate(now.getDate() - BLOCK_DURATION_DAYS);
 
   for (const activity of activities) {
+    /* ── Match account ── */
     if (activity.account_reference_number !== accountRefNumber) continue;
+
+    /* ── Skip self (editing case) ── */
     if (excludeActivityId && activity.id === excludeActivityId) continue;
 
+    /* ── Date check ── */
     const createdAt = new Date(activity.date_created);
     if (isNaN(createdAt.getTime()) || createdAt < cutoffDate) continue;
 
+    /* ── Status checks ── */
     const hasBlockingStatus = blockingStatuses.includes(activity.status);
+
     const isScheduled =
       checkScheduled &&
       typeof activity.scheduled_date === "string" &&
@@ -71,60 +66,71 @@ export function checkCompanyBlocked(
 
     if (!hasBlockingStatus && !isScheduled) continue;
 
-    // If already delivered in history, no longer blocking
-    const isDelivered = history.some(
+    /* ── ✅ FIX: Delivered OR Completed (case-insensitive) ── */
+    const isFinal = history.some(
       (h) =>
         h.activity_reference_number === activity.activity_reference_number &&
-        h.status === DELIVERED_STATUS,
+        FINAL_STATUSES.includes((h.status ?? "").trim().toLowerCase())
     );
-    if (isDelivered) continue;
 
+    if (isFinal) continue;
+
+    /* ── Compute expiry ── */
     const blockExpiry = new Date(createdAt);
     blockExpiry.setDate(blockExpiry.getDate() + BLOCK_DURATION_DAYS);
+
     const daysRemaining = Math.ceil(
-      (blockExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      (blockExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     );
+
+    const safeDays = Math.max(0, daysRemaining);
 
     const statusLabel =
       isScheduled && !hasBlockingStatus ? "Scheduled" : activity.status;
 
     return {
       blocked: true,
-      daysRemaining: Math.max(0, daysRemaining),
-      reason: `This company already has an active "${statusLabel}" activity (created ${createdAt.toLocaleDateString()}). A new activity for this stage can only be created once it is marked as Delivered, or after ${Math.max(0, daysRemaining)} day${daysRemaining !== 1 ? "s" : ""}.`,
+      daysRemaining: safeDays,
+      reason: `This company already has an active "${statusLabel}" activity (created ${createdAt.toLocaleDateString()}). A new activity for this stage can only be created once it is marked as Delivered or Completed, or after ${safeDays} day${safeDays !== 1 ? "s" : ""}.`,
     };
   }
 
   return { blocked: false, reason: "" };
 }
 
-// ─── Per-stage blocking presets ───────────────────────────────────────────────
+/* ───────────────── BLOCK PRESETS ───────────────── */
 
-/** NewTask "Add" — block if company is already in-progress OR scheduled */
+/** NewTask — block if in-progress OR scheduled */
 export const BLOCK_NEW_TASK = {
   statuses: ["On-Progress", "Assisted", "Quote-Done", "SO-Done"],
   checkScheduled: true,
 };
 
-/** Progress CreateActivityDialog — block if already another in-progress entry */
+/** Progress — block if already active */
 export const BLOCK_PROGRESS = {
   statuses: ["On-Progress", "Assisted", "Quote-Done", "SO-Done"],
   checkScheduled: false,
 };
 
-/** Scheduled CreateActivityDialog — block if already another scheduled entry */
+/** Scheduled — block if already scheduled */
 export const BLOCK_SCHEDULED = {
   statuses: [],
   checkScheduled: true,
 };
 
-/** Done CreateActivityDialog — block if already another Done entry */
+/** Done — block if already Done */
+export const BLOCK_COMPLETED = {
+  statuses: ["Completed"],
+  checkScheduled: false,
+};
+
+/** Done — block if already Done */
 export const BLOCK_DONE = {
   statuses: ["Done"],
   checkScheduled: false,
 };
 
-/** Overdue CreateActivityDialog — block if already another scheduled/overdue entry */
+/** Overdue — block if scheduled/overdue */
 export const BLOCK_OVERDUE = {
   statuses: [],
   checkScheduled: true,

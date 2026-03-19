@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { checkCompanyBlocked, BLOCK_DONE } from "@/utils/activityBlockUtils";
+import { checkCompanyBlocked, BLOCK_COMPLETED } from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -320,7 +320,7 @@ export const Completed: React.FC<NewTaskProps> = ({
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800";
 
-            if (item.status === "Done") {
+            if (item.status === "Completed") {
               badgeClass = "bg-gray-400 text-white";
             }
 
@@ -332,8 +332,8 @@ export const Completed: React.FC<NewTaskProps> = ({
               item.account_reference_number,
               activities,
               history,
-              BLOCK_DONE.statuses,
-              BLOCK_DONE.checkScheduled,
+              BLOCK_COMPLETED.statuses,
+              BLOCK_COMPLETED.checkScheduled,
               item.id, // exclude the current activity
             );
 
