@@ -26,18 +26,17 @@ export async function GET(req: Request) {
       );
     }
 
-    // ✅ Paginated query — stable ORDER BY prevents duplicate/skipped rows across batches
+    // ✅ FILTER: status must be 'active' (case-insensitive safe)
     const Xchire_fetch = await Xchire_sql`
       SELECT *
-      FROM   accounts
-      WHERE  tsm = ${tsm}
-      ORDER  BY date_created ASC, id ASC
-      LIMIT  ${safeLimit}
+      FROM accounts
+      WHERE tsm = ${tsm}
+        AND LOWER(status) = 'active'
+      ORDER BY date_created ASC, id ASC
+      LIMIT ${safeLimit}
       OFFSET ${safeOffset};
     `;
 
-    // Return empty array (not 404) so the batching loop in the client
-    // can cleanly detect "no more rows" without throwing an error
     return NextResponse.json(
       { success: true, data: Xchire_fetch },
       { status: 200 }

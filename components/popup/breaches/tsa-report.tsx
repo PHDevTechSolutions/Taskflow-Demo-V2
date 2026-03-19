@@ -4,7 +4,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RefreshCcw, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RefreshCcw, Loader2, List } from "lucide-react";
 import { sileo } from "sileo";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
@@ -23,7 +29,7 @@ interface Activity {
 interface ClientSegments {
   top50: number; next30: number; balance20: number;
   csrClient: number; newClient: number; tsaClient: number;
-  inbound: number; outbound: number;
+  outbound: number;
 }
 
 interface Denominators {
@@ -67,9 +73,7 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
     return acc;
   }, {} as TimeByActivity);
 
-// FIX: Outbound is determined ONLY by source === "Outbound - Touchbase"
-// Removed erroneous `|| a.type_activity === "Outbound Calls"` and
-// `|| a.source === "history"` conditions from the original code.
+// Outbound is determined ONLY by source === "Outbound - Touchbase"
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase";
 
@@ -137,13 +141,13 @@ export default function TSAReports() {
   const [clientSegments, setClientSegments] = useState<ClientSegments>({
     top50: 0, next30: 0, balance20: 0,
     csrClient: 0, newClient: 0, tsaClient: 0,
-    inbound: 0, outbound: 0,
+    outbound: 0,
   });
 
   const [denominators, setDenominators] = useState<Denominators>({
     total: 0, top50: 0, next30: 0, bal20: 0,
     csrClient: 0, newClient: 0, tsaClient: 0,
-    daily: 20, weekly: 100, monthly: 440,
+    daily: 20, weekly: 120, monthly: 520,
   });
 
   const [pendingClientApprovalCount, setPendingClientApprovalCount] = useState(0);
@@ -159,6 +163,9 @@ export default function TSAReports() {
   const [overdueByCompany, setOverdueByCompany] = useState<Record<string, number>>({});
   const [overdueCount, setOverdueCount] = useState(0);
   const [showAllOverdue, setShowAllOverdue] = useState(false);
+  const [coverageDialogSource, setCoverageDialogSource] = useState<"covered" | "uncovered" | null>(null);
+  const [coveredAccounts, setCoveredAccounts] = useState<Activity[]>([]);
+  const [uncoveredAccounts, setUncoveredAccounts] = useState<Activity[]>([]);
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
@@ -378,7 +385,7 @@ export default function TSAReports() {
       });
       setTotalSales(sales);
 
-      // FIX: use source === "Outbound - Touchbase" only
+      // Outbound count — source === "Outbound - Touchbase" only
       const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
 
       const dayOfWeek = targetDate.getDay();
@@ -426,53 +433,73 @@ export default function TSAReports() {
   }, [activities, fromDate]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
+  //
+  // Scope: the FULL calendar month of fromDate (month start → month end).
+  // - "Covered"     = cluster accounts whose company_name appears in ANY
+  //                   activity within that month range
+  // - "Not Reached" = the rest
+  // - NO source filter — isOutboundTouchbase applies only to the Outbound
+  //   Performance card, NOT to coverage counts.
+  // - Denominators come from clusterAccounts, not activities.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
       setUniqueClientReach(0);
       setUniqueActivitiesList([]);
-      setClientSegments({ top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0, inbound: 0, outbound: 0 });
+      setCoveredAccounts([]);
+      setUncoveredAccounts([]);
+      setClientSegments({ top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0, outbound: 0 });
       return;
     }
 
+    // Explicit month bounds from fromDate
     const fromDateObj = new Date(fromDate);
-    const selectedMonth = fromDateObj.getMonth();
-    const selectedYear = fromDateObj.getFullYear();
+    const monthStart  = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd    = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    // FIX: Inbound by type_activity, Outbound by source === "Outbound - Touchbase"
-    const filtered = activities.filter((act) => {
-      if (!act.account_reference_number || !act.date_created) return false;
-      const d = new Date(act.date_created);
-      if (d.getMonth() !== selectedMonth || d.getFullYear() !== selectedYear) return false;
-      return act.type_activity === "Inbound Calls" || isOutboundTouchbase(act);
+    // Step 1 — company names with ANY activity within the calendar month
+    const touchedCompanies = new Set<string>();
+    const byActivityRef: Record<string, any> = {};
+
+    activities.forEach((act) => {
+      if (!act.company_name || !act.date_created) return;
+      const t = new Date(act.date_created).getTime();
+      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+
+      touchedCompanies.add(act.company_name.toLowerCase());
+
+      if (act.activity_reference_number) {
+        byActivityRef[act.activity_reference_number] = act;
+      }
     });
 
-    const byRef: Record<string, any> = {};
-    filtered.forEach((act) => { byRef[act.activity_reference_number] = act; });
-    const unique = Object.values(byRef);
-    setUniqueActivitiesList(unique);
+    setUniqueActivitiesList(Object.values(byActivityRef));
 
-    let inbound = 0, outbound = 0;
+    // Step 2 — covered / uncovered split by company_name
+    const covered   = clusterAccounts.filter((acc) =>
+      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
+    );
+    const uncovered = clusterAccounts.filter((acc) =>
+      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
+    );
+
+    setCoveredAccounts(covered);
+    setUncoveredAccounts(uncovered);
+
+    // Step 3 — segment counts from covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
-
-    unique.forEach((act) => {
-      if (act.type_activity === "Inbound Calls") inbound++;
-      // FIX: outbound count uses same source check
-      if (isOutboundTouchbase(act)) outbound++;
-
-      const account = clusterAccounts.find((acc) => acc.account_reference_number === act.account_reference_number);
-      if (!account?.type_client) return;
-      const type = account.type_client;
-      if (type === "top50") seg.top50++;
-      else if (type === "next30") seg.next30++;
+    covered.forEach((acc) => {
+      const type = acc.type_client ?? "";
+      if      (type === "top50")     seg.top50++;
+      else if (type === "next30")    seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
       else if (type === "newclient") seg.newClient++;
       else if (type === "tsaclient") seg.tsaClient++;
     });
 
-    setUniqueClientReach(unique.length);
-    setClientSegments({ ...seg, inbound, outbound });
+    setUniqueClientReach(covered.length);
+    setClientSegments({ ...seg, outbound: covered.length });
   }, [activities, clusterAccounts, fromDate]);
 
   // ── New clients ───────────────────────────────────────────────────────────
@@ -505,13 +532,13 @@ export default function TSAReports() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const overdueEntries = Object.entries(overdueByCompany);
-  const visibleOverdue = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
-  const newClientEntries = Object.entries(newClientByCompany);
+  const overdueEntries    = Object.entries(overdueByCompany);
+  const visibleOverdue    = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
+  const newClientEntries  = Object.entries(newClientByCompany);
   const visibleNewClients = showAllNewClients ? newClientEntries : newClientEntries.slice(0, 5);
 
-  const isAnySyncing = loadingActivities || loadingOverdue;
-  const dailyPct = denominators.daily > 0
+  const isAnySyncing  = loadingActivities || loadingOverdue;
+  const dailyPct      = denominators.daily > 0
     ? Math.min(100, Math.round((outboundDaily / denominators.daily) * 100))
     : 0;
   const selectedAgent = agents.find((a) => a.ReferenceID === selectedRefId);
@@ -612,6 +639,7 @@ export default function TSAReports() {
         {/* LEFT */}
         <ul className="list-none space-y-3">
 
+          {/* Outbound Performance */}
           <SectionCard
             title="Outbound Performance"
             badge={
@@ -652,7 +680,28 @@ export default function TSAReports() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Database Coverage">
+          {/* Database Coverage */}
+          <SectionCard
+            title="Database Coverage"
+            badge={
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCoverageDialogSource("covered")}
+                  className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
+                >
+                  <List size={10} />
+                  Covered
+                </button>
+                <span className="text-gray-300 text-[9px]">·</span>
+                <button
+                  onClick={() => setCoverageDialogSource("uncovered")}
+                  className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
+                >
+                  Not Reached
+                </button>
+              </div>
+            }
+          >
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
@@ -666,12 +715,12 @@ export default function TSAReports() {
               </div>
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[
-                  { label: "Top 50", val: clientSegments.top50,    denom: denominators.top50 },
-                  { label: "Next 30", val: clientSegments.next30,  denom: denominators.next30 },
-                  { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
-                  { label: "CSR",    val: clientSegments.csrClient, denom: denominators.csrClient },
-                  { label: "New",    val: clientSegments.newClient, denom: denominators.newClient },
-                  { label: "TSA",    val: clientSegments.tsaClient, denom: denominators.tsaClient },
+                  { label: "Top 50",  val: clientSegments.top50,    denom: denominators.top50 },
+                  { label: "Next 30", val: clientSegments.next30,   denom: denominators.next30 },
+                  { label: "Bal 20",  val: clientSegments.balance20, denom: denominators.bal20 },
+                  { label: "CSR",     val: clientSegments.csrClient, denom: denominators.csrClient },
+                  { label: "New",     val: clientSegments.newClient, denom: denominators.newClient },
+                  { label: "TSA",     val: clientSegments.tsaClient, denom: denominators.tsaClient },
                 ].map(({ label, val, denom }) => (
                   <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                     <p className="text-[8px] text-gray-400 uppercase">{label}</p>
@@ -684,6 +733,7 @@ export default function TSAReports() {
             </div>
           </SectionCard>
 
+          {/* Overdue Activities */}
           <SectionCard
             title={`Overdue Activities${overdueCount > 0 ? ` · ${overdueCount}` : ""}`}
             accent="border-l-red-400"
@@ -714,6 +764,7 @@ export default function TSAReports() {
             )}
           </SectionCard>
 
+          {/* New Account Development */}
           <SectionCard
             title={`New Account Devt${newClientCount > 0 ? ` · ${newClientCount}` : ""}`}
             badge={
@@ -742,6 +793,7 @@ export default function TSAReports() {
         {/* RIGHT */}
         <ul className="list-none space-y-3">
 
+          {/* Time Consumed */}
           <SectionCard
             title="Time Consumed"
             badge={<span className="text-[10px] font-bold text-gray-600">{formatDuration(timeConsumedMs)}</span>}
@@ -765,6 +817,7 @@ export default function TSAReports() {
             )}
           </SectionCard>
 
+          {/* Total Sales */}
           <li className="bg-gray-900 border border-gray-800 shadow-sm overflow-hidden">
             <div className="px-3 py-2 border-b border-gray-700">
               <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Total Sales Today</span>
@@ -777,6 +830,7 @@ export default function TSAReports() {
             </div>
           </li>
 
+          {/* CSR Metrics */}
           <SectionCard title="CSR Metrics — Handling Times">
             {loadingCsrMetrics ? (
               <div className="flex items-center gap-2 text-gray-400 py-2">
@@ -793,6 +847,7 @@ export default function TSAReports() {
             )}
           </SectionCard>
 
+          {/* Closing of Quotation */}
           <SectionCard title="Closing of Quotation" accent="border-l-red-500">
             <div className="space-y-1">
               {[
@@ -810,6 +865,117 @@ export default function TSAReports() {
           </SectionCard>
         </ul>
       </div>
+
+      {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
+      {(() => {
+        const isCovered   = coverageDialogSource === "covered";
+        const isUncovered = coverageDialogSource === "uncovered";
+        const dialogOpen  = isCovered || isUncovered;
+        const list        = isCovered ? coveredAccounts : uncoveredAccounts;
+
+        const typeLabel = (normalized: string): string => {
+          const map: Record<string, string> = {
+            top50: "Top 50", next30: "Next 30", balance20: "Balance 20",
+            csrclient: "CSR Client", newclient: "New Client", tsaclient: "TSA Client",
+          };
+          return map[normalized] ?? normalized;
+        };
+
+        const typeColors: Record<string, string> = {
+          top50:     "bg-amber-100 text-amber-700 border-amber-200",
+          next30:    "bg-blue-100 text-blue-700 border-blue-200",
+          balance20: "bg-violet-100 text-violet-700 border-violet-200",
+          newclient: "bg-emerald-100 text-emerald-700 border-emerald-200",
+          tsaclient: "bg-rose-100 text-rose-700 border-rose-200",
+          csrclient: "bg-slate-100 text-slate-600 border-slate-200",
+        };
+        const pillColor = (t: string) =>
+          typeColors[t] ?? "bg-indigo-50 text-indigo-600 border-indigo-200";
+
+        return (
+          <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) setCoverageDialogSource(null); }}>
+            <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
+
+              {/* Header */}
+              <DialogHeader className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-[11px] font-black uppercase tracking-wider text-gray-700">
+                    {isCovered ? "Covered Accounts" : "Not Reached Accounts"}
+                    <span className="ml-2 text-gray-400 font-normal">{list.length}</span>
+                  </DialogTitle>
+                  {/* Tab toggle */}
+                  <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setCoverageDialogSource("covered")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
+                        isCovered
+                          ? "bg-emerald-600 text-white"
+                          : "bg-white text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      Covered · {coveredAccounts.length}
+                    </button>
+                    <button
+                      onClick={() => setCoverageDialogSource("uncovered")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
+                        isUncovered
+                          ? "bg-amber-500 text-white"
+                          : "bg-white text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      Not Reached · {uncoveredAccounts.length}
+                    </button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Table */}
+              {list.length === 0 ? (
+                <p className="text-[11px] text-gray-300 italic px-4 py-6 text-center">
+                  {isCovered
+                    ? "No accounts reached this month."
+                    : "All accounts have been reached this month."}
+                </p>
+              ) : (
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead className="sticky top-0 bg-gray-50 z-10">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-black uppercase tracking-wider text-gray-500 border-b border-gray-200 w-[55%]">
+                          Company
+                        </th>
+                        <th className="text-left px-3 py-2 font-black uppercase tracking-wider text-gray-500 border-b border-gray-200 w-[45%]">
+                          Type
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((acc, i) => (
+                        <tr
+                          key={acc.account_reference_number || i}
+                          className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                        >
+                          <td className="px-3 py-2 text-gray-700 font-medium border-b border-gray-100">
+                            <span className="block" title={acc.company_name || "—"}>
+                              {acc.company_name || "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 border-b border-gray-100">
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${pillColor(acc.type_client ?? "")}`}>
+                              {typeLabel(acc.type_client ?? "—")}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
     </div>
   );
 }
