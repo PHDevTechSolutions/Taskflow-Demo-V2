@@ -33,10 +33,12 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { toast } from "sonner";
+import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
 import { DeleteDialog } from "./dialog/delete";
 import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
+import { DeliveredDialog } from "../dialog/delivered";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -138,6 +140,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   // --- DELETE DIALOG STATE ---
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
+  const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
@@ -391,6 +394,65 @@ export const Progress: React.FC<NewTaskProps> = ({
     }
   };
 
+  const openDeliveredDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogDeliveredOpen(true);
+  };
+
+  const handleConfirmDelivered = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogDeliveredOpen(false);
+
+      const res = await fetch("/api/act-update-status-delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchAllData();
+
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Done.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
   return (
     <>
       <Input
@@ -481,6 +543,17 @@ export const Progress: React.FC<NewTaskProps> = ({
                           >
                             <Check className="mr-2 text-red-500" /> Mark as
                             Pending
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            disabled={updatingId === item.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeliveredDialog(item.id);
+                            }}
+                          >
+                            <Check className="mr-2 h-4 w-4 text-green-600" />
+                            Mark as Completed
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -763,6 +836,13 @@ export const Progress: React.FC<NewTaskProps> = ({
         loading={updatingId !== null}
         title="Delete Activity"
         description="Are you sure you want to delete this activity? This action cannot be undone."
+      />
+
+      <DeliveredDialog
+        open={dialogDeliveredOpen}
+        onOpenChange={setDialogDeliveredOpen}
+        onConfirm={handleConfirmDelivered}
+        loading={updatingId !== null}
       />
 
       <DoneDialog
