@@ -17,7 +17,16 @@ import {
   ReceiptText,
   Activity,
   Lock,
+  CheckCircle2,
+  Trash,
+  MoreVertical
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   HoverCard,
@@ -31,6 +40,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { DeleteDialog } from "./dialog/delete";
+import { DeliveredDialog } from "../dialog/delivered";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -80,6 +92,7 @@ interface HistoryItem {
   type_activity: string;
   tsm_approved_status: string;
   status?: string; // Added for delivery/completion check
+  quotation_status?: string;
 }
 
 interface NewTaskProps {
@@ -123,6 +136,11 @@ export const Done: React.FC<NewTaskProps> = ({
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null,);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -302,6 +320,108 @@ export const Done: React.FC<NewTaskProps> = ({
     );
   }
 
+  type BadgeVariant =
+    | "secondary"
+    | "outline"
+    | "destructive"
+    | "default"
+    | null
+    | undefined;
+
+  function getBadgeProps(status: string): {
+    variant: BadgeVariant;
+    className?: string;
+  } {
+    switch (status) {
+      case "Assisted":
+      case "On-Progress":
+        return { variant: "secondary", className: "bg-orange-500 text-white" };
+      case "SO-Done":
+        return { variant: "default", className: "bg-yellow-400 text-white" };
+      case "Quote-Done":
+        return { variant: "outline", className: "bg-blue-500 text-white" };
+      case "Cancelled":
+        return { variant: "destructive", className: "bg-red-600 text-white" };
+      default:
+        return { variant: "default" };
+    }
+  }
+
+  const openDoneDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogOpen(true);
+  };
+
+  const handleConfirmDone = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogOpen(false);
+
+      const res = await fetch("/api/act-update-status-delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(
+          `Failed to update status: ${result.error || "Unknown error"}`,
+        );
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchAllData();
+
+      toast.success("Transaction marked as Done.");
+    } catch {
+      toast.error("An error occurred while updating status.");
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const openDeleteDialog = (id: string) => {
+    setSelectedDeleteId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedDeleteId) return;
+
+    try {
+      setUpdatingId(selectedDeleteId);
+      setDeleteDialogOpen(false);
+
+      // Call your bulk delete API
+      const res = await fetch("/api/activity/tsa/planner/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [Number(selectedDeleteId)] }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || "Delete failed");
+      }
+
+      await fetchAllData();
+      toast.success("Activity deleted successfully.");
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred while deleting.");
+    } finally {
+      setUpdatingId(null);
+      setSelectedDeleteId(null);
+    }
+  };
+
   return (
     <>
       <Input
@@ -318,6 +438,7 @@ export const Done: React.FC<NewTaskProps> = ({
           {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800";
+            const badgeProps = getBadgeProps(item.status);
 
             if (item.status === "Done") {
               badgeClass = "bg-gray-400 text-white";
@@ -366,6 +487,38 @@ export const Done: React.FC<NewTaskProps> = ({
                         tsmDetails={tsmDetails ?? null}
                         signature={signature}
                       />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            disabled={updatingId === item.id}
+                            className="cursor-pointer rounded-none"
+                          >
+                            Actions <MoreVertical />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDoneDialog(item.id);
+                            }}
+                          >
+                            <Check className="mr-2 text-green-500" /> Mark as
+                            Completed
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteDialog(item.id);
+                            }}
+                          >
+                            <Trash className="mr-2 text-red-600" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
 
@@ -431,9 +584,38 @@ export const Done: React.FC<NewTaskProps> = ({
                         );
                       })}
                   </div>
+                  {!["assisted", "not assisted"].includes(
+                    item.status.toLowerCase(),
+                  ) && (
+                      <Badge
+                        variant={badgeProps.variant}
+                        className={`font-mono rounded-sm shadow-md p-2 border-none text-[10px] ${badgeProps.className || ""}`}
+                      >
+                        <CheckCircle2 />
+                        {item.status.replace("-", " ")} /{" "}
+                        {item.relatedHistoryItems.some(
+                          (h) =>
+                            h.quotation_status && h.quotation_status !== "-",
+                        ) && (
+                            <p>
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.quotation_status ?? "-")
+                                      .filter((v) => v !== "-"),
+                                  ),
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
+                      </Badge>
+                    )}
                 </div>
 
+
                 <AccordionContent className="text-xs px-4 py-2 uppercase">
+
                   <p>
                     <strong>Contact Number:</strong>{" "}
                     {item.contact_number || "-"}
@@ -450,6 +632,7 @@ export const Done: React.FC<NewTaskProps> = ({
                   </p>
 
                   <Separator className="mb-2 mt-2" />
+
 
                   {item.relatedHistoryItems.length === 0 ? (
                     <p>No quotation or SO history available.</p>
@@ -630,6 +813,23 @@ export const Done: React.FC<NewTaskProps> = ({
           })}
         </Accordion>
       </div>
+
+      <DeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        loading={updatingId !== null}
+        title="Delete Activity"
+        description="Are you sure you want to delete this activity? This action cannot be undone."
+      />
+
+      <DeliveredDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConfirm={handleConfirmDone}
+        loading={updatingId !== null}
+      />
+
     </>
   );
 };
