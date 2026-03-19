@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Loader2, PenLine } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Completed {
   id: number;
@@ -51,7 +54,6 @@ interface TaskListEditDialogProps {
   item: Completed;
   onClose: () => void;
   onSave: () => void;
-
   company?: {
     account_reference_number: string;
     company_name?: string;
@@ -61,7 +63,6 @@ interface TaskListEditDialogProps {
     address?: string;
     contact_person?: string;
   };
-
   firstname?: string;
   lastname?: string;
   email?: string;
@@ -70,7 +71,9 @@ interface TaskListEditDialogProps {
   managername?: string;
 }
 
-const editableFields: (keyof Completed)[] = [
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const EDITABLE_FIELDS: (keyof Completed)[] = [
   "project_name",
   "project_type",
   "source",
@@ -88,7 +91,7 @@ const editableFields: (keyof Completed)[] = [
   "payment_terms",
 ];
 
-const quotationStatusOptions = [
+const QUOTATION_STATUS_OPTIONS = [
   "Pending Client Approval",
   "For Bidding",
   "Nego",
@@ -104,140 +107,151 @@ const quotationStatusOptions = [
   "Declined / Disapproved",
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getLabel(key: string): string {
+  if (key === "call_type") return "Type";
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getInputType(key: string): string {
+  switch (key) {
+    case "delivery_date": return "date";
+    case "quotation_amount":
+    case "so_amount":
+    case "actual_sales": return "number";
+    default: return "text";
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function TaskListEditDialog({
   item,
   onClose,
   onSave,
 }: TaskListEditDialogProps) {
-  const initialFormState = editableFields.reduce((acc, key) => {
-    const value = item[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      (acc as any)[key] = value;
-    }
-    return acc;
-  }, {} as Partial<Completed>);
+  const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState<Partial<Completed>>(initialFormState);
+  // FIX: initialize from item directly, only include fields with values
+  const buildInitial = (src: Completed): Partial<Completed> =>
+    EDITABLE_FIELDS.reduce((acc, key) => {
+      const val = src[key];
+      if (val !== undefined && val !== null && String(val).trim() !== "") {
+        (acc as any)[key] = val;
+      }
+      return acc;
+    }, {} as Partial<Completed>);
 
+  const [formData, setFormData] = useState<Partial<Completed>>(() => buildInitial(item));
+
+  // FIX: reset form when item changes (dialog reused for different rows)
   useEffect(() => {
-    setFormData(initialFormState);
-  }, [item]);
+    setFormData(buildInitial(item));
+  }, [item.id]);
 
   const handleChange = (field: keyof Completed, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const getInputType = (key: string) => {
-    switch (key) {
-      case "callback":
-        return "datetime-local";
-      case "delivery_date":
-        return "date";
-      case "quotation_amount":
-      case "so_amount":
-      case "actual_sales":
-        return "number";
-      default:
-        return "text";
-    }
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
     try {
-      const res = await fetch(
-        `/api/activity/tsa/historical/update?id=${item.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        }
-      );
-
-      if (!res.ok) throw new Error("Failed to update activity");
+      const res = await fetch(`/api/activity/tsa/historical/update?id=${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) throw new Error("Failed to update");
 
       sileo.success({
-        title: "Succeess",
-        description: "Activity updated successfully!",
-        duration: 4000,
+        title: "Saved",
+        description: "Activity updated successfully.",
+        duration: 3000,
         position: "top-right",
         fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
+        styles: { title: "text-white!", description: "text-white" },
       });
-
       onSave();
-    } catch (error) {
+    } catch {
       sileo.error({
         title: "Failed",
-        description: "Update failed! Please try again.",
+        description: "Update failed. Please try again.",
         duration: 4000,
         position: "top-right",
         fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
+        styles: { title: "text-white!", description: "text-white" },
       });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getLabel = (key: string) => {
-    if (key === "call_type") return "Type";
-    return key.replace(/_/g, " ");
-  };
+  // Visible fields only — type_activity is hidden (read-only context)
+  const visibleEntries = Object.entries(formData).filter(([key]) => key !== "type_activity");
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg rounded-none">
-        <DialogHeader>
-          <DialogTitle className="text-sm">
-            Edit Activity: {item.activity_reference_number}
-          </DialogTitle>
-        </DialogHeader>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg rounded-none p-0 overflow-hidden gap-0">
 
-        <div className="space-y-4 max-h-[60vh] overflow-auto">
-          {Object.entries(formData).map(([key, value]) => {
-            if (key === "type_activity") {
-              return (
-                <Input
-                  key={key}
-                  type="hidden"
-                  className="rounded-none"
-                  value={value as any}
-                  disabled
-                  readOnly
-                />
-              );
-            }
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="bg-white/10 rounded-full p-1.5">
+                <PenLine className="h-4 w-4 text-white" />
+              </div>
+              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                Edit Activity
+              </DialogTitle>
+            </div>
+            <p className="text-zinc-400 text-[11px] font-mono mt-0.5">
+              {item.activity_reference_number}
+            </p>
+          </DialogHeader>
+        </div>
 
+        {/* ── Fields ──────────────────────────────────────────────────── */}
+        <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+
+          {/* type_activity — read-only display, not editable */}
+          {item.type_activity && (
+            <div>
+              <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                Activity Type
+              </Label>
+              <div className="border border-zinc-200 rounded px-3 py-2 bg-zinc-50 text-xs text-zinc-600 font-mono">
+                {item.type_activity}
+              </div>
+            </div>
+          )}
+
+          {visibleEntries.length === 0 && (
+            <p className="text-xs text-zinc-400 italic text-center py-4">
+              No editable fields with data for this record.
+            </p>
+          )}
+
+          {visibleEntries.map(([key, value]) => {
+            // ── call_status select ──────────────────────────────────
             if (key === "call_status") {
               return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">
+                <div key={key}>
+                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
                     {getLabel(key)}
                   </Label>
                   <Select
                     value={String(value ?? "")}
-                    onValueChange={(val) =>
-                      handleChange(key as keyof Completed, val)
-                    }
+                    onValueChange={(val) => handleChange(key as keyof Completed, val)}
                   >
-                    <SelectTrigger className="w-full text-left rounded-none">
+                    <SelectTrigger className="w-full rounded-none text-xs">
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="Successful">
-                          Successful
-                        </SelectItem>
-                        <SelectItem value="Unsuccessful">
-                          Unsuccessful
-                        </SelectItem>
+                        <SelectItem value="Successful">Successful</SelectItem>
+                        <SelectItem value="Unsuccessful">Unsuccessful</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -245,27 +259,24 @@ export default function TaskListEditDialog({
               );
             }
 
+            // ── quotation_status select ─────────────────────────────
             if (key === "quotation_status") {
               return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">
+                <div key={key}>
+                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
                     Quotation Status
                   </Label>
                   <Select
                     value={String(value ?? "")}
-                    onValueChange={(val) =>
-                      handleChange("quotation_status", val)
-                    }
+                    onValueChange={(val) => handleChange("quotation_status", val)}
                   >
-                    <SelectTrigger className="w-full text-left rounded-none">
+                    <SelectTrigger className="w-full rounded-none text-xs">
                       <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {quotationStatusOptions.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status}
-                          </SelectItem>
+                        {QUOTATION_STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
@@ -274,62 +285,63 @@ export default function TaskListEditDialog({
               );
             }
 
+            // ── remarks textarea ────────────────────────────────────
             if (key === "remarks") {
               return (
-                <div key={key} className="flex flex-col">
-                  <Label className="capitalize mb-2">
-                    {getLabel(key)}
+                <div key={key}>
+                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                    Remarks
                   </Label>
                   <Textarea
-                    className="w-full rounded-none"
-                    value={value as any}
-                    onChange={(e) =>
-                      handleChange(
-                        key as keyof Completed,
-                        e.target.value
-                      )
-                    }
+                    className="w-full rounded-none text-xs resize-none"
+                    rows={3}
+                    value={String(value ?? "")}
+                    onChange={(e) => handleChange("remarks", e.target.value)}
                   />
                 </div>
               );
             }
 
+            // ── default input ───────────────────────────────────────
             return (
-              <div key={key} className="flex flex-col">
-                <Label className="capitalize mb-2">
+              <div key={key}>
+                <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
                   {getLabel(key)}
                 </Label>
                 <Input
-                  className="w-full rounded-none"
+                  className="w-full rounded-none text-xs"
                   type={getInputType(key)}
-                  value={value as any}
-                  onChange={(e) =>
-                    handleChange(
-                      key as keyof Completed,
-                      e.target.value
-                    )
-                  }
+                  value={String(value ?? "")}
+                  onChange={(e) => handleChange(key as keyof Completed, e.target.value)}
                 />
               </div>
             );
           })}
         </div>
 
-        <DialogFooter className="mt-4 flex justify-end">
+        {/* ── Footer ──────────────────────────────────────────────────── */}
+        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
           <Button
             variant="outline"
+            className="rounded-none flex-1 text-xs h-10"
             onClick={onClose}
-            className="rounded-none p-6"
+            disabled={saving}
           >
             Cancel
           </Button>
           <Button
+            className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
             onClick={handleSave}
-            className="rounded-none p-6"
+            disabled={saving}
           >
-            Save
+            {saving ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving...</>
+            ) : (
+              "Save Changes"
+            )}
           </Button>
-        </DialogFooter>
+        </div>
+
       </DialogContent>
     </Dialog>
   );
