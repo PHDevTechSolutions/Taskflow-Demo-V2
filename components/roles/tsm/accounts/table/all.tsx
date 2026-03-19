@@ -7,7 +7,7 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
-  CalendarDays, ArrowLeft, FileText, Hash,
+  CalendarDays, ArrowLeft, FileText, Hash, Building2,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
@@ -28,7 +28,6 @@ interface Activity {
   status?: string;
   date_created?: string;
   referenceid?: string;
-  // ── enriched fields ──
   quotation_amount?: number;
   quotation_number?: string;
   quotation_status?: string;
@@ -58,7 +57,6 @@ interface AccountsTableProps {
   setDateCreatedFilterRangeAction?: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
 }
 
-// Which list triggered the history dialog
 type ListSource = "with" | "without" | null;
 
 const ITEMS_PER_PAGE = 20;
@@ -102,6 +100,24 @@ function formatRangeLabel(range: DateRange | undefined): string {
   return `${from} – ${range.to.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
+/* ─── Type client color map ───────────────────────────────────────── */
+
+const TYPE_CLIENT_STYLES: Record<string, { pill: string; dot: string }> = {
+  "TOP 50":     { pill: "bg-amber-100 text-amber-700 border-amber-200",    dot: "bg-amber-500" },
+  "NEXT 30":    { pill: "bg-blue-100 text-blue-700 border-blue-200",       dot: "bg-blue-500" },
+  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
+  "NEW CLIENT": { pill: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200",       dot: "bg-rose-500" },
+  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200",    dot: "bg-slate-400" },
+};
+
+function getTypeClientStyle(type: string) {
+  return TYPE_CLIENT_STYLES[type?.toUpperCase()] ?? {
+    pill: "bg-indigo-50 text-indigo-600 border-indigo-200",
+    dot:  "bg-indigo-400",
+  };
+}
+
 /* ─── Stat Card ───────────────────────────────────────────────────── */
 
 function StatCard({ label, value, accent, onClick, clickable, sublabel }: {
@@ -123,6 +139,8 @@ function StatCard({ label, value, accent, onClick, clickable, sublabel }: {
 }
 
 /* ─── Account List Dialog ─────────────────────────────────────────── */
+// CHANGED: Added type_client filter tabs, expanded card layout, full company name visible,
+//          type_client badge prominently shown on each card.
 
 interface AccountListDialogProps {
   open: boolean; onClose: () => void;
@@ -130,7 +148,7 @@ interface AccountListDialogProps {
   icon: React.ReactNode; iconBg: string;
   accounts: Account[];
   agentMap: Record<string, string>;
-  activityCountMap: Record<string, number>; // company_name.toLowerCase() → count
+  activityCountMap: Record<string, number>;
   onViewHistory: (companyName: string, source: ListSource) => void;
   source: ListSource;
 }
@@ -140,21 +158,46 @@ function AccountListDialog({
   accounts, agentMap, activityCountMap, onViewHistory, source,
 }: AccountListDialogProps) {
   const [search, setSearch] = useState("");
-  useEffect(() => { if (!open) setSearch(""); }, [open]);
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  useEffect(() => { if (!open) { setSearch(""); setTypeFilter("ALL"); } }, [open]);
+
+  // All unique type_client values in this account list
+  const typeClientOptions = useMemo(() => {
+    const types = Array.from(new Set(accounts.map((a) => a.type_client?.toUpperCase()).filter(Boolean)));
+    return types.sort();
+  }, [accounts]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter((a) =>
-      a.company_name.toLowerCase().includes(q) ||
-      a.contact_person.toLowerCase().includes(q) ||
-      (agentMap[a.referenceid?.toLowerCase()] ?? "").toLowerCase().includes(q)
-    );
-  }, [accounts, search, agentMap]);
+    return accounts.filter((a) => {
+      // type_client filter
+      if (typeFilter !== "ALL" && a.type_client?.toUpperCase() !== typeFilter) return false;
+      // text search
+      if (!q) return true;
+      return (
+        a.company_name.toLowerCase().includes(q) ||
+        a.contact_person.toLowerCase().includes(q) ||
+        (agentMap[a.referenceid?.toLowerCase()] ?? "").toLowerCase().includes(q) ||
+        a.region?.toLowerCase().includes(q)
+      );
+    });
+  }, [accounts, search, agentMap, typeFilter]);
+
+  // Count per type for the filter tab badges
+  const typeCountMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    accounts.forEach((a) => {
+      const t = a.type_client?.toUpperCase() ?? "";
+      m[t] = (m[t] ?? 0) + 1;
+    });
+    return m;
+  }, [accounts]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl w-full max-h-[82vh] flex flex-col p-0 gap-0 rounded-2xl border border-slate-200 shadow-2xl overflow-hidden bg-white">
+      <DialogContent className="max-w-7xl w-full max-h-[88vh] flex flex-col p-0 gap-0 rounded-2xl border border-slate-200 shadow-2xl overflow-hidden bg-white">
+
+        {/* ── Header ────────────────────────────────────────────────── */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between shrink-0 bg-slate-50">
           <div className="flex items-center gap-3">
             <span className={`flex items-center justify-center w-9 h-9 rounded-xl border shrink-0 ${iconBg}`}>{icon}</span>
@@ -168,45 +211,131 @@ function AccountListDialog({
           </button>
         </div>
 
+        {/* ── Type Client Filter Tabs ───────────────────────────────── */}
+        <div className="px-5 pt-3 pb-0 shrink-0 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-3 scrollbar-none">
+            {/* ALL tab */}
+            <button
+              onClick={() => setTypeFilter("ALL")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border transition-all shrink-0
+                ${typeFilter === "ALL"
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                }`}
+            >
+              All
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${typeFilter === "ALL" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                {accounts.length}
+              </span>
+            </button>
+
+            {typeClientOptions.map((type) => {
+              const style = getTypeClientStyle(type);
+              const count = typeCountMap[type] ?? 0;
+              const isActive = typeFilter === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setTypeFilter(type)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border transition-all shrink-0
+                    ${isActive ? `${style.pill} border-current` : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? style.dot : "bg-slate-300"}`} />
+                  {type}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? "bg-white/50" : "bg-slate-100 text-slate-400"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Search ───────────────────────────────────────────────── */}
         <div className="px-5 py-3 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
             <Search size={13} className="text-slate-400 shrink-0" />
-            <input type="text" placeholder="Search company, contact, agent..." value={search}
+            <input type="text" placeholder="Search company, contact, agent, region..." value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
             {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={12} /></button>}
           </div>
         </div>
 
-        <div className="px-5 py-2 border-b border-slate-100 shrink-0">
+        {/* ── Result count ─────────────────────────────────────────── */}
+        <div className="px-5 py-2 border-b border-slate-100 shrink-0 flex items-center justify-between">
           <span className="text-[11px] text-slate-500 font-medium">
             {filtered.length} account{filtered.length !== 1 ? "s" : ""}
             {search && ` matching "${search}"`}
+            {typeFilter !== "ALL" && ` · ${typeFilter}`}
           </span>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-2">
+        {/* ── Account Cards ─────────────────────────────────────────── */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2.5">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-300">
-              <Search size={28} strokeWidth={1} /><p className="text-sm font-medium">No accounts found</p>
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+              <Building2 size={32} strokeWidth={1} />
+              <p className="text-sm font-medium">No accounts found</p>
+              {(search || typeFilter !== "ALL") && (
+                <button
+                  onClick={() => { setSearch(""); setTypeFilter("ALL"); }}
+                  className="text-xs text-indigo-400 hover:text-indigo-600 font-medium transition-colors"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : filtered.map((account) => {
             const actCount = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+            const typeStyle = getTypeClientStyle(account.type_client);
+            const agentName = agentMap[account.referenceid?.toLowerCase()] ?? null;
+
             return (
-              <div key={account.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-800 truncate">{account.company_name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 truncate uppercase">
-                    {account.contact_person}
-                    {account.region && <span className="ml-2 text-slate-300">· {account.region}</span>}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <span className="text-[10px] text-slate-400 hidden sm:block uppercase">
-                    {agentMap[account.referenceid?.toLowerCase()] ?? "—"}
+              <div
+                key={account.id}
+                className="rounded-xl border border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm transition-all duration-150"
+              >
+                {/* Card top row */}
+                <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-2">
+                  <div className="flex-1 min-w-0">
+                    {/* Company name — full, not truncated */}
+                    <p className="text-sm font-bold text-slate-800 leading-snug break-words">
+                      {account.company_name}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wide">
+                      {account.contact_person}
+                    </p>
+                  </div>
+
+                  {/* Type client badge — prominent */}
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border shrink-0 mt-0.5 ${typeStyle.pill}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
+                    {account.type_client}
                   </span>
-                  {/* Activity count badge */}
+                </div>
+
+                {/* Card detail row */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2 text-[11px] text-slate-400">
+                  {account.region && (
+                    <span>{account.region}</span>
+                  )}
+                  {account.contact_number && (
+                    <span className="font-mono">{account.contact_number}</span>
+                  )}
+                  {account.industry && (
+                    <span className="hidden sm:inline truncate max-w-[160px]" title={account.industry}>
+                      {account.industry.replace(/_/g, " ")}
+                    </span>
+                  )}
+                  {agentName && (
+                    <span className="text-slate-300">· {agentName}</span>
+                  )}
+                </div>
+
+                {/* Card footer row */}
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+                  {/* Activity count */}
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border
                     ${actCount > 0
                       ? "bg-indigo-50 text-indigo-600 border-indigo-200"
@@ -214,10 +343,14 @@ function AccountListDialog({
                     <FileText size={9} />
                     {actCount} {actCount === 1 ? "activity" : "activities"}
                   </span>
+
+                  {/* History button */}
                   <button
                     onClick={() => { onClose(); onViewHistory(account.company_name, source); }}
-                    className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700 transition-colors">
-                    <History size={11} /> history
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
+                  >
+                    <History size={11} />
+                    View History
                   </button>
                 </div>
               </div>
@@ -327,7 +460,7 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 interface HistoryDialogProps {
   open: boolean;
   onClose: () => void;
-  onBack: (() => void) | null; // null = opened from table directly (no back)
+  onBack: (() => void) | null;
   companyName: string | null;
   loading: boolean;
   records: Activity[];
@@ -365,7 +498,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
     Proposal: "bg-rose-500/15 text-rose-300 border-rose-500/20",
   };
   const getTypeStyle = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
-
   const toggleExpand = (key: string | number | null) =>
     setExpanded((prev) => (prev === key ? null : key));
 
@@ -373,10 +505,8 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl w-full max-h-[85vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
 
-        {/* Header */}
         <div className="px-6 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            {/* Back button */}
             {onBack && (
               <button
                 onClick={() => { onClose(); setTimeout(onBack, 150); }}
@@ -400,7 +530,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
           </button>
         </div>
 
-        {/* Summary pills */}
         {!loading && records.length > 0 && (
           <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-white/5 bg-[#161b22]/50 shrink-0">
             <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold font-mono border border-white/10">{records.length} records</span>
@@ -412,7 +541,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
           </div>
         )}
 
-        {/* Search */}
         <div className="px-6 py-3 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
             <Search size={13} className="text-slate-500 shrink-0" />
@@ -423,7 +551,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
           </div>
         </div>
 
-        {/* Records */}
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -441,7 +568,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
             const key = r.id ?? i;
             const isOpen = expanded === key;
             const duration = fmtDuration(r.start_date, r.end_date);
-            // Check if this record has any enriched fields worth showing
             const hasExtra = !!(r.quotation_amount || r.quotation_number || r.quotation_status ||
               r.so_amount || r.so_number || r.dr_number || r.delivery_date ||
               r.type_client || r.source || r.call_status || r.call_type ||
@@ -449,7 +575,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
 
             return (
               <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all duration-150 overflow-hidden">
-                {/* Main row */}
                 <div
                   className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`}
                   onClick={() => hasExtra && toggleExpand(key)}
@@ -488,7 +613,6 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
                   </div>
                 </div>
 
-                {/* Expanded detail panel */}
                 {isOpen && hasExtra && (
                   <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
@@ -505,7 +629,7 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
                       <DetailField label="Type Client"      value={r.type_client} />
                       <DetailField label="Source"           value={r.source} />
                       <DetailField label="Call Status"      value={r.call_status} />
-                      <DetailField label="Type"        value={r.call_type} />
+                      <DetailField label="Type"             value={r.call_type} />
                       <DetailField label="Duration"         value={duration} />
                       <DetailField label="Start Date"       value={fmtDate(r.start_date)} />
                       <DetailField label="End Date"         value={fmtDate(r.end_date)} />
@@ -532,7 +656,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const [historyOpen,    setHistoryOpen]    = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
-  const [historySource,  setHistorySource]  = useState<ListSource>(null); // where to go back
+  const [historySource,  setHistorySource]  = useState<ListSource>(null);
   const [activities,     setActivities]     = useState<Activity[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -583,7 +707,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return s;
   }, [scopedActivities]);
 
-  // Activity count per company (for the list dialog badges)
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
     scopedActivities.forEach((a) => {
@@ -623,7 +746,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => setCurrentPage(1), [search, ownerFilter]);
 
-  // Open history — track which list it came from for Back navigation
   const openHistory = async (companyName: string, source: ListSource = null) => {
     setHistoryCompany(companyName);
     setHistorySource(source);
@@ -641,7 +763,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     } catch { setActivities([]); } finally { setLoadingHistory(false); }
   };
 
-  // Back from history → reopen the originating list dialog
   const handleHistoryBack = historySource
     ? () => setActiveListOpen(historySource)
     : null;
@@ -694,8 +815,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       />
 
       <div className="space-y-5">
-
-        {/* Filter banners */}
         {(hasAgentFilter || hasDateFilter) && (
           <div className="flex flex-wrap gap-2">
             {hasAgentFilter && (
@@ -715,7 +834,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
-        {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <StatCard label={hasAgentFilter ? "Agent Accounts" : "Total Accounts"} value={scopedAccounts.length} accent="#1e293b" sublabel={agentLabel ?? undefined} />
           <StatCard label="With Activities" value={withActivityAccounts.length} accent="#10b981" clickable sublabel={hasDateFilter ? "in range" : undefined} onClick={() => setActiveListOpen("with")} />
@@ -723,7 +841,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           {typeClientCounts.map(([type, count], i) => <StatCard key={type} label={type} value={count} accent={accentColors[i % accentColors.length]} />)}
         </div>
 
-        {/* Table */}
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap items-center gap-3 bg-gray-50/60">
             <h2 className="text-sm font-semibold text-gray-700 mr-auto">
@@ -762,6 +879,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 ) : paginatedAccounts.map((account) => {
                   const hasAct = companiesWithActivity.has(account.company_name.toLowerCase());
                   const actCnt = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+                  const typeStyle = getTypeClientStyle(account.type_client);
                   return (
                     <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors group">
                       <TableCell className="text-xs text-gray-600 font-medium whitespace-nowrap">
@@ -787,7 +905,12 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                       <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.contact_number}</TableCell>
                       <TableCell className="text-gray-500 text-xs">{account.email_address}</TableCell>
                       <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.region}</TableCell>
-                      <TableCell><span className="inline-block rounded-md bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600 whitespace-nowrap uppercase tracking-wide">{account.type_client}</span></TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase tracking-wide ${typeStyle.pill}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
+                          {account.type_client}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.industry}</TableCell>
                       <TableCell className="text-gray-400 text-[11px] whitespace-nowrap tabular-nums">{fmtDate(account.date_created) ?? "—"}</TableCell>
                     </TableRow>
