@@ -1,86 +1,264 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, } from "@/components/ui/select";
-import { Label } from "@/components/ui/label"
+import { ArrowLeftRight, Users, UserCheck, Loader2 } from "lucide-react";
 
-interface TransferDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    agents: any[];
-    selectedAccountIds: string[];
-    onConfirmTransfer: (agentRefId: string, accountIds: string[]) => void;
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  profilePicture?: string | null;
 }
 
+interface TransferDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  agents: Agent[]; // FIX: was typed as any[]
+  selectedAccountIds: string[];
+  onConfirmTransfer: (agentRefId: string, accountIds: string[]) => void;
+  loading?: boolean; // FIX: added — original had no loading state for confirm action
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export function TransferDialog({
-    open,
-    onOpenChange,
-    agents,
-    selectedAccountIds,
-    onConfirmTransfer,
+  open,
+  onOpenChange,
+  agents,
+  selectedAccountIds,
+  onConfirmTransfer,
+  loading = false,
 }: TransferDialogProps) {
-    const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [search, setSearch] = useState("");
 
-    useEffect(() => {
-        if (!open) {
-            setSelectedAgent("");
-        }
-    }, [open]);
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setSelectedAgent("");
+      setSearch("");
+    }
+  }, [open]);
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="rounded-none">
-                <DialogHeader>
-                    <DialogTitle>Transfer Accounts</DialogTitle>
-                    <DialogDescription>
-                        Transfer the selected accounts to another agent.
-                    </DialogDescription>
-                </DialogHeader>
-                <Label htmlFor="terms">Transfer to agent:</Label>
-                <Select
-                    value={selectedAgent}
-                    onValueChange={(value) => setSelectedAgent(value)}
-                    defaultValue=""
-                    disabled={!agents.length}
-                >
-                    <SelectTrigger className="w-full rounded-none">
-                        <SelectValue placeholder="Select agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {agents.map((agent, index) => (
-                            <SelectItem
-                                className="capitalize flex items-center gap-2"
-                                key={`${agent.ReferenceID}-${index}`}
-                                value={agent.ReferenceID}
-                            >
-                                <img
-                                    src={agent.profilePicture || "/Taskflow.png"}
-                                    alt={`${agent.Firstname} ${agent.Lastname}`}
-                                    className="w-6 h-6 rounded-full object-cover"
-                                />
-                                {agent.Lastname}, {agent.Firstname}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
-                <DialogFooter className="flex justify-end gap-2 mt-4">
-                    <Button variant="secondary" className="rounded-none p-6" onClick={() => onOpenChange(false)}>
-                        Cancel
-                    </Button>
-
-                    <Button
-                        onClick={() => {
-                            if (selectedAgent) onConfirmTransfer(selectedAgent, selectedAccountIds);
-                        }}
-                        disabled={!selectedAgent} className="rounded-none p-6"
-                    >
-                        Confirm Transfer
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+  // FIX: filter agents by search term
+  const filteredAgents = React.useMemo(() => {
+    if (!search.trim()) return agents;
+    const term = search.toLowerCase();
+    return agents.filter(
+      (a) =>
+        a.Firstname.toLowerCase().includes(term) ||
+        a.Lastname.toLowerCase().includes(term) ||
+        a.ReferenceID.toLowerCase().includes(term),
     );
+  }, [agents, search]);
+
+  const selectedAgentData = agents.find((a) => a.ReferenceID === selectedAgent) ?? null;
+
+  const handleConfirm = () => {
+    if (selectedAgent && selectedAccountIds.length > 0) {
+      onConfirmTransfer(selectedAgent, selectedAccountIds);
+    }
+  };
+
+  const handleClose = () => {
+    if (!loading) onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="rounded-none p-0 overflow-hidden max-w-md w-full gap-0">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="bg-zinc-900 px-6 pt-6 pb-5">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="bg-white/10 rounded-full p-1.5">
+                <ArrowLeftRight className="h-4 w-4 text-white" />
+              </div>
+              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                Transfer Accounts
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Reassign the selected accounts to another agent. This action takes
+              effect immediately upon confirmation.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Selected accounts count badge */}
+          {selectedAccountIds.length > 0 && (
+            <div className="mt-4 inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded px-3 py-1.5">
+              <Users className="h-3 w-3 text-zinc-300" />
+              <span className="text-[11px] font-semibold text-zinc-200">
+                {selectedAccountIds.length}{" "}
+                {selectedAccountIds.length === 1 ? "account" : "accounts"} selected
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Body ───────────────────────────────────────────────────────── */}
+        <div className="px-6 py-5 space-y-4">
+
+          <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+            Select Agent
+          </p>
+
+          {/* Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by name or ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-3 pr-3 py-2 text-xs border border-zinc-200 rounded-none bg-zinc-50 focus:outline-none focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all"
+            />
+          </div>
+
+          {/* Agent list */}
+          <div className="border border-zinc-200 rounded-none overflow-hidden">
+            <div className="max-h-52 overflow-y-auto custom-scrollbar">
+              {agents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-1">
+                  <span className="text-xs text-zinc-400">No agents available.</span>
+                </div>
+              ) : filteredAgents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-1">
+                  <span className="text-xs text-zinc-400">No agents match your search.</span>
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="text-xs text-zinc-500 underline hover:text-zinc-800"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-zinc-100">
+                  {filteredAgents.map((agent, idx) => {
+                    const isSelected = selectedAgent === agent.ReferenceID;
+                    const initials =
+                      agent.Firstname.charAt(0).toUpperCase() +
+                      agent.Lastname.charAt(0).toUpperCase();
+
+                    return (
+                      <li
+                        key={`${agent.ReferenceID}-${idx}`}
+                        onClick={() => setSelectedAgent(agent.ReferenceID)}
+                        className={`
+                          flex items-center justify-between px-4 py-3
+                          cursor-pointer text-xs transition-colors select-none
+                          ${isSelected
+                            ? "bg-zinc-900 text-white"
+                            : "hover:bg-zinc-50 text-zinc-700"
+                          }
+                        `}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          {agent.profilePicture ? (
+                            <img
+                              src={agent.profilePicture}
+                              alt={`${agent.Firstname} ${agent.Lastname}`}
+                              className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                              onError={(e) => {
+                                // FIX: fallback to initials if image fails to load
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className={`
+                                w-7 h-7 rounded-full flex items-center justify-center
+                                text-[10px] font-bold flex-shrink-0
+                                ${isSelected
+                                  ? "bg-white/20 text-white"
+                                  : "bg-zinc-100 text-zinc-600"
+                                }
+                              `}
+                            >
+                              {initials}
+                            </div>
+                          )}
+
+                          <div>
+                            <p className="font-semibold capitalize">
+                              {agent.Lastname}, {agent.Firstname}
+                            </p>
+                            <p
+                              className={`text-[10px] font-mono ${
+                                isSelected ? "text-zinc-300" : "text-zinc-400"
+                              }`}
+                            >
+                              {agent.ReferenceID}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <UserCheck className="h-4 w-4 text-white flex-shrink-0" />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Selected agent confirmation strip */}
+          {selectedAgentData && (
+            <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 px-3 py-2">
+              <UserCheck className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+              <p className="text-xs text-zinc-600">
+                Transferring to{" "}
+                <strong className="text-zinc-900 capitalize">
+                  {selectedAgentData.Firstname} {selectedAgentData.Lastname}
+                </strong>
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <DialogFooter className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+          <Button
+            variant="outline"
+            className="rounded-none flex-1 text-xs h-10"
+            onClick={handleClose}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+            onClick={handleConfirm}
+            disabled={!selectedAgent || selectedAccountIds.length === 0 || loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                Transferring...
+              </>
+            ) : (
+              <>
+                <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" />
+                Confirm Transfer
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+
+      </DialogContent>
+    </Dialog>
+  );
 }
