@@ -35,10 +35,6 @@ import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
 import { Badge } from "@/components/ui/badge";
 import { AccountDialog } from "../dialog/active";
-import {
-  checkCompanyBlocked,
-  BLOCK_NEW_TASK,
-} from "@/utils/activityBlockUtils";
 
 interface Account {
   id: string;
@@ -183,15 +179,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Add Account Handler
   const handleAdd = async (account: Account) => {
-    // ─── Block check before proceeding ────────────────────────────────────
-    const blockCheck = checkCompanyBlocked(
-      account.account_reference_number,
-      existingActivities,
-      existingHistory,
-      BLOCK_NEW_TASK.statuses,
-      BLOCK_NEW_TASK.checkScheduled,
-    );
-
+    
     // ─── CHANGE 2: Unlock when activity status is "Completed" ─────────────
     // If the existing activity for this company is already Completed,
     // bypass the lock and allow a new activity to be created.
@@ -200,21 +188,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
         a.account_reference_number === account.account_reference_number &&
         a.status?.toLowerCase() === "completed",
     );
-
-    if (blockCheck.blocked && !hasCompletedActivity) {
-      sileo.error({
-        title: "Cannot Add Activity",
-        description: blockCheck.reason,
-        duration: 6000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
-      return;
-    }
 
     setLoading(true); // <-- start loading
 
@@ -712,13 +685,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // ─── Reusable "Add" button with block guard ──────────────────────────────
   const AddButton = ({ account }: { account: Account }) => {
-    const blockCheck = checkCompanyBlocked(
-      account.account_reference_number,
-      existingActivities,
-      existingHistory,
-      BLOCK_NEW_TASK.statuses,
-      BLOCK_NEW_TASK.checkScheduled,
-    );
+    
 
     // ─── CHANGE 2: Unlock when activity status is "Completed" ─────────────
     const hasCompletedActivity = existingActivities.some(
@@ -726,37 +693,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
         a.account_reference_number === account.account_reference_number &&
         a.status?.toLowerCase() === "completed",
     );
-
-    if (blockCheck.blocked && !hasCompletedActivity) {
-      return (
-        <HoverCard>
-          <HoverCardTrigger asChild>
-            <Button
-              type="button"
-              disabled
-              variant="outline"
-              className="cursor-not-allowed rounded-none opacity-60 text-xs"
-            >
-              <Lock size={13} className="mr-1" /> Locked
-            </Button>
-          </HoverCardTrigger>
-          <HoverCardContent
-            side="top"
-            align="end"
-            className="text-xs max-w-xs leading-relaxed"
-          >
-            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-              <Lock size={12} /> Activity Locked
-            </p>
-            <p>{blockCheck.reason}</p>
-            <p className="mt-1 text-muted-foreground">
-              Unlocks when activity is marked as{" "}
-              <strong>Completed</strong>.
-            </p>
-          </HoverCardContent>
-        </HoverCard>
-      );
-    }
 
     return (
       <Button

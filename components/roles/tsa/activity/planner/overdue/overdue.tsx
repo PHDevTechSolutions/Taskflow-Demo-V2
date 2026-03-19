@@ -41,7 +41,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { sileo } from "sileo";
-import { checkCompanyBlocked, BLOCK_OVERDUE } from "@/utils/activityBlockUtils";
+
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -484,16 +484,6 @@ export const Overdue: React.FC<NewTaskProps> = ({
               badgeClass = "bg-gray-400 text-white";
             }
 
-            // Block only if the company already has another overdue/scheduled activity within 30 days.
-            const blockCheck = checkCompanyBlocked(
-              item.account_reference_number,
-              activities,
-              history,
-              BLOCK_OVERDUE.statuses,
-              BLOCK_OVERDUE.checkScheduled,
-              item.id, // exclude the current activity
-            );
-
             return (
               <AccordionItem
                 key={item.id}
@@ -507,72 +497,36 @@ export const Overdue: React.FC<NewTaskProps> = ({
                     </AccordionTrigger>
 
                     <div className="flex gap-2 ml-4">
-                      {/* ─── Block Guard ─────────────────────────── */}
-                      {blockCheck.blocked ? (
-                        <HoverCard>
-                          <HoverCardTrigger asChild>
-                            <Button
-                              disabled
-                              variant="outline"
-                              className="rounded-none cursor-not-allowed opacity-60 text-xs"
-                            >
-                              <Lock size={13} className="mr-1" />
-                              Locked
-                            </Button>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            side="top"
-                            align="end"
-                            className="text-xs max-w-xs leading-relaxed"
-                          >
-                            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-                              <Lock size={12} /> Activity Locked
-                            </p>
-                            <p>{blockCheck.reason}</p>
-                            {blockCheck.daysRemaining !== undefined && (
-                              <p className="mt-1 text-muted-foreground">
-                                Unlocks in{" "}
-                                <strong>
-                                  {blockCheck.daysRemaining} day
-                                  {blockCheck.daysRemaining !== 1 ? "s" : ""}
-                                </strong>{" "}
-                                or when marked as Delivered.
-                              </p>
-                            )}
-                          </HoverCardContent>
-                        </HoverCard>
-                      ) : (
-                        <CreateActivityDialog
-                          firstname={firstname}
-                          lastname={lastname}
-                          target_quota={target_quota}
-                          email={email}
-                          contact={contact}
-                          tsmname={tsmname}
-                          managername={managername}
-                          referenceid={item.referenceid}
-                          tsm={item.tsm}
-                          manager={item.manager}
-                          type_client={item.type_client}
-                          contact_number={item.contact_number}
-                          email_address={item.email_address}
-                          activityReferenceNumber={
-                            item.activity_reference_number
-                          }
-                          ticket_reference_number={item.ticket_reference_number}
-                          agent={item.agent}
-                          company_name={item.company_name}
-                          contact_person={item.contact_person}
-                          address={item.address}
-                          accountReferenceNumber={item.account_reference_number}
-                          onCreated={() => {
-                            fetchAllData();
-                          }}
-                          managerDetails={managerDetails ?? null}
-                          tsmDetails={tsmDetails ?? null}
-                          signature={signature}
-                        />
-                      )}
+                      <CreateActivityDialog
+                        firstname={firstname}
+                        lastname={lastname}
+                        target_quota={target_quota}
+                        email={email}
+                        contact={contact}
+                        tsmname={tsmname}
+                        managername={managername}
+                        referenceid={item.referenceid}
+                        tsm={item.tsm}
+                        manager={item.manager}
+                        type_client={item.type_client}
+                        contact_number={item.contact_number}
+                        email_address={item.email_address}
+                        activityReferenceNumber={
+                          item.activity_reference_number
+                        }
+                        ticket_reference_number={item.ticket_reference_number}
+                        agent={item.agent}
+                        company_name={item.company_name}
+                        contact_person={item.contact_person}
+                        address={item.address}
+                        accountReferenceNumber={item.account_reference_number}
+                        onCreated={() => {
+                          fetchAllData();
+                        }}
+                        managerDetails={managerDetails ?? null}
+                        tsmDetails={tsmDetails ?? null}
+                        signature={signature}
+                      />
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -700,82 +654,82 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.ticket_reference_number &&
                           h.ticket_reference_number !== "-",
                       ) && (
-                        <p>
-                          <strong>Ticket Reference Number:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.ticket_reference_number ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.ticket_reference_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.call_type && h.call_type !== "-",
                       ) && (
-                        <p>
-                          <strong>Type:</strong>{" "}
-                          <span>
-                            {item.relatedHistoryItems
-                              .map((h) => h.call_type ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span>
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.type_activity && h.type_activity !== "-",
                       ) && (
-                        <p>
-                          <strong>Type of Activity:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.type_activity ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Type of Activity:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.type_activity ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.source && h.source !== "-",
                       ) && (
-                        <p>
-                          <strong>Source:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.source ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* Quotation Number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.quotation_number && h.quotation_number !== "-",
                       ) && (
-                        <p>
-                          <strong>Quotation Number:</strong>{" "}
-                          <span>
-                            {item.relatedHistoryItems
-                              .map((h) => h.quotation_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span>
+                              {item.relatedHistoryItems
+                                .map((h) => h.quotation_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* TOTAL Quotation Amount */}
                       {item.relatedHistoryItems.some(
@@ -783,51 +737,51 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.quotation_amount !== null &&
                           h.quotation_amount !== undefined,
                       ) && (
-                        <p>
-                          <strong>Total Quotation Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => {
-                              return total + (h.quotation_amount ?? 0);
-                            }, 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.quotation_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {/* SO Number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.so_number && h.so_number !== "-",
                       ) && (
-                        <p>
-                          <strong>SO Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.so_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>SO Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.so_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* TOTAL SO Amount */}
                       {item.relatedHistoryItems.some(
                         (h) =>
                           h.so_amount !== null && h.so_amount !== undefined,
                       ) && (
-                        <p>
-                          <strong>Total SO Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => {
-                              return total + (h.so_amount ?? 0);
-                            }, 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.so_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       <Separator className="mb-2 mt-2" />
                       {item.relatedHistoryItems.some(
@@ -835,16 +789,16 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.tsm_approved_status &&
                           h.tsm_approved_status !== "-",
                       ) && (
-                        <p>
-                          <strong>TSM Feedback:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.tsm_approved_status ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                     </>
                   )}
 
