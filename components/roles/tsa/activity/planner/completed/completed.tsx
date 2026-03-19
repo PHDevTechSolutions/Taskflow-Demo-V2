@@ -1,29 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import {
-  CheckCircle2Icon,
-  AlertCircleIcon,
-  Check,
-  LoaderPinwheel,
-  PhoneOutgoing,
-  PackageCheck,
-  ReceiptText,
-  Activity,
-  Lock,
-} from "lucide-react";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
+import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Lock, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger, } from "@/components/ui/hover-card";
 import { supabase } from "@/utils/supabase";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
