@@ -33,6 +33,7 @@ import {
 import { supabase } from "@/utils/supabase";
 import { CancelledDialog } from "../dialog/cancelled";
 import { DoneDialog } from "../dialog/done";
+import { DeliveredDialog } from "../dialog/delivered";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +139,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
+  const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null,
   );
@@ -388,6 +390,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
     setDialogDoneOpen(true);
   };
 
+  const openDeliveredDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogDeliveredOpen(true);
+  };
+
   const handleConfirmDone = async () => {
     if (!selectedActivityId) return;
 
@@ -444,6 +451,60 @@ export const Overdue: React.FC<NewTaskProps> = ({
           title: "text-white!",
           description: "text-white",
         },
+      });
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const handleConfirmDelivered = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogDeliveredOpen(false);
+
+      const res = await fetch("/api/act-update-status-delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchAllData();
+
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Done.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
       });
     } finally {
       setUpdatingId(null);
@@ -540,11 +601,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
                               disabled={updatingId === item.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openDoneDialog(item.id);
+                                openDeliveredDialog(item.id);
                               }}
                             >
                               <Check className="mr-2 h-4 w-4 text-green-600" />
-                              Mark as Done
+                              Mark as COmpleted
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
@@ -823,6 +884,13 @@ export const Overdue: React.FC<NewTaskProps> = ({
         open={dialogDoneOpen}
         onOpenChange={setDialogDoneOpen}
         onConfirm={handleConfirmDone}
+        loading={updatingId !== null}
+      />
+
+      <DeliveredDialog
+        open={dialogDeliveredOpen}
+        onOpenChange={setDialogDeliveredOpen}
+        onConfirm={handleConfirmDelivered}
         loading={updatingId !== null}
       />
 

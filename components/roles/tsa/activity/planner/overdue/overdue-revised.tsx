@@ -33,6 +33,7 @@ import {
 import { supabase } from "@/utils/supabase";
 import { CancelledDialog } from "../dialog/cancelled";
 import { DoneDialog } from "../dialog/done";
+import { DeliveredDialog } from "../dialog/delivered";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +139,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
+  const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null,
   );
@@ -388,6 +390,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
     setDialogDoneOpen(true);
   };
 
+  const openDeliveredDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogDeliveredOpen(true);
+  };
+
   const handleConfirmDone = async () => {
     if (!selectedActivityId) return;
 
@@ -444,6 +451,60 @@ export const Overdue: React.FC<NewTaskProps> = ({
           title: "text-white!",
           description: "text-white",
         },
+      });
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const handleConfirmDelivered = async () => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+      setDialogDeliveredOpen(false);
+
+      const res = await fetch("/api/act-update-status-delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        sileo.error({
+          title: "Failed",
+          description: `Failed to update status: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        setUpdatingId(null);
+        return;
+      }
+
+      await fetchAllData();
+
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Done.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
       });
     } finally {
       setUpdatingId(null);
@@ -586,11 +647,11 @@ export const Overdue: React.FC<NewTaskProps> = ({
                               disabled={updatingId === item.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openDoneDialog(item.id);
+                                openDeliveredDialog(item.id);
                               }}
                             >
                               <Check className="mr-2 h-4 w-4 text-green-600" />
-                              Mark as Done
+                              Mark as Completed
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
@@ -700,82 +761,82 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.ticket_reference_number &&
                           h.ticket_reference_number !== "-",
                       ) && (
-                        <p>
-                          <strong>Ticket Reference Number:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.ticket_reference_number ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.ticket_reference_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.call_type && h.call_type !== "-",
                       ) && (
-                        <p>
-                          <strong>Type:</strong>{" "}
-                          <span>
-                            {item.relatedHistoryItems
-                              .map((h) => h.call_type ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span>
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.type_activity && h.type_activity !== "-",
                       ) && (
-                        <p>
-                          <strong>Type of Activity:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.type_activity ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Type of Activity:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.type_activity ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {item.relatedHistoryItems.some(
                         (h) => h.source && h.source !== "-",
                       ) && (
-                        <p>
-                          <strong>Source:</strong>{" "}
-                          <span>
-                            {Array.from(
-                              new Set(
-                                item.relatedHistoryItems
-                                  .map((h) => h.source ?? "-")
-                                  .filter((v) => v !== "-"),
-                              ),
-                            ).join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span>
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* Quotation Number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.quotation_number && h.quotation_number !== "-",
                       ) && (
-                        <p>
-                          <strong>Quotation Number:</strong>{" "}
-                          <span>
-                            {item.relatedHistoryItems
-                              .map((h) => h.quotation_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span>
+                              {item.relatedHistoryItems
+                                .map((h) => h.quotation_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* TOTAL Quotation Amount */}
                       {item.relatedHistoryItems.some(
@@ -783,51 +844,51 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.quotation_amount !== null &&
                           h.quotation_amount !== undefined,
                       ) && (
-                        <p>
-                          <strong>Total Quotation Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => {
-                              return total + (h.quotation_amount ?? 0);
-                            }, 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.quotation_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       {/* SO Number */}
                       {item.relatedHistoryItems.some(
                         (h) => h.so_number && h.so_number !== "-",
                       ) && (
-                        <p>
-                          <strong>SO Number:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.so_number ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>SO Number:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.so_number ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                       {/* TOTAL SO Amount */}
                       {item.relatedHistoryItems.some(
                         (h) =>
                           h.so_amount !== null && h.so_amount !== undefined,
                       ) && (
-                        <p>
-                          <strong>Total SO Amount:</strong>{" "}
-                          {item.relatedHistoryItems
-                            .reduce((total, h) => {
-                              return total + (h.so_amount ?? 0);
-                            }, 0)
-                            .toLocaleString("en-PH", {
-                              style: "currency",
-                              currency: "PHP",
-                            })}
-                        </p>
-                      )}
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => {
+                                return total + (h.so_amount ?? 0);
+                              }, 0)
+                              .toLocaleString("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              })}
+                          </p>
+                        )}
 
                       <Separator className="mb-2 mt-2" />
                       {item.relatedHistoryItems.some(
@@ -835,16 +896,16 @@ export const Overdue: React.FC<NewTaskProps> = ({
                           h.tsm_approved_status &&
                           h.tsm_approved_status !== "-",
                       ) && (
-                        <p>
-                          <strong>TSM Feedback:</strong>{" "}
-                          <span className="uppercase">
-                            {item.relatedHistoryItems
-                              .map((h) => h.tsm_approved_status ?? "-")
-                              .filter((v) => v !== "-")
-                              .join(", ")}
-                          </span>
-                        </p>
-                      )}
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                     </>
                   )}
 
@@ -869,6 +930,13 @@ export const Overdue: React.FC<NewTaskProps> = ({
         open={dialogDoneOpen}
         onOpenChange={setDialogDoneOpen}
         onConfirm={handleConfirmDone}
+        loading={updatingId !== null}
+      />
+
+      <DeliveredDialog
+        open={dialogDeliveredOpen}
+        onOpenChange={setDialogDeliveredOpen}
+        onConfirm={handleConfirmDelivered}
         loading={updatingId !== null}
       />
 
