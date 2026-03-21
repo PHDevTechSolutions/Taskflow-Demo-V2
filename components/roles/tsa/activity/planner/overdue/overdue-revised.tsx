@@ -263,7 +263,12 @@ export const Overdue: React.FC<NewTaskProps> = ({
       const schedDate = new Date(a.scheduled_date);
       schedDate.setHours(0, 0, 0, 0);
 
-      return schedDate < today;
+      const isCompleted =
+        a.status === "Done" ||
+        a.status === "Completed" ||
+        a.status === "Delivered";
+        
+      return schedDate < today && !isCompleted;
     })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {

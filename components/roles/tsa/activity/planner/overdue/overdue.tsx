@@ -605,7 +605,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
                               }}
                             >
                               <Check className="mr-2 h-4 w-4 text-green-600" />
-                              Mark as COmpleted
+                              Mark as Completed
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
