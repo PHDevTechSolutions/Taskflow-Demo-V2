@@ -15,8 +15,8 @@ import { Info } from "lucide-react";
 
 interface HistoryItem {
   referenceid: string;
-  source: string;
-  call_status: string;
+  source: string; // "Outbound - Touchbase" | "Outbound - Follow-up"
+  call_status: string; // "Successful" | "Unsuccessful"
   type_activity: string;
   start_date: string;
   end_date: string;

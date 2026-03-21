@@ -21,6 +21,10 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  checkCompanyBlocked,
+  BLOCK_SCHEDULED,
+} from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -149,25 +153,14 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setHistoryLoading(true);
     setError(null);
 
+    // NOTE: We intentionally do NOT send the date range to the API here so
+    // that we always get the full dataset and apply scheduled_date filtering
+    // on the client side (see filteredActivities below).
     const url = new URL(
       "/api/activity/tsa/planner/fetch-scheduled",
       window.location.origin,
     );
     url.searchParams.append("referenceid", referenceid);
-
-    // Only send date params when the user explicitly selected a range.
-    // No range = no params = API returns ALL scheduled activities (any date).
-    // The UI still shows today-only by default via client-side filteredActivities.
-    if (dateCreatedFilterRange?.from) {
-      const fromStr = toLocalDateString(dateCreatedFilterRange.from);
-      url.searchParams.append("from", fromStr);
-      url.searchParams.append(
-        "to",
-        dateCreatedFilterRange.to
-          ? toLocalDateString(dateCreatedFilterRange.to)
-          : fromStr,
-      );
-    }
 
     fetch(url.toString())
       .then(async (res) => {
@@ -183,7 +176,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         setActivitiesLoading(false);
         setHistoryLoading(false);
       });
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid]);
 
   useEffect(() => {
     if (!referenceid) return;
@@ -759,6 +752,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
               const badgeProps = getBadgeProps(item.status);
               const statusStyles = getStatusStyles(item.status);
 
+              const blockCheck = checkCompanyBlocked(
+                item.account_reference_number,
+                activities,
+                history,
+                BLOCK_SCHEDULED.statuses,
+                BLOCK_SCHEDULED.checkScheduled,
+                item.id,
+              );
+
               return (
                 <AccordionItem
                   key={item.id}
@@ -772,39 +774,73 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
-                        <CreateActivityDialog
-                          firstname={firstname}
-                          lastname={lastname}
-                          target_quota={target_quota}
-                          email={email}
-                          contact={contact}
-                          tsmname={tsmname}
-                          managername={managername}
-                          referenceid={item.referenceid}
-                          tsm={item.tsm}
-                          manager={item.manager}
-                          type_client={item.type_client}
-                          contact_number={item.contact_number}
-                          email_address={item.email_address}
-                          activityReferenceNumber={
-                            item.activity_reference_number
-                          }
-                          ticket_reference_number={
-                            item.ticket_reference_number
-                          }
-                          agent={item.agent}
-                          company_name={item.company_name}
-                          contact_person={item.contact_person}
-                          address={item.address}
-                          accountReferenceNumber={
-                            item.account_reference_number
-                          }
-                          onCreated={() => fetchAllData()}
-                          managerDetails={managerDetails ?? null}
-                          tsmDetails={tsmDetails ?? null}
-                          signature={signature}
-                        />
-
+                        {blockCheck.blocked ? (
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <Button
+                                disabled
+                                variant="outline"
+                                className="rounded-none cursor-not-allowed opacity-60 text-xs"
+                              >
+                                <Lock size={13} className="mr-1" />
+                                Locked
+                              </Button>
+                            </HoverCardTrigger>
+                            <HoverCardContent
+                              side="top"
+                              align="end"
+                              className="text-xs max-w-xs leading-relaxed"
+                            >
+                              <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
+                                <Lock size={12} /> Activity Locked
+                              </p>
+                              <p>{blockCheck.reason}</p>
+                              {blockCheck.daysRemaining !== undefined && (
+                                <p className="mt-1 text-muted-foreground">
+                                  Unlocks in{" "}
+                                  <strong>
+                                    {blockCheck.daysRemaining} day
+                                    {blockCheck.daysRemaining !== 1 ? "s" : ""}
+                                  </strong>{" "}
+                                  or when marked as Delivered.
+                                </p>
+                              )}
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : (
+                          <CreateActivityDialog
+                            firstname={firstname}
+                            lastname={lastname}
+                            target_quota={target_quota}
+                            email={email}
+                            contact={contact}
+                            tsmname={tsmname}
+                            managername={managername}
+                            referenceid={item.referenceid}
+                            tsm={item.tsm}
+                            manager={item.manager}
+                            type_client={item.type_client}
+                            contact_number={item.contact_number}
+                            email_address={item.email_address}
+                            activityReferenceNumber={
+                              item.activity_reference_number
+                            }
+                            ticket_reference_number={
+                              item.ticket_reference_number
+                            }
+                            agent={item.agent}
+                            company_name={item.company_name}
+                            contact_person={item.contact_person}
+                            address={item.address}
+                            accountReferenceNumber={
+                              item.account_reference_number
+                            }
+                            onCreated={() => fetchAllData()}
+                            managerDetails={managerDetails ?? null}
+                            tsmDetails={tsmDetails ?? null}
+                            signature={signature}
+                          />
+                        )}
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

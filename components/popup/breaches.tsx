@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RefreshCcw, Loader2 } from "lucide-react";
+import { RefreshCcw, Loader2, List } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { sileo } from "sileo";
@@ -36,7 +36,6 @@ interface ClientSegments {
   csrClient: number;
   newClient: number;
   tsaClient: number;
-  inbound: number;
   outbound: number;
 }
 
@@ -81,6 +80,10 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity => {
   }, {} as TimeByActivity);
 };
 
+// Outbound is determined ONLY by source === "Outbound - Touchbase"
+const isOutboundTouchbase = (a: any): boolean =>
+  a.source === "Outbound - Touchbase";
+
 // ─── Reusable UI ──────────────────────────────────────────────────────────────
 
 const StatRow = ({ label, value }: { label: string; value: string | number }) => (
@@ -91,24 +94,16 @@ const StatRow = ({ label, value }: { label: string; value: string | number }) =>
 );
 
 const SectionCard = ({
-  title,
-  badge,
-  children,
-  accent,
+  title, badge, children, accent,
 }: {
   title: string;
   badge?: React.ReactNode;
   children: React.ReactNode;
   accent?: string;
 }) => (
-  <li
-    className={`bg-white border border-gray-200 shadow-sm overflow-hidden ${accent ? `border-l-4 ${accent}` : ""
-      }`}
-  >
+  <li className={`bg-white border border-gray-200 shadow-sm overflow-hidden ${accent ? `border-l-4 ${accent}` : ""}`}>
     <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 bg-gray-50">
-      <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">
-        {title}
-      </span>
+      <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">{title}</span>
       {badge}
     </div>
     <div className="p-3">{children}</div>
@@ -129,10 +124,7 @@ export function BreachesDialog() {
   const [toDate, setToDate] = useState<string>(today);
 
   const [userDetails, setUserDetails] = useState({
-    referenceid: "",
-    firstname: "",
-    lastname: "",
-    role: "",
+    referenceid: "", firstname: "", lastname: "", role: "",
   });
 
   const [activities, setActivities] = useState<any[]>([]);
@@ -159,7 +151,7 @@ export function BreachesDialog() {
   const [clientSegments, setClientSegments] = useState<ClientSegments>({
     top50: 0, next30: 0, balance20: 0,
     csrClient: 0, newClient: 0, tsaClient: 0,
-    inbound: 0, outbound: 0,
+    outbound: 0,
   });
 
   const [denominators, setDenominators] = useState<Denominators>({
@@ -180,6 +172,9 @@ export function BreachesDialog() {
   const [overdueByCompany, setOverdueByCompany] = useState<Record<string, number>>({});
   const [overdueCount, setOverdueCount] = useState(0);
   const [showAllOverdue, setShowAllOverdue] = useState(false);
+  const [coverageDialogSource, setCoverageDialogSource] = useState<"covered" | "uncovered" | null>(null);
+  const [coveredAccounts, setCoveredAccounts] = useState<Activity[]>([]);
+  const [uncoveredAccounts, setUncoveredAccounts] = useState<Activity[]>([]);
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
@@ -189,37 +184,21 @@ export function BreachesDialog() {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
-  // ─── Fetch user then cluster ────────────────────────────────────────────
+  // ─── Fetch user ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!userId) return;
-
-    const fetchUser = async () => {
-      setLoadingUser(true);
-      try {
-        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error("Failed to fetch user");
-        const data = await res.json();
-        const refId = data.ReferenceID || "";
-        setUserDetails({
-          referenceid: refId,
-          role: data.Role || "",
-          firstname: data.Firstname || "",
-          lastname: data.Lastname || "",
-        });
-      } catch {
-        sileo.error({
-          title: "Error",
-          description: "Failed to load user.",
-          duration: 4000,
-          position: "top-center",
-        });
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-
-    fetchUser();
+    setLoadingUser(true);
+    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
+      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+      .then((data) => setUserDetails({
+        referenceid: data.ReferenceID || "",
+        role: data.Role || "",
+        firstname: data.Firstname || "",
+        lastname: data.Lastname || "",
+      }))
+      .catch(() => sileo.error({ title: "Error", description: "Failed to load user.", duration: 4000, position: "top-center" }))
+      .finally(() => setLoadingUser(false));
   }, [userId]);
 
   // ─── Fetch helpers ──────────────────────────────────────────────────────
@@ -227,22 +206,17 @@ export function BreachesDialog() {
   const fetchClusterData = useCallback(async (refId: string) => {
     if (!refId) return;
     try {
-      const res = await fetch(
-        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`
-      );
+      const res = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      const active: any[] = (data.data || []).filter(
-        (a: any) => (a.status || "").toLowerCase() === "active"
-      );
-
+      const active: any[] = (data.data || []).filter((a: any) => (a.status || "").toLowerCase() === "active");
       const norm = (val: string) => (val || "").toLowerCase().replace(/\s+/g, "");
 
       setDenominators({
-        total: active.length,
-        top50: active.filter((a) => norm(a.type_client) === "top50").length,
-        next30: active.filter((a) => norm(a.type_client) === "next30").length,
-        bal20: active.filter((a) => norm(a.type_client) === "balance20").length,
+        total:     active.length,
+        top50:     active.filter((a) => norm(a.type_client) === "top50").length,
+        next30:    active.filter((a) => norm(a.type_client) === "next30").length,
+        bal20:     active.filter((a) => norm(a.type_client) === "balance20").length,
         csrClient: active.filter((a) => norm(a.type_client) === "csrclient").length,
         newClient: active.filter((a) => norm(a.type_client) === "newclient").length,
         tsaClient: active.filter((a) => norm(a.type_client) === "tsaclient").length,
@@ -256,12 +230,7 @@ export function BreachesDialog() {
         }))
       );
     } catch {
-      sileo.error({
-        title: "Error",
-        description: "Failed to fetch cluster data.",
-        duration: 4000,
-        position: "top-center",
-      });
+      sileo.error({ title: "Error", description: "Failed to fetch cluster data.", duration: 4000, position: "top-center" });
     }
   }, []);
 
@@ -269,19 +238,12 @@ export function BreachesDialog() {
     if (!refId) return;
     setLoadingActivities(true);
     try {
-      const res = await fetch(
-        `/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}`
-      );
+      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);
     } catch {
-      sileo.error({
-        title: "Error",
-        description: "Failed to fetch activities.",
-        duration: 4000,
-        position: "top-center",
-      });
+      sileo.error({ title: "Error", description: "Failed to fetch activities.", duration: 4000, position: "top-center" });
     } finally {
       setLoadingActivities(false);
     }
@@ -298,19 +260,11 @@ export function BreachesDialog() {
       const data = await res.json();
       const acts: any[] = data.activities || [];
       const grouped: Record<string, number> = {};
-      acts.forEach((a) => {
-        const c = a.company_name || "Unknown";
-        grouped[c] = (grouped[c] || 0) + 1;
-      });
+      acts.forEach((a) => { const c = a.company_name || "Unknown"; grouped[c] = (grouped[c] || 0) + 1; });
       setOverdueByCompany(grouped);
       setOverdueCount(acts.length);
     } catch {
-      sileo.error({
-        title: "Error",
-        description: "Failed to fetch overdue activities.",
-        duration: 4000,
-        position: "top-center",
-      });
+      sileo.error({ title: "Error", description: "Failed to fetch overdue activities.", duration: 4000, position: "top-center" });
     } finally {
       setLoadingOverdue(false);
     }
@@ -320,9 +274,7 @@ export function BreachesDialog() {
     if (!refId) return;
     setLoadingCsrMetrics(true);
     try {
-      const res = await fetch(
-        `/api/act-fetch-activity-v2?referenceid=${encodeURIComponent(refId)}`
-      );
+      const res = await fetch(`/api/act-fetch-activity-v2?referenceid=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const result = await res.json();
       const data: any[] = result.data || [];
@@ -334,9 +286,8 @@ export function BreachesDialog() {
       ];
 
       const fromTs = new Date(from).getTime();
-      const toDate = new Date(to);
-      toDate.setHours(23, 59, 59, 999);
-      const toTs = toDate.getTime();
+      const toDateObj = new Date(to); toDateObj.setHours(23, 59, 59, 999);
+      const toTs = toDateObj.getTime();
 
       let rtTotal = 0, rtCount = 0;
       let nqTotal = 0, nqCount = 0;
@@ -352,8 +303,7 @@ export function BreachesDialog() {
         const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
         const endorsed = new Date(row.ticket_endorsed).getTime();
         if (!isNaN(tsaAck) && !isNaN(endorsed) && tsaAck >= endorsed) {
-          rtTotal += (tsaAck - endorsed) / 3600000;
-          rtCount++;
+          rtTotal += (tsaAck - endorsed) / 3600000; rtCount++;
         }
 
         const received = new Date(row.ticket_received).getTime();
@@ -400,7 +350,6 @@ export function BreachesDialog() {
   }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
   // ─── Compute outbound + time metrics ───────────────────────────────────
-  // Uses the TSA-specific weekly logic (6-day rolling, capped at month start)
 
   useEffect(() => {
     if (!activities.length) {
@@ -431,8 +380,8 @@ export function BreachesDialog() {
       });
       setTotalSales(sales);
 
-      const isOutbound = (a: any) => a.type_activity === "Outbound Calls" || a.source === "history";
-      const dailyCount = dailyActivities.filter(isOutbound).length;
+      // Outbound count — source === "Outbound - Touchbase" only
+      const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
 
       const dayOfWeek = targetDate.getDay();
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -445,14 +394,16 @@ export function BreachesDialog() {
 
       const weeklyCount = activities.filter((act) => {
         const t = new Date(act.date_created).getTime();
-        return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutbound(act);
+        return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
       const monthlyCount = activities.filter((act) => {
         const d = new Date(act.date_created);
-        return d.getMonth() === targetDate.getMonth()
-          && d.getFullYear() === targetDate.getFullYear()
-          && isOutbound(act);
+        return (
+          d.getMonth() === targetDate.getMonth() &&
+          d.getFullYear() === targetDate.getFullYear() &&
+          isOutboundTouchbase(act)
+        );
       }).length;
 
       setOutboundDaily(dailyCount);
@@ -477,55 +428,73 @@ export function BreachesDialog() {
   }, [activities, fromDate]);
 
   // ─── Territory coverage ─────────────────────────────────────────────────
+  //
+  // Scope: the FULL calendar month of fromDate (month start → month end).
+  // - "Covered"     = cluster accounts whose company_name appears in ANY
+  //                   activity within that month range
+  // - "Not Reached" = the rest
+  // - NO source filter — isOutboundTouchbase applies only to the Outbound
+  //   Performance card, NOT to coverage counts.
+  // - Denominators come from clusterAccounts, not activities.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
       setUniqueClientReach(0);
       setUniqueActivitiesList([]);
-      setClientSegments({ top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0, inbound: 0, outbound: 0 });
+      setCoveredAccounts([]);
+      setUncoveredAccounts([]);
+      setClientSegments({ top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0, outbound: 0 });
       return;
     }
 
+    // Explicit month bounds from fromDate
     const fromDateObj = new Date(fromDate);
-    const selectedMonth = fromDateObj.getMonth();
-    const selectedYear = fromDateObj.getFullYear();
+    const monthStart  = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd    = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    const filtered = activities.filter(
-      (act) =>
-        act.account_reference_number &&
-        act.date_created &&
-        (act.type_activity === "Inbound Calls" || act.type_activity === "Outbound Calls") &&
-        new Date(act.date_created).getMonth() === selectedMonth &&
-        new Date(act.date_created).getFullYear() === selectedYear
+    // Step 1 — company names with ANY activity within the calendar month
+    const touchedCompanies = new Set<string>();
+    const byActivityRef: Record<string, any> = {};
+
+    activities.forEach((act) => {
+      if (!act.company_name || !act.date_created) return;
+      const t = new Date(act.date_created).getTime();
+      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+
+      touchedCompanies.add(act.company_name.toLowerCase());
+
+      if (act.activity_reference_number) {
+        byActivityRef[act.activity_reference_number] = act;
+      }
+    });
+
+    setUniqueActivitiesList(Object.values(byActivityRef));
+
+    // Step 2 — covered / uncovered split by company_name
+    const covered   = clusterAccounts.filter((acc) =>
+      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
+    );
+    const uncovered = clusterAccounts.filter((acc) =>
+      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
     );
 
-    const byRef: Record<string, any> = {};
-    filtered.forEach((act) => { byRef[act.activity_reference_number] = act; });
-    const unique = Object.values(byRef);
-    setUniqueActivitiesList(unique);
+    setCoveredAccounts(covered);
+    setUncoveredAccounts(uncovered);
 
-    let inbound = 0, outbound = 0;
+    // Step 3 — segment counts from covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
-
-    unique.forEach((act) => {
-      if (act.type_activity === "Inbound Calls") inbound++;
-      if (act.type_activity === "Outbound Calls") outbound++;
-
-      const account = clusterAccounts.find(
-        (acc) => acc.account_reference_number === act.account_reference_number
-      );
-      if (!account?.type_client) return;
-      const type = account.type_client;
-      if (type === "top50") seg.top50++;
-      else if (type === "next30") seg.next30++;
+    covered.forEach((acc) => {
+      const type = acc.type_client ?? "";
+      if      (type === "top50")     seg.top50++;
+      else if (type === "next30")    seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
       else if (type === "newclient") seg.newClient++;
       else if (type === "tsaclient") seg.tsaClient++;
     });
 
-    setUniqueClientReach(unique.length);
-    setClientSegments({ ...seg, inbound, outbound });
+    setUniqueClientReach(covered.length);
+    setClientSegments({ ...seg, outbound: covered.length });
   }, [activities, clusterAccounts, fromDate]);
 
   // ─── New clients per company ────────────────────────────────────────────
@@ -561,13 +530,13 @@ export function BreachesDialog() {
 
   // ─── Derived ────────────────────────────────────────────────────────────
 
-  const overdueEntries = Object.entries(overdueByCompany);
-  const visibleOverdue = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
-  const newClientEntries = Object.entries(newClientByCompany);
+  const overdueEntries    = Object.entries(overdueByCompany);
+  const visibleOverdue    = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
+  const newClientEntries  = Object.entries(newClientByCompany);
   const visibleNewClients = showAllNewClients ? newClientEntries : newClientEntries.slice(0, 5);
 
   const isAnySyncing = loadingActivities || loadingOverdue;
-  const dailyPct = Math.min(100, Math.round((outboundDaily / 20) * 100));
+  const dailyPct     = Math.min(100, Math.round((outboundDaily / 20) * 100));
 
   const handleManualSync = () => {
     const refId = userDetails.referenceid;
@@ -584,10 +553,110 @@ export function BreachesDialog() {
     });
   };
 
+  // ─── Coverage dialog helpers ────────────────────────────────────────────
+
+  const typeLabel = (normalized: string): string => {
+    const map: Record<string, string> = {
+      top50: "Top 50", next30: "Next 30", balance20: "Balance 20",
+      csrclient: "CSR Client", newclient: "New Client", tsaclient: "TSA Client",
+    };
+    return map[normalized] ?? normalized;
+  };
+
+  const typeColors: Record<string, string> = {
+    top50:     "bg-amber-100 text-amber-700 border-amber-200",
+    next30:    "bg-blue-100 text-blue-700 border-blue-200",
+    balance20: "bg-violet-100 text-violet-700 border-violet-200",
+    newclient: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    tsaclient: "bg-rose-100 text-rose-700 border-rose-200",
+    csrclient: "bg-slate-100 text-slate-600 border-slate-200",
+  };
+  const pillColor = (t: string) =>
+    typeColors[t] ?? "bg-indigo-50 text-indigo-600 border-indigo-200";
+
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
     <>
+      {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
+      {(() => {
+        const isCovered   = coverageDialogSource === "covered";
+        const isUncovered = coverageDialogSource === "uncovered";
+        const dialogOpen  = isCovered || isUncovered;
+        const list        = isCovered ? coveredAccounts : uncoveredAccounts;
+
+        return (
+          <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) setCoverageDialogSource(null); }}>
+            <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-[11px] font-black uppercase tracking-wider text-gray-700">
+                    {isCovered ? "Covered Accounts" : "Not Reached Accounts"}
+                    <span className="ml-2 text-gray-400 font-normal">{list.length}</span>
+                  </DialogTitle>
+                  <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setCoverageDialogSource("covered")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
+                        isCovered ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      Covered · {coveredAccounts.length}
+                    </button>
+                    <button
+                      onClick={() => setCoverageDialogSource("uncovered")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
+                        isUncovered ? "bg-amber-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      Not Reached · {uncoveredAccounts.length}
+                    </button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {list.length === 0 ? (
+                <p className="text-[11px] text-gray-300 italic px-4 py-6 text-center">
+                  {isCovered
+                    ? "No accounts reached this month."
+                    : "All accounts have been reached this month."}
+                </p>
+              ) : (
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead className="sticky top-0 bg-gray-50 z-10">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-black uppercase tracking-wider text-gray-500 border-b border-gray-200 w-[55%]">
+                          Company
+                        </th>
+                        <th className="text-left px-3 py-2 font-black uppercase tracking-wider text-gray-500 border-b border-gray-200 w-[45%]">
+                          Type
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((acc, i) => (
+                        <tr key={acc.account_reference_number || i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="px-3 py-2 text-gray-700 font-medium border-b border-gray-100">
+                            {acc.company_name || "—"}
+                          </td>
+                          <td className="px-3 py-2 border-b border-gray-100">
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${pillColor(acc.type_client ?? "")}`}>
+                              {typeLabel(acc.type_client ?? "—")}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── MAIN DIALOG ─────────────────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="fixed bottom-6 right-4 bg-white rounded-none shadow-2xl z-50 flex flex-col border border-gray-200 p-0"
@@ -600,9 +669,7 @@ export function BreachesDialog() {
               End of Day Report — Sales
             </DialogTitle>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              {loadingUser
-                ? "Loading…"
-                : `${userDetails.lastname || "—"}, ${userDetails.firstname || "—"}`}
+              {loadingUser ? "Loading…" : `${userDetails.lastname || "—"}, ${userDetails.firstname || "—"}`}
             </p>
           </DialogHeader>
 
@@ -634,10 +701,7 @@ export function BreachesDialog() {
                     type="date"
                     className="h-7 text-[11px] rounded-none bg-white border-gray-200"
                     value={fromDate}
-                    onChange={(e) => {
-                      setFromDate(e.target.value);
-                      setToDate(e.target.value);
-                    }}
+                    onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
                   />
                 </div>
               </div>
@@ -654,6 +718,7 @@ export function BreachesDialog() {
 
             {/* ── Metrics grid ───────────────────────────────────────── */}
             <div className="grid grid-cols-2 gap-3">
+
               {/* LEFT */}
               <ul className="list-none space-y-3">
 
@@ -661,10 +726,10 @@ export function BreachesDialog() {
                 <SectionCard
                   title="Outbound Performance"
                   badge={
-                    <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700"
-                        : dailyPct >= 50 ? "bg-amber-100 text-amber-700"
-                          : "bg-red-100 text-red-600"
-                      }`}>
+                    <span className={`text-[9px] font-black px-2 py-0.5 ${
+                      dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
+                      dailyPct >= 50  ? "bg-amber-100 text-amber-700" :
+                      "bg-red-100 text-red-600"}`}>
                       {dailyPct}% Today
                     </span>
                   }
@@ -672,19 +737,18 @@ export function BreachesDialog() {
                   <div className="mb-3">
                     <div className="h-1 bg-gray-100 w-full overflow-hidden">
                       <div
-                        className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500"
-                            : dailyPct >= 50 ? "bg-amber-500"
-                              : "bg-red-500"
-                          }`}
+                        className={`h-full transition-all duration-500 ${
+                          dailyPct >= 100 ? "bg-emerald-500" :
+                          dailyPct >= 50  ? "bg-amber-500" : "bg-red-500"}`}
                         style={{ width: `${dailyPct}%` }}
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-1 text-center">
                     {[
-                      { label: "Daily", value: outboundDaily, denom: 20 },
-                      { label: "Weekly", value: outboundWeekly, denom: 100 },
-                      { label: "Monthly", value: outboundMonthly, denom: 440 },
+                      { label: "Daily",   value: outboundDaily,   denom: 20 },
+                      { label: "Weekly",  value: outboundWeekly,  denom: 120 },
+                      { label: "Monthly", value: outboundMonthly, denom: 520 },
                     ].map(({ label, value, denom }, i) => (
                       <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
                         <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
@@ -698,7 +762,26 @@ export function BreachesDialog() {
                 </SectionCard>
 
                 {/* Database Coverage */}
-                <SectionCard title="Database Coverage">
+                <SectionCard
+                  title="Database Coverage"
+                > {/*badge={
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setCoverageDialogSource("covered")}
+                        className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
+                      >
+                        <List size={10} />
+                        Covered
+                      </button>
+                      <span className="text-gray-300 text-[9px]">·</span>
+                      <button
+                        onClick={() => setCoverageDialogSource("uncovered")}
+                        className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
+                      >
+                        Not Reached
+                      </button>
+                    </div>
+                  }*/}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
@@ -716,12 +799,12 @@ export function BreachesDialog() {
                     </div>
                     <div className="grid grid-cols-3 gap-1 mt-2">
                       {[
-                        { label: "Top 50", val: clientSegments.top50, denom: denominators.top50 },
-                        { label: "Next 30", val: clientSegments.next30, denom: denominators.next30 },
-                        { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
-                        { label: "CSR", val: clientSegments.csrClient, denom: denominators.csrClient },
-                        { label: "New", val: clientSegments.newClient, denom: denominators.newClient },
-                        { label: "TSA", val: clientSegments.tsaClient, denom: denominators.tsaClient },
+                        { label: "Top 50",  val: clientSegments.top50,    denom: denominators.top50 },
+                        { label: "Next 30", val: clientSegments.next30,   denom: denominators.next30 },
+                        { label: "Bal 20",  val: clientSegments.balance20, denom: denominators.bal20 },
+                        { label: "CSR",     val: clientSegments.csrClient, denom: denominators.csrClient },
+                        { label: "New",     val: clientSegments.newClient, denom: denominators.newClient },
+                        { label: "TSA",     val: clientSegments.tsaClient, denom: denominators.tsaClient },
                       ].map(({ label, val, denom }) => (
                         <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                           <p className="text-[8px] text-gray-400 uppercase">{label}</p>
@@ -730,10 +813,6 @@ export function BreachesDialog() {
                           </p>
                         </div>
                       ))}
-                    </div>
-                    <div className="flex justify-between pt-1 text-[10px] text-gray-500 border-t border-gray-100 mt-1">
-                      <span>IN: <strong className="text-gray-700">{clientSegments.inbound}</strong></span>
-                      <span>OUT: <strong className="text-gray-700">{clientSegments.outbound}</strong></span>
                     </div>
                   </div>
                 </SectionCard>
@@ -807,11 +886,7 @@ export function BreachesDialog() {
                 {/* Time Consumed */}
                 <SectionCard
                   title="Time Consumed"
-                  badge={
-                    <span className="text-[10px] font-bold text-gray-600">
-                      {formatDuration(timeConsumedMs)}
-                    </span>
-                  }
+                  badge={<span className="text-[10px] font-bold text-gray-600">{formatDuration(timeConsumedMs)}</span>}
                 >
                   {loadingTime ? (
                     <div className="flex items-center gap-2 text-gray-400 py-2">
@@ -835,17 +910,12 @@ export function BreachesDialog() {
                 {/* Total Sales */}
                 <li className="bg-gray-900 border border-gray-800 shadow-sm overflow-hidden">
                   <div className="px-3 py-2 border-b border-gray-700">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
-                      Total Sales Today
-                    </span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Total Sales Today</span>
                   </div>
                   <div className="px-3 py-3 flex items-baseline gap-1">
                     <span className="text-gray-400 text-sm font-medium">₱</span>
                     <span className="text-white text-2xl font-black tracking-tight tabular-nums">
-                      {totalSales.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </li>
@@ -859,9 +929,9 @@ export function BreachesDialog() {
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <StatRow label="TSA Response Time" value={formatHoursToHMS(avgResponseTime)} />
-                      <StatRow label="Non-Quotation HT" value={formatHoursToHMS(avgNonQuotationHT)} />
-                      <StatRow label="Quotation HT" value={formatHoursToHMS(avgQuotationHT)} />
+                      <StatRow label="TSA Response Time"     value={formatHoursToHMS(avgResponseTime)} />
+                      <StatRow label="Non-Quotation HT"      value={formatHoursToHMS(avgNonQuotationHT)} />
+                      <StatRow label="Quotation HT"          value={formatHoursToHMS(avgQuotationHT)} />
                       <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)} />
                     </div>
                   )}
@@ -871,19 +941,14 @@ export function BreachesDialog() {
                 <SectionCard title="Closing of Quotation" accent="border-l-red-500">
                   <div className="space-y-1">
                     {[
-                      { label: "Pending Client Approval", value: pendingClientApprovalCount },
-                      { label: "SPF — Pending Client", value: spfPendingClientApproval },
+                      { label: "Pending Client Approval",   value: pendingClientApprovalCount },
+                      { label: "SPF — Pending Client",      value: spfPendingClientApproval },
                       { label: "SPF — Pending Procurement", value: spfPendingProcurement },
-                      { label: "SPF — Pending PD", value: spfPendingPD },
+                      { label: "SPF — Pending PD",          value: spfPendingPD },
                     ].map(({ label, value }) => (
-                      <div
-                        key={label}
-                        className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0"
-                      >
+                      <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                         <span className="text-[10px] text-red-500 font-medium">{label}</span>
-                        <span className={`text-[11px] font-black ${value > 0 ? "text-red-600" : "text-gray-400"}`}>
-                          {value}
-                        </span>
+                        <span className={`text-[11px] font-black ${value > 0 ? "text-red-600" : "text-gray-400"}`}>{value}</span>
                       </div>
                     ))}
                   </div>

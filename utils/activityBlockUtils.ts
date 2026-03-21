@@ -114,7 +114,7 @@ export const BLOCK_PROGRESS = {
 
 /** Scheduled — block if already scheduled */
 export const BLOCK_SCHEDULED = {
-  statuses: [],
+  statuses: ["On-Progress", "Assisted"],
   checkScheduled: true,
 };
 
