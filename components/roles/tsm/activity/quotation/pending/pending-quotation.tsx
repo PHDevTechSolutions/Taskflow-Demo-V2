@@ -10,6 +10,9 @@ import TaskListEditDialog from "../../dialog/edit";
 import { ButtonGroup } from "@/components/ui/button-group";
 
 interface Completed {
+    quotation_subject: string;
+    quotation_vatable: string;
+    restocking_fee: string;
     id: number;
     activity_reference_number: string;
     referenceid: string;
@@ -387,6 +390,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     deliveryFee={editItem.delivery_fee}
+                    restockingFee={editItem.restocking_fee ?? ""}
+                    whtType={editItem.quotation_vatable ?? "none"}
+                    quotationSubject={editItem.quotation_subject ?? "For Quotation"}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}

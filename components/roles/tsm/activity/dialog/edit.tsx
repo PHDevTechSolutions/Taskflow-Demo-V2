@@ -40,6 +40,10 @@ interface CompletedItem {
     email_address?: string;
     address?: string;
     region?: string;
+    delivery_fee?: string;
+    restocking_fee?: string;
+    quotation_vatable?: string;
+    quotation_subject?: string;
 }
 
 interface ProductItem {
@@ -79,6 +83,9 @@ interface TaskListEditDialogProps {
     tsmcontact?: string;
     managername?: string;
     deliveryFee?: string;
+    restockingFee?: string;
+    whtType?: string;
+    quotationSubject?: string;
 
     // Signatories
     agentName?: string;
@@ -734,7 +741,7 @@ export default function TaskListEditDialog({
                         <Preview
                             payload={getQuotationPayload()}
                             quotationType={quotation_type}
-                            setIsPreviewOpen={() => {}}
+                            setIsPreviewOpen={() => { }}
                         />
                     </div>
 

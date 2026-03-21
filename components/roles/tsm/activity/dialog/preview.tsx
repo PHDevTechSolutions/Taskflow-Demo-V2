@@ -37,6 +37,11 @@ type Payload = {
     vatTypeLabel: string;
     vatType: string;
     deliveryFee: string;
+    restockingFee?: number;
+    whtType?: string;
+    whtLabel?: string;
+    whtAmount?: number;
+    netAmountToCollect?: number;
     salesManagerContact?: string;
     salesManagerEmail?: string;
 
@@ -120,8 +125,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                     ))}
                 </div>
 
-                {/* ── CLIENT INFO ───────────────────────────────────────────────── */}
-                <div className="border-l border-r border-black">
+                {/* CLIENT INFORMATION GRID */}
+                <div className="mt-5 border-l border-r border-black">
                     {[
                         { label: "COMPANY NAME", value: payload.companyName, borderTop: true },
                         { label: "ADDRESS", value: payload.address },
@@ -132,12 +137,13 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                     ].map((info, i) => (
                         <div
                             key={i}
-                            className={`flex items-center px-4 py-1.5 min-h-[28px]
-                ${info.borderTop ? "border-t border-black" : ""}
-                ${info.borderBottom ? "border-b border-black" : ""}`}
+                            className={`grid grid-cols-6 py-1 px-4 items-center min-h-[30px]
+                    ${info.borderTop ? 'border-t border-black' : ''} 
+                    ${info.borderBottom ? 'border-b border-black' : ''}
+                  `}
                         >
-                            <span className="w-36 shrink-0 font-black text-[10px] text-gray-800 uppercase">{info.label}:</span>
-                            <span className="flex-1 font-semibold text-gray-600 pl-3 text-[10px] uppercase">{info.value || "—"}</span>
+                            <span className="col-span-1 font-black text-[10px] text-[#121212]">{info.label}:</span>
+                            <span className="col-span-5 text-[11px] font-bold text-gray-700 pl-4">{info.value || "---"}</span>
                         </div>
                     ))}
                 </div>
@@ -146,98 +152,155 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                     We are pleased to offer you the following products for consideration:
                 </p>
 
-                {/* ── ITEMS TABLE ───────────────────────────────────────────────── */}
-                <div className="border border-black overflow-hidden">
+                {/* ITEM SPECIFICATION TABLE */}
+                <div className="border border-black overflow-hidden shadow-sm">
                     <table className="w-full text-[10px] border-collapse">
                         <thead>
-                            <tr className="bg-gray-50 border-b border-black">
-                                {["ITEM NO", "QTY", "REFERENCE PHOTO", "PRODUCT DESCRIPTION", "UNIT PRICE", "TOTAL AMOUNT"].map((h, i) => (
-                                    <th
-                                        key={h}
-                                        className={`p-2.5 font-black uppercase text-[9px] text-gray-700
-                      ${i < 5 ? "border-r border-black" : ""}
-                      ${i === 0 || i === 1 ? "w-14 text-center" : ""}
-                      ${i === 2 ? "w-28 text-center" : ""}
-                      ${i === 4 || i === 5 ? "w-28 text-right" : "text-left"}`}
-                                    >
-                                        {h}
-                                    </th>
-                                ))}
+                            <tr className="bg-[#F9FAFA] border-b border-black font-black uppercase text-[#121212]">
+                                <th className="p-3 border-r border-black w-16 text-center">ITEM NO</th>
+                                <th className="p-3 border-r border-black w-16 text-center">QTY</th>
+                                <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
+                                <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
+                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-black">
                             {payload.items.map((item, idx) => (
-                                <tr key={idx} className="border-b border-black last:border-b-0 hover:bg-gray-50/40 transition-colors">
-                                    <td className="p-3 text-center border-r border-black align-top font-bold text-gray-400">
-                                        {item.itemNo}
-                                    </td>
-                                    <td className="p-3 text-center border-r border-black align-top font-black text-gray-800">
-                                        {item.qty}
-                                    </td>
-                                    <td className="p-2 border-r border-black align-top bg-white">
+                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="p-4 text-center border-r border-black align-top font-bold text-gray-400">{item.itemNo}</td>
+                                    <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
+                                    <td className="p-3 border-r border-black align-top bg-white">
                                         {item.photo ? (
-                                            <img
-                                                src={item.photo}
-                                                className="w-20 h-20 object-contain mx-auto mix-blend-multiply"
-                                                alt="product"
-                                            />
+                                            <img src={item.photo} className="w-24 h-24 object-contain mx-auto mix-blend-multiply" alt="sku-ref" />
                                         ) : (
-                                            <div className="w-20 h-20 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic mx-auto">
-                                                No Image
-                                            </div>
+                                            <div className="w-24 h-24 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic">No Image</div>
                                         )}
                                     </td>
-                                    <td className="p-3 border-r border-black align-top">
-                                        <p className="font-black text-[10px] uppercase mb-1 text-gray-900">{item.title}</p>
-                                        <p className="text-[9px] text-blue-600 font-bold mb-2 tracking-tight">{item.sku}</p>
+                                    <td className="p-4 border-r border-black align-top">
+                                        <p className="font-black text-[#121212] text-xs uppercase mb-1">{item.title}</p>
+                                        <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
                                         <div
-                                            className="text-[9px] text-gray-500 leading-relaxed"
+                                            className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
                                             dangerouslySetInnerHTML={{ __html: item.product_description }}
                                         />
-                                        {item.remarks && (
-                                            <span className="inline-block mt-1.5 bg-orange-400 px-1.5 py-0.5 text-[8px] font-bold text-red-900 uppercase">
-                                                {item.remarks}
-                                            </span>
-                                        )}
+                                        <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
-                                    <td className="p-3 text-right border-r border-black align-top tabular-nums">
+                                    <td className="p-4 text-right border-r border-black align-top font-medium">
                                         ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-3 text-right align-top font-black tabular-nums text-gray-900">
+                                    <td className="p-4 text-right font-black align-top text-[#121212]">
                                         ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
 
-                            {/* Tax type row */}
-                            <tr className="bg-gray-200 border-t-2 border-black h-10">
-                                <td colSpan={2} className="border-r border-gray-400" />
-                                <td className="px-3 border-r border-gray-400">
-                                    <span className="text-red-600 italic font-black text-[12px]">Tax Type:</span>
-                                </td>
-                                <td className="px-3 border-r border-gray-400">
-                                    <div className="flex gap-4 text-[10px] uppercase font-bold">
-                                        <TaxOption label="VAT Inc" active={payload.vatType === "vat_inc"} />
-                                        <TaxOption label="VAT Exe" active={payload.vatType === "vat_exe"} />
-                                        <TaxOption label="Zero-Rated" active={payload.vatType === "zero_rated"} />
+                            {/* SUMMARY BAR */}
+                            <tr className="border-t-2 border-black bg-white text-gray-900">
+                                {/* Left: Tax Type + WHT */}
+                                <td colSpan={4} className="border-r-2 border-black p-3 align-top">
+                                    <div className="flex flex-col gap-2">
+                                        {/* VAT Type */}
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-bold text-red-600 italic text-[11px] uppercase whitespace-nowrap">Tax Type:</span>
+                                            <div className="flex gap-3 text-[10px] font-black uppercase">
+                                                {["vat_inc", "vat_exe", "zero_rated"].map((v) => (
+                                                    <span key={v} className={payload.vatType === v ? "text-gray-900" : "text-gray-300"}>
+                                                        {payload.vatType === v ? "●" : "○"} {v === "vat_inc" ? "VAT Inc" : v === "vat_exe" ? "VAT Exe" : "Zero-Rated"}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* EWT */}
+                                        {payload.whtType && payload.whtType !== "none" && (
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-bold text-blue-600 italic text-[10px] uppercase whitespace-nowrap">Withholding:</span>
+                                                <span className="text-[10px] font-black uppercase text-blue-800">● {payload.whtLabel}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
-                                <td className="px-3 text-right border-r border-gray-400 font-semibold text-[9px] uppercase text-gray-600">
-                                    Delivery Fee:
-                                </td>
-                                <td className="px-3 text-right font-black text-[12px] tabular-nums">
-                                    ₱{payload.deliveryFee}
-                                </td>
-                            </tr>
 
-                            {/* Grand total row */}
-                            <tr className="bg-gray-200 border-t border-gray-300 h-10">
-                                <td colSpan={4} className="border-r border-gray-400" />
-                                <td className="px-3 text-right border-r border-gray-400 font-semibold text-[9px] uppercase text-gray-600">
-                                    Grand Total:
-                                </td>
-                                <td className="px-3 text-right font-black text-[13px] text-emerald-700 tabular-nums">
-                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                {/* Right: Fee Breakdown */}
+                                <td colSpan={2} className="p-0 align-top">
+                                    <table className="w-full border-collapse text-[10px]">
+                                        <tbody>
+                                            {/* Net Sales */}
+                                            <tr className="border-b border-gray-100">
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                    Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                            {/* Delivery Fee */}
+                                            <tr className="border-b border-gray-100">
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Delivery Charge</td>
+                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                            {/* Restocking Fee */}
+                                            <tr className="border-b-2 border-black">
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Restocking Fee</td>
+                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                    ₱{(payload.restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                            {/* Total Invoice */}
+                                            <tr className="bg-gray-50 border-b border-black">
+                                                <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">Total Invoice Amount</td>
+                                                <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900 tabular-nums">
+                                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                            {/* VAT breakdown if vat_inc */}
+                                            {payload.vatType === "vat_inc" && (
+                                                <>
+                                                    <tr className="border-b border-gray-100">
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12/112)</td>
+                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
+                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                    <tr className={payload.whtType && payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Net of VAT (Tax Base)</td>
+                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
+                                                            ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                    {payload.whtType && payload.whtType !== "none" && (
+                                                        <tr className="border-b-2 border-black bg-blue-50">
+                                                            <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
+                                                                Less: {payload.whtLabel}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right font-black text-blue-700 tabular-nums">
+                                                                − ₱{(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </>
+                                            )}
+                                            {payload.vatType !== "vat_inc" && (
+                                                <tr className="border-b-2 border-black">
+                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Tax Status</td>
+                                                    <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
+                                                        {payload.vatType === "vat_exe" ? "VAT Exempt" : "Zero-Rated"}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {/* Net Amount to Collect */}
+                                            <tr className="bg-gray-900 text-white">
+                                                <td className="px-3 py-3 text-right font-black uppercase border-r border-gray-700 text-[10px] tracking-tight">
+                                                    {payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
+                                                </td>
+                                                <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
+                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </td>
                             </tr>
                         </tbody>
