@@ -25,11 +25,9 @@ async function fetchOverdueActivities(referenceid: string) {
     const filtered = data.filter((a) => {
       const scheduled = new Date(a.scheduled_date);
       scheduled.setHours(0, 0, 0, 0);
-      // ✅ Use real DB status, exclude all completed statuses
       return scheduled < todayDate && !COMPLETED_STATUSES.includes(a.status);
     });
 
-    // ✅ No .map() overwriting status — keep real DB values
     allActivities.push(...filtered);
 
     if (data.length < BATCH_SIZE) break;
@@ -64,7 +62,6 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
     offset += BATCH_SIZE;
   }
 
-  // Remove any with a successful counterpart
   const { data: successfulData, error: errSuccess } = await supabase
     .from("history")
     .select("activity_reference_number")
