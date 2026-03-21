@@ -512,13 +512,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               <TableRow>
                 <TableHead className="w-10" />
                 <TableHead className="w-[60px] text-center">Tools</TableHead>
+                <TableHead>Quotation #</TableHead>
                 <TableHead>Date Created</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead className="text-center">Status</TableHead>
                 <TableHead>Date Approved/Decline</TableHead>
                 <TableHead>Contact #</TableHead>
-                <TableHead>Quotation #</TableHead>
+                
                 <TableHead>Quotation Amount</TableHead>
                 <TableHead className="text-center">Source</TableHead>
               </TableRow>
@@ -568,6 +569,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    </TableCell>
+
+                    <TableCell className="uppercase">
+                      {displayValue(item.quotation_number)}
                     </TableCell>
 
                     <TableCell>
@@ -649,9 +654,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         )}
                     </TableCell>
                     <TableCell>{displayValue(item.contact_number)}</TableCell>
-                    <TableCell className="uppercase">
-                      {displayValue(item.quotation_number)}
-                    </TableCell>
                     <TableCell>
                       ₱
                       {displayValue(item.quotation_amount) !== ""

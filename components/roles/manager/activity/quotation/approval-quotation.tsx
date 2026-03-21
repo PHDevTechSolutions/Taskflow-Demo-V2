@@ -368,13 +368,13 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                             <TableRow>
                                 <TableHead className="w-[60px] text-center">Tools</TableHead>
                                 <TableHead>Agent</TableHead>
+                                <TableHead>Quotation #</TableHead>
                                 <TableHead>Date Created</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
                                 <TableHead>Date Approved/Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
-                                <TableHead>Quotation #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
                                 <TableHead className="text-center">Source</TableHead>
                             </TableRow>
@@ -409,22 +409,27 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                             </DropdownMenu>
                                         </TableCell>
 
-                                        <TableCell className="whitespace-nowrap">
-                                            <div className="flex items-center gap-2 capitalize">
+                                        <TableCell className="w-[250px] max-w-[250px]">
+                                            <div className="flex items-center gap-2 overflow-hidden">
                                                 {agent?.profilePicture ? (
                                                     <img
                                                         src={agent.profilePicture}
                                                         alt={agent.name}
-                                                        className="w-6 h-6 rounded-full object-cover"
+                                                        className="w-6 h-6 min-w-[24px] rounded-full object-cover"
                                                     />
                                                 ) : (
-                                                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                                                    <div className="w-6 h-6 min-w-[24px] rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
                                                         N/A
                                                     </div>
                                                 )}
-                                                <span>{agent?.name || "-"}</span>
+
+                                                <span className="truncate">
+                                                    {agent?.name || "-"}
+                                                </span>
                                             </div>
                                         </TableCell>
+
+                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
 
                                         <TableCell>
                                             {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
@@ -469,7 +474,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                             {displayValue(item.tsm_remarks)}
                                         </TableCell>
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-                                        <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
+                                        
                                         <TableCell>
                                             {displayValue(item.quotation_amount) !== "-"
                                                 ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
