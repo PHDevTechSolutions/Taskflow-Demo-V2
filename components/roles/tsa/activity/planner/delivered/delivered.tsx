@@ -198,7 +198,7 @@ export const Delivered: React.FC<CompletedProps> = ({
       .map(([activity_reference_number, items]) => {
         // FIX: only include groups that have at least one "Delivered" history item
         const hasDelivered = items.some(
-          (h) => h.status.trim().toLowerCase() === "delivered"
+          (h) => (h.status || "").trim().toLowerCase() === "delivered"
         );
         if (!hasDelivered) return null;
 

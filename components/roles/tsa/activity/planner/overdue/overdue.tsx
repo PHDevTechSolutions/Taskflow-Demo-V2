@@ -139,10 +139,8 @@ export const Overdue: React.FC<NewTaskProps> = ({
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // ✅ Single trigger for all re-fetches
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // ✅ Fetch logic inline — no useCallback, no stale closure risk
   useEffect(() => {
     if (!referenceid) {
       setActivities([]);
@@ -187,7 +185,6 @@ export const Overdue: React.FC<NewTaskProps> = ({
       });
   }, [referenceid, dateCreatedFilterRange, refreshKey]);
 
-  // ✅ Realtime subscriptions — only increment refreshKey
   useEffect(() => {
     if (!referenceid) return;
 
@@ -201,7 +198,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
+        () => {
           setRefreshKey((prev) => prev + 1);
         },
       )
@@ -217,8 +214,7 @@ export const Overdue: React.FC<NewTaskProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          console.log("History realtime update:", payload);
+        () => {
           setRefreshKey((prev) => prev + 1);
         },
       )
@@ -242,7 +238,6 @@ export const Overdue: React.FC<NewTaskProps> = ({
     return true;
   };
 
-  // ✅ Matches exact DB casing + lowercase variants just in case
   const completedStatuses = ["done", "completed", "delivered", "cancelled"];
 
   const mergedData = activities
@@ -255,21 +250,22 @@ export const Overdue: React.FC<NewTaskProps> = ({
 
       const activityStatus = (a.status || "").trim().toLowerCase();
 
-      // ✅ Exclude completed — API already filters but this is a safety net
       if (completedStatuses.includes(activityStatus)) return false;
 
       return schedDate < today;
     })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
+      // ✅ Aligned with API: only Unsuccessful + Outbound Calls history
       const relatedHistoryItems = history.filter(
         (h) =>
           h.activity_reference_number === activity.activity_reference_number &&
-          h.call_status === "Unsuccessful",
+          h.call_status === "Unsuccessful" &&
+          h.type_activity === "Outbound Calls",
       );
       return { ...activity, relatedHistoryItems };
     })
-    // FIX: only show activities that have at least one Unsuccessful history entry
+    // Only show activities that have at least one qualifying history entry
     .filter((item) => item.relatedHistoryItems.length > 0)
     .sort(
       (a, b) =>
