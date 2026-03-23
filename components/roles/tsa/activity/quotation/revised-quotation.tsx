@@ -519,7 +519,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 <TableHead className="text-center">Status</TableHead>
                 <TableHead>Date Approved/Decline</TableHead>
                 <TableHead>Contact #</TableHead>
-                
+
                 <TableHead>Quotation Amount</TableHead>
                 <TableHead className="text-center">Source</TableHead>
               </TableRow>
@@ -590,15 +590,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     </TableCell>
                     <td className="p-2 font-semibold text-center">
                       <span
-                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${
-                          item.tsm_approved_status === "Approved"
+                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${item.tsm_approved_status === "Approved"
                             ? "bg-green-100 text-green-700"
                             : item.tsm_approved_status === "Pending"
                               ? "bg-orange-100 text-orange-700"
                               : item.tsm_approved_status === "Decline"
                                 ? "bg-red-100 text-red-700"
                                 : "bg-gray-100 text-gray-600"
-                        }`}
+                          }`}
                       >
                         {item.tsm_approved_status}
                       </span>
@@ -658,22 +657,21 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       ₱
                       {displayValue(item.quotation_amount) !== ""
                         ? parseFloat(
-                            displayValue(item.quotation_amount),
-                          ).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
+                          displayValue(item.quotation_amount),
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
                         : "-"}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
-                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize ${
-                          item.quotation_type === "Ecoshift Corporation"
+                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize ${item.quotation_type === "Ecoshift Corporation"
                             ? "bg-green-100 text-green-700"
                             : item.quotation_type === "Disruptive Solutions Inc"
                               ? "bg-rose-100 text-rose-800"
                               : "bg-gray-100 text-gray-600"
-                        }`}
+                          }`}
                       >
                         {displayValue(item.quotation_type)}
                       </span>

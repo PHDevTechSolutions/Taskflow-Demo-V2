@@ -2,22 +2,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, FileSpreadsheet, FileText, MoreVertical, } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import TaskListEditDialog from "./dialog/edit";
-
-interface SupervisorDetails {
-    firstname: string;
-    lastname: string;
-    email: string;
-    profilePicture: string;
-    signatureImage: string;
-    contact: string;
-}
 
 interface Completed {
     id: number;
@@ -50,14 +41,13 @@ interface Completed {
     tsm_approved_status: string;
     delivery_fee: string;
 
-    // Signatories
-    // Agent
+    // Signatories — Agent
     agent_name: string;
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
 
-    // TSM
+    // Signatories — TSM
     tsm_name: string;
     tsm_signature: string;
     tsm_contact_number: string;
@@ -65,7 +55,7 @@ interface Completed {
     tsm_approval_date: string;
     tsm_remarks: string;
 
-    // Manager
+    // Signatories — Manager
     manager_name: string;
 }
 
@@ -100,15 +90,16 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
-    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
+    const [agents, setAgents] = useState<any[]>([]);
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editOpen, setEditOpen] = useState(false);
 
     // -----------------------------
     // FETCH ACTIVITIES
+    // FIX: Removed redundant client-side date filtering — the API already
+    //      handles it. When no range is selected, ALL records are returned.
     // -----------------------------
-    const fetchActivities = useCallback(() => {
+    const fetchActivities = useCallback(async () => {
         if (!referenceid) {
             setActivities([]);
             return;
@@ -117,29 +108,53 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
         setLoading(true);
         setError(null);
 
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-            : null;
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-            : null;
+        try {
+            const from = dateCreatedFilterRange?.from
+                ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+                : null;
+            const to = dateCreatedFilterRange?.to
+                ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+                : null;
 
-        const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
-        url.searchParams.append("referenceid", referenceid);
-        if (from && to) {
-            url.searchParams.append("from", from);
-            url.searchParams.append("to", to);
+            const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            if (from && to) {
+                url.searchParams.append("from", from);
+                url.searchParams.append("to", to);
+            }
+
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch activities");
+            const data = await res.json();
+            setActivities(data.activities || []);
+        } catch (err: any) {
+            setError(err.message ?? "Unknown error");
+        } finally {
+            setLoading(false);
         }
-
-        fetch(url.toString())
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
     }, [referenceid, dateCreatedFilterRange]);
+
+    // -----------------------------
+    // FETCH AGENTS
+    // FIX: Removed redundant `userDetails` wrapper — use `referenceid` directly.
+    // -----------------------------
+    useEffect(() => {
+        if (!referenceid) return;
+
+        const fetchAgents = async () => {
+            try {
+                const res = await fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(referenceid)}`);
+                if (!res.ok) throw new Error("Failed to fetch agents");
+                const data = await res.json();
+                setAgents(Array.isArray(data) ? data : []);
+            } catch (err) {
+                console.error(err);
+                setError("Failed to load agents.");
+            }
+        };
+
+        fetchAgents();
+    }, [referenceid]);
 
     // -----------------------------
     // REAL-TIME SUBSCRIPTION
@@ -150,7 +165,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
         fetchActivities();
 
         const channel = supabase
-            .channel(`history-${referenceid}`)
+            .channel(`history-manager-${referenceid}`)
             .on(
                 "postgres_changes",
                 {
@@ -159,19 +174,18 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                     table: "history",
                     filter: `manager=eq.${referenceid}`,
                 },
-                () => {
-                    fetchActivities();
-                }
+                () => { fetchActivities(); }
             )
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
     }, [referenceid, fetchActivities]);
 
     // -----------------------------
     // SORT & FILTER
+    // FIX: Removed hasMeaningfulData — it was incorrectly hiding valid records
+    //      that had empty optional fields.
+    // FIX: Removed duplicate client-side date range filter — API handles this.
     // -----------------------------
     const sortedActivities = useMemo(() => {
         return [...activities].sort(
@@ -181,88 +195,23 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
         );
     }, [activities]);
 
-    const hasMeaningfulData = (item: Completed) => {
-        const columnsToCheck = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
-        return columnsToCheck.some((col) => {
-            const val = (item as any)[col];
-            if (val === null || val === undefined) return false;
-            if (typeof val === "string") return val.trim() !== "";
-            if (typeof val === "number") return !isNaN(val);
-            return Boolean(val);
-        });
-    };
-
     const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase();
+        const search = searchTerm.toLowerCase().trim();
 
         return sortedActivities
-            // 🔴 EXCLUDE declined quotations
-            .filter((item) =>
-                ["Endorsed to Sales Head"].includes(item.tsm_approved_status)
-            )
-
-            // 🔍 search filter
+            .filter((item) => item.tsm_approved_status === "Endorsed to Sales Head")
+            .filter((item) => item.type_activity === "Quotation Preparation")
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
-                    (val) => val && String(val).toLowerCase().includes(search)
+                    (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
                 );
-            })
-
-            // 📄 quotation only
-            .filter((item) => item.type_activity === "Quotation Preparation")
-
-            // 🧹 meaningful data only
-            .filter(hasMeaningfulData)
-
-            // 📅 date range filter
-            .filter((item) => {
-                if (!dateCreatedFilterRange) return true;
-
-                const updated = item.date_updated
-                    ? new Date(item.date_updated)
-                    : new Date(item.date_created);
-
-                if (isNaN(updated.getTime())) return false;
-
-                const from = dateCreatedFilterRange.from
-                    ? new Date(dateCreatedFilterRange.from)
-                    : null;
-
-                const to = dateCreatedFilterRange.to
-                    ? new Date(dateCreatedFilterRange.to)
-                    : null;
-
-                if (from && updated < from) return false;
-                if (to && updated > to) return false;
-
-                return true;
             });
-    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
+    }, [sortedActivities, searchTerm]);
 
     // -----------------------------
     // AGENT MAP
     // -----------------------------
-    const [agents, setAgents] = useState<any[]>([]);
-    const userDetails = { referenceid }; // placeholder
-    useEffect(() => {
-        if (!userDetails.referenceid) return;
-
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`);
-                if (!response.ok) throw new Error("Failed to fetch agents");
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error(err);
-                setError("Failed to load agents.");
-            }
-        };
-
-        fetchAgents();
-    }, [userDetails.referenceid]);
-
     const agentMap = useMemo(() => {
         const map: Record<string, { name: string; profilePicture: string }> = {};
         agents.forEach((agent) => {
@@ -279,7 +228,8 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     // -----------------------------
     // UTILS
     // -----------------------------
-    const displayValue = (v: any) => (v === null || v === undefined || String(v).trim() === "" ? "-" : String(v));
+    const displayValue = (v: any) =>
+        v === null || v === undefined || String(v).trim() === "" ? "-" : String(v);
 
     function formatDuration(start?: string, end?: string) {
         if (!start || !end) return "-";
@@ -300,9 +250,8 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     }
 
     // -----------------------------
-    // SELECTION
+    // DIALOG HANDLERS
     // -----------------------------
-
     const openEditDialog = (item: Completed) => {
         setEditItem(item);
         setEditOpen(true);
@@ -311,11 +260,6 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     const closeEditDialog = () => {
         setEditOpen(false);
         setEditItem(null);
-    };
-
-    const onEditSaved = () => {
-        fetchActivities();
-        closeEditDialog();
     };
 
     return (
@@ -355,13 +299,36 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                 </Alert>
             )}
 
+            {/* Loading State */}
+            {loading && (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <Loader2 className="w-8 h-8 animate-spin mb-3 opacity-50" />
+                    <p className="text-xs font-semibold uppercase tracking-wide">Loading quotations...</p>
+                </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !error && filteredActivities.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 border border-dashed border-gray-200 rounded-sm bg-gray-50">
+                    <FileX className="w-12 h-12 mb-3 opacity-25" />
+                    <p className="text-sm font-bold uppercase tracking-wide text-gray-400">
+                        No Endorsed Quotations Found
+                    </p>
+                    <p className="text-xs mt-1 text-gray-300">
+                        {searchTerm
+                            ? "Try adjusting your search term."
+                            : "There are currently no quotations endorsed to Sales Head."}
+                    </p>
+                </div>
+            )}
+
             {/* Total Records */}
-            {filteredActivities.length > 0 && (
+            {!loading && filteredActivities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
             )}
 
             {/* Table */}
-            {filteredActivities.length > 0 && (
+            {!loading && filteredActivities.length > 0 && (
                 <div className="overflow-auto space-y-8 custom-scrollbar">
                     <Table className="text-xs">
                         <TableHeader>
@@ -388,16 +355,12 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                         <TableCell className="text-center flex space-x-2 justify-center">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        className="rounded-none flex items-center gap-1 text-xs cursor-pointer"
-                                                    >
+                                                    <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
                                                         Actions
                                                         <MoreVertical className="w-4 h-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-
                                                 <DropdownMenuContent align="end" className="rounded-none text-xs">
-                                                    {/* Edit */}
                                                     <DropdownMenuItem
                                                         onClick={() => openEditDialog(item)}
                                                         className="flex items-center gap-2 cursor-pointer"
@@ -422,10 +385,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                                         N/A
                                                     </div>
                                                 )}
-
-                                                <span className="truncate">
-                                                    {agent?.name || "-"}
-                                                </span>
+                                                <span className="truncate">{agent?.name || "-"}</span>
                                             </div>
                                         </TableCell>
 
@@ -441,11 +401,16 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                             {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
 
-                                        <TableCell className="font-semibold">{item.company_name}<br /><span className="text-[10px] italic">{item.activity_reference_number}</span></TableCell>
+                                        <TableCell className="font-semibold">
+                                            {item.company_name}
+                                            <br />
+                                            <span className="text-[10px] italic">{item.activity_reference_number}</span>
+                                        </TableCell>
+
                                         <TableCell className="p-2 font-semibold text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
-                                                ${item.tsm_approved_status === "Approved By Sales Head"
+                                                    ${item.tsm_approved_status === "Approved By Sales Head"
                                                         ? "bg-green-100 text-green-700"
                                                         : item.tsm_approved_status === "Endorsed to Sales Head"
                                                             ? "bg-orange-100 text-orange-700"
@@ -473,20 +438,22 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                             <br />
                                             {displayValue(item.tsm_remarks)}
                                         </TableCell>
+
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-                                        
+
                                         <TableCell>
-                                            {displayValue(item.quotation_amount) !== "-"
-                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
+                                            {item.quotation_amount != null
+                                                ? Number(item.quotation_amount).toLocaleString(undefined, {
                                                     minimumFractionDigits: 2,
                                                     maximumFractionDigits: 2,
                                                 })
                                                 : "-"}
                                         </TableCell>
+
                                         <TableCell className="text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
-                                                ${item.quotation_type === "Ecoshift Corporation"
+                                                    ${item.quotation_type === "Ecoshift Corporation"
                                                         ? "bg-green-100 text-green-700"
                                                         : item.quotation_type === "Disruptive Solutions Inc"
                                                             ? "bg-rose-100 text-rose-800"
@@ -509,7 +476,10 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                 <TaskListEditDialog
                     item={editItem}
                     onClose={closeEditDialog}
-                    onSave={onEditSaved}
+                    onSave={() => {
+                        fetchActivities();
+                        closeEditDialog();
+                    }}
                     firstname={firstname}
                     lastname={lastname}
                     email={email}
@@ -524,7 +494,6 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
-                    // Signatories
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}

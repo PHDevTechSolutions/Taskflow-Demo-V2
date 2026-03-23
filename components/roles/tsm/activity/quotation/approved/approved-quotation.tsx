@@ -52,6 +52,7 @@ interface Completed {
     contact_person: string;
     tsm_approved_status: string;
     tsm_approval_date: string;
+    manager_approval_date: string;
     delivery_fee: string;
 
     // Signatories
@@ -367,7 +368,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
-                                <TableHead>Date Approved</TableHead>
+                                <TableHead>Date Approved/Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
                                 <TableHead className="text-center">Source</TableHead>
@@ -453,11 +454,40 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>
-                                            {item.tsm_approval_date
-                                                ? new Date(item.tsm_approval_date).toLocaleDateString("en-PH", {
-                                                    timeZone: "Asia/Manila",
-                                                })
-                                                : "-"}
+                                            {item.tsm_approval_date && (
+                                                <>
+                                                    
+                                                    {new Date(item.tsm_approval_date).toLocaleString(
+                                                        "en-PH",
+                                                        {
+                                                            timeZone: "Asia/Manila",
+                                                            year: "numeric",
+                                                            month: "short",
+                                                            day: "2-digit",
+                                                            hour: "2-digit",
+                                                            minute: "2-digit",
+                                                            second: "2-digit",
+                                                        },
+                                                    )}
+                                                </>
+                                            )}
+                                            {item.manager_approval_date && (
+                                                <>
+                                                    <br />
+                                                    {new Date(item.manager_approval_date).toLocaleString(
+                                                        "en-PH",
+                                                        {
+                                                            timeZone: "Asia/Manila",
+                                                            year: "numeric",
+                                                            month: "short",
+                                                            day: "2-digit",
+                                                            hour: "2-digit",
+                                                            minute: "2-digit",
+                                                            second: "2-digit",
+                                                        },
+                                                    )}
+                                                </>
+                                            )}
                                         </TableCell>
 
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
