@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data, error } = await supabase
       .from("activity")
       .update({ 
-        status: "Done",
+        status: "Pending",
         date_updated: new Date().toISOString(),  // <-- add this line
       })
       .eq("id", id)
