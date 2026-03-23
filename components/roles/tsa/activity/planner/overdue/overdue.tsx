@@ -162,7 +162,6 @@ export const Overdue: React.FC<NewTaskProps> = ({
       : null;
 
     const url = new URL(
-      // ✅ New dedicated API route — old fetch-activity is untouched
       "/api/activity/tsa/breaches/fetch-overdue",
       window.location.origin,
     );
@@ -270,6 +269,8 @@ export const Overdue: React.FC<NewTaskProps> = ({
       );
       return { ...activity, relatedHistoryItems };
     })
+    // FIX: only show activities that have at least one Unsuccessful history entry
+    .filter((item) => item.relatedHistoryItems.length > 0)
     .sort(
       (a, b) =>
         new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),

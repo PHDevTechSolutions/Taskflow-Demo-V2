@@ -109,6 +109,7 @@ const data = {
         { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
         { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
+        { name: "Daily Activity Logs", url: "/roles/tsm/activity/ccg", icon: Compass },
 
         // Manager
         { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
@@ -139,6 +140,7 @@ const data = {
         { name: "FB Marketplace Summary", url: "/roles/tsa/reports/fb", icon: ShoppingBag },
 
         // TSM
+        { name: "Outbound", url: "/roles/tsm/reports/ob", icon: PhoneCall },
         { name: "Quotation", url: "/roles/tsm/reports/quotation", icon: FileText },
         { name: "Sales Order", url: "/roles/tsm/reports/so", icon: ShoppingCart },
         { name: "Sales Invoice", url: "/roles/tsm/reports/si", icon: File },

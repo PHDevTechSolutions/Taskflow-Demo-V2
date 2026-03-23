@@ -589,7 +589,6 @@ export const SalesTable: React.FC<SalesProps> = ({
               {/*<TableHead className="text-xs">SO Amount</TableHead>*/}
               <TableHead className="text-xs text-right">Total Sales Invoice</TableHead>
               <TableHead className="text-xs">Variance</TableHead>
-              <TableHead className="text-xs">Achievement</TableHead>
               <TableHead className="text-xs">Par</TableHead>
               <TableHead className="text-xs">% To Plan</TableHead>
             </TableRow>
@@ -662,7 +661,7 @@ export const SalesTable: React.FC<SalesProps> = ({
                           currency: "PHP",
                         })}
                       </TableCell>
-                      <TableCell>{achievement.toFixed(2)}%</TableCell>
+                      {/*<TableCell>{achievement.toFixed(2)}%</TableCell>*/}
                       <TableCell>{parPercentage.toFixed(2)}%</TableCell>
                       <TableCell>{percentToPlan}%</TableCell>
                     </TableRow>

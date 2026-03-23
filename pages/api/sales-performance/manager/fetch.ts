@@ -35,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Add date filtering if from and to are valid
     if (fromDate && toDate) {
-      query = query.gte("si_date", fromDate).lte("si_date", toDate);
+      query = query.gte("delivery_date", fromDate).lte("delivery_date", toDate);
     }
 
     const { data, error } = await query;
