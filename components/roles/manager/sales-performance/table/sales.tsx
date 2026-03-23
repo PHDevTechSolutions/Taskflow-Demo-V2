@@ -257,8 +257,13 @@ export const SalesTable: React.FC<SalesProps> = ({
   }, [fromDate, toDate]);
 
   const parPercentage = (workingDaysSoFar / totalWorkingDays) * 100;
+
+  // Quota: full month quota when no date filter; prorate only when date filter is active
+  const hasDateRange = !!(dateCreatedFilterRange?.from && dateCreatedFilterRange?.to);
   const getProratedQuota = (fullQuota: number) =>
-    (fullQuota / totalWorkingDays) * workingDaysSoFar;
+    hasDateRange
+      ? Math.round((fullQuota / totalWorkingDays) * workingDaysSoFar)
+      : fullQuota;
 
   const filteredActivitiesByDate = useMemo(() => {
     const fromTime = fromDate.getTime();
@@ -486,7 +491,7 @@ export const SalesTable: React.FC<SalesProps> = ({
 
         <span className="text-xs text-gray-500">
           Days elapsed: <strong>{workingDaysSoFar}</strong> / {totalWorkingDays} &nbsp;|&nbsp;
-          Par: <strong>{parPercentage.toFixed(1)}%</strong>
+          Par: <strong>{parPercentage.toFixed(2)}%</strong>
         </span>
       </div>
 
