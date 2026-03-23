@@ -13,6 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { useFormat } from "@/contexts/FormatContext";
 import { type DateRange } from "react-day-picker";
+import { Menu, X } from "lucide-react";
 
 import { Meeting } from "@/components/roles/tsa/activity/meeting/meeting";
 import { BreachesDialog } from "@/components/popup/breaches";
@@ -105,6 +106,105 @@ function useFormattedClock(timeFormat: string, dateFormat: string) {
   return { time, date };
 }
 
+// ─── Shared sidebar content ───────────────────────────────────────────────────
+
+interface SidebarInnerProps {
+  navUser: {
+    name: string;
+    position: string;
+    email: string;
+    ReferenceID: string;
+    TSM: string;
+    Manager: string;
+    avatar: string;
+  };
+  userId: string;
+  dateCreatedFilterRange: DateRange | undefined;
+  setDateCreatedFilterRangeAction: React.Dispatch<
+    React.SetStateAction<DateRange | undefined>
+  >;
+  isTSM: boolean;
+  userDetails: UserDetails;
+  timeLogs: TimeLog[];
+  loadingLogs: boolean;
+  errorLogs: string | null;
+  time: string;
+  date: string;
+  onClose?: () => void;
+}
+
+function SidebarInner({
+  navUser,
+  userId,
+  dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
+  isTSM,
+  userDetails,
+  timeLogs,
+  loadingLogs,
+  errorLogs,
+  time,
+  date,
+  onClose,
+}: SidebarInnerProps) {
+  return (
+    <div className="flex flex-col h-full">
+      {/* ── Header ── */}
+      <div className="border-b border-sidebar-border h-16 flex items-center justify-between px-3">
+        <NavUser user={navUser} userId={userId} />
+        {/* Close button — visible only on mobile */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+            aria-label="Close panel"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* ── Content ── */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <DatePicker
+          selectedDateRange={dateCreatedFilterRange}
+          onDateSelectAction={setDateCreatedFilterRangeAction}
+        />
+
+        <div className="mx-0 border-t border-sidebar-border" />
+
+        {!isTSM && (
+          <Card className="rounded-none shadow-none border-0">
+            <CardContent className="space-y-2 px-3 py-2">
+              <Meeting
+                referenceid={userDetails.ReferenceID}
+                tsm={userDetails.TSM}
+                manager={userDetails.Manager}
+              />
+              <TimeLogComponent
+                timeLogs={timeLogs}
+                loadingLogs={loadingLogs}
+                errorLogs={errorLogs}
+                dateCreatedFilterRange={dateCreatedFilterRange}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* ── Footer clock ── */}
+      <div className="border-t border-sidebar-border pt-2 pb-1 text-center select-none">
+        <div className="text-xs font-mono font-semibold text-gray-700 tabular-nums tracking-tight">
+          {time}
+        </div>
+        <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+          {date}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SidebarRight({
@@ -115,6 +215,8 @@ export function SidebarRight({
 }: SidebarRightProps) {
   const { timeFormat, dateFormat } = useFormat();
   const { time, date } = useFormattedClock(timeFormat, dateFormat);
+
+  const [mobileOpen, setMobileOpen] = React.useState(false);
 
   const [userDetails, setUserDetails] = React.useState<UserDetails>(DEFAULT_USER);
   const [timeLogs, setTimeLogs]       = React.useState<TimeLog[]>([]);
@@ -147,7 +249,7 @@ export function SidebarRight({
       .catch((err) => console.error("User fetch error:", err));
   }, [userId]);
 
-  // ── Fetch all time logs (no date filter here — filtering is done in component) ──
+  // ── Fetch all time logs ─────────────────────────────────────────────────
 
   React.useEffect(() => {
     if (!userDetails.Email) {
@@ -194,67 +296,119 @@ export function SidebarRight({
     avatar:      userDetails.profilePicture || "/avatars/shadcn.jpg",
   };
 
+  const sharedProps = {
+    navUser,
+    userId:                       userId ?? "",
+    dateCreatedFilterRange,
+    setDateCreatedFilterRangeAction,
+    isTSM,
+    userDetails,
+    timeLogs,
+    loadingLogs,
+    errorLogs,
+    time,
+    date,
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <Sidebar
-      collapsible="none"
-      className="sticky top-0 hidden h-svh border-l lg:flex"
-      {...props}
-    >
-      {/* ── Header ── */}
-      <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
-        <NavUser user={navUser} userId={userId ?? ""} />
-      </SidebarHeader>
+    <>
+      {/* ════════════════════════════════════════════════
+          DESKTOP — original sticky sidebar (lg and up)
+      ════════════════════════════════════════════════ */}
+      <Sidebar
+        collapsible="none"
+        className="sticky top-0 hidden h-svh border-l lg:flex"
+        {...props}
+      >
+        <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
+          <NavUser user={navUser} userId={userId ?? ""} />
+        </SidebarHeader>
 
-      {/* ── Content ── */}
-      <SidebarContent className="custom-scrollbar overflow-y-auto">
+        <SidebarContent className="custom-scrollbar overflow-y-auto">
+          <DatePicker
+            selectedDateRange={dateCreatedFilterRange}
+            onDateSelectAction={setDateCreatedFilterRangeAction}
+          />
 
-        {/* Date range picker */}
-        <DatePicker
-          selectedDateRange={dateCreatedFilterRange}
-          onDateSelectAction={setDateCreatedFilterRangeAction}
+          <SidebarSeparator className="mx-0" />
+
+          {!isTSM && (
+            <Card className="rounded-none shadow-none border-0">
+              <CardContent className="space-y-2 px-3 py-2">
+                <Meeting
+                  referenceid={userDetails.ReferenceID}
+                  tsm={userDetails.TSM}
+                  manager={userDetails.Manager}
+                />
+                <TimeLogComponent
+                  timeLogs={timeLogs}
+                  loadingLogs={loadingLogs}
+                  errorLogs={errorLogs}
+                  dateCreatedFilterRange={dateCreatedFilterRange}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </SidebarContent>
+
+        <SidebarFooter>
+          <div className="border-t border-sidebar-border pt-2 pb-1 text-center select-none">
+            <div className="text-xs font-mono font-semibold text-gray-700 tabular-nums tracking-tight">
+              {time}
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+              {date}
+            </div>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* ════════════════════════════════════════════════
+          MOBILE — hamburger button (hidden on lg+)
+      ════════════════════════════════════════════════ */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3.5 right-4 z-40 p-2 rounded-md bg-white border border-gray-200 shadow-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+        aria-label="Open panel"
+      >
+        <Menu size={20} />
+      </button>
+
+      {/* ════════════════════════════════════════════════
+          MOBILE — backdrop
+      ════════════════════════════════════════════════ */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity"
+          onClick={() => setMobileOpen(false)}
         />
+      )}
 
-        <SidebarSeparator className="mx-0" />
+      {/* ════════════════════════════════════════════════
+          MOBILE — slide-in drawer from the right
+      ════════════════════════════════════════════════ */}
+      <div
+        className={[
+          "lg:hidden fixed top-0 right-0 z-50 h-full w-[85vw] max-w-sm",
+          "bg-white border-l border-sidebar-border shadow-2xl",
+          "transform transition-transform duration-300 ease-in-out",
+          mobileOpen ? "translate-x-0" : "translate-x-full",
+        ].join(" ")}
+        aria-modal="true"
+        role="dialog"
+      >
+        <SidebarInner
+          {...sharedProps}
+          onClose={() => setMobileOpen(false)}
+        />
+      </div>
 
-        {/* Meeting + Time Logs — hidden for TSM */}
-        {!isTSM && (
-          <Card className="rounded-none shadow-none border-0">
-            <CardContent className="space-y-2 px-3 py-2">
-              <Meeting
-                referenceid={userDetails.ReferenceID}
-                tsm={userDetails.TSM}
-                manager={userDetails.Manager}
-              />
-              {/* Pass dateCreatedFilterRange so logs are filtered by the selected date range */}
-              <TimeLogComponent
-                timeLogs={timeLogs}
-                loadingLogs={loadingLogs}
-                errorLogs={errorLogs}
-                dateCreatedFilterRange={dateCreatedFilterRange}
-              />
-            </CardContent>
-          </Card>
-        )}
-      </SidebarContent>
-
-      {/* ── Floating breach dialogs ── */}
+      {/* ── Floating breach dialogs (role-based) ── */}
       {isTSA     && <BreachesDialog />}
       {isTSM     && <BreachesTSMDialog />}
       {isManager && <BreachesManagerDialog />}
-
-      {/* ── Footer clock ── */}
-      <SidebarFooter>
-        <div className="border-t border-sidebar-border pt-2 pb-1 text-center select-none">
-          <div className="text-xs font-mono font-semibold text-gray-700 tabular-nums tracking-tight">
-            {time}
-          </div>
-          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">
-            {date}
-          </div>
-        </div>
-      </SidebarFooter>
-    </Sidebar>
+    </>
   );
 }
