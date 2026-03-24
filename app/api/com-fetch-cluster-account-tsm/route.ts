@@ -1,46 +1,50 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 
+// Validate environment variable and initialize database client
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
-if (!Xchire_databaseUrl) throw new Error("TASKFLOW_DB_URL is not set.");
-
+if (!Xchire_databaseUrl) {
+  throw new Error("TASKFLOW_DB_URL is not set in the environment variables.");
+}
 const Xchire_sql = neon(Xchire_databaseUrl);
-const DEFAULT_LIMIT = 1000;
 
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const tsm    = url.searchParams.get("tsm");
-    const limit  = parseInt(url.searchParams.get("limit") ?? `${DEFAULT_LIMIT}`, 10);
-    const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+    const Xchire_url = new URL(req.url);
+    const tsm = Xchire_url.searchParams.get("tsm");
 
-    const safeLimit  = isNaN(limit)  || limit < 1 ? DEFAULT_LIMIT : limit;
-    const safeOffset = isNaN(offset) || offset < 0 ? 0 : offset;
+    console.log("Received tsm:", tsm);
 
     if (!tsm) {
-      return NextResponse.json({ success: false, error: "Missing TSM ID." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing reference ID." },
+        { status: 400 }
+      );
     }
 
-    // ✅ Safer query: trim & lower, deduplicate by company_name
-    const accounts = await Xchire_sql`
-      SELECT DISTINCT ON (company_name) *
-      FROM accounts
-      WHERE TRIM(LOWER(tsm)) = LOWER(${tsm})
-        AND TRIM(LOWER(status)) = 'active'
-      ORDER BY company_name, date_created ASC, id ASC
-      LIMIT ${safeLimit}
-      OFFSET ${safeOffset};
+    const Xchire_fetch = await Xchire_sql`
+      SELECT * FROM accounts WHERE tsm = ${tsm};
     `;
 
-    return NextResponse.json({ success: true, data: accounts }, { status: 200 });
+    if (Xchire_fetch.length === 0) {
+      return NextResponse.json(
+        { success: false, data: [], error: "No accounts found with the provided reference ID." },
+        { status: 404 }
+      );
+    }
 
-  } catch (err: any) {
-    console.error("Error fetching accounts:", err);
+    // ✅ Standardized response format
     return NextResponse.json(
-      { success: false, error: err.message || "Failed to fetch accounts." },
+      { success: true, data: Xchire_fetch },
+      { status: 200 }
+    );
+  } catch (Xchire_error: any) {
+    console.error("Error fetching accounts:", Xchire_error);
+    return NextResponse.json(
+      { success: false, error: Xchire_error.message || "Failed to fetch accounts." },
       { status: 500 }
     );
   }
 }
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; // Always fetch latest data
