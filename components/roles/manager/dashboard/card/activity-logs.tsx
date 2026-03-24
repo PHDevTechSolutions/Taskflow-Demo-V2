@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import {
   Item,
@@ -9,6 +9,11 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { ChevronDown, ChevronRight, Users } from "lucide-react";
+
+import { db } from "@/lib/firebase";
+import {
+  collection, query, where, orderBy, onSnapshot,
+} from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +36,7 @@ interface Activity {
 
 interface Props {
   agents: Agent[];
-  agentActivityMap: Record<string, Activity>;
+  agentActivityMap?: Record<string, Activity>; // kept for backward compat but no longer required
   selectedAgent?: string;
   onSelectAgent?: (referenceId: string) => void;
 }
@@ -43,19 +48,69 @@ function isSame(a?: string, b?: string) {
   return a.toLowerCase() === b.toLowerCase();
 }
 
-// ─── Agent Card ───────────────────────────────────────────────────────────────
+function formatFirestoreDate(value: any): string | null {
+  if (!value) return null;
+  const options: Intl.DateTimeFormatOptions = {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  };
+  if (value?.toDate) return value.toDate().toLocaleString("en-PH", options);
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? value : d.toLocaleString("en-PH", options);
+  }
+  return null;
+}
+
+// ─── Hook: subscribe to login/logout for a single agent ───────────────────────
+
+function useAgentActivity(referenceId: string): Activity {
+  const [activity, setActivity] = useState<Activity>({
+    latestLogin: null,
+    latestLogout: null,
+  });
+
+  useEffect(() => {
+    if (!referenceId) return;
+
+    const q = query(
+      collection(db, "activity_logs"),
+      where("ReferenceID", "==", referenceId),
+      orderBy("date_created", "desc")
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const loginDoc  = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "login");
+        const logoutDoc = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "logout");
+        setActivity({
+          latestLogin:  loginDoc  ? formatFirestoreDate(loginDoc.data().date_created)  : null,
+          latestLogout: logoutDoc ? formatFirestoreDate(logoutDoc.data().date_created) : null,
+        });
+      },
+      (err) => console.error("[AgentActivityLogs] Firestore error:", err)
+    );
+
+    return () => unsub();
+  }, [referenceId]);
+
+  return activity;
+}
+
+// ─── Agent Item ───────────────────────────────────────────────────────────────
 
 function AgentItem({
   agent,
-  activity,
   isSelected,
   onSelect,
 }: {
   agent: Agent;
-  activity?: Activity;
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const activity = useAgentActivity(agent.ReferenceID);
+
   return (
     <button
       type="button"
@@ -99,8 +154,8 @@ function AgentItem({
                   {" | "}
                   <span>TQ: {Number(agent.TargetQuota).toLocaleString()}</span>
                 </div>
-                <span>Latest login: {activity?.latestLogin ?? "—"}</span>
-                <span>Latest logout: {activity?.latestLogout ?? "—"}</span>
+                <span>Latest login: {activity.latestLogin ?? "—"}</span>
+                <span>Latest logout: {activity.latestLogout ?? "—"}</span>
               </ItemDescription>
             </div>
           </div>
@@ -115,25 +170,22 @@ function AgentItem({
 function TSMRow({
   tsm,
   tsaUnder,
-  agentActivityMap,
   selectedAgent,
   onSelectAgent,
 }: {
   tsm: Agent;
   tsaUnder: Agent[];
-  agentActivityMap: Record<string, Activity>;
   selectedAgent: string;
   onSelectAgent: (id: string) => void;
 }) {
-  const isTSMSelected   = isSame(tsm.ReferenceID, selectedAgent);
+  const isTSMSelected    = isSame(tsm.ReferenceID, selectedAgent);
   const hasSelectedChild = tsaUnder.some((a) => isSame(a.ReferenceID, selectedAgent));
   const [expanded, setExpanded] = useState(isTSMSelected || hasSelectedChild);
 
-  const activity = agentActivityMap?.[tsm.ReferenceID];
-  const summedTQ = tsaUnder.reduce((sum, a) => sum + (Number(a.TargetQuota) || 0), 0);
+  const activity  = useAgentActivity(tsm.ReferenceID);
+  const summedTQ  = tsaUnder.reduce((sum, a) => sum + (Number(a.TargetQuota) || 0), 0);
 
   function handleTSMClick() {
-    // Toggle expand; select/deselect TSM
     setExpanded((v) => !v);
     onSelectAgent(isTSMSelected ? "all" : tsm.ReferenceID);
   }
@@ -189,10 +241,10 @@ function TSMRow({
               </span>
             </div>
             <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
-              Login: {activity?.latestLogin ?? "—"}
+              Login: {activity.latestLogin ?? "—"}
             </p>
             <p className="text-[11px] text-gray-400 font-mono">
-              Logout: {activity?.latestLogout ?? "—"}
+              Logout: {activity.latestLogout ?? "—"}
             </p>
           </div>
         </div>
@@ -222,7 +274,6 @@ function TSMRow({
                 <AgentItem
                   key={agent.ReferenceID}
                   agent={agent}
-                  activity={agentActivityMap?.[agent.ReferenceID]}
                   isSelected={isSame(agent.ReferenceID, selectedAgent)}
                   onSelect={() => handleAgentClick(agent.ReferenceID)}
                 />
@@ -239,13 +290,11 @@ function TSMRow({
 
 export function AgentActivityLogs({
   agents,
-  agentActivityMap,
   selectedAgent,
   onSelectAgent,
 }: Props) {
-  // Normalize — always a string so nothing downstream can crash
-  const safeSelected   = selectedAgent ?? "all";
-  const handleSelect   = onSelectAgent ?? (() => {});
+  const safeSelected = selectedAgent ?? "all";
+  const handleSelect = onSelectAgent ?? (() => {});
 
   const activeAgents = agents.filter(
     (a) => !["resigned", "terminated"].includes((a.Status ?? "").toLowerCase())
@@ -275,7 +324,7 @@ export function AgentActivityLogs({
 
       <CardContent className="flex flex-col gap-4">
 
-        {/* TSMs */}
+        {/* TSMs with their TSA agents */}
         {tsmAgents.length > 0 && (
           <section className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -289,7 +338,6 @@ export function AgentActivityLogs({
                     key={tsm.ReferenceID}
                     tsm={tsm}
                     tsaUnder={tsaUnder}
-                    agentActivityMap={agentActivityMap}
                     selectedAgent={safeSelected}
                     onSelectAgent={handleSelect}
                   />
@@ -299,7 +347,7 @@ export function AgentActivityLogs({
           </section>
         )}
 
-        {/* Orphaned TSAs */}
+        {/* Orphaned TSAs (no TSM assigned) */}
         {orphanedTSAs.length > 0 && (
           <section className="flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -310,7 +358,6 @@ export function AgentActivityLogs({
                 <AgentItem
                   key={agent.ReferenceID}
                   agent={agent}
-                  activity={agentActivityMap?.[agent.ReferenceID]}
                   isSelected={isSame(agent.ReferenceID, safeSelected)}
                   onSelect={() =>
                     handleSelect(isSame(agent.ReferenceID, safeSelected) ? "all" : agent.ReferenceID)

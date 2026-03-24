@@ -11,6 +11,7 @@ import { MapPin, Clock, CalendarDays } from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, onSnapshot } from "firebase/firestore";
+import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,14 @@ interface Agent {
   TargetQuota: string;
 }
 
+interface Meeting {
+  start_date: string | null;
+  end_date: string | null;
+  remarks: string | null;
+  type_activity: string | null;
+  date_created: string | null;
+}
+
 interface Props {
   agent: Agent;
   agentActivities: HistoryItem[];
@@ -58,7 +67,6 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// FIX: defined once outside component — stable, no closure issues
 function formatFirestoreDate(dateCreated: any): string | null {
   if (!dateCreated) return null;
   const options: Intl.DateTimeFormatOptions = {
@@ -107,6 +115,42 @@ function toMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// ─── Supabase: fetch ALL meetings for an agent (batched, no row cap) ──────────
+
+async function fetchAllMeetingsFromSupabase(agentId: string): Promise<Meeting[]> {
+  const all: Meeting[] = [];
+  let offset = 0;
+  const BATCH = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("meetings")
+      .select("start_date, end_date, remarks, type_activity, date_created")
+      .eq("referenceid", agentId)
+      .order("date_created", { ascending: false })
+      .range(offset, offset + BATCH - 1);
+
+    if (error) {
+      console.error("[AgentCard] Supabase meetings error:", error.message);
+      break;
+    }
+    if (!data || data.length === 0) break;
+
+    all.push(...data.map((row: any) => ({
+      start_date:    row.start_date    ?? null,
+      end_date:      row.end_date      ?? null,
+      remarks:       row.remarks       ?? null,
+      type_activity: row.type_activity ?? null,
+      date_created:  row.date_created  ?? null,
+    })));
+
+    if (data.length < BATCH) break;
+    offset += BATCH;
+  }
+
+  return all;
+}
+
 // ─── FlyTo Helper ─────────────────────────────────────────────────────────────
 
 function FlyToLocation({ center, zoom }: { center: LatLngExpression; zoom: number }) {
@@ -121,21 +165,15 @@ function FlyToLocation({ center, zoom }: { center: LatLngExpression; zoom: numbe
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function AgentCard({ agent, agentActivities }: Props) {
-  const [siteVisits, setSiteVisits]     = useState<SiteVisit[]>([]);
+  const [siteVisits,    setSiteVisits]    = useState<SiteVisit[]>([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
-  const [errorVisits, setErrorVisits]   = useState<string | null>(null);
+  const [errorVisits,   setErrorVisits]   = useState<string | null>(null);
   const [selectedVisit, setSelectedVisit] = useState<[number, number] | null>(null);
 
-  const [latestLogin, setLatestLogin]   = useState<string | null>(null);
+  const [latestLogin,  setLatestLogin]  = useState<string | null>(null);
   const [latestLogout, setLatestLogout] = useState<string | null>(null);
 
-  const [meetings, setMeetings] = useState<Array<{
-    start_date: string | null;
-    end_date: string | null;
-    remarks: string | null;
-    type_activity: string | null;
-    date_created: string | null;
-  }>>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   // ── Site visits ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -152,7 +190,7 @@ export function AgentCard({ agent, agentActivities }: Props) {
       .finally(() => setLoadingVisits(false));
   }, [agent?.ReferenceID]);
 
-  // ── Login / logout ──────────────────────────────────────────────────────
+  // ── Login / logout (Firestore — kept as-is, this is correct) ───────────
   useEffect(() => {
     if (!agent?.ReferenceID) return;
     const refId = agent.ReferenceID.trim();
@@ -177,37 +215,36 @@ export function AgentCard({ agent, agentActivities }: Props) {
     return () => unsub();
   }, [agent?.ReferenceID]);
 
-  // ── Meetings ────────────────────────────────────────────────────────────
+  // ── Meetings — now from Supabase instead of Firestore ──────────────────
   useEffect(() => {
     if (!agent?.ReferenceID) return;
 
-    const q = query(
-      collection(db, "meetings"),
-      where("referenceid", "==", agent.ReferenceID),
-      orderBy("date_created", "desc")
-    );
+    fetchAllMeetingsFromSupabase(agent.ReferenceID).then(setMeetings);
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      setMeetings(
-        snapshot.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            start_date:    formatFirestoreDate(d.start_date),
-            end_date:      formatFirestoreDate(d.end_date),
-            remarks:       d.remarks       ?? "—",
-            type_activity: d.type_activity ?? "—",
-            date_created:  formatFirestoreDate(d.date_created),
-          };
-        })
-      );
-    });
+    // Realtime updates via Supabase channel
+    const channel = supabase
+      .channel(`meetings:agent:${agent.ReferenceID}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meetings",
+          filter: `referenceid=eq.${agent.ReferenceID}`,
+        },
+        () => {
+          // Re-fetch on any change
+          fetchAllMeetingsFromSupabase(agent.ReferenceID).then(setMeetings);
+        }
+      )
+      .subscribe();
 
-    return () => unsub();
+    return () => { supabase.removeChannel(channel); };
   }, [agent?.ReferenceID]);
 
   // ── Derived stats ───────────────────────────────────────────────────────
-  const soDoneActivities      = agentActivities.filter((i) => i.status === "SO-Done");
-  const cancelledActivities   = agentActivities.filter((i) => i.status === "Cancelled");
+  const soDoneActivities     = agentActivities.filter((i) => i.status === "SO-Done");
+  const cancelledActivities  = agentActivities.filter((i) => i.status === "Cancelled");
 
   const totalDurationMs = agentActivities.reduce((total, item) => {
     const start = parseDateMs(item.start_date);
@@ -215,15 +252,15 @@ export function AgentCard({ agent, agentActivities }: Props) {
     return (start !== null && end !== null && end > start) ? total + (end - start) : total;
   }, 0);
 
-  const totalActualSales        = sumField("actual_sales", agentActivities);
-  const totalSoAmount           = sumField("so_amount", soDoneActivities);
-  const totalQuotationAmount    = sumField("quotation_amount", agentActivities);
-  const totalCancelledSoAmount  = sumField("so_amount", cancelledActivities);
+  const totalActualSales       = sumField("actual_sales",       agentActivities);
+  const totalSoAmount          = sumField("so_amount",          soDoneActivities);
+  const totalQuotationAmount   = sumField("quotation_amount",   agentActivities);
+  const totalCancelledSoAmount = sumField("so_amount",          cancelledActivities);
 
-  const countDrNumber           = uniqueCount("dr_number", agentActivities);
-  const countQuotationNumber    = uniqueCount("quotation_number", agentActivities);
-  const countSoNumber           = uniqueCount("so_number", soDoneActivities);
-  const countCancelledSoNumber  = uniqueCount("so_number", cancelledActivities);
+  const countDrNumber          = uniqueCount("dr_number",        agentActivities);
+  const countQuotationNumber   = uniqueCount("quotation_number", agentActivities);
+  const countSoNumber          = uniqueCount("so_number",        soDoneActivities);
+  const countCancelledSoNumber = uniqueCount("so_number",        cancelledActivities);
 
   // ── Map markers ─────────────────────────────────────────────────────────
   const mapMarkers = siteVisits
@@ -318,7 +355,6 @@ export function AgentCard({ agent, agentActivities }: Props) {
               </Item>
             )}
 
-            {/* Empty stats state */}
             {totalActualSales === 0 && totalSoAmount === 0 &&
               totalCancelledSoAmount === 0 && totalQuotationAmount === 0 && (
               <div className="flex items-center justify-center h-full py-10 text-xs text-gray-400 italic">
@@ -334,20 +370,17 @@ export function AgentCard({ agent, agentActivities }: Props) {
                 Loading site visits...
               </div>
             )}
-
             {!loadingVisits && errorVisits && (
               <div className="absolute inset-0 flex items-center justify-center text-xs text-red-500">
                 {errorVisits}
               </div>
             )}
-
             {!loadingVisits && !errorVisits && siteVisits.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-400">
                 <MapPin size={28} className="opacity-30" />
                 <p className="text-xs">No site visits recorded.</p>
               </div>
             )}
-
             {!loadingVisits && !errorVisits && siteVisits.length > 0 && (
               <>
                 <Map center={mapCenter} zoom={13} className="h-full w-full">
@@ -358,7 +391,6 @@ export function AgentCard({ agent, agentActivities }: Props) {
                   ))}
                 </Map>
 
-                {/* Site visits list overlay */}
                 <div className="absolute top-3 right-3 w-64 max-h-[320px] z-[9999]
                   bg-white/90 backdrop-blur-sm rounded-lg shadow-lg overflow-auto
                   border border-gray-200 p-3 font-mono">
@@ -373,8 +405,7 @@ export function AgentCard({ agent, agentActivities }: Props) {
                       const isSelected = selectedVisit?.[0] === lat && selectedVisit?.[1] === lng;
 
                       return (
-                        <li
-                          key={idx}
+                        <li key={idx}
                           onClick={() => hasCoords && setSelectedVisit([lat as number, lng as number])}
                           className={`rounded-md p-2 text-[10px] border transition-colors
                             ${hasCoords ? "cursor-pointer hover:bg-green-50 hover:border-green-300" : "opacity-50 cursor-not-allowed"}
@@ -386,11 +417,8 @@ export function AgentCard({ agent, agentActivities }: Props) {
                           <p><span className="font-semibold">Location:</span>{visit.Location || "N/A"}</p>
                           <p><span className="font-semibold">Date:</span>    {visit.date_created ? new Date(visit.date_created).toLocaleDateString() : "N/A"}</p>
                           {visit.PhotoURL && (
-                            <img
-                              src={visit.PhotoURL}
-                              alt={visit.Type}
-                              className="mt-2 w-full max-h-32 rounded object-cover"
-                            />
+                            <img src={visit.PhotoURL} alt={visit.Type}
+                              className="mt-2 w-full max-h-32 rounded object-cover" />
                           )}
                         </li>
                       );
@@ -402,7 +430,7 @@ export function AgentCard({ agent, agentActivities }: Props) {
           </div>
         </div>
 
-        {/* ── Meetings ── */}
+        {/* ── Meetings (Supabase) ── */}
         {meetings.length > 0 && (
           <div className="rounded-xl border border-green-200 bg-green-50 overflow-hidden">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-green-200 bg-green-100">
@@ -415,17 +443,20 @@ export function AgentCard({ agent, agentActivities }: Props) {
               {meetings.map((meeting, idx) => (
                 <li key={idx} className="px-5 py-3 hover:bg-green-100 transition-colors">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-gray-700">
-                    <p><span className="font-semibold text-gray-500">Type:</span>    {meeting.type_activity ?? "N/A"}</p>
+                    <p><span className="font-semibold text-gray-500">Type:</span>     {meeting.type_activity ?? "N/A"}</p>
                     <p><span className="font-semibold text-gray-500">Recorded:</span> {meeting.date_created  ?? "N/A"}</p>
-                    <p><span className="font-semibold text-gray-500">Start:</span>   {meeting.start_date    ?? "N/A"}</p>
-                    <p><span className="font-semibold text-gray-500">End:</span>     {meeting.end_date      ?? "N/A"}</p>
-                    <p className="col-span-2"><span className="font-semibold text-gray-500">Remarks:</span> {meeting.remarks ?? "N/A"}</p>
+                    <p><span className="font-semibold text-gray-500">Start:</span>    {meeting.start_date    ?? "N/A"}</p>
+                    <p><span className="font-semibold text-gray-500">End:</span>      {meeting.end_date      ?? "N/A"}</p>
+                    <p className="col-span-2">
+                      <span className="font-semibold text-gray-500">Remarks:</span> {meeting.remarks ?? "N/A"}
+                    </p>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
         )}
+
       </CardContent>
     </Card>
   );

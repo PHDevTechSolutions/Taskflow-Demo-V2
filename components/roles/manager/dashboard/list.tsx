@@ -37,6 +37,7 @@ interface HistoryItem {
     date_created: string;
     company_name: string;
     remarks: string;
+    activity_reference_number: string;
 }
 
 interface Agent {
@@ -80,18 +81,11 @@ interface Props {
 
 function formatDate(dateCreated: any): string | null {
     if (!dateCreated) return null;
-
     const options: Intl.DateTimeFormatOptions = {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-        hour12: true,
-        timeZoneName: "short",
+        year: "numeric", month: "long", day: "numeric",
+        hour: "numeric", minute: "numeric", second: "numeric",
+        hour12: true, timeZoneName: "short",
     };
-
     if (dateCreated.toDate) return dateCreated.toDate().toLocaleString("en-US", options);
     if (typeof dateCreated === "string") return new Date(dateCreated).toLocaleString("en-US", options);
     return null;
@@ -152,13 +146,10 @@ export function AgentList({
     // ── Filter history ──────────────────────────────────────────────────────
     const filteredHistory = useMemo(() => {
         if (!history.length) return [];
-
         const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : new Date();
         const to   = dateCreatedFilterRange?.to   ? new Date(dateCreatedFilterRange.to)   : new Date(from);
-
         from.setHours(0, 0, 0, 0);
         to.setHours(23, 59, 59, 999);
-
         return history.filter((item) => {
             const createdAt = new Date(item.date_created);
             if (isNaN(createdAt.getTime())) return false;
@@ -173,7 +164,6 @@ export function AgentList({
         if (!agents.length) return;
         setAgentActivityMap({});
         const unsubscribes: (() => void)[] = [];
-
         const agentsToWatch = selectedAgent === "all"
             ? agents
             : agents.filter((a) => a.ReferenceID === selectedAgent);
@@ -184,11 +174,9 @@ export function AgentList({
                 where("ReferenceID", "==", agent.ReferenceID),
                 orderBy("date_created", "desc")
             );
-
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const loginDoc  = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "login");
                 const logoutDoc = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "logout");
-
                 setAgentActivityMap((prev) => ({
                     ...prev,
                     [agent.ReferenceID]: {
@@ -206,10 +194,8 @@ export function AgentList({
     // ── Fetch database count ────────────────────────────────────────────────
     useEffect(() => {
         if (selectedAgent === "all") { setCountData(null); return; }
-
         setLoading(true);
         setError(null);
-
         fetch(`/api/count-database?referenceid=${encodeURIComponent(selectedAgent)}`)
             .then(async (res) => {
                 if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
@@ -235,12 +221,7 @@ export function AgentList({
 
     // ── Fetch scheduled ─────────────────────────────────────────────────────
     useEffect(() => {
-        if (selectedAgent === "all") {
-            setTodayNextAvailableCount(0);
-            setScheduledCompanies([]);
-            return;
-        }
-
+        if (selectedAgent === "all") { setTodayNextAvailableCount(0); setScheduledCompanies([]); return; }
         setLoadingScheduled(true);
         fetch(`/api/count-scheduled?referenceid=${encodeURIComponent(selectedAgent)}`)
             .then((res) => res.json())
@@ -261,9 +242,8 @@ export function AgentList({
     );
 
     // ── Render ──────────────────────────────────────────────────────────────
-
-    if (loadingHistory) return <div className="text-center py-10">Loading history data...</div>;
-    if (errorHistory)   return <div className="text-center text-red-500 py-10">{errorHistory}</div>;
+    if (loadingHistory) return <div className="text-center py-10 text-sm text-gray-500">Loading history data...</div>;
+    if (errorHistory)   return <div className="text-center text-red-500 py-10 text-sm">{errorHistory}</div>;
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
@@ -292,7 +272,7 @@ export function AgentList({
 
             <div className="grid grid-cols-1 gap-4">
 
-                {/* ── Activity logs — always visible, cards are clickable ── */}
+                {/* ── Activity logs ── */}
                 <AgentActivityLogs
                     agents={agents}
                     agentActivityMap={agentActivityMap}
@@ -300,7 +280,7 @@ export function AgentList({
                     onSelectAgent={setSelectedAgent}
                 />
 
-                {/* ── Agent Summary Card (when an agent is selected) ── */}
+                {/* ── Agent Summary Card ── */}
                 {selectedAgent !== "all" && (
                     selectedAgentObj ? (
                         <AgentCard
@@ -311,9 +291,7 @@ export function AgentList({
                             referenceid={referenceid}
                         />
                     ) : (
-                        <p className="text-center text-sm italic text-muted-foreground">
-                            Agent not found.
-                        </p>
+                        <p className="text-center text-sm italic text-muted-foreground">Agent not found.</p>
                     )
                 )}
 
@@ -322,80 +300,131 @@ export function AgentList({
                     selectedAgentObj.Role !== "Territory Sales Manager" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                        {/* Total Database */}
-                        <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
-                            <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
-                                <Building2 className="w-5 h-5" /> Total Database
-                            </h2>
-                            {loading  && <p className="text-center text-gray-500 italic">Loading...</p>}
-                            {error    && <p className="text-center text-red-600 font-semibold">{error}</p>}
-                            {!loading && !error && !countData && (
-                                <p className="mt-4 text-center text-sm text-gray-400 italic">
-                                    No data available for this agent.
-                                </p>
-                            )}
-                            {countData && !loading && !error && (
-                                <div className="space-y-3 text-gray-700 text-sm">
-                                    {[
-                                        { label: "Total",      value: countData.totalCount },
-                                        { label: "Top 50",     value: countData.top50Count },
-                                        { label: "Next 30",    value: countData.next30Count },
-                                        { label: "Balance 20", value: countData.balance20Count },
-                                        { label: "CSR Client", value: countData.csrClientCount },
-                                        { label: "TSA Client", value: countData.tsaClientCount },
-                                    ].map(({ label, value }) => (
-                                        <p key={label} className="flex items-center gap-2">
-                                            <span className="font-semibold text-gray-900">{label}:</span>
-                                            <span>{value.toLocaleString()}</span>
-                                        </p>
-                                    ))}
+                        {/* ── Total Database ── */}
+                        <div className="rounded-xl border border-gray-200 shadow-sm bg-white overflow-hidden">
+                            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+                                <div className="p-2 rounded-lg bg-blue-100">
+                                    <Building2 className="w-4 h-4 text-blue-600" />
                                 </div>
-                            )}
-                        </div>
+                                <h2 className="text-sm font-bold text-gray-800">Total Database</h2>
+                            </div>
 
-                        {/* Scheduled Accounts Today */}
-                        <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
-                            <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
-                                <PhoneForwarded className="w-5 h-5" /> OB Calls – Scheduled Accounts For Today
-                            </h2>
-                            <p className="text-2xl font-bold mb-3">
-                                {todayNextAvailableCount.toLocaleString()}
-                            </p>
-                            <Sheet>
-                                <SheetTrigger asChild>
-                                    <Button size="sm" disabled={loadingScheduled}>View Accounts</Button>
-                                </SheetTrigger>
-                                <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
-                                    <SheetHeader>
-                                        <SheetTitle>Scheduled Accounts Today</SheetTitle>
-                                    </SheetHeader>
-                                    <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
-                                        {loadingScheduled && (
-                                            <p className="text-sm text-muted-foreground">Loading...</p>
-                                        )}
-                                        {!loadingScheduled && scheduledCompanies.length === 0 && (
-                                            <p className="text-sm text-muted-foreground">
-                                                No scheduled accounts for today.
-                                            </p>
-                                        )}
-                                        {!loadingScheduled && scheduledCompanies.map((company, idx) => (
-                                            <div key={idx} className="text-sm py-1 border-b border-gray-100 last:border-0">
-                                                {company.company_name}
+                            <div className="px-5 py-3">
+                                {loading && (
+                                    <p className="text-center text-xs text-gray-400 italic py-6">Loading...</p>
+                                )}
+                                {error && (
+                                    <p className="text-center text-xs text-red-500 font-semibold py-6">{error}</p>
+                                )}
+                                {!loading && !error && !countData && (
+                                    <p className="text-center text-xs text-gray-400 italic py-6">
+                                        No data available for this agent.
+                                    </p>
+                                )}
+                                {countData && !loading && !error && (
+                                    <div className="divide-y divide-gray-100">
+                                        {[
+                                            { label: "Total",      value: countData.totalCount,     color: "text-gray-800",   bg: "bg-gray-100"    },
+                                            { label: "Top 50",     value: countData.top50Count,     color: "text-blue-700",   bg: "bg-blue-50"     },
+                                            { label: "Next 30",    value: countData.next30Count,    color: "text-indigo-700", bg: "bg-indigo-50"   },
+                                            { label: "Balance 20", value: countData.balance20Count, color: "text-violet-700", bg: "bg-violet-50"   },
+                                            { label: "CSR Client", value: countData.csrClientCount, color: "text-emerald-700",bg: "bg-emerald-50"  },
+                                            { label: "TSA Client", value: countData.tsaClientCount, color: "text-orange-700", bg: "bg-orange-50"   },
+                                        ].map(({ label, value, color, bg }) => (
+                                            <div key={label} className="flex items-center justify-between py-2.5">
+                                                <span className="text-xs text-gray-500 font-medium">{label}</span>
+                                                <span className={`text-xs font-bold tabular-nums px-2.5 py-1 rounded-full ${color} ${bg}`}>
+                                                    {value.toLocaleString()}
+                                                </span>
                                             </div>
                                         ))}
                                     </div>
-                                </SheetContent>
-                            </Sheet>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── Scheduled Accounts Today ── */}
+                        <div className="rounded-xl border border-gray-200 shadow-sm bg-white overflow-hidden">
+                            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+                                <div className="p-2 rounded-lg bg-green-100">
+                                    <PhoneForwarded className="w-4 h-4 text-green-600" />
+                                </div>
+                                <h2 className="text-sm font-bold text-gray-800">OB Calls – Scheduled Today</h2>
+                            </div>
+
+                            <div className="px-5 py-4 flex flex-col gap-4">
+                                {/* Big count */}
+                                <div className="flex items-end gap-2">
+                                    <span className="text-5xl font-black text-gray-800 tabular-nums leading-none">
+                                        {loadingScheduled ? "—" : todayNextAvailableCount.toLocaleString()}
+                                    </span>
+                                    <span className="text-xs text-gray-400 mb-1.5">
+                                        account{todayNextAvailableCount !== 1 ? "s" : ""} scheduled
+                                    </span>
+                                </div>
+
+                                <Sheet>
+                                    <SheetTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={loadingScheduled || todayNextAvailableCount === 0}
+                                            className="w-full rounded-lg text-xs gap-1.5"
+                                        >
+                                            <PhoneForwarded className="w-3.5 h-3.5" />
+                                            View Scheduled Accounts
+                                        </Button>
+                                    </SheetTrigger>
+
+                                    <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-0 flex flex-col">
+                                        <SheetHeader className="px-5 py-4 border-b border-gray-100 shrink-0">
+                                            <SheetTitle className="flex items-center gap-2 text-sm">
+                                                <PhoneForwarded className="w-4 h-4 text-green-600" />
+                                                Scheduled Accounts Today
+                                                <span className="ml-auto text-xs font-normal text-gray-400">
+                                                    {scheduledCompanies.length} total
+                                                </span>
+                                            </SheetTitle>
+                                        </SheetHeader>
+
+                                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                            {loadingScheduled && (
+                                                <p className="text-xs text-center text-gray-400 py-10 italic">Loading...</p>
+                                            )}
+                                            {!loadingScheduled && scheduledCompanies.length === 0 && (
+                                                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                                                    <PhoneForwarded className="w-10 h-10 mb-3 opacity-20" />
+                                                    <p className="text-xs font-semibold uppercase tracking-wide">No scheduled accounts today</p>
+                                                </div>
+                                            )}
+                                            {!loadingScheduled && scheduledCompanies.length > 0 && (
+                                                <ul className="divide-y divide-gray-100 px-5">
+                                                    {scheduledCompanies.map((company, idx) => (
+                                                        <li key={idx} className="flex items-center gap-3 py-3">
+                                                            <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                                {idx + 1}
+                                                            </span>
+                                                            <span className="text-sm text-gray-700 font-medium">
+                                                                {company.company_name}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    </SheetContent>
+                                </Sheet>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* ── Meetings (only when no agent is selected) ── */}
+                {/* ── Meetings (no agent selected) ── */}
                 {selectedAgent === "all" && (
                     <AgentMeetings agents={agents} selectedAgent={selectedAgent} />
                 )}
 
-                {/* ── Table cards (always visible, filtered by selectedAgent) ── */}
+                {/* ── Table cards ── */}
                 <OutboundCallsTableCard
                     history={filteredHistory}
                     agents={agents}
