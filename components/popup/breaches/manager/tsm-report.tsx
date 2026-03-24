@@ -445,13 +445,10 @@ export default function TSMReports() {
 
   // ── Territory coverage ────────────────────────────────────────────────────
   //
-  // Scope: the FULL calendar month of fromDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
-  //                   activity within that month range
-  // - "Not Reached" = the rest
-  // - NO source filter — isOutboundTouchbase applies only to the Outbound
-  //   Performance card, NOT to coverage counts.
-  // - Denominators come from clusterAccounts, not activities.
+  // FIX: activeClusterNames is the source of truth — only companies that exist
+  // in clusterAccounts (already filtered to active) are considered.
+  // Activities whose company_name is NOT in the current cluster are excluded
+  // from coverage counts entirely.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
@@ -463,45 +460,47 @@ export default function TSMReports() {
       return;
     }
 
-    // Explicit month bounds from fromDate
     const fromDateObj = new Date(fromDate);
-    const monthStart  = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd    = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    // Step 1 — company names with ANY activity within the calendar month
-    const touchedCompanies = new Set<string>();
-    const byActivityRef: Record<string, any> = {};
-
-    activities.forEach((act) => {
-      if (!act.company_name || !act.date_created) return;
-      const t = new Date(act.date_created).getTime();
-      if (isNaN(t) || t < monthStart || t > monthEnd) return;
-
-      touchedCompanies.add(act.company_name.toLowerCase());
-
-      if (act.activity_reference_number) {
-        byActivityRef[act.activity_reference_number] = act;
-      }
+    // Step 1 — Build a map of active cluster companies (source of truth)
+    const clusterCompanyMap = new Map<string, Activity>();
+    clusterAccounts.forEach((acc) => {
+      if (acc.company_name) clusterCompanyMap.set(acc.company_name.toLowerCase(), acc);
     });
 
-    setUniqueActivitiesList(Object.values(byActivityRef));
+    // Step 2 — Filter activities:
+    //   (a) company_name must exist in current clusterCompanyMap (active cluster only)
+    //   (b) date_created must be within the month range
+    const clusterActivities = activities.filter((act) =>
+      act.company_name &&
+      clusterCompanyMap.has(act.company_name.toLowerCase()) && // ← FIX: exclude companies no longer in cluster
+      act.date_created &&
+      new Date(act.date_created).getTime() >= monthStart &&
+      new Date(act.date_created).getTime() <= monthEnd
+    );
 
-    // Step 2 — covered / uncovered split by company_name
-    const covered   = clusterAccounts.filter((acc) =>
-      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
-    );
-    const uncovered = clusterAccounts.filter((acc) =>
-      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
-    );
+    // Step 3 — Unique activities by reference number
+    const uniqueByRef: Record<string, Activity> = {};
+    clusterActivities.forEach((act) => {
+      if (act.activity_reference_number) uniqueByRef[act.activity_reference_number] = act;
+    });
+    setUniqueActivitiesList(Object.values(uniqueByRef));
+
+    // Step 4 — Covered vs Uncovered (based on active cluster only)
+    const touchedCompanies = new Set(clusterActivities.map((a) => a.company_name!.toLowerCase()));
+    const covered   = clusterAccounts.filter((acc) => acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase()));
+    const uncovered = clusterAccounts.filter((acc) => acc.company_name && !touchedCompanies.has(acc.company_name.toLowerCase()));
 
     setCoveredAccounts(covered);
     setUncoveredAccounts(uncovered);
 
-    // Step 3 — segment counts from covered cluster accounts
+    // Step 5 — Segment counts for covered accounts only
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach((acc) => {
       const type = acc.type_client ?? "";
-      if      (type === "top50")     seg.top50++;
+      if (type === "top50")     seg.top50++;
       else if (type === "next30")    seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
@@ -525,12 +524,25 @@ export default function TSMReports() {
     const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
     const allowed = ["Assisted", "Quote-Done", "SO-Done", "Delivered"];
 
+    // FIX: also filter against active cluster companies
+    const activeClusterNames = new Set(clusterAccounts.map((a) => (a.company_name ?? "").toLowerCase()));
+
     const grouped: Record<string, number> = {};
     let total = 0;
 
     activities.forEach((act) => {
       const t = new Date(act.date_created).getTime();
-      if (allowed.includes(act.status) && act.type_client === "New Client" && t >= startOfDay.getTime() && t <= endOfDay.getTime()) {
+      const companyKey = (act.company_name || "").toLowerCase();
+
+      // Only count if company still exists in active cluster
+      if (!activeClusterNames.has(companyKey)) return;
+
+      if (
+        allowed.includes(act.status) &&
+        act.type_client === "New Client" &&
+        t >= startOfDay.getTime() &&
+        t <= endOfDay.getTime()
+      ) {
         const company = act.company_name || "Unknown";
         grouped[company] = (grouped[company] || 0) + 1;
         total++;
@@ -539,7 +551,7 @@ export default function TSMReports() {
 
     setNewClientByCompany(grouped);
     setNewClientCount(total);
-  }, [activities, fromDate]);
+  }, [activities, fromDate, clusterAccounts]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -692,26 +704,7 @@ export default function TSMReports() {
           </SectionCard>
 
           {/* Database Coverage */}
-          <SectionCard
-            title="Database Coverage"
-          > {/*badge={
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCoverageDialogSource("covered")}
-                  className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
-                >
-                  <List size={10} />
-                  Covered
-                </button>
-                <span className="text-gray-300 text-[9px]">·</span>
-                <button
-                  onClick={() => setCoverageDialogSource("uncovered")}
-                  className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
-                >
-                  Not Reached
-                </button>
-              </div>
-            }*/}
+          <SectionCard title="Database Coverage">
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>

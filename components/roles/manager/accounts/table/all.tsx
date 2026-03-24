@@ -289,7 +289,6 @@ function AccountListDialog({
   const typeCountMap = useMemo(() => {
     const m: Record<string, number> = {};
     accounts.forEach((a) => {
-      // ── normalize to uppercase so mixed-case dupes are merged ──
       const t = a.type_client?.toUpperCase() ?? "";
       m[t] = (m[t] ?? 0) + 1;
     });
@@ -764,26 +763,42 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     posts.filter((a) => a.status?.toLowerCase() === "active"),
   [posts]);
 
+  // ── FIX: Set of active company names (lowercase) — source of truth ──
+  const activeCompanyNames = useMemo(() => {
+    const s = new Set<string>();
+    allActiveAccounts.forEach((a) => s.add(a.company_name.toLowerCase()));
+    return s;
+  }, [allActiveAccounts]);
+
+  // ── FIX: Filter allActivities to only include companies still in active accounts ──
+  const activeFilteredActivities = useMemo(() =>
+    allActivities.filter((a) =>
+      a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
+    ),
+  [allActivities, activeCompanyNames]);
+
   const tsmIds = useMemo(() => {
     const s = new Set<string>();
     allActiveAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
     return [...s];
   }, [allActiveAccounts]);
 
+  // ── FIX: activityKeySet now uses activeFilteredActivities ──
   const activityKeySet = useMemo(() => {
     const s = new Set<string>();
-    allActivities.forEach((a) => {
+    activeFilteredActivities.forEach((a) => {
       if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
       else if (a.company_name)        s.add(`name:${a.company_name.toLowerCase()}`);
     });
     return s;
-  }, [allActivities]);
+  }, [activeFilteredActivities]);
 
   const getAccountKey = (account: Account): string => {
     if (account.account_reference_number) return account.account_reference_number.toLowerCase();
     return `name:${account.company_name.toLowerCase()}`;
   };
 
+  // ── FIX: companiesWithActivity now uses activityKeySet derived from activeFilteredActivities ──
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
     allActiveAccounts.forEach((a) => {
@@ -792,10 +807,11 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return s;
   }, [allActiveAccounts, activityKeySet]);
 
+  // ── FIX: activityCountMap now uses activeFilteredActivities ──
   const activityCountMap = useMemo(() => {
     const refCount: Record<string, number> = {};
     const nameCount: Record<string, number> = {};
-    allActivities.forEach((a) => {
+    activeFilteredActivities.forEach((a) => {
       if (a.account_reference_number) {
         const k = a.account_reference_number.toLowerCase();
         refCount[k] = (refCount[k] ?? 0) + 1;
@@ -815,7 +831,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       }
     });
     return m;
-  }, [allActivities, allActiveAccounts]);
+  }, [activeFilteredActivities, allActiveAccounts]);
 
   const tsmData = useMemo(() => {
     return tsmIds.map((tsmId) => {
@@ -855,7 +871,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const scopedWithActivity    = useMemo(() => scopedBase.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
   const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
 
-  // ── FIX: normalize type_client to uppercase before grouping ──────────────
   const typeClientCounts = useMemo(() => {
     const c: Record<string, number> = {};
     scopedBase.forEach((a) => {
@@ -897,12 +912,19 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     setSearch("");
   };
 
+  // ── FIX: openHistory guards against companies not in active accounts ──
   const openHistory = (companyName: string, source: ListSource = null) => {
+    // Only open history if the company still exists in active accounts
+    const isActive = activeCompanyNames.has(companyName.toLowerCase());
+    if (!isActive) return;
+
     setHistoryCompany(companyName);
     setHistorySource(source);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    const filtered = allActivities.filter((a) =>
+
+    // Use activeFilteredActivities so only records tied to active companies are shown
+    const filtered = activeFilteredActivities.filter((a) =>
       (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
     );
     setActivities(filtered);
