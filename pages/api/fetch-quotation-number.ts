@@ -14,7 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from("history")
       .select("quotation_number")
       .ilike("quotation_number", `${prefix}-%`)
-      .order("quotation_number", { ascending: true });
+      .order("quotation_number", { ascending: false }) // pinakamataas muna
+      .limit(1); // isang row lang — ang pinakamataas na sequence
 
     if (error) {
       return res.status(500).json({ message: error.message });
