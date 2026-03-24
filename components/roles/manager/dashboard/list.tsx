@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
@@ -13,11 +12,13 @@ import { OutboundCallsTableCard } from "./table/outbound-calls";
 import { QuotationTableCard } from "../../tsm/dashboard/table/quotation";
 import { SalesOrderTableCard } from "../../tsm/dashboard/table/sales-order";
 import { InboundRepliesCard } from "../../tsm/dashboard/table/inbound-replies";
-import { Building2, PhoneForwarded } from 'lucide-react';
+import { Building2, PhoneForwarded } from "lucide-react";
 
 import ReactSelect from "react-select";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot, DocumentData, limit } from "firebase/firestore";
+import { collection, query, orderBy, where, onSnapshot } from "firebase/firestore";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface HistoryItem {
     referenceid: string;
@@ -51,14 +52,6 @@ interface Agent {
     Connection: string;
 }
 
-interface AgentMeeting {
-    start_date?: string | null;
-    end_date?: string | null;
-    remarks?: string | null;
-    type_activity?: string | null;
-    date_created?: string | null;
-}
-
 interface ScheduledCompany {
     company_name: string;
 }
@@ -68,94 +61,88 @@ interface AgentOption {
     label: string;
 }
 
+type AgentActivity = {
+    latestLogin: string | null;
+    latestLogout: string | null;
+};
+
+type CountData = {
+    totalCount: number;
+    top50Count: number;
+    next30Count: number;
+    balance20Count: number;
+    csrClientCount: number;
+    tsaClientCount: number;
+};
+
 interface Props {
     referenceid: string;
     dateCreatedFilterRange: any;
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// FIX: Moved outside component so it's stable and doesn't need to be a dep
+function formatDate(dateCreated: any): string | null {
+    if (!dateCreated) return null;
+
+    const options: Intl.DateTimeFormatOptions = {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+        timeZoneName: "short",
+    };
+
+    if (dateCreated.toDate) {
+        return dateCreated.toDate().toLocaleString("en-US", options);
+    }
+
+    if (typeof dateCreated === "string") {
+        return new Date(dateCreated).toLocaleString("en-US", options);
+    }
+
+    return null;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function AgentList({
     referenceid,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }: Props) {
-    const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [history, setHistory]               = useState<HistoryItem[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [errorHistory, setErrorHistory] = useState<string | null>(null);
+    const [errorHistory, setErrorHistory]     = useState<string | null>(null);
 
-    const [agents, setAgents] = useState<Agent[]>([]);
+    const [agents, setAgents]               = useState<Agent[]>([]);
     const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-    const [count, setCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError]     = useState<string | null>(null);
+
+    const [countData, setCountData]                         = useState<CountData | null>(null);
     const [todayNextAvailableCount, setTodayNextAvailableCount] = useState<number>(0);
-    const [scheduledCompanies, setScheduledCompanies] = useState<ScheduledCompany[]>([]);
-    const [loadingScheduled, setLoadingScheduled] = useState(false);
+    const [scheduledCompanies, setScheduledCompanies]       = useState<ScheduledCompany[]>([]);
+    const [loadingScheduled, setLoadingScheduled]           = useState(false);
 
-    type AgentActivity = {
-        latestLogin: string | null;
-        latestLogout: string | null;
-    };
+    const [agentActivityMap, setAgentActivityMap] = useState<Record<string, AgentActivity>>({});
 
-    const [agentActivityMap, setAgentActivityMap] = useState<
-        Record<string, AgentActivity>
-    >({});
-
-    const [agentMeetingMap, setAgentMeetingMap] = useState<
-        Record<string, AgentMeeting>
-    >({});
-
-    const formatDate = (dateCreated: any) => {
-        if (!dateCreated) return null;
-
-        if (dateCreated.toDate) {
-            return dateCreated.toDate().toLocaleString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "numeric",
-                minute: "numeric",
-                second: "numeric",
-                hour12: true,
-                timeZoneName: "short",
-            });
-        }
-
-        if (typeof dateCreated === "string") {
-            return new Date(dateCreated).toLocaleString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "numeric",
-                minute: "numeric",
-                second: "numeric",
-                hour12: true,
-                timeZoneName: "short",
-            });
-        }
-
-        return null;
-    };
-
-    /* =========================
-       DEFAULT DATE = TODAY
-    ========================= */
+    // ── Default date = today (run once on mount only) ──────────────────────
+    // FIX: Empty dep array so this only fires once and never causes a loop
     useEffect(() => {
-        if (!dateCreatedFilterRange?.from) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        setDateCreatedFilterRangeAction({ from: today, to: today });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-            setDateCreatedFilterRangeAction({
-                from: today,
-                to: today,
-            });
-        }
-    }, [dateCreatedFilterRange, setDateCreatedFilterRangeAction]);
-
-    /* =========================
-       FETCH AGENTS
-    ========================= */
+    // ── Fetch agents ────────────────────────────────────────────────────────
     useEffect(() => {
         if (!referenceid) return;
 
@@ -168,9 +155,7 @@ export function AgentList({
             .catch(() => setErrorHistory("Failed to load agents."));
     }, [referenceid]);
 
-    /* =========================
-       FETCH HISTORY
-    ========================= */
+    // ── Fetch history ───────────────────────────────────────────────────────
     useEffect(() => {
         if (!referenceid) return;
 
@@ -185,19 +170,16 @@ export function AgentList({
             .finally(() => setLoadingHistory(false));
     }, [referenceid]);
 
-    /* =========================
-       FILTER LOGIC (TODAY DEFAULT)
-    ========================= */
+    // ── Filter history ──────────────────────────────────────────────────────
     const filteredHistory = useMemo(() => {
         if (!history.length) return [];
 
         const from = dateCreatedFilterRange?.from
             ? new Date(dateCreatedFilterRange.from)
             : new Date();
-
         const to = dateCreatedFilterRange?.to
             ? new Date(dateCreatedFilterRange.to)
-            : from;
+            : new Date(from);
 
         from.setHours(0, 0, 0, 0);
         to.setHours(23, 59, 59, 999);
@@ -205,30 +187,24 @@ export function AgentList({
         return history.filter((item) => {
             const createdAt = new Date(item.date_created);
             if (isNaN(createdAt.getTime())) return false;
-
             if (createdAt < from || createdAt > to) return false;
-
             if (selectedAgent === "all") return true;
-
-            return (
-                item.referenceid.toLowerCase() ===
-                selectedAgent.toLowerCase()
-            );
+            return item.referenceid.toLowerCase() === selectedAgent.toLowerCase();
         });
     }, [history, selectedAgent, dateCreatedFilterRange]);
 
+    // ── Firebase activity log listener ──────────────────────────────────────
+    // FIX: formatDate is now stable (defined outside), so deps are correct
     useEffect(() => {
         if (!agents.length) return;
 
-        // clear old data
         setAgentActivityMap({});
-
         const unsubscribes: (() => void)[] = [];
 
         const agentsToWatch =
             selectedAgent === "all"
                 ? agents
-                : agents.filter(a => a.ReferenceID === selectedAgent);
+                : agents.filter((a) => a.ReferenceID === selectedAgent);
 
         agentsToWatch.forEach((agent) => {
             const q = query(
@@ -238,22 +214,14 @@ export function AgentList({
             );
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                const loginDoc = snapshot.docs.find(
-                    d => d.data().status?.toLowerCase() === "login"
-                );
-                const logoutDoc = snapshot.docs.find(
-                    d => d.data().status?.toLowerCase() === "logout"
-                );
+                const loginDoc  = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "login");
+                const logoutDoc = snapshot.docs.find((d) => d.data().status?.toLowerCase() === "logout");
 
-                setAgentActivityMap(prev => ({
+                setAgentActivityMap((prev) => ({
                     ...prev,
                     [agent.ReferenceID]: {
-                        latestLogin: loginDoc
-                            ? formatDate(loginDoc.data().date_created)
-                            : null,
-                        latestLogout: logoutDoc
-                            ? formatDate(logoutDoc.data().date_created)
-                            : null,
+                        latestLogin:  loginDoc  ? formatDate(loginDoc.data().date_created)  : null,
+                        latestLogout: logoutDoc ? formatDate(logoutDoc.data().date_created) : null,
                     },
                 }));
             });
@@ -261,18 +229,10 @@ export function AgentList({
             unsubscribes.push(unsubscribe);
         });
 
-        return () => unsubscribes.forEach(u => u());
+        return () => unsubscribes.forEach((u) => u());
     }, [selectedAgent, agents]);
 
-    const [countData, setCountData] = useState<{
-        totalCount: number | null;
-        top50Count: number | null;
-        next30Count: number | null;
-        balance20Count: number | null;
-        csrClientCount: number | null;
-        tsaClientCount: number | null;
-    } | null>(null);
-
+    // ── Fetch database count ────────────────────────────────────────────────
     useEffect(() => {
         if (selectedAgent === "all") {
             setCountData(null);
@@ -293,27 +253,25 @@ export function AgentList({
             .then((data) => {
                 if (data.success) {
                     setCountData({
-                        totalCount: data.totalCount ?? 0,
-                        top50Count: data.top50Count ?? 0,
-                        next30Count: data.next30Count ?? 0,
+                        totalCount:    data.totalCount    ?? 0,
+                        top50Count:    data.top50Count    ?? 0,
+                        next30Count:   data.next30Count   ?? 0,
                         balance20Count: data.balance20Count ?? 0,
                         csrClientCount: data.csrClientCount ?? 0,
                         tsaClientCount: data.tsaClientCount ?? 0,
                     });
                 } else {
-                    setError(data.error || "Failed to fetch count");
-                    setCountData(null);
+                    throw new Error(data.error || "Failed to fetch count");
                 }
             })
             .catch((err) => {
                 setError(err.message);
                 setCountData(null);
             })
-            .finally(() => {
-                setLoading(false);
-            });
+            .finally(() => setLoading(false));
     }, [selectedAgent]);
 
+    // ── Fetch scheduled accounts ────────────────────────────────────────────
     useEffect(() => {
         if (selectedAgent === "all") {
             setTodayNextAvailableCount(0);
@@ -323,10 +281,9 @@ export function AgentList({
 
         setLoadingScheduled(true);
         fetch(`/api/count-scheduled?referenceid=${encodeURIComponent(selectedAgent)}`)
-            .then(res => res.json())
-            .then(data => {
+            .then((res) => res.json())
+            .then((data) => {
                 setTodayNextAvailableCount(data.count ?? 0);
-                // If your API returns the list too, set it here
                 setScheduledCompanies(data.companies ?? []);
             })
             .catch(() => {
@@ -336,215 +293,199 @@ export function AgentList({
             .finally(() => setLoadingScheduled(false));
     }, [selectedAgent]);
 
-    const agentOptions: AgentOption[] = [
+    // ── Agent dropdown options ──────────────────────────────────────────────
+    const agentOptions: AgentOption[] = useMemo(() => [
         { value: "all", label: "All Agents" },
-        ...agents.map(agent => ({
+        ...agents.map((agent) => ({
             value: agent.ReferenceID,
             label: `${agent.Firstname} ${agent.Lastname}`,
         })),
-    ];
+    ], [agents]);
 
-    const selectedOption = agentOptions.find(opt => opt.value === selectedAgent);
+    const selectedOption = agentOptions.find((opt) => opt.value === selectedAgent);
+
+    // ── Selected agent object ───────────────────────────────────────────────
+    const selectedAgentObj = useMemo(
+        () => selectedAgent !== "all"
+            ? agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase())
+            : undefined,
+        [selectedAgent, agents]
+    );
+
+    // ── Render ──────────────────────────────────────────────────────────────
+
+    if (loadingHistory) {
+        return <div className="text-center py-10">Loading history data...</div>;
+    }
+
+    if (errorHistory) {
+        return <div className="text-center text-red-500 py-10">{errorHistory}</div>;
+    }
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            {loadingHistory ? (
-                <div className="text-center py-10">Loading history data...</div>
-            ) : errorHistory ? (
-                <div className="text-center text-red-500 py-10">{errorHistory}</div>
-            ) : (
-                <>
-                    {/* AGENT FILTER */}
-                    <ReactSelect
-                        options={agentOptions}
-                        value={selectedOption}
-                        onChange={(option) => setSelectedAgent(option?.value ?? "all")}
-                        placeholder="Filter by Agent"
-                        isSearchable={true}
-                        styles={{
-                            control: (base) => ({ ...base, fontSize: 12 }),
-                            menu: (base) => ({ ...base, fontSize: 12 }),
-                        }}
-                        className="capitalize"
-                    />
+            {/* ── Agent Filter ── */}
+            <ReactSelect
+                options={agentOptions}
+                value={selectedOption}
+                onChange={(option) => setSelectedAgent(option?.value ?? "all")}
+                placeholder="Filter by Agent"
+                isSearchable
+                styles={{
+                    control: (base) => ({ ...base, fontSize: 12 }),
+                    menu:    (base) => ({ ...base, fontSize: 12 }),
+                }}
+                className="capitalize"
+            />
 
-                    <div className="grid grid-cols-1 gap-4 mt-2">
-                        {/* CARD 1 – AGENT SUMMARY */}
-                        {selectedAgent !== "all" && (() => {
-                            const agent = agents.find(
-                                (a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase()
-                            );
+            <div className="grid grid-cols-1 gap-4 mt-2">
 
-                            if (!agent) {
-                                return (
-                                    <p className="text-center text-sm italic text-muted-foreground">
-                                        Agent not found.
-                                    </p>
-                                );
-                            }
-
-                            const agentActivities = filteredHistory.filter(
-                                (item) => item.referenceid.toLowerCase() === selectedAgent.toLowerCase()
-                            );
-
-                            return <AgentCard
-                                agent={agent}
-                                agentActivities={agentActivities}
+                {/* ── Agent Summary Card ── */}
+                {selectedAgent !== "all" && (
+                    selectedAgentObj
+                        ? (
+                            <AgentCard
+                                agent={selectedAgentObj}
+                                agentActivities={filteredHistory.filter(
+                                    (item) => item.referenceid.toLowerCase() === selectedAgent.toLowerCase()
+                                )}
                                 referenceid={referenceid}
-
-                            />;
-                        })()}
-
-                        {selectedAgent == "all" && (
-                            <AgentActivityLogs
-                                agents={agents}
-                                agentActivityMap={agentActivityMap}
                             />
-                        )}
+                        )
+                        : (
+                            <p className="text-center text-sm italic text-muted-foreground">
+                                Agent not found.
+                            </p>
+                        )
+                )}
 
-                        {selectedAgent !== "all" && (() => {
-                            const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
-                            if (!agent) return null;
+                {/* ── All agents activity logs ── */}
+                {selectedAgent === "all" && (
+                    <AgentActivityLogs
+                        agents={agents}
+                        agentActivityMap={agentActivityMap}
+                    />
+                )}
 
-                            if (agent.Role === "Territory Sales Manager") {
-                                // Do NOT show these cards for TSM role
-                                return null;
-                            }
+                {/* ── Database + Scheduled cards (TSA only) ── */}
+                {selectedAgent !== "all" && selectedAgentObj && selectedAgentObj.Role !== "Territory Sales Manager" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                            return (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* CARD 1 – TOTAL DATABASE */}
-                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
-                                        <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
-                                            <Building2 className="w-5 h-5" />Total Database
-                                        </h2>
+                        {/* Total Database */}
+                        <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                            <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
+                                <Building2 className="w-5 h-5" /> Total Database
+                            </h2>
 
-                                        {loading && (
-                                            <p className="text-center text-gray-500 italic">Loading...</p>
+                            {loading && (
+                                <p className="text-center text-gray-500 italic">Loading...</p>
+                            )}
+
+                            {error && (
+                                <p className="text-center text-red-600 font-semibold">{error}</p>
+                            )}
+
+                            {/* FIX: was checking !referenceid (manager ID) — should check countData */}
+                            {!loading && !error && !countData && (
+                                <p className="mt-4 text-center text-sm text-gray-400 italic">
+                                    No data available for this agent.
+                                </p>
+                            )}
+
+                            {countData && !loading && !error && (
+                                <div className="space-y-3 text-gray-700 text-sm">
+                                    {[
+                                        { label: "Total",      value: countData.totalCount },
+                                        { label: "Top 50",     value: countData.top50Count },
+                                        { label: "Next 30",    value: countData.next30Count },
+                                        { label: "Balance 20", value: countData.balance20Count },
+                                        { label: "CSR Client", value: countData.csrClientCount },
+                                        { label: "TSA Client", value: countData.tsaClientCount },
+                                    ].map(({ label, value }) => (
+                                        <p key={label} className="flex items-center gap-2">
+                                            <span className="font-semibold text-gray-900">{label}:</span>
+                                            <span>{value.toLocaleString()}</span>
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Scheduled Accounts Today */}
+                        <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
+                            <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
+                                <PhoneForwarded className="w-5 h-5" /> OB Calls – Scheduled Accounts For Today
+                            </h2>
+
+                            <p className="text-2xl font-bold mb-3">
+                                {todayNextAvailableCount.toLocaleString()}
+                            </p>
+
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button size="sm" disabled={loadingScheduled}>
+                                        View Accounts
+                                    </Button>
+                                </SheetTrigger>
+
+                                <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
+                                    <SheetHeader>
+                                        <SheetTitle>Scheduled Accounts Today</SheetTitle>
+                                    </SheetHeader>
+
+                                    <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
+                                        {loadingScheduled && (
+                                            <p className="text-sm text-muted-foreground">Loading...</p>
                                         )}
 
-                                        {error && (
-                                            <p className="text-center text-red-600 font-semibold">{error}</p>
-                                        )}
-
-                                        {countData && !loading && !error && countData.totalCount !== null && (
-                                            <div className="space-y-3 text-gray-700 text-sm">
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Total:</span>
-                                                    <span>{(countData.totalCount ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Top 50:</span>
-                                                    <span>{(countData.top50Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Next 30:</span>
-                                                    <span>{(countData.next30Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Balance 20:</span>
-                                                    <span>{(countData.balance20Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">CSR Client:</span>
-                                                    <span>{(countData.csrClientCount ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">TSA Client:</span>
-                                                    <span>{(countData.tsaClientCount ?? 0).toLocaleString()}</span>
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {!referenceid && (
-                                            <p className="mt-4 text-center text-sm text-gray-400 italic">
-                                                Select an agent to see companies count.
+                                        {!loadingScheduled && scheduledCompanies.length === 0 && (
+                                            <p className="text-sm text-muted-foreground">
+                                                No scheduled accounts for today.
                                             </p>
                                         )}
+
+                                        {!loadingScheduled && scheduledCompanies.map((company, idx) => (
+                                            <div key={idx} className="text-sm py-1 border-b border-gray-100 last:border-0">
+                                                {company.company_name}
+                                            </div>
+                                        ))}
                                     </div>
-
-                                    {/* CARD 2 – NEXT AVAILABLE TODAY */}
-                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
-                                        <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
-                                            <PhoneForwarded className="w-5 h-5" /> OB Calls – Scheduled Accounts For Today
-                                        </h2>
-
-                                        <p className="text-2xl font-bold mb-3">{todayNextAvailableCount.toLocaleString()}</p>
-
-                                        <Sheet>
-                                            <SheetTrigger asChild>
-                                                <Button size="sm" disabled={loadingScheduled}>
-                                                    View Accounts
-                                                </Button>
-                                            </SheetTrigger>
-
-                                            <SheetContent side="right" className="w-[400px] sm:w-[480px] z-[9999] p-4">
-                                                <SheetHeader>
-                                                    <SheetTitle>Scheduled Accounts Today</SheetTitle>
-                                                </SheetHeader>
-
-                                                {/* Card container with fixed max height and scroll */}
-                                                <div className="mt-4 p-4 bg-white rounded-lg shadow-md max-h-[400px] overflow-y-auto custom-scrollbar">
-                                                    {loadingScheduled && (
-                                                        <p className="text-sm text-muted-foreground">Loading...</p>
-                                                    )}
-
-                                                    {!loadingScheduled && scheduledCompanies.length === 0 && (
-                                                        <p className="text-sm text-muted-foreground">No scheduled accounts for today.</p>
-                                                    )}
-
-                                                    {!loadingScheduled &&
-                                                        scheduledCompanies.map((company, idx) => (
-                                                            <div key={idx}>
-                                                                {company.company_name}
-                                                            </div>
-                                                        ))}
-                                                </div>
-                                            </SheetContent>
-                                        </Sheet>
-
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {selectedAgent == "all" && (
-                            <AgentMeetings agents={agents} selectedAgent={selectedAgent} />
-                        )}
-
-                        <OutboundCallsTableCard
-                            history={filteredHistory}
-                            agents={agents}
-                            dateCreatedFilterRange={dateCreatedFilterRange}
-                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                        />
-
-                        <QuotationTableCard
-                            history={filteredHistory}
-                            agents={agents}
-                            dateCreatedFilterRange={dateCreatedFilterRange}
-                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                        />
-
-                        <SalesOrderTableCard
-                            history={filteredHistory}
-                            agents={agents}
-                            dateCreatedFilterRange={dateCreatedFilterRange}
-                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                        />
-
-                        {/* OTHER CARDS */}
-                        <OutboundCard
-                            history={filteredHistory}
-                            agents={agents}
-                        />
-                        <InboundRepliesCard
-                            history={filteredHistory}
-                            agents={agents}
-                        />
+                                </SheetContent>
+                            </Sheet>
+                        </div>
                     </div>
-                </>
-            )}
+                )}
+
+                {/* ── All agents meetings ── */}
+                {selectedAgent === "all" && (
+                    <AgentMeetings agents={agents} selectedAgent={selectedAgent} />
+                )}
+
+                {/* ── Shared table cards ── */}
+                <OutboundCallsTableCard
+                    history={filteredHistory}
+                    agents={agents}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+
+                <QuotationTableCard
+                    history={filteredHistory}
+                    agents={agents}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+
+                <SalesOrderTableCard
+                    history={filteredHistory}
+                    agents={agents}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                />
+
+                <OutboundCard history={filteredHistory} agents={agents} />
+                <InboundRepliesCard history={filteredHistory} agents={agents} />
+            </div>
         </main>
     );
 }
