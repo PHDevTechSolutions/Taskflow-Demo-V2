@@ -1,3 +1,5 @@
+// /api/com-fetch-cluster-account-manager/route.ts
+
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 
@@ -12,30 +14,35 @@ const DEFAULT_LIMIT = 1000;
 export async function GET(req: Request) {
   try {
     const Xchire_url = new URL(req.url);
-    const manager    = Xchire_url.searchParams.get("manager");
+    const manager    = Xchire_url.searchParams.get("manager"); // now optional
     const limit  = parseInt(Xchire_url.searchParams.get("limit")  ?? `${DEFAULT_LIMIT}`, 10);
-    const offset = parseInt(Xchire_url.searchParams.get("offset") ?? "0",                10);
+    const offset = parseInt(Xchire_url.searchParams.get("offset") ?? "0", 10);
 
     const safeLimit  = isNaN(limit)  || limit  < 1 ? DEFAULT_LIMIT : limit;
     const safeOffset = isNaN(offset) || offset < 0 ? 0             : offset;
 
-    if (!manager) {
-      return NextResponse.json(
-        { success: false, error: "Missing reference ID." },
-        { status: 400 }
-      );
-    }
+    // ── KEY CHANGE: manager is now optional.
+    // If provided → filter by manager (existing behavior, used by tsm-report).
+    // If omitted   → return ALL active accounts (used for total denominator).
 
-    // ✅ FILTER: status must be 'active' (case-insensitive safe)
-    const Xchire_fetch = await Xchire_sql`
-      SELECT *
-      FROM accounts
-      WHERE manager = ${manager}
-        AND LOWER(status) = 'active'
-      ORDER BY date_created ASC, id ASC
-      LIMIT ${safeLimit}
-      OFFSET ${safeOffset};
-    `;
+    const Xchire_fetch = manager
+      ? await Xchire_sql`
+          SELECT *
+          FROM accounts
+          WHERE manager = ${manager}
+            AND LOWER(status) = 'active'
+          ORDER BY date_created ASC, id ASC
+          LIMIT ${safeLimit}
+          OFFSET ${safeOffset};
+        `
+      : await Xchire_sql`
+          SELECT *
+          FROM accounts
+          WHERE LOWER(status) = 'active'
+          ORDER BY date_created ASC, id ASC
+          LIMIT ${safeLimit}
+          OFFSET ${safeOffset};
+        `;
 
     return NextResponse.json(
       { success: true, data: Xchire_fetch },

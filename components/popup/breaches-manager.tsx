@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import Lottie from "lottie-react";
 import buttonAnimation from "../../public/animation/breaches.json";
 import TSAReports from "../popup/breaches/manager/tsa-report";
-import TSMReports from "../popup/breaches/manager/manager-report";
+import TSMReports from "../popup/breaches/manager/tsm-report";
+import ManagerReports from "../popup/breaches/manager/manager-report";
 
 export function BreachesManagerDialog() {
     const [open, setOpen] = useState(false);
@@ -36,16 +37,22 @@ export function BreachesManagerDialog() {
                     {/* Tabs + Content */}
                     <div className="flex-1 overflow-hidden flex flex-col px-4 pt-3 pb-0">
                         <Tabs defaultValue="default-report" className="flex flex-col h-full">
-                            <TabsList className="grid grid-cols-2 h-8 rounded-none bg-gray-100 shrink-0 mb-3">
+                            <TabsList className="grid grid-cols-3 h-8 rounded bg-gray-100 shrink-0 mb-3">
                                 <TabsTrigger
                                     value="default-report"
-                                    className="rounded-none uppercase font-black text-[10px] tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white"
+                                    className="rounded uppercase font-black text-[10px] tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white"
                                 >
                                     Manager Report
                                 </TabsTrigger>
                                 <TabsTrigger
+                                    value="tsm"
+                                    className="rounded uppercase font-black text-[10px] tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white"
+                                >
+                                    TSM Report
+                                </TabsTrigger>
+                                <TabsTrigger
                                     value="agent"
-                                    className="rounded-none uppercase font-black text-[10px] tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white"
+                                    className="rounded uppercase font-black text-[10px] tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white"
                                 >
                                     Agent Report
                                 </TabsTrigger>
@@ -55,9 +62,16 @@ export function BreachesManagerDialog() {
                                 value="default-report"
                                 className="flex-1 overflow-y-auto mt-0 data-[state=inactive]:hidden"
                             >
-                                <TSMReports />
+                                <ManagerReports />
                             </TabsContent>
 
+                            <TabsContent
+                                value="tsm"
+                                className="flex-1 overflow-y-auto mt-0 data-[state=inactive]:hidden"
+                            >
+                                <TSMReports />
+                            </TabsContent>
+                            
                             <TabsContent
                                 value="agent"
                                 className="flex-1 overflow-y-auto mt-0 data-[state=inactive]:hidden"

@@ -79,11 +79,9 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
     return acc;
   }, {} as TimeByActivity);
 
-// Outbound is determined ONLY by source === "Outbound - Touchbase"
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase";
 
-// Fixed outbound counts per TSM per month (hardcoded business logic)
 const getFixedCount = (refId: string, date: Date): number => {
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
@@ -157,14 +155,12 @@ export default function TSMReports() {
   const [clusterAccounts, setClusterAccounts] = useState<Activity[]>([]);
   const [uniqueActivitiesList, setUniqueActivitiesList] = useState<Activity[]>([]);
 
-  // Loading states
   const [loadingUser, setLoadingUser] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingOverdue, setLoadingOverdue] = useState(false);
   const [loadingCsrMetrics, setLoadingCsrMetrics] = useState(false);
   const [loadingTime, setLoadingTime] = useState(false);
 
-  // Metrics
   const [timeByActivity, setTimeByActivity] = useState<TimeByActivity>({});
   const [timeConsumedMs, setTimeConsumedMs] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
@@ -233,13 +229,31 @@ export default function TSMReports() {
   const fetchClusterData = useCallback(async (refId: string) => {
     if (!refId) return;
     try {
-      const res = await fetch(`/api/com-fetch-cluster-account-manager?manager=${encodeURIComponent(refId)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      const active = (data.data || []).filter((a: any) => (a.status || "").toLowerCase() === "active");
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let allAccounts: any[] = [];
+      let hasMore = true;
+
+      while (hasMore) {
+        const res = await fetch(
+          `/api/com-fetch-manager-account?manager=${encodeURIComponent(refId)}&limit=${PAGE_SIZE}&offset=${offset}`
+        );
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const batch: any[] = data.data || [];
+        allAccounts = [...allAccounts, ...batch];
+        hasMore = batch.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      const active = allAccounts.filter(
+        (a: any) => (a.status || "").toLowerCase() === "active"
+      );
 
       const countByType = (val: string) =>
-        active.filter((a: any) => (a.type_client || "").trim().toLowerCase() === val).length;
+        active.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === val
+        ).length;
 
       setDenominators((prev) => ({
         ...prev,
@@ -260,7 +274,12 @@ export default function TSMReports() {
         }))
       );
     } catch {
-      sileo.error({ title: "Error", description: "Failed to fetch cluster.", duration: 4000, position: "top-center" });
+      sileo.error({
+        title: "Error",
+        description: "Failed to fetch cluster.",
+        duration: 4000,
+        position: "top-center",
+      });
     }
   }, []);
 
@@ -416,10 +435,8 @@ export default function TSMReports() {
       });
       setTotalSales(sales);
 
-      // Outbound count based ONLY on source === "Outbound - Touchbase"
       const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
 
-      // Weekly (Mon–Sun)
       const dayOfWeek = targetDate.getDay();
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const weekStart = new Date(targetDate);
@@ -475,14 +492,6 @@ export default function TSMReports() {
   }, [activities, fromDate, userDetails.referenceid]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
-  //
-  // Scope: the FULL calendar month of fromDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
-  //                   activity within that month range
-  // - "Not Reached" = the rest
-  // - NO source filter — isOutboundTouchbase applies only to the Outbound
-  //   Touchbase Performance card, NOT to coverage counts.
-  // - Denominators come from clusterAccounts, not activities.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
@@ -494,22 +503,27 @@ export default function TSMReports() {
       return;
     }
 
-    // Explicit month bounds from fromDate
     const fromDateObj = new Date(fromDate);
-    const monthStart  = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd    = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    // Step 1 — company names with ANY activity within the calendar month
-    const touchedCompanies = new Set<string>();
+    // ── KEY FIX: dual-key set — mirrors all.tsx activityKeySet logic exactly.
+    // Old code only matched by company_name → 309 accounts missed due to string
+    // mismatches. Now uses account_reference_number first, falls back to
+    // "name:company_name" — same strategy as all.tsx getAccountKey / activityKeySet.
+    const activityKeySet = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
     activities.forEach((act) => {
-      if (!act.company_name || !act.date_created) return;
+      if (!act.date_created) return;
       const t = new Date(act.date_created).getTime();
       if (isNaN(t) || t < monthStart || t > monthEnd) return;
 
-      // ALL activity types count for coverage — no source filter
-      touchedCompanies.add(act.company_name.toLowerCase());
+      if (act.account_reference_number) {
+        activityKeySet.add(act.account_reference_number.toLowerCase());
+      } else if (act.company_name) {
+        activityKeySet.add(`name:${act.company_name.toLowerCase()}`);
+      }
 
       if (act.activity_reference_number) {
         byActivityRef[act.activity_reference_number] = act;
@@ -518,18 +532,18 @@ export default function TSMReports() {
 
     setUniqueActivitiesList(Object.values(byActivityRef));
 
-    // Step 2 — covered / uncovered split by company_name
-    const covered   = clusterAccounts.filter((acc) =>
-      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
-    );
-    const uncovered = clusterAccounts.filter((acc) =>
-      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
-    );
+    // Mirror all.tsx getAccountKey helper
+    const getAccountKey = (acc: Activity): string => {
+      if (acc.account_reference_number) return acc.account_reference_number.toLowerCase();
+      return `name:${(acc.company_name ?? "").toLowerCase()}`;
+    };
+
+    const covered   = clusterAccounts.filter((acc) =>  activityKeySet.has(getAccountKey(acc)));
+    const uncovered = clusterAccounts.filter((acc) => !activityKeySet.has(getAccountKey(acc)));
 
     setCoveredAccounts(covered);
     setUncoveredAccounts(uncovered);
 
-    // Step 3 — segment counts from covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach((acc) => {
       const type = acc.type_client ?? "";
@@ -554,7 +568,7 @@ export default function TSMReports() {
 
     const targetDate = new Date(fromDate);
     const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+    const endOfDay   = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
     const allowed = ["Assisted", "Quote-Done", "SO-Done", "Delivered"];
 
     const grouped: Record<string, number> = {};
@@ -579,13 +593,11 @@ export default function TSMReports() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const overdueEntries = Object.entries(overdueByCompany);
-  const visibleOverdue = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
-
-  const newClientEntries = Object.entries(newClientByCompany);
+  const overdueEntries    = Object.entries(overdueByCompany);
+  const visibleOverdue    = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
+  const newClientEntries  = Object.entries(newClientByCompany);
   const visibleNewClients = showAllNewClients ? newClientEntries : newClientEntries.slice(0, 5);
-
-  const isAnySyncing = loadingActivities || loadingOverdue;
+  const isAnySyncing      = loadingActivities || loadingOverdue;
 
   const handleManualSync = () => {
     const refId = userDetails.referenceid;
@@ -700,26 +712,7 @@ export default function TSMReports() {
           </SectionCard>
 
           {/* Database Coverage */}
-          <SectionCard
-            title="Database Coverage"
-          > {/*badge={
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCoverageDialogSource("covered")}
-                  className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
-                >
-                  <List size={10} />
-                  Covered
-                </button>
-                <span className="text-gray-300 text-[9px]">·</span>
-                <button
-                  onClick={() => setCoverageDialogSource("uncovered")}
-                  className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
-                >
-                  Not Reached
-                </button>
-              </div>
-            }*/}
+          <SectionCard title="Database Coverage">
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
@@ -733,12 +726,12 @@ export default function TSMReports() {
               </div>
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[
-                  { label: "Top 50", val: clientSegments.top50,    denom: denominators.top50 },
-                  { label: "Next 30", val: clientSegments.next30,  denom: denominators.next30 },
-                  { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
-                  { label: "CSR",    val: clientSegments.csrClient, denom: denominators.csrClient },
-                  { label: "New",    val: clientSegments.newClient, denom: denominators.newClient },
-                  { label: "TSA",    val: clientSegments.tsaClient, denom: denominators.tsaClient },
+                  { label: "Top 50",  val: clientSegments.top50,     denom: denominators.top50 },
+                  { label: "Next 30", val: clientSegments.next30,    denom: denominators.next30 },
+                  { label: "Bal 20",  val: clientSegments.balance20,  denom: denominators.bal20 },
+                  { label: "CSR",     val: clientSegments.csrClient,  denom: denominators.csrClient },
+                  { label: "New",     val: clientSegments.newClient,  denom: denominators.newClient },
+                  { label: "TSA",     val: clientSegments.tsaClient,  denom: denominators.tsaClient },
                 ].map(({ label, val, denom }) => (
                   <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                     <p className="text-[8px] text-gray-400 uppercase">{label}</p>
@@ -863,9 +856,9 @@ export default function TSMReports() {
               </div>
             ) : (
               <div className="space-y-1">
-                <StatRow label="TSA Response Time"    value={formatHoursToHMS(avgResponseTime)} />
-                <StatRow label="Non-Quotation HT"     value={formatHoursToHMS(avgNonQuotationHT)} />
-                <StatRow label="Quotation HT"         value={formatHoursToHMS(avgQuotationHT)} />
+                <StatRow label="TSA Response Time"     value={formatHoursToHMS(avgResponseTime)} />
+                <StatRow label="Non-Quotation HT"      value={formatHoursToHMS(avgNonQuotationHT)} />
+                <StatRow label="Quotation HT"          value={formatHoursToHMS(avgQuotationHT)} />
                 <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)} />
               </div>
             )}
@@ -875,10 +868,10 @@ export default function TSMReports() {
           <SectionCard title="Closing of Quotation" accent="border-l-red-500">
             <div className="space-y-1">
               {[
-                { label: "Pending Client Approval",     value: pendingClientApprovalCount },
-                { label: "SPF — Pending Client",        value: spfPendingClientApproval },
-                { label: "SPF — Pending Procurement",   value: spfPendingProcurement },
-                { label: "SPF — Pending PD",            value: spfPendingPD },
+                { label: "Pending Client Approval",   value: pendingClientApprovalCount },
+                { label: "SPF — Pending Client",      value: spfPendingClientApproval },
+                { label: "SPF — Pending Procurement", value: spfPendingProcurement },
+                { label: "SPF — Pending PD",          value: spfPendingPD },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>
@@ -889,6 +882,7 @@ export default function TSMReports() {
           </SectionCard>
         </ul>
       </div>
+
       {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
       {(() => {
         const isCovered   = coverageDialogSource === "covered";
@@ -896,7 +890,6 @@ export default function TSMReports() {
         const dialogOpen  = isCovered || isUncovered;
         const list        = isCovered ? coveredAccounts : uncoveredAccounts;
 
-        // Restore display label for type_client (was normalized to lowercase no-spaces)
         const typeLabel = (normalized: string): string => {
           const map: Record<string, string> = {
             top50: "Top 50", next30: "Next 30", balance20: "Balance 20",
@@ -919,22 +912,17 @@ export default function TSMReports() {
         return (
           <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) setCoverageDialogSource(null); }}>
             <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
-
-              {/* Header */}
               <DialogHeader className="px-4 py-3 border-b border-gray-100 shrink-0">
                 <div className="flex items-center justify-between">
                   <DialogTitle className="text-[11px] font-black uppercase tracking-wider text-gray-700">
                     {isCovered ? "Covered Accounts" : "Not Reached Accounts"}
                     <span className="ml-2 text-gray-400 font-normal">{list.length}</span>
                   </DialogTitle>
-                  {/* Tab toggle */}
                   <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
                     <button
                       onClick={() => setCoverageDialogSource("covered")}
                       className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isCovered
-                          ? "bg-emerald-600 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
+                        isCovered ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
                       }`}
                     >
                       Covered · {coveredAccounts.length}
@@ -942,9 +930,7 @@ export default function TSMReports() {
                     <button
                       onClick={() => setCoverageDialogSource("uncovered")}
                       className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isUncovered
-                          ? "bg-amber-500 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
+                        isUncovered ? "bg-amber-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
                       }`}
                     >
                       Not Reached · {uncoveredAccounts.length}
@@ -953,11 +939,10 @@ export default function TSMReports() {
                 </div>
               </DialogHeader>
 
-              {/* Table */}
               {list.length === 0 ? (
                 <p className="text-[11px] text-gray-300 italic px-4 py-6 text-center">
                   {isCovered
-                    ? "No accounts reached via outbound touchbase this month."
+                    ? "No accounts reached this month."
                     : "All accounts have been reached this month."}
                 </p>
               ) : (
@@ -999,7 +984,6 @@ export default function TSMReports() {
           </Dialog>
         );
       })()}
-
     </div>
   );
 }

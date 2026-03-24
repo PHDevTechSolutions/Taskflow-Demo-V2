@@ -1,13 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
 
+// helper function
+const capitalize = (str: string = "") =>
+  str
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
+  if (req.method !== "PATCH") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
-    let { id } = req.body;
+    let { id, tsm_approved_status } = req.body;
 
     if (!id) {
       return res.status(400).json({ error: "Missing ID" });
@@ -18,12 +24,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "ID must be a valid number" });
     }
 
-    // Update scheduled_status AND date_updated to current time
+    if (!tsm_approved_status || typeof tsm_approved_status !== "string") {
+      return res.status(400).json({ error: "Missing or invalid tsm_approved_status" });
+    }
+
+    // ✅ Capitalize each word before saving
+    const normalizedStatus = capitalize(tsm_approved_status.trim());
+
     const { data, error } = await supabase
-      .from("activity")
-      .update({ 
-        status: "Pending",
-        date_updated: new Date().toISOString(),  // <-- add this line
+      .from("history")
+      .update({
+        tsm_approved_status: normalizedStatus,
+        date_updated: new Date().toISOString(),
       })
       .eq("id", id)
       .select();
@@ -34,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!data || data.length === 0) {
-      return res.status(404).json({ error: "Activity not found" });
+      return res.status(404).json({ error: "Record not found" });
     }
 
     return res.status(200).json({ success: true, data });
