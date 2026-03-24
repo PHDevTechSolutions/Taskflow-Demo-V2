@@ -103,7 +103,7 @@ const SectionCard = ({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function TSAReports() {
+export default function TSMReports() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
   const queryUserId = searchParams?.get("id") ?? "";
@@ -204,7 +204,7 @@ export default function TSAReports() {
         setAgents(active);
         if (active.length > 0 && !selectedRefId) setSelectedRefId(active[0].ReferenceID);
       })
-      .catch(() => console.error("Failed to fetch agents"))
+      .catch(() => console.error("Failed to fetch tsm"))
       .finally(() => setLoadingAgents(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [managerDetails.referenceid]);
