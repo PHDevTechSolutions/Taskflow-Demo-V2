@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data, error } = await supabase
       .from("history")
       .select("quotation_number")
-      .ilike("quotation_number", `${prefix}%`)
+      .ilike("quotation_number", `${prefix}-%`)
       .order("quotation_number", { ascending: true });
 
     if (error) {
