@@ -1625,7 +1625,7 @@ export function QuotationSheet(props: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Pending">Approved to TSM</SelectItem>
                     <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
                   </SelectGroup>
                 </SelectContent>

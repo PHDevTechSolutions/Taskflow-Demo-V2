@@ -310,46 +310,6 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
   return (
     <Card className="min-h-[160px]">
       <CardHeader className="flex justify-between items-center gap-4">
-        <div className="flex items-center gap-4">
-          {agent.profilePicture ? (
-            <img
-              src={agent.profilePicture}
-              alt={`${agent.Firstname} ${agent.Lastname}`}
-              className="w-20 h-20 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-gray-300 flex items-center justify-center text-xl text-gray-600">
-              ?
-            </div>
-          )}
-
-          <div className="flex flex-col">
-            <p className="font-semibold text-lg uppercase">
-              {agent.Firstname} {agent.Lastname}
-            </p>
-            {agent.Position && (
-              <p className="text-xs text-muted-foreground font-mono mb-2">
-                {agent.Position} | Target Quota: {agent.TargetQuota}
-              </p>
-            )}
-
-            {agent.Status && (
-              <div className="flex items-start gap-2 text-xs text-muted-foreground font-mono">
-                <Badge className="text-[8px] p-2 font-mono">{agent.Status}</Badge>
-
-                <div className="flex flex-col leading-tight">
-                  {latestLogin && (
-                    <span>Latest login: {latestLogin}</span>
-                  )}
-                  {latestLogout && (
-                    <span>Latest logout: {latestLogout}</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
         {totalDurationMs > 0 && (
           <Badge className="p-4 font-mono">
             Total Working Hours: {formatDurationMs(totalDurationMs)}
