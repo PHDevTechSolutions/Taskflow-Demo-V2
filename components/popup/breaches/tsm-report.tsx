@@ -283,7 +283,7 @@ export default function TSMReports() {
     if (!refId || !from || !to) return;
     setLoadingOverdue(true);
     try {
-      const url = `/api/activity/tsm/breaches/fetch-activity?tsm=${encodeURIComponent(refId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      const url = `/api/activity/tsm/breaches/fetch?tsm=${encodeURIComponent(refId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();

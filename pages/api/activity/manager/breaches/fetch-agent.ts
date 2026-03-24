@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .collection("users")
       .find({
         Manager: referenceid,
+        Role: "Territory Sales Associate",
         Status: { $nin: ["Resigned", "Terminated"] }, // exclude resigned or terminated
       })
       .project({

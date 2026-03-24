@@ -37,7 +37,7 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import {
   PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck,
   AlertCircle, ChevronDown, ChevronRight, Bell, CheckCircle2,
-  XCircle, Eye, Download,
+  XCircle, Eye, Download, Trash2,
 } from "lucide-react";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -363,6 +363,64 @@ function DashboardContent() {
 
   const queryUserId = searchParams?.get("id") ?? "";
 
+  const handleClearCache = useCallback(async () => {
+    try {
+      // Clear local/session storage.
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Clear Cache Storage (used by fetch/service worker caches).
+      if ("caches" in window) {
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      }
+
+      // Unregister all service workers.
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+      }
+
+      // Best-effort clear IndexedDB databases (supported in modern Chromium browsers).
+      const indexedDbWithList = indexedDB as IDBFactory & {
+        databases?: () => Promise<Array<{ name?: string }>>;
+      };
+      if (typeof indexedDbWithList.databases === "function") {
+        const dbs = await indexedDbWithList.databases();
+        await Promise.all(
+          dbs
+            .map((db) => db.name)
+            .filter((name): name is string => Boolean(name))
+            .map(
+              (name) =>
+                new Promise<void>((resolve) => {
+                  const req = indexedDB.deleteDatabase(name);
+                  req.onsuccess = () => resolve();
+                  req.onerror = () => resolve();
+                  req.onblocked = () => resolve();
+                })
+            )
+        );
+      }
+
+      sileo.success({
+        title: "Cache Cleared",
+        description: "Browser cache and local app storage were cleared. Reloading...",
+        duration: 2000,
+        position: "top-right",
+      });
+
+      setTimeout(() => window.location.reload(), 300);
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "Unable to fully clear browser cache.",
+        duration: 3000,
+        position: "top-right",
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
@@ -462,6 +520,15 @@ function DashboardContent() {
               </Breadcrumb>
             </div>
             <div className="flex items-center gap-2 px-3">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-none text-xs"
+                onClick={handleClearCache}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Clear Cache
+              </Button>
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}

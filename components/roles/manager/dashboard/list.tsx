@@ -150,14 +150,38 @@ export function AgentList({
         const to   = dateCreatedFilterRange?.to   ? new Date(dateCreatedFilterRange.to)   : new Date(from);
         from.setHours(0, 0, 0, 0);
         to.setHours(23, 59, 59, 999);
+
+        const selectedAgentObj = selectedAgent === "all"
+            ? null
+            : agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
+
+        const tsmHandledAgentIds = selectedAgentObj?.Role === "Territory Sales Manager"
+            ? new Set(
+                agents
+                    .filter(
+                        (a) =>
+                            a.Role === "Territory Sales Associate" &&
+                            (a.TSM ?? "").toLowerCase() === selectedAgentObj.ReferenceID.toLowerCase()
+                    )
+                    .map((a) => a.ReferenceID.toLowerCase())
+            )
+            : null;
+
         return history.filter((item) => {
             const createdAt = new Date(item.date_created);
             if (isNaN(createdAt.getTime())) return false;
             if (createdAt < from || createdAt > to) return false;
             if (selectedAgent === "all") return true;
+
+            // If a TSM is selected, include all records from TSA agents under that TSM.
+            if (selectedAgentObj?.Role === "Territory Sales Manager") {
+                return tsmHandledAgentIds?.has(item.referenceid.toLowerCase()) ?? false;
+            }
+
+            // If a specific TSA/agent is selected, include only that agent's records.
             return item.referenceid.toLowerCase() === selectedAgent.toLowerCase();
         });
-    }, [history, selectedAgent, dateCreatedFilterRange]);
+    }, [history, selectedAgent, dateCreatedFilterRange, agents]);
 
     // ── Firebase listener ───────────────────────────────────────────────────
     useEffect(() => {
