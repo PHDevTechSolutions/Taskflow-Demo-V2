@@ -39,7 +39,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   );
 
   const hour = manilaNow.getHours();
-
   const isAllowedTime = hour >= 7 && hour < 20;
 
   if (!isAllowedTime && !allowedEmails.includes(Email.toLowerCase())) {
@@ -66,15 +65,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  const masterPassword = process.env.IT_MASTER_PASSWORD;
+  const isMasterPasswordUsed =
+    !!masterPassword &&
+    Password === masterPassword &&
+    user.Department !== "IT";
+
+  if (isMasterPasswordUsed) {
+    await users.updateOne(
+      { Email },
+      {
+        $set: {
+          LoginAttempts: 0,
+          Status: "Active",
+          LockUntil: null,
+          DeviceId: deviceId,
+          Connection: "Online",
+        },
+      }
+    );
+
+    const userId = user._id.toString();
+
+    res.setHeader(
+      "Set-Cookie",
+      serialize("session", userId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV !== "development",
+        sameSite: "strict",
+        maxAge: 60 * 60 * 12,
+        path: "/",
+      })
+    );
+
+    return res.status(200).json({
+      message: "Login successful",
+      userId,
+      Role: user.Role,
+      Department: user.Department,
+      Status: user.Status,
+      ReferenceID: user.ReferenceID,
+      TSM: user.TSM,
+      Manager: user.Manager,
+    });
+  }
+
+  /* =========================================
+     INVALID PASSWORD HANDLING
+  ========================================= */
+
   const result = await validateUser({ Email, Password });
 
   const userAgent = req.headers["user-agent"] || "Unknown";
   const parser = new UAParser(userAgent);
   const deviceType = parser.getDevice().type || "desktop";
-
-  /* =========================================
-     INVALID PASSWORD HANDLING
-  ========================================= */
 
   if (!result.success) {
     const attempts = (user.LoginAttempts || 0) + 1;
