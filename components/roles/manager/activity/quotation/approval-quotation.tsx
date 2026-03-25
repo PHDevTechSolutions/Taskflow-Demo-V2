@@ -197,7 +197,10 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
         const search = searchTerm.toLowerCase().trim();
 
         return sortedActivities
-            .filter((item) => item.tsm_approved_status === "Approved By Sales Head")
+            .filter((item) =>
+                item.tsm_approved_status === "Approved By Sales Head" ||
+                item.tsm_approved_status === "Approved"
+            )
             .filter((item) => item.type_activity === "Quotation Preparation")
             .filter((item) => {
                 if (!search) return true;

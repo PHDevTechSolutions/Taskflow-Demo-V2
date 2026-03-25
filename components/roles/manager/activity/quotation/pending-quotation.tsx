@@ -199,7 +199,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
         const search = searchTerm.toLowerCase().trim();
 
         return sortedActivities
-            .filter((item) => item.tsm_approved_status === "Endorsed to Sales Head")
+            .filter((item) => item.tsm_approved_status === "Pending")
             .filter((item) => item.type_activity === "Quotation Preparation")
             .filter((item) => {
                 if (!search) return true;
