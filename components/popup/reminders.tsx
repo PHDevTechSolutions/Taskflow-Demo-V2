@@ -154,7 +154,7 @@ export function Reminders() {
               body: payload.notification.body || "",
             });
           }
-          audioRef.current?.play().catch(() => {});
+          audioRef.current?.play().catch(() => { });
         });
         return () => typeof unsub === "function" && unsub();
       } catch {
@@ -201,7 +201,17 @@ export function Reminders() {
     setCurrentMeeting(meeting ?? null);
     setShowMeeting(!!meeting);
 
-    if (now.getHours() === 18 && now.getMinutes() === 30 && !dismissedLogout) {
+    // ── Logout Reminder (4:30 PM → before 5:00 PM, once per day only) ──
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+
+    const isAfter430 =
+      hours > 16 || (hours === 16 && minutes >= 30);
+
+    const isBefore5 =
+      hours < 17;
+
+    if (isAfter430 && isBefore5 && !dismissedLogout) {
       setShowLogout(true);
     }
   }, [now, meetings, dismissedMeetings, dismissedLogout]);
@@ -210,7 +220,7 @@ export function Reminders() {
   useEffect(() => {
     if (showMeeting && !prevMeeting.current && audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch(() => { });
     }
     prevMeeting.current = showMeeting;
   }, [showMeeting]);
@@ -321,7 +331,7 @@ export function Reminders() {
                 </DialogTitle>
               </div>
               <DialogDescription className="text-zinc-400 text-xs">
-                It&apos;s 6:30 PM — time to wrap up for the day.
+                It&apos;s 5:00 PM — time to wrap up for the day.
               </DialogDescription>
             </DialogHeader>
           </div>

@@ -34,19 +34,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "tsa.taskflowtest@ecoshiftcorp.com",
   ];
 
-  const manilaNow = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
-  );
+  //const manilaNow = new Date(
+    //new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
+  //);
 
-  const hour = manilaNow.getHours();
-  const isAllowedTime = hour >= 7 && hour < 20;
+  //const hour = manilaNow.getHours();
+  //const isAllowedTime = hour >= 7 && hour < 20;
 
-  if (!isAllowedTime && !allowedEmails.includes(Email.toLowerCase())) {
-    return res.status(403).json({
-      message:
-        "Login is only allowed between 7:00 AM and 8:00 PM (Manila Time).",
-    });
-  }
+  //if (!isAllowedTime && !allowedEmails.includes(Email.toLowerCase())) {
+    //return res.status(403).json({
+      //message:
+        //"Login is only allowed between 7:00 AM and 8:00 PM (Manila Time).",
+    //});
+  //}
 
   /* =========================================
      ACCOUNT STATUS CHECK

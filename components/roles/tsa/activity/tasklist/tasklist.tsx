@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertCircleIcon,
@@ -11,6 +11,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -126,8 +131,6 @@ function getBadgeClass(status?: string): string {
   }
 }
 
-// FIX: was checking columns that don't exist on the interface (e.g. "date_site_vist" typo)
-// Simplified: an item has meaningful data if ANY non-trivial field is non-empty
 function hasMeaningfulData(item: Completed): boolean {
   const checks: (keyof Completed)[] = [
     "type_activity", "call_status", "call_type", "quotation_number",
@@ -144,7 +147,295 @@ function hasMeaningfulData(item: Completed): boolean {
   });
 }
 
+function toDatetimeLocal(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+const EDIT_TIME_PASSWORD = "PHDEVTECH";
+
+// ─── Password Gate Dialog ─────────────────────────────────────────────────────
+
+interface PasswordGateDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function PasswordGateDialog({ open, onClose, onSuccess }: PasswordGateDialogProps) {
+  const [password, setPassword]   = useState("");
+  const [showPw, setShowPw]       = useState(false);
+  const [error, setError]         = useState(false);
+  const [shake, setShake]         = useState(false);
+  const inputRef                  = useRef<HTMLInputElement>(null);
+
+  // Reset state each time dialog opens
+  useEffect(() => {
+    if (open) {
+      setPassword("");
+      setShowPw(false);
+      setError(false);
+      setShake(false);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  const handleSubmit = () => {
+    if (password === EDIT_TIME_PASSWORD) {
+      setError(false);
+      onSuccess();
+      onClose();
+    } else {
+      setError(true);
+      setShake(true);
+      setPassword("");
+      setTimeout(() => setShake(false), 500);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-xs rounded-none p-0 overflow-hidden gap-0">
+        {/* Header */}
+        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="bg-white/10 rounded-full p-1.5">
+                <Lock className="h-4 w-4 text-yellow-400" />
+              </div>
+              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                Authentication Required
+              </DialogTitle>
+            </div>
+            <p className="text-zinc-400 text-xs mt-1">
+              Enter the password to edit timestamp data.
+            </p>
+          </DialogHeader>
+        </div>
+
+        {/* Body */}
+        <div className={`px-6 py-5 space-y-4 ${shake ? "animate-shake" : ""}`}>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+              Password
+            </label>
+            <div className="relative">
+              <Input
+                ref={inputRef}
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                placeholder="Enter password"
+                className={`rounded-none text-sm pr-9 ${error ? "border-red-400 focus-visible:ring-red-300" : ""}`}
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+              >
+                {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            {error && (
+              <p className="text-[11px] text-red-500 font-medium">Incorrect password. Please try again.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+          <Button
+            variant="outline"
+            className="rounded-none flex-1 text-xs h-10"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800 gap-1.5"
+            onClick={handleSubmit}
+            disabled={!password}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Confirm
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Edit Time Dialog ─────────────────────────────────────────────────────────
+
+interface EditTimeDialogProps {
+  open: boolean;
+  onClose: () => void;
+  item: Completed | null;
+  onSaved: () => void;
+}
+
+function EditTimeDialog({ open, onClose, item, onSaved }: EditTimeDialogProps) {
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate]     = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    if (item) {
+      setStartDate(toDatetimeLocal(item.start_date));
+      setEndDate(toDatetimeLocal(item.end_date));
+      setError(null);
+    }
+  }, [item, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  const handleSave = async () => {
+    if (!item) return;
+    if (!startDate || !endDate) { setError("Both start and end date are required."); return; }
+
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) { setError("Invalid date format."); return; }
+    if (end <= start) { setError("End date must be after start date."); return; }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/activity/tsa/historical/update-history-time", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          start_date: start.toISOString(),
+          end_date:   end.toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Failed to update time");
+      }
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open || !item) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-md rounded-none p-0 overflow-hidden gap-0">
+        {/* Header */}
+        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="bg-white/10 rounded-full p-1.5">
+                <Clock className="h-4 w-4 text-blue-400" />
+              </div>
+              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                Edit Time
+              </DialogTitle>
+            </div>
+            <p className="text-zinc-400 text-xs font-mono mt-1">{item.company_name}</p>
+            {item.type_activity && (
+              <p className="text-zinc-500 text-[10px] uppercase tracking-wider mt-0.5">{item.type_activity}</p>
+            )}
+          </DialogHeader>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+              Start Date &amp; Time
+            </label>
+            <Input
+              type="datetime-local"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="rounded-none text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+              End Date &amp; Time
+            </label>
+            <Input
+              type="datetime-local"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="rounded-none text-sm"
+            />
+          </div>
+
+          {startDate && endDate && (() => {
+            const s = new Date(startDate);
+            const e = new Date(endDate);
+            if (!isNaN(s.getTime()) && !isNaN(e.getTime()) && e > s) {
+              return (
+                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50 border border-zinc-200 text-xs text-zinc-600">
+                  <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>Duration: <strong className="text-zinc-800">{formatDuration(s.toISOString(), e.toISOString())}</strong></span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {error && (
+            <p className="text-xs text-red-600 font-medium">{error}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+          <Button
+            variant="outline"
+            className="rounded-none flex-1 text-xs h-10"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+            onClick={handleSave}
+            disabled={saving || !startDate || !endDate}
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -174,10 +465,46 @@ export const TaskList: React.FC<CompletedProps> = ({
   const [editSoNumber, setEditSoNumber] = useState("");
   const [editSoAmount, setEditSoAmount] = useState<number | "">("");
   const [isEditingSo, setIsEditingSo] = useState(false);
-  const [savingSo, setSavingSo] = useState(false); // FIX: added loading state for SO save
+  const [savingSo, setSavingSo] = useState(false);
+
+  // ── Edit Time state ──────────────────────────────────────────────────────
+  const [editTimeOpen, setEditTimeOpen]         = useState(false);
+  const [editTimeItem, setEditTimeItem]         = useState<Completed | null>(null);
+  const [showEditTimeBtn, setShowEditTimeBtn]   = useState(false);
+
+  // ── Password Gate state ──────────────────────────────────────────────────
+  const [pwGateOpen, setPwGateOpen]             = useState(false);
+  const [pendingTimeItem, setPendingTimeItem]   = useState<Completed | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // ── Alt + Ctrl + T shortcut ───────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.altKey && e.ctrlKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        setShowEditTimeBtn((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // ── Handler: Time button click → open password gate first ────────────────
+  const handleEditTimeClick = (item: Completed) => {
+    setPendingTimeItem(item);
+    setPwGateOpen(true);
+  };
+
+  // ── Handler: Password verified → open Edit Time dialog ───────────────────
+  const handlePasswordSuccess = () => {
+    if (pendingTimeItem) {
+      setEditTimeItem(pendingTimeItem);
+      setEditTimeOpen(true);
+    }
+    setPendingTimeItem(null);
+  };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -248,7 +575,6 @@ export const TaskList: React.FC<CompletedProps> = ({
       })
       .filter((item) => {
         if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-        // FIX: filter on date_updated if available, else date_created
         const updated = item.date_updated
           ? new Date(item.date_updated)
           : new Date(item.date_created);
@@ -264,8 +590,6 @@ export const TaskList: React.FC<CompletedProps> = ({
       );
   }, [activities, searchTerm, filterStatus, filterTypeActivity, dateCreatedFilterRange]);
 
-  // Reset page when filters change
-  // FIX: was missing this — page would stay on page 5 after filtering to 1 page
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterTypeActivity, dateCreatedFilterRange]);
 
   const statusOptions = useMemo(() => {
@@ -293,7 +617,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     });
   };
 
-  // FIX: select all only selects current page items
   const allCurrentSelected =
     paginatedActivities.length > 0 &&
     paginatedActivities.every((item) => selectedIds.has(item.id));
@@ -372,6 +695,21 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   return (
     <>
+      {/* ── Password Gate Dialog ─────────────────────────────────────── */}
+      <PasswordGateDialog
+        open={pwGateOpen}
+        onClose={() => { setPwGateOpen(false); setPendingTimeItem(null); }}
+        onSuccess={handlePasswordSuccess}
+      />
+
+      {/* ── Edit Time Dialog ────────────────────────────────────────────── */}
+      <EditTimeDialog
+        open={editTimeOpen}
+        onClose={() => { setEditTimeOpen(false); setEditTimeItem(null); }}
+        item={editTimeItem}
+        onSaved={fetchActivities}
+      />
+
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -457,6 +795,11 @@ export const TaskList: React.FC<CompletedProps> = ({
               <span className="ml-2 text-indigo-600 font-medium">· {selectedIds.size} selected</span>
             )}
           </span>
+          {showEditTimeBtn && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-semibold border border-blue-200 bg-blue-50 px-2 py-0.5 rounded">
+              <Clock className="h-3 w-3" /> Edit Time mode active
+            </span>
+          )}
         </div>
       )}
 
@@ -466,7 +809,6 @@ export const TaskList: React.FC<CompletedProps> = ({
           <Table className="text-xs min-w-[1800px]">
             <TableHeader>
               <TableRow className="bg-zinc-50 border-b border-zinc-200">
-                {/* FIX: select-all checkbox added */}
                 <TableHead className="w-10 px-3">
                   <Checkbox
                     checked={allCurrentSelected}
@@ -535,6 +877,17 @@ export const TaskList: React.FC<CompletedProps> = ({
                             }}
                           >
                             <Undo className="h-3 w-3" /> RE-SO
+                          </Button>
+                        )}
+
+                        {/* Edit Time button — only visible when Alt+Ctrl+T is active */}
+                        {showEditTimeBtn && (
+                          <Button
+                            size="sm"
+                            className="rounded-none h-7 px-2 text-[10px] gap-1 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleEditTimeClick(item)}
+                          >
+                            <Clock className="h-3 w-3" /> Time
                           </Button>
                         )}
                       </div>
