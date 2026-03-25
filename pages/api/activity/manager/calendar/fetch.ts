@@ -22,39 +22,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from("history")
         .select(`
           id,
+          activity_reference_number,
           referenceid,
-          quotation_amount,
-          quotation_number,
-          ticket_reference_number,
-          remarks,
+          tsm,
+          manager,
+          type_activity,
           date_created,
           date_updated,
-          company_name,
-          contact_number,
-          contact_person,
-          type_client,
+          start_date,
+          end_date,
           status,
-          type_activity,
-          source,
-          actual_sales,
-          dr_number,
-          delivery_date,
-          si_date,
-          payment_terms,
-          so_number,
-          so_amount,
-          call_type,
-          call_status,
-          quotation_status
+          company_name,
+          remarks
         `)
-        .eq("tsm", referenceid)
-        // 🔑 CRITICAL: stable ordering (walang skip / duplicate)
-        .order("date_created", { ascending: true })
-        .order("id", { ascending: true })
+        .eq("manager", referenceid)
+        // 🔑 STABLE ORDERING (IMPORTANT)
+        .order("date_updated", { ascending: false })
+        .order("id", { ascending: false })
         .range(offset, offset + BATCH_SIZE - 1);
 
       if (fromDate && toDate) {
-        query = query.gte("date_created", fromDate).lte("date_created", toDate);
+        query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
       }
 
       const { data, error } = await query;

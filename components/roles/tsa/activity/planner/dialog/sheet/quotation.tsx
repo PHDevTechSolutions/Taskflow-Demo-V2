@@ -83,6 +83,8 @@ interface Props {
   setItemRemarks: (value: string) => void;
   quotationSubject: string;
   setQuotationSubject: (value: string) => void;
+  tsmApprovalStatus: string;
+  setTsmApprovalStatus: (value: string) => void;
 
   // --- ACTIONS ---
   handleBack: () => void;
@@ -215,6 +217,7 @@ export function QuotationSheet(props: Props) {
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
     quotationStatus, setQuotationStatus,
+    tsmApprovalStatus, setTsmApprovalStatus,
 
     // --- TAX & FINANCIALS ---
     vatType, setVatType,
@@ -1840,7 +1843,7 @@ Procurement
               />
 
               <FieldLabel className="font-bold">Status </FieldLabel>
-              <Select value={quotationStatus} onValueChange={setQuotationStatus}>
+              <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
                 <SelectTrigger className="w-full rounded-none">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
@@ -1859,6 +1862,19 @@ Procurement
                     <SelectItem value="Canvass Only">Canvass Only</SelectItem>
                     <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
                     <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <FieldLabel className="font-bold">Approval Process </FieldLabel>
+              <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
+                <SelectTrigger className="w-full rounded-none">
+                  <SelectValue placeholder="Select Approval Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="Pending">Endorsed to TSM</SelectItem>
+                    <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

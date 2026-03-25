@@ -123,7 +123,8 @@ interface SidebarInnerProps {
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
   >;
-  isTSM: boolean;
+  // FIX: use isTSA only — TSM and Manager must NOT see Meeting/TimeLog
+  isTSA: boolean;
   userDetails: UserDetails;
   timeLogs: TimeLog[];
   loadingLogs: boolean;
@@ -138,7 +139,7 @@ function SidebarInner({
   userId,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
-  isTSM,
+  isTSA,
   userDetails,
   timeLogs,
   loadingLogs,
@@ -173,7 +174,8 @@ function SidebarInner({
 
         <div className="mx-0 border-t border-sidebar-border" />
 
-        {!isTSM && (
+        {/* FIX: Only TSA sees Meeting and TimeLog */}
+        {isTSA && (
           <Card className="rounded-none shadow-none border-0">
             <CardContent className="space-y-2 px-3 py-2">
               <Meeting
@@ -219,9 +221,9 @@ export function SidebarRight({
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   const [userDetails, setUserDetails] = React.useState<UserDetails>(DEFAULT_USER);
-  const [timeLogs, setTimeLogs]       = React.useState<TimeLog[]>([]);
+  const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
   const [loadingLogs, setLoadingLogs] = React.useState(false);
-  const [errorLogs, setErrorLogs]     = React.useState<string | null>(null);
+  const [errorLogs, setErrorLogs] = React.useState<string | null>(null);
 
   // ── Fetch user ──────────────────────────────────────────────────────────
 
@@ -235,15 +237,15 @@ export function SidebarRight({
       })
       .then((data) =>
         setUserDetails({
-          ReferenceID:    data.ReferenceID    || "",
-          TSM:            data.TSM            || "",
-          Manager:        data.Manager        || "",
-          Firstname:      data.Firstname      || "",
-          Lastname:       data.Lastname       || "",
-          Position:       data.Position       || "",
-          Email:          data.Email          || "",
+          ReferenceID: data.ReferenceID || "",
+          TSM: data.TSM || "",
+          Manager: data.Manager || "",
+          Firstname: data.Firstname || "",
+          Lastname: data.Lastname || "",
+          Position: data.Position || "",
+          Email: data.Email || "",
           profilePicture: data.profilePicture || "",
-          Role:           data.Role           || "",
+          Role: data.Role || "",
         })
       )
       .catch((err) => console.error("User fetch error:", err));
@@ -282,26 +284,27 @@ export function SidebarRight({
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
-  const isTSM     = userDetails.Role === "Territory Sales Manager";
+  // FIX: define each role cleanly — Meeting/TimeLog shown ONLY for TSA
   const isTSA     = userDetails.Role === "Territory Sales Associate";
+  const isTSM     = userDetails.Role === "Territory Sales Manager";
   const isManager = userDetails.Role === "Manager";
 
   const navUser = {
-    name:        `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
-    position:    userDetails.Position,
-    email:       userDetails.Email,
+    name: `${userDetails.Firstname} ${userDetails.Lastname}`.trim() || "Unknown User",
+    position: userDetails.Position,
+    email: userDetails.Email,
     ReferenceID: userDetails.ReferenceID,
-    TSM:         userDetails.TSM,
-    Manager:     userDetails.Manager,
-    avatar:      userDetails.profilePicture || "/avatars/shadcn.jpg",
+    TSM: userDetails.TSM,
+    Manager: userDetails.Manager,
+    avatar: userDetails.profilePicture || "/avatars/shadcn.jpg",
   };
 
   const sharedProps = {
     navUser,
-    userId:                       userId ?? "",
+    userId: userId ?? "",
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
-    isTSM,
+    isTSA,
     userDetails,
     timeLogs,
     loadingLogs,
@@ -334,7 +337,8 @@ export function SidebarRight({
 
           <SidebarSeparator className="mx-0" />
 
-          {!isTSM && (
+          {/* FIX: Only TSA sees Meeting and TimeLog */}
+          {isTSA && (
             <Card className="rounded-none shadow-none border-0">
               <CardContent className="space-y-2 px-3 py-2">
                 <Meeting
@@ -406,8 +410,8 @@ export function SidebarRight({
       </div>
 
       {/* ── Floating breach dialogs (role-based) ── */}
-      {isTSA     && <BreachesDialog />}
-      {isTSM     && <BreachesTSMDialog />}
+      {isTSA && <BreachesDialog />}
+      {isTSM && <BreachesTSMDialog />}
       {isManager && <BreachesManagerDialog />}
     </>
   );

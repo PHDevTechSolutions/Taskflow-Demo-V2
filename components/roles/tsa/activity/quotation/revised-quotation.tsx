@@ -94,6 +94,7 @@ interface Completed {
   manager_approval_date: string;
   tsm_remarks: string;
   manager_remarks: string;
+  quotation_status: string;
 }
 
 interface CompletedProps {
@@ -129,11 +130,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 }) => {
   const searchParams = useSearchParams();
 
-  // ?highlight=<arn>  — scroll to and pulse this row
   const highlightRef = searchParams?.get("highlight") ?? null;
-  // ?openEdit=<arn>   — auto-open the edit dialog for this row
   const openEditRef = searchParams?.get("openEdit") ?? null;
-  // ?action=preview|download — auto-trigger that action inside the edit dialog
   const actionRef = (searchParams?.get("action") ?? null) as
     | "preview"
     | "download"
@@ -149,12 +147,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
   const [editItem, setEditItem] = useState<Completed | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  // The autoAction to forward to TaskListEditDialog on auto-open
   const [editAutoAction, setEditAutoAction] = useState<
     "preview" | "download" | null
   >(null);
 
-  // Guard: only fire the auto-open once per unique openEditRef value
   const autoOpenFiredRef = useRef<string | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -169,6 +165,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
   const [highlightedArn, setHighlightedArn] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+
+  // ── Inline status edit state ─────────────────────────────────────────────
+  const [editStatusMode, setEditStatusMode] = useState(false);
+  const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (tsmDetailsProp !== undefined) setTsmDetails(tsmDetailsProp);
@@ -270,9 +270,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     };
   }, [highlightRef, activities]);
 
-  // ── Auto-open edit dialog (from notification PDF buttons) ────────────────
-  // Fires once per unique openEditRef. Forwards actionRef so the edit dialog
-  // can auto-trigger "preview" (open Preview modal) or "download" (jsPDF).
+  // ── Auto-open edit dialog ────────────────────────────────────────────────
   useEffect(() => {
     if (!openEditRef || activities.length === 0) return;
     if (autoOpenFiredRef.current === openEditRef) return;
@@ -287,6 +285,37 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     setEditAutoAction(actionRef);
     setEditOpen(true);
   }, [openEditRef, actionRef, activities]);
+
+  // ── Alt + Ctrl + E  →  toggle inline status-edit mode ───────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.altKey && e.ctrlKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        setEditStatusMode((prev) => {
+          if (prev) setPendingStatuses({}); // discard on toggle-off
+          return !prev;
+        });
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // ── Save a single row's inline status ───────────────────────────────────
+  const saveStatus = async (item: Completed) => {
+    const newStatus = pendingStatuses[item.id];
+    if (!newStatus || newStatus === item.tsm_approved_status) return;
+    try {
+      await fetch("/api/act-update-status", { // ← adjust to your real endpoint
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, tsm_approved_status: newStatus }),
+      });
+      fetchActivities();
+    } catch (err) {
+      console.error("Status update failed", err);
+    }
+  };
 
   const sortedActivities = useMemo(
     () =>
@@ -367,7 +396,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
   const openEditDialog = (item: Completed) => {
     setEditItem(item);
-    setEditAutoAction(null); // manual open — no auto-action
+    setEditAutoAction(null);
     setEditOpen(true);
   };
   const closeEditDialog = () => {
@@ -442,6 +471,18 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           outline: 2px solid rgb(234 179 8);
           outline-offset: -2px;
         }
+        .status-edit-mode-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: rgb(239 246 255);
+          border: 1px solid rgb(147 197 253);
+          color: rgb(29 78 216);
+          font-size: 0.7rem;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 4px;
+        }
       `}</style>
 
       <div className="mb-4 flex items-center justify-between gap-4">
@@ -453,6 +494,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           onChange={(e) => setSearchTerm(e.target.value)}
         />
         <div className="flex items-center space-x-2">
+          {/* Edit-mode indicator badge */}
+          {editStatusMode && (
+            <span className="status-edit-mode-badge">
+              <PenIcon className="w-3 h-3" />
+              Status Edit ON &nbsp;·&nbsp; Alt+Ctrl+E to exit
+            </span>
+          )}
+
           <TaskListDialog
             filterStatus={filterStatus}
             filterTypeActivity={filterTypeActivity}
@@ -513,15 +562,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 <TableHead className="w-10" />
                 <TableHead className="w-[60px] text-center">Tools</TableHead>
                 <TableHead>Quotation #</TableHead>
-                <TableHead>Date Created</TableHead>
+                <TableHead className="text-left">Remarks</TableHead>
+                <TableHead className="text-center">Status</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Company</TableHead>
-                <TableHead className="text-center">Status</TableHead>
                 <TableHead>Date Approved/Decline</TableHead>
                 <TableHead>Contact #</TableHead>
-                
                 <TableHead>Quotation Amount</TableHead>
-                <TableHead className="text-center">Source</TableHead>
+                <TableHead>Date Created</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -575,34 +623,67 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       {displayValue(item.quotation_number)}
                     </TableCell>
 
-                    <TableCell>
-                      {new Date(
-                        item.date_updated ?? item.date_created,
-                      ).toLocaleDateString("en-PH", {
-                        timeZone: "Asia/Manila",
-                      })}
+                    <TableCell className="text-left">
+                      {item.quotation_status}
                     </TableCell>
+
+                    {/* ── Status cell: inline-edit when mode is ON ── */}
+                    <TableCell className="p-2 font-semibold">
+                      {editStatusMode ? (
+                        <input
+                          className="border border-blue-300 rounded px-2 py-1 text-xs w-28 capitalize font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
+                          value={
+                            pendingStatuses[item.id] !== undefined
+                              ? pendingStatuses[item.id]
+                              : item.tsm_approved_status
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value
+                              .toLowerCase()
+                              .replace(/\b\w/g, (c) => c.toUpperCase()); // capitalize each word
+                      
+                            setPendingStatuses((prev) => ({
+                              ...prev,
+                              [item.id]: value,
+                            }));
+                          }}
+                          onBlur={() => saveStatus(item)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              (e.target as HTMLInputElement).blur();
+                            if (e.key === "Escape") {
+                              setPendingStatuses((prev) => {
+                                const next = { ...prev };
+                                delete next[item.id];
+                                return next;
+                              });
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${
+                            item.tsm_approved_status === "Approved"
+                              ? "bg-green-100 text-green-700"
+                              : item.tsm_approved_status === "Pending"
+                              ? "bg-orange-100 text-orange-700"
+                              : item.tsm_approved_status === "Decline"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {item.tsm_approved_status}
+                        </span>
+                      )}
+                    </TableCell>
+
                     <TableCell className="whitespace-nowrap font-mono">
                       {formatDuration(item.start_date, item.end_date)}
                     </TableCell>
                     <TableCell className="font-semibold">
                       {item.company_name}
                     </TableCell>
-                    <td className="p-2 font-semibold text-center">
-                      <span
-                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${
-                          item.tsm_approved_status === "Approved"
-                            ? "bg-green-100 text-green-700"
-                            : item.tsm_approved_status === "Pending"
-                              ? "bg-orange-100 text-orange-700"
-                              : item.tsm_approved_status === "Decline"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {item.tsm_approved_status}
-                      </span>
-                    </td>
                     <TableCell>
                       {item.tsm_approval_date && (
                         <>
@@ -665,18 +746,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                           })
                         : "-"}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <span
-                        className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize ${
-                          item.quotation_type === "Ecoshift Corporation"
-                            ? "bg-green-100 text-green-700"
-                            : item.quotation_type === "Disruptive Solutions Inc"
-                              ? "bg-rose-100 text-rose-800"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {displayValue(item.quotation_type)}
-                      </span>
+                    <TableCell>
+                      {new Date(
+                        item.date_updated ?? item.date_created,
+                      ).toLocaleDateString("en-PH", {
+                        timeZone: "Asia/Manila",
+                      })}
                     </TableCell>
                   </TableRow>
                 );

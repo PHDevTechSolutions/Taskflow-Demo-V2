@@ -55,11 +55,11 @@ export default async function handler(
   }
 
   try {
-    const rawAgent = req.query.department_head ?? req.query.referenceid;
-    const department_head = typeof rawAgent === "string" ? rawAgent.trim() : "";
+    const rawAgent = req.query.agent ?? req.query.manager;
+    const manager = typeof rawAgent === "string" ? rawAgent.trim() : "";
 
-    if (!department_head) {
-      return res.status(400).json({ error: "Missing required query: department_head" });
+    if (!manager) {
+      return res.status(400).json({ error: "Missing required query: manager" });
     }
 
     const { db } = await connectToDatabase();
@@ -68,7 +68,7 @@ export default async function handler(
 
     /* ================= CSR METRICS FILTER START ================= */
 
-    const filter = { department_head };
+    const filter = { manager };
 
     /* ================= CSR METRICS FILTER END ================= */
 
@@ -78,7 +78,7 @@ export default async function handler(
 
     console.log("CSR METRICS V2 RESULT COUNT:", data.length);
 
-    console.log("CSR METRICS V2 REF:", department_head);
+    console.log("CSR METRICS V2 REF:", manager);
 
     /* ================= DEBUG LOG END ================= */
 

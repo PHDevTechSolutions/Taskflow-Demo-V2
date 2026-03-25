@@ -115,6 +115,7 @@ const data = {
         { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
+        { name: "Daily Activity Logs", url: "/roles/manager/activity/ccg", icon: Compass },
 
         // CSR
         { name: "Quotation List", url: "/roles/csr/activity/quotation/quotation-list", icon: Compass },
@@ -150,6 +151,7 @@ const data = {
         { name: "FB Marketplace", url: "/roles/tsm/reports/fb", icon: ShoppingBag },
 
         // Manager
+        { name: "Outbound Summary", url: "/roles/manager/reports/ob", icon: PhoneCall },
         { name: "Quotation Summary", url: "/roles/manager/reports/quotation", icon: FileText },
         { name: "SO Summary", url: "/roles/manager/reports/so", icon: ShoppingCart },
         { name: "Sales Invoice Summary", url: "/roles/manager/reports/si", icon: File },

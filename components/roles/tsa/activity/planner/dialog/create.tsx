@@ -91,7 +91,7 @@ interface Activity {
 
     date_followup?: string;
     remarks: string;
-    tsm_approved_status: string;
+    tsm_approved_status?: string;
     // CSR
     agent: string;
     start_date?: string;
@@ -216,6 +216,7 @@ export function CreateActivityDialog({
     const [quotationAmount, setQuotationAmount] = useState("");
     const [quotationType, setQuotationType] = useState("");
     const [quotationStatus, setQuotationStatus] = useState("");
+    const [tsmApprovalStatus, setTsmApprovalStatus] = useState("");
 
     const [soNumber, setSoNumber] = useState("");
     const [soAmount, setSoAmount] = useState("");
@@ -269,6 +270,7 @@ export function CreateActivityDialog({
         quotationAmount: "",
         quotationType: "",
         quotationStatus: "",
+        tsmApprovalStatus: "",
         itemRemarks: "",
         soNumber: "",
         soAmount: "",
@@ -301,6 +303,7 @@ export function CreateActivityDialog({
         setQuotationAmount(initialState.quotationAmount);
         setQuotationType(initialState.quotationType);
         setQuotationStatus(initialState.quotationStatus);
+        setTsmApprovalStatus(initialState.tsmApprovalStatus)
         setSoNumber(initialState.soNumber);
         setSoAmount(initialState.soAmount);
         setSiDate(initialState.siDate);
@@ -498,7 +501,7 @@ export function CreateActivityDialog({
 
             date_followup: followUpDate || undefined,
             remarks,
-            tsm_approved_status: "Pending",
+            tsm_approved_status: tsmApprovalStatus || undefined,
             start_date: startDate,
             end_date: new Date().toISOString(),
         };
@@ -998,6 +1001,8 @@ export function CreateActivityDialog({
                                     setQuotationType={setQuotationType}
                                     quotationStatus={quotationStatus}
                                     setQuotationStatus={setQuotationStatus}
+                                    tsmApprovalStatus={tsmApprovalStatus}
+                                    setTsmApprovalStatus={setTsmApprovalStatus}
                                     callType={callType}
                                     setCallType={setCallType}
                                     followUpDate={followUpDate}

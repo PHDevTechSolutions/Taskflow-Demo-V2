@@ -15,7 +15,7 @@ import { type DateRange } from "react-day-picker";
 /* ─── Types ───────────────────────────────────────────────────────── */
 
 interface Account {
-  id: string; tsm: string; referenceid: string; company_name: string;
+  id: string; tsm: string; referenceid: string; account_reference_number?: string; company_name: string;
   type_client: string; date_created: string; contact_person: string;
   contact_number: string; email_address: string; address?: string;
   delivery_address?: string; region: string; industry: string; status?: string;
@@ -23,6 +23,7 @@ interface Account {
 
 interface Activity {
   id?: string;
+  account_reference_number?: string;
   company_name?: string;
   type_activity?: string;
   remarks?: string;
@@ -122,20 +123,28 @@ function getTypeClientStyle(type: string) {
 
 /* ─── Stat Card ───────────────────────────────────────────────────── */
 
-function StatCard({ label, value, accent, onClick, clickable, sublabel }: {
+function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive }: {
   label: string; value: number | string; accent: string;
-  onClick?: () => void; clickable?: boolean; sublabel?: string;
+  onClick?: () => void; clickable?: boolean; sublabel?: string; isActive?: boolean;
 }) {
   return (
     <div onClick={onClick}
-      className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-indigo-200" : ""}`}
+      className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all duration-150
+        ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-indigo-200" : ""}
+        ${isActive ? "ring-2 ring-indigo-500 border-indigo-400 shadow-md -translate-y-0.5" : ""}`}
       style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{ background: `radial-gradient(circle at 80% 20%, ${accent}, transparent 70%)` }} />
       <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</span>
       <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
       {sublabel && <span className="text-[10px] text-gray-400 mt-0.5">{sublabel}</span>}
-      {clickable && <span className="text-[10px] text-indigo-400 font-semibold">Click to view</span>}
+      {isActive && (
+        <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
+          Filtering active
+        </span>
+      )}
+      {!isActive && clickable && <span className="text-[10px] text-indigo-400 font-semibold">Click to filter</span>}
     </div>
   );
 }
@@ -265,7 +274,9 @@ function AccountListDialog({
   useEffect(() => { if (!open) { setSearch(""); setTypeFilter("ALL"); } }, [open]);
 
   const typeClientOptions = useMemo(() => {
-    const types = Array.from(new Set(accounts.map((a) => a.type_client?.toUpperCase()).filter(Boolean)));
+    const types = Array.from(
+      new Set(accounts.map((a) => a.type_client?.toUpperCase()).filter(Boolean))
+    );
     return types.sort();
   }, [accounts]);
 
@@ -285,7 +296,10 @@ function AccountListDialog({
 
   const typeCountMap = useMemo(() => {
     const m: Record<string, number> = {};
-    accounts.forEach((a) => { const t = a.type_client?.toUpperCase() ?? ""; m[t] = (m[t] ?? 0) + 1; });
+    accounts.forEach((a) => {
+      const t = a.type_client?.toUpperCase() ?? "";
+      m[t] = (m[t] ?? 0) + 1;
+    });
     return m;
   }, [accounts]);
 
@@ -373,7 +387,7 @@ function AccountListDialog({
                   </div>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border shrink-0 mt-0.5 ${typeStyle.pill}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
-                    {account.type_client}
+                    {account.type_client?.toUpperCase()}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2 text-[11px] text-slate-400">
@@ -687,18 +701,16 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [allActivities,     setAllActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
-  // Drill-down state
   const [drillLevel,        setDrillLevel]        = useState<DrillLevel>("tsm");
   const [selectedTSMId,     setSelectedTSMId]     = useState<string>("");
   const [selectedTSMName,   setSelectedTSMName]   = useState<string>("");
   const [selectedAgentId,   setSelectedAgentId]   = useState<string>("");
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
 
-  // Account table state
-  const [search,      setSearch]      = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [search,           setSearch]           = useState("");
+  const [currentPage,      setCurrentPage]      = useState(1);
+  const [typeClientFilter, setTypeClientFilter] = useState<string | null>(null);
 
-  // Dialogs
   const [historyOpen,    setHistoryOpen]    = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
   const [historySource,  setHistorySource]  = useState<ListSource>(null);
@@ -710,7 +722,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
   const rangeLabel    = formatRangeLabel(dateCreatedFilterRange);
 
-  /* ── Fetch agents ── */
   useEffect(() => {
     if (!userDetails.referenceid) return;
     fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`)
@@ -727,25 +738,33 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       .catch(() => setAgents([]));
   }, [userDetails.referenceid]);
 
-  /* ── Fetch all activities ── */
   useEffect(() => {
     if (!userDetails.referenceid) return;
+    let cancelled = false;
     setLoadingActivities(true);
-    fetch(`/api/reports/manager/fetch?referenceid=${encodeURIComponent(userDetails.referenceid)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+    setAllActivities([]);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const params = new URLSearchParams({ referenceid: userDetails.referenceid });
+    if (dateCreatedFilterRange?.from) params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
+    if (dateCreatedFilterRange?.to)   params.set("to",   dateCreatedFilterRange.to.toISOString().slice(0, 10));
+    fetch(`/api/reports/manager/fetch?${params.toString()}`, { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
-        const arr = Array.isArray(data) ? data : (data.activities ?? data ?? []);
+        if (cancelled) return;
+        const arr = Array.isArray(data) ? data : Array.isArray(data?.activities) ? data.activities : [];
         setAllActivities(arr);
       })
-      .catch(() => setAllActivities([]))
-      .finally(() => setLoadingActivities(false));
-  }, [userDetails.referenceid]);
+      .catch((err) => { if (cancelled || err?.name === "AbortError") return; setAllActivities([]); })
+      .finally(() => { clearTimeout(timeout); if (!cancelled) setLoadingActivities(false); });
+    return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
+  }, [userDetails.referenceid, dateCreatedFilterRange]);
 
-  /* ── Derived maps ── */
   const agentMap = useMemo(() => {
     const map: Record<string, string> = {};
-    const list = Array.isArray(agents) ? agents : [];
-    list.forEach((a) => { if (a.ReferenceID) map[a.ReferenceID.toLowerCase()] = `${a.Firstname} ${a.Lastname}`; });
+    (Array.isArray(agents) ? agents : []).forEach((a) => {
+      if (a.ReferenceID) map[a.ReferenceID.toLowerCase()] = `${a.Firstname} ${a.Lastname}`;
+    });
     return map;
   }, [agents]);
 
@@ -753,79 +772,136 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     posts.filter((a) => a.status?.toLowerCase() === "active"),
   [posts]);
 
-  // All unique TSM ids derived from accounts' .tsm field
-  const tsmIds = useMemo(() => {
+  // ── Type client filter applied on top of active accounts ──
+  const typeClientFilteredAccounts = useMemo(() =>
+    typeClientFilter
+      ? allActiveAccounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter)
+      : allActiveAccounts,
+  [allActiveAccounts, typeClientFilter]);
+
+  // ── Set of active company names (lowercase) — source of truth ──
+  const activeCompanyNames = useMemo(() => {
     const s = new Set<string>();
-    allActiveAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
-    return [...s];
+    allActiveAccounts.forEach((a) => s.add(a.company_name.toLowerCase()));
+    return s;
   }, [allActiveAccounts]);
 
-  // Date-filtered activities for "with/without activity" counts
-  const dateFilteredActivities = useMemo(() => {
-    if (!hasDateFilter) return allActivities;
-    return allActivities.filter((a) => activityInRange(a.date_created, dateCreatedFilterRange));
-  }, [allActivities, hasDateFilter, dateCreatedFilterRange]);
+  // ── Filter allActivities to only include companies still in active accounts ──
+  const activeFilteredActivities = useMemo(() =>
+    allActivities.filter((a) =>
+      a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
+    ),
+  [allActivities, activeCompanyNames]);
 
+  const tsmIds = useMemo(() => {
+    const s = new Set<string>();
+    typeClientFilteredAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
+    return [...s];
+  }, [typeClientFilteredAccounts]);
+
+  // ── activityKeySet uses activeFilteredActivities ──
+  const activityKeySet = useMemo(() => {
+    const s = new Set<string>();
+    activeFilteredActivities.forEach((a) => {
+      if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
+      else if (a.company_name)        s.add(`name:${a.company_name.toLowerCase()}`);
+    });
+    return s;
+  }, [activeFilteredActivities]);
+
+  const getAccountKey = (account: Account): string => {
+    if (account.account_reference_number) return account.account_reference_number.toLowerCase();
+    return `name:${account.company_name.toLowerCase()}`;
+  };
+
+  // ── companiesWithActivity uses activityKeySet derived from activeFilteredActivities ──
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
-    dateFilteredActivities.forEach((a) => { if (a.company_name) s.add(a.company_name.toLowerCase()); });
+    allActiveAccounts.forEach((a) => {
+      if (activityKeySet.has(getAccountKey(a))) s.add(a.company_name.toLowerCase());
+    });
     return s;
-  }, [dateFilteredActivities]);
+  }, [allActiveAccounts, activityKeySet]);
 
+  // ── activityCountMap uses activeFilteredActivities ──
   const activityCountMap = useMemo(() => {
+    const refCount: Record<string, number> = {};
+    const nameCount: Record<string, number> = {};
+    activeFilteredActivities.forEach((a) => {
+      if (a.account_reference_number) {
+        const k = a.account_reference_number.toLowerCase();
+        refCount[k] = (refCount[k] ?? 0) + 1;
+      } else if (a.company_name) {
+        const k = a.company_name.toLowerCase();
+        nameCount[k] = (nameCount[k] ?? 0) + 1;
+      }
+    });
     const m: Record<string, number> = {};
-    dateFilteredActivities.forEach((a) => {
-      if (a.company_name) { const k = a.company_name.toLowerCase(); m[k] = (m[k] ?? 0) + 1; }
+    allActiveAccounts.forEach((a) => {
+      const key = a.company_name.toLowerCase();
+      if (a.account_reference_number) {
+        const refKey = a.account_reference_number.toLowerCase();
+        if (refCount[refKey]) m[key] = (m[key] ?? 0) + refCount[refKey];
+      } else if (nameCount[key]) {
+        m[key] = (m[key] ?? 0) + nameCount[key];
+      }
     });
     return m;
-  }, [dateFilteredActivities]);
+  }, [activeFilteredActivities, allActiveAccounts]);
 
-  /* ── TSM-level data ── */
-  // TSM name comes from agentMap (if the TSM's own referenceid is in agentMap),
-  // otherwise fallback to the raw tsm field value from accounts.
   const tsmData = useMemo(() => {
     return tsmIds.map((tsmId) => {
-      const tsmAccounts = allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === tsmId);
+      const tsmAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === tsmId);
       const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
-      // Try to resolve TSM name: check agentMap first, then use the raw tsm string from any account
       const tsmName = agentMap[tsmId] ?? tsmAccounts[0]?.tsm ?? tsmId;
       return { tsmId, tsmName, accountCount: tsmAccounts.length, agentCount: agentIds.length };
     }).sort((a, b) => b.accountCount - a.accountCount);
-  }, [tsmIds, allActiveAccounts, agentMap]);
+  }, [tsmIds, typeClientFilteredAccounts, agentMap]);
 
-  /* ── Agent-level data (under selected TSM) ── */
   const agentsUnderTSM = useMemo(() => {
     if (!selectedTSMId) return [];
-    const tsmAccounts = allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    const tsmAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
     return agentIds.map((agentId) => {
       const agentAccounts = tsmAccounts.filter((a) => a.referenceid?.toLowerCase() === agentId);
       const withAct    = agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
       const withoutAct = agentAccounts.length - withAct;
-      return {
-        agentId,
-        agentName: agentMap[agentId] ?? agentId,
-        accountCount: agentAccounts.length,
-        withActivity: withAct,
-        withoutActivity: withoutAct,
-      };
+      return { agentId, agentName: agentMap[agentId] ?? agentId, accountCount: agentAccounts.length, withActivity: withAct, withoutActivity: withoutAct };
     }).sort((a, b) => b.accountCount - a.accountCount);
-  }, [selectedTSMId, allActiveAccounts, agentMap, companiesWithActivity]);
+  }, [selectedTSMId, typeClientFilteredAccounts, agentMap, companiesWithActivity]);
 
-  /* ── Account-level data (under selected agent) ── */
   const agentAccounts = useMemo(() => {
     if (!selectedAgentId) return [];
-    return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-  }, [selectedAgentId, allActiveAccounts]);
+    return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+  }, [selectedAgentId, typeClientFilteredAccounts]);
 
   const withActivityAccounts    = useMemo(() => agentAccounts.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
   const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
 
+  const scopedBase = useMemo(() => {
+    if (drillLevel === "tsm")   return typeClientFilteredAccounts;
+    if (drillLevel === "agent") return typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    return agentAccounts;
+  }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, agentAccounts]);
+
+  const scopedWithActivity    = useMemo(() => scopedBase.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
+  const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
+
+  // ── Unfiltered scoped base for type client count cards (always shows all types) ──
+  const unfilteredScopedBase = useMemo(() => {
+    if (drillLevel === "tsm")   return allActiveAccounts;
+    if (drillLevel === "agent") return allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+  }, [drillLevel, allActiveAccounts, selectedTSMId, selectedAgentId]);
+
   const typeClientCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    agentAccounts.forEach((a) => { const t = a.type_client ?? "Unknown"; c[t] = (c[t] ?? 0) + 1; });
+    unfilteredScopedBase.forEach((a) => {
+      const t = (a.type_client ?? "Unknown").toUpperCase();
+      c[t] = (c[t] ?? 0) + 1;
+    });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [agentAccounts]);
+  }, [unfilteredScopedBase]);
 
   const filteredAccounts = useMemo(() => {
     const q = search.toLowerCase();
@@ -841,41 +917,45 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => setCurrentPage(1), [search, selectedAgentId]);
 
-  /* ── Navigation ── */
   const goToTSM = () => {
     setDrillLevel("tsm");
     setSelectedTSMId(""); setSelectedTSMName("");
     setSelectedAgentId(""); setSelectedAgentName("");
     setSearch("");
+    setTypeClientFilter(null);
   };
   const goToAgent = (tsmId: string, tsmName: string) => {
     setSelectedTSMId(tsmId); setSelectedTSMName(tsmName);
     setDrillLevel("agent");
     setSelectedAgentId(""); setSelectedAgentName("");
     setSearch("");
+    setTypeClientFilter(null);
   };
   const goToAccounts = (agentId: string, agentName: string) => {
     setSelectedAgentId(agentId); setSelectedAgentName(agentName);
     setDrillLevel("accounts");
     setSearch("");
+    setTypeClientFilter(null);
   };
 
-  /* ── History ── */
+  // ── openHistory guards against companies not in active accounts ──
   const openHistory = (companyName: string, source: ListSource = null) => {
+    const isActive = activeCompanyNames.has(companyName.toLowerCase());
+    if (!isActive) return;
+
     setHistoryCompany(companyName);
     setHistorySource(source);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    const filtered = allActivities.filter((a) =>
-      (a.company_name ?? "").toLowerCase() === companyName.toLowerCase() &&
-      activityInRange(a.date_created, dateCreatedFilterRange)
+
+    const filtered = activeFilteredActivities.filter((a) =>
+      (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
     );
     setActivities(filtered);
     setLoadingHistory(false);
   };
 
   const handleHistoryBack = historySource ? () => setActiveListOpen(historySource) : null;
-
   const accentColors = ["#6366f1","#f59e0b","#10b981","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6"];
 
   const listDesc = (count: number, type: "with" | "without") =>
@@ -883,16 +963,11 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       ? `${count} accounts ${type === "with" ? "with" : "with no"} activity between ${rangeLabel}`
       : `${count} accounts ${type === "with" ? "with at least one activity" : "with no recorded activities"}`;
 
-  /* ── Stat counts for top cards ── */
-  const overallCounts = useMemo(() => {
-    const base =
-      drillLevel === "tsm"     ? allActiveAccounts :
-      drillLevel === "agent"   ? allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId) :
-      agentAccounts;
-    const withAct    = base.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
-    const withoutAct = base.length - withAct;
-    return { total: base.length, withAct, withoutAct };
-  }, [drillLevel, allActiveAccounts, agentAccounts, selectedTSMId, companiesWithActivity]);
+  const overallCounts = useMemo(() => ({
+    total:      scopedBase.length,
+    withAct:    scopedWithActivity.length,
+    withoutAct: scopedWithoutActivity.length,
+  }), [scopedBase, scopedWithActivity, scopedWithoutActivity]);
 
   return (
     <>
@@ -911,26 +986,25 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       <AccountListDialog
         open={activeListOpen === "with"} onClose={() => setActiveListOpen(null)}
         source="with" title="Accounts With Activities"
-        description={listDesc(withActivityAccounts.length, "with")}
+        description={listDesc(scopedWithActivity.length, "with")}
         icon={<CheckCircle2 size={16} className="text-emerald-500" />}
         iconBg="bg-emerald-50 border-emerald-100"
-        accounts={withActivityAccounts} agentMap={agentMap} activityCountMap={activityCountMap}
+        accounts={scopedWithActivity} agentMap={agentMap} activityCountMap={activityCountMap}
         onViewHistory={(n, s) => { setActiveListOpen(null); openHistory(n, s); }}
       />
 
       <AccountListDialog
         open={activeListOpen === "without"} onClose={() => setActiveListOpen(null)}
         source="without" title="Accounts With No Activities"
-        description={listDesc(withoutActivityAccounts.length, "without")}
+        description={listDesc(scopedWithoutActivity.length, "without")}
         icon={<AlertCircle size={16} className="text-amber-500" />}
         iconBg="bg-amber-50 border-amber-100"
-        accounts={withoutActivityAccounts} agentMap={agentMap} activityCountMap={activityCountMap}
+        accounts={scopedWithoutActivity} agentMap={agentMap} activityCountMap={activityCountMap}
         onViewHistory={(n, s) => { setActiveListOpen(null); openHistory(n, s); }}
       />
 
       <div className="space-y-5">
 
-        {/* Date filter badge */}
         {hasDateFilter && (
           <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
             <CalendarDays size={12} className="shrink-0" />
@@ -939,7 +1013,20 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
-        {/* Loading indicator */}
+        {/* ── Active type client filter banner ── */}
+        {typeClientFilter && (
+          <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+            Type filter: <strong>{typeClientFilter}</strong>
+            <button
+              onClick={() => setTypeClientFilter(null)}
+              className="ml-1 text-indigo-400 hover:text-indigo-700 transition-colors flex items-center"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
+
         {loadingActivities && (
           <div className="flex items-center gap-2 text-[11px] text-indigo-500 font-medium">
             <div className="w-3 h-3 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
@@ -947,30 +1034,32 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
-        {/* Top stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <StatCard label="Total Accounts" value={overallCounts.total} accent="#1e293b" />
           <StatCard
             label="With Activities" value={overallCounts.withAct} accent="#10b981"
-            clickable={drillLevel === "accounts"}
-            sublabel={hasDateFilter ? "in range" : undefined}
-            onClick={drillLevel === "accounts" ? () => setActiveListOpen("with") : undefined}
+            clickable sublabel={hasDateFilter ? "in range" : undefined}
+            onClick={() => setActiveListOpen("with")}
           />
           <StatCard
             label="No Activities" value={overallCounts.withoutAct} accent="#f59e0b"
-            clickable={drillLevel === "accounts"}
-            sublabel={hasDateFilter ? "in range" : undefined}
-            onClick={drillLevel === "accounts" ? () => setActiveListOpen("without") : undefined}
+            clickable sublabel={hasDateFilter ? "in range" : undefined}
+            onClick={() => setActiveListOpen("without")}
           />
-          {drillLevel === "accounts" && typeClientCounts.map(([type, count], i) => (
-            <StatCard key={type} label={type} value={count} accent={accentColors[i % accentColors.length]} />
+          {typeClientCounts.map(([type, count], i) => (
+            <StatCard
+              key={type}
+              label={type}
+              value={count}
+              accent={accentColors[i % accentColors.length]}
+              clickable
+              isActive={typeClientFilter === type}
+              onClick={() => setTypeClientFilter((prev) => prev === type ? null : type)}
+            />
           ))}
         </div>
 
-        {/* Main drill-down panel */}
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-
-          {/* Panel header */}
           <div className="px-4 py-3 border-b flex flex-wrap items-center gap-3 bg-gray-50/60">
             <div className="mr-auto">
               <DrillBreadcrumb
@@ -1008,14 +1097,17 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             )}
           </div>
 
-          {/* Level: TSM overview */}
           {drillLevel === "tsm" && (
             <div className="p-4 space-y-2.5">
               {tsmData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <Users size={32} strokeWidth={1} />
                   <p className="text-sm font-medium">No TSM data found</p>
-                  <p className="text-[11px] text-slate-400">Make sure accounts have a TSM field set</p>
+                  <p className="text-[11px] text-slate-400">
+                    {typeClientFilter
+                      ? `No accounts with type "${typeClientFilter}" found`
+                      : "Make sure accounts have a TSM field set"}
+                  </p>
                 </div>
               ) : tsmData.map((tsm) => (
                 <TSMRowCard
@@ -1029,13 +1121,15 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             </div>
           )}
 
-          {/* Level: Agents under selected TSM */}
           {drillLevel === "agent" && (
             <div className="p-4 space-y-2.5">
               {agentsUnderTSM.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <User size={32} strokeWidth={1} />
                   <p className="text-sm font-medium">No agents found under this TSM</p>
+                  {typeClientFilter && (
+                    <p className="text-[11px] text-slate-400">No "{typeClientFilter}" accounts assigned here</p>
+                  )}
                 </div>
               ) : agentsUnderTSM.map((agent) => (
                 <AgentRowCard
@@ -1050,7 +1144,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             </div>
           )}
 
-          {/* Level: Account list of selected agent */}
           {drillLevel === "accounts" && (
             <>
               <div className="overflow-auto p-2">
@@ -1096,7 +1189,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                           <TableCell>
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase tracking-wide ${typeStyle.pill}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
-                              {account.type_client}
+                              {account.type_client?.toUpperCase()}
                             </span>
                           </TableCell>
                           <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.industry}</TableCell>
