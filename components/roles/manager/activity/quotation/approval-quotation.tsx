@@ -86,6 +86,12 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
 }) => {
+    const toLocalYMD = (value: Date) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, "0");
+        const day = String(value.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
     const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -109,18 +115,18 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
 
         try {
             const from = dateCreatedFilterRange?.from
-                ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+                ? toLocalYMD(new Date(dateCreatedFilterRange.from))
                 : null;
             const to = dateCreatedFilterRange?.to
-                ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+                ? toLocalYMD(new Date(dateCreatedFilterRange.to))
                 : null;
 
             const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
             url.searchParams.append("referenceid", referenceid);
-            if (from && to) {
-                url.searchParams.append("from", from);
-                url.searchParams.append("to", to);
-            }
+            url.searchParams.append("statusType", "approved");
+            // Date range is optional. If no dates are selected, API should return all records.
+            if (from) url.searchParams.append("from", from);
+            if (to) url.searchParams.append("to", to);
 
             const res = await fetch(url.toString());
             if (!res.ok) throw new Error("Failed to fetch activities");
@@ -148,7 +154,8 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                 setAgents(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error(err);
-                setError("Failed to load agents.");
+                // Do not block quotation list rendering when agent metadata fails.
+                setAgents([]);
             }
         };
 
