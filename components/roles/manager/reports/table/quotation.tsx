@@ -116,9 +116,6 @@ function computeDuration(start?: string, end?: string): string {
 
 /* ================= DATE HELPER ================= */
 
-// date_created is a DATE column — always send plain "YYYY-MM-DD" to the API.
-// Sending ISO timestamps (with time + timezone) causes timezone-based
-// off-by-one mismatches against a DATE column in PostgREST.
 function toPlainDate(value: Date | string): string {
   const d     = typeof value === "string" ? new Date(value) : value;
   const year  = d.getFullYear();
@@ -152,8 +149,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     const url = new URL("/api/reports/manager/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
 
-    // FIX 1: plain YYYY-MM-DD — date_created is DATE, not TIMESTAMPTZ.
-    // Old code sent ISO timestamps → timezone shifts caused off-by-one issues.
     if (dateCreatedFilterRange?.from) {
       url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
     }
@@ -161,11 +156,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
     }
 
-    // FIX 2: push type_activity filter to the DB level.
-    // Old: API fetched ALL types → client filtered → 10–50x excess rows fetched
-    //      → sequential batch loop timed out on wide ranges (e.g. March 1–23)
-    //      → "Failed to fetch activities" error.
-    // New: DB returns only quotation rows → far fewer batches → no timeout.
     url.searchParams.append("type_activity", "quotation preparation");
 
     fetch(url.toString())
@@ -193,7 +183,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           setActivities((curr) => {
             switch (payload.eventType) {
               case "INSERT":
-                // Only add if it's a quotation preparation record
                 if (newRecord.type_activity?.toLowerCase() !== "quotation preparation") return curr;
                 return curr.some((a) => a.id === newRecord.id) ? curr : [...curr, newRecord];
               case "UPDATE":
@@ -214,7 +203,6 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   // ─── Fetch agents ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    // Match sales-performance source so TSM/TSA mapping is identical.
     fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
       .then((res) => { if (!res.ok) throw new Error("Failed"); return res.json(); })
       .then((data) => setAgents(data || []))
@@ -248,17 +236,17 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     [activities]
   );
 
+  // ─── TSM Summary (UPDATED: per-status counts) ────────────────────────────────
   const tsmSummary = useMemo(() => {
     const summaryMap = new Map<string, {
       tsmId: string;
       tsmName: string;
       quoteCount: number;
       quotationAmount: number;
-      cancelledStatus: number;
-      doneStatus: number;
+      statusCounts: Record<string, number>;
     }>();
 
-    // Initialize from official TSM list (same style as sales-performance table)
+    // Initialize from official TSM list
     tsmAgents.forEach((tsm) => {
       const tsmId = tsm.ReferenceID.toLowerCase();
       summaryMap.set(tsmId, {
@@ -266,8 +254,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
         quoteCount: 0,
         quotationAmount: 0,
-        cancelledStatus: 0,
-        doneStatus: 0,
+        statusCounts: Object.fromEntries(ALL_STATUSES.map((s) => [s, 0])),
       });
     });
 
@@ -277,14 +264,15 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       if (!tsmId) return;
       if (!summaryMap.has(tsmId)) return;
 
-      const row = summaryMap.get(tsmId);
-      if (!row) return;
+      const row = summaryMap.get(tsmId)!;
       row.quoteCount += 1;
       row.quotationAmount += item.quotation_amount ?? 0;
 
-      const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
-      if (priority === "COLD") row.cancelledStatus += 1;
-      if (priority === "DONE") row.doneStatus += 1;
+      const statusKey = item.quotation_status?.toUpperCase() ?? "";
+      const matchedStatus = ALL_STATUSES.find((s) => s === statusKey);
+      if (matchedStatus) {
+        row.statusCounts[matchedStatus] += 1;
+      }
     });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.quoteCount - a.quoteCount);
@@ -332,8 +320,19 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 <TableHead className="text-gray-500">TSM</TableHead>
                 <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
                 <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-                <TableHead className="text-gray-500 text-right">Cancelled Status</TableHead>
-                <TableHead className="text-gray-500 text-right">Done Status</TableHead>
+                <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
+                <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
+                <TableHead className="text-gray-500 text-right">Nego</TableHead>
+                <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
+                <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
+                <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
+                <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
+                <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
+                <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
+                <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
+                <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
+                <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
+                <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -351,8 +350,25 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                       <TableCell className="text-right">
                         {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                       </TableCell>
-                      <TableCell className="text-right text-red-600 font-semibold">{item.cancelledStatus}</TableCell>
-                      <TableCell className="text-right text-green-600 font-semibold">{item.doneStatus}</TableCell>
+                      {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
+                      {ALL_STATUSES.map((status) => {
+                        const count = item.statusCounts[status] ?? 0;
+                        const priority = PRIORITY_MAP[status];
+                        const colorClass =
+                          priority === "HOT"  ? "text-red-600 font-semibold" :
+                          priority === "WARM" ? "text-amber-600 font-semibold" :
+                          priority === "DONE" ? "text-green-600 font-semibold" :
+                          priority === "COLD" ? "text-blue-500 font-semibold" :
+                          "text-gray-700";
+                        return (
+                          <TableCell
+                            key={status}
+                            className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
+                          >
+                            {count > 0 ? count : "—"}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   </React.Fragment>
                 );

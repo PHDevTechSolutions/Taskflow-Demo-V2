@@ -151,13 +151,11 @@ const data = {
         { name: "FB Marketplace", url: "/roles/tsm/reports/fb", icon: ShoppingBag },
 
         // Manager
-        { name: "Outbound Summary", url: "/roles/manager/reports/ob", icon: PhoneCall },
         { name: "Quotation Summary", url: "/roles/manager/reports/quotation", icon: FileText },
         { name: "SO Summary", url: "/roles/manager/reports/so", icon: ShoppingCart },
         { name: "Sales Invoice Summary", url: "/roles/manager/reports/si", icon: File },
         { name: "CSR Inquiry Summary", url: "/roles/manager/reports/csr", icon: Phone },
         { name: "SPF Summary", url: "/roles/manager/reports/spf", icon: ClipboardPenLine },
-        { name: "New Client Summary", url: "/roles/manager/reports/ncs", icon: Leaf },
         { name: "FB Marketplace", url: "/roles/manager/reports/fb", icon: ShoppingBag },
 
         // Admin
@@ -166,7 +164,6 @@ const data = {
         { name: "Sales Invoice Summary", url: "/roles/admin/reports/si", icon: File },
         { name: "CSR Inquiry Summary", url: "/roles/admin/reports/csr", icon: Phone },
         { name: "SPF Summary", url: "/roles/admin/reports/spf", icon: ClipboardPenLine },
-        { name: "New Client Summary", url: "/roles/admin/reports/ncs", icon: Leaf },
         { name: "FB Marketplace Summary", url: "/roles/admin/reports/fb", icon: ShoppingBag },
       ],
     },
