@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
   CalendarDays, ArrowLeft, FileText, Hash, Building2,
-  Users, ChevronRight, User,
+  Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
@@ -532,12 +532,17 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 interface HistoryDialogProps {
   open: boolean; onClose: () => void; onBack: (() => void) | null;
   companyName: string | null; loading: boolean; records: Activity[];
+  account?: Account | null;
 }
 
-function HistoryDialog({ open, onClose, onBack, companyName, loading, records }: HistoryDialogProps) {
+function HistoryDialog({ open, onClose, onBack, companyName, loading, records, account }: HistoryDialogProps) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | number | null>(null);
   useEffect(() => { if (!open) { setSearch(""); setExpanded(null); } }, [open]);
+
+  const totalActualSales = useMemo(() =>
+    records.reduce((sum, r) => sum + (r.actual_sales ?? 0), 0),
+  [records]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -604,6 +609,53 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
             ))}
           </div>
         )}
+
+        {/* ── Account info + total sales panel ── */}
+        <div className="px-6 py-3 border-b border-white/5 bg-[#0d1117] shrink-0">
+          <div className="flex flex-wrap items-start gap-4">
+            {/* Contact details */}
+            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {account?.contact_person && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <User size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono truncate">{account.contact_person}</span>
+                </div>
+              )}
+              {account?.contact_number && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <Phone size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono">{account.contact_number}</span>
+                </div>
+              )}
+              {account?.email_address && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <Mail size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono truncate">{account.email_address}</span>
+                </div>
+              )}
+              {(account?.address || account?.delivery_address) && (
+                <div className="flex items-start gap-2 text-[11px]">
+                  <MapPin size={11} className="text-slate-500 shrink-0 mt-px" />
+                  <span className="text-slate-300 font-mono leading-snug break-words">
+                    {account.address ?? account.delivery_address}
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Total actual sales */}
+            {totalActualSales > 0 && (
+              <div className="shrink-0 flex flex-col items-end gap-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold font-mono uppercase tracking-wide">
+                  <TrendingUp size={10} />
+                  Total Actual Sales
+                </div>
+                <span className="text-emerald-300 font-bold font-mono text-base tabular-nums">
+                  {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="px-6 py-3 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
@@ -715,6 +767,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
   const [historySource,  setHistorySource]  = useState<ListSource>(null);
   const [activities,     setActivities]     = useState<Activity[]>([]);
+  const [historyAccount, setHistoryAccount] = useState<Account | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [exportOpen,     setExportOpen]     = useState(false);
   const [activeListOpen, setActiveListOpen] = useState<ListSource>(null);
@@ -943,7 +996,10 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const isActive = activeCompanyNames.has(companyName.toLowerCase());
     if (!isActive) return;
 
+    const acct = allActiveAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
+
     setHistoryCompany(companyName);
+    setHistoryAccount(acct);
     setHistorySource(source);
     setHistoryOpen(true);
     setLoadingHistory(true);
@@ -981,6 +1037,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         open={historyOpen} onClose={() => setHistoryOpen(false)}
         onBack={handleHistoryBack}
         companyName={historyCompany} loading={loadingHistory} records={activities}
+        account={historyAccount}
       />
 
       <AccountListDialog
