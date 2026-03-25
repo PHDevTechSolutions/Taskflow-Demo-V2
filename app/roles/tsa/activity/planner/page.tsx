@@ -80,6 +80,69 @@ interface QuotationNotification {
 
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
 
+// ─── Clear Cache Dialog ───────────────────────────────────────────────────────
+
+function ClearCacheDialog({
+  open,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white border border-gray-200 shadow-xl rounded-none p-6 w-80 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
+          <h2 className="text-sm font-black uppercase tracking-wider text-gray-800">Clear Cache</h2>
+        </div>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          This will clear all browser cache, local storage, and service workers. The page will reload automatically.
+        </p>
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-8 rounded-none text-xs"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 h-8 rounded-none text-xs bg-red-600 hover:bg-red-700 text-white"
+            onClick={() => { onClose(); onConfirm(); }}
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1" />
+            Clear Now
+          </Button>
+        </div>
+        <p className="text-[10px] text-gray-400 text-center">Press <kbd className="px-1 py-0.5 border border-gray-300 rounded text-[9px] font-mono">Esc</kbd> to close</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Notification Dropdown ────────────────────────────────────────────────────
 
 function NotificationDropdown({
@@ -98,14 +161,11 @@ function NotificationDropdown({
 
   // ── Sound refs ──
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Tracks IDs from the PREVIOUS fetch so we can detect genuinely NEW ones
   const prevIdsRef = useRef<Set<number>>(new Set());
-  // Prevents playing sound on the very first load (page mount)
   const isFirstLoad = useRef(true);
 
   const READ_KEY = `notif_read_${referenceid}`;
 
-  // Load persisted read IDs
   useEffect(() => {
     if (!referenceid) return;
     try {
@@ -122,14 +182,9 @@ function NotificationDropdown({
         audioRef.current = new Audio("/alert-notification.mp3");
         audioRef.current.volume = 0.6;
       }
-      // Reset so it plays from the start even if called rapidly
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {
-        // Autoplay blocked by browser policy — silently ignore
-      });
-    } catch {
-      // Ignore any audio errors
-    }
+      audioRef.current.play().catch(() => { });
+    } catch { }
   };
 
   const fetchNotifications = useCallback(async () => {
@@ -153,25 +208,16 @@ function NotificationDropdown({
         return dateB - dateA;
       });
 
-      // ── Detect new notifications ──────────────────────────────────────────
       const newIds = new Set<number>(filtered.map((n: QuotationNotification) => n.id as number));
-
       if (!isFirstLoad.current) {
-        // Find IDs that weren't in the previous fetch
         const brandNewIds = [...newIds].filter((id) => !prevIdsRef.current.has(id));
-        if (brandNewIds.length > 0) {
-          playSound();
-        }
+        if (brandNewIds.length > 0) playSound();
       }
-
       prevIdsRef.current = newIds;
       isFirstLoad.current = false;
-      // ─────────────────────────────────────────────────────────────────────
 
       setNotifications(filtered);
-    } catch {
-      // non-critical
-    } finally {
+    } catch { } finally {
       setLoading(false);
     }
   }, [referenceid]);
@@ -185,9 +231,7 @@ function NotificationDropdown({
     if (isOpen && notifications.length > 0) {
       const allIds = new Set(notifications.map((n) => n.id));
       setReadIds(allIds);
-      try {
-        localStorage.setItem(READ_KEY, JSON.stringify(Array.from(allIds)));
-      } catch { }
+      try { localStorage.setItem(READ_KEY, JSON.stringify(Array.from(allIds))); } catch { }
     }
   };
 
@@ -361,27 +405,38 @@ function DashboardContent() {
   const [doneCount, setDoneCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
 
+  // ── Clear cache dialog state ──────────────────────────────────────────────
+  const [clearCacheOpen, setClearCacheOpen] = useState(false);
+
   const queryUserId = searchParams?.get("id") ?? "";
+
+  // ── Alt + Ctrl + C shortcut ───────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.altKey && e.ctrlKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        setClearCacheOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const handleClearCache = useCallback(async () => {
     try {
-      // Clear local/session storage.
       localStorage.clear();
       sessionStorage.clear();
 
-      // Clear Cache Storage (used by fetch/service worker caches).
       if ("caches" in window) {
         const cacheKeys = await caches.keys();
         await Promise.all(cacheKeys.map((key) => caches.delete(key)));
       }
 
-      // Unregister all service workers.
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map((reg) => reg.unregister()));
       }
 
-      // Best-effort clear IndexedDB databases (supported in modern Chromium browsers).
       const indexedDbWithList = indexedDB as IDBFactory & {
         databases?: () => Promise<Array<{ name?: string }>>;
       };
@@ -506,6 +561,13 @@ function DashboardContent() {
 
   return (
     <>
+      {/* ── Clear Cache Dialog ─────────────────────────────────────────────── */}
+      <ClearCacheDialog
+        open={clearCacheOpen}
+        onClose={() => setClearCacheOpen(false)}
+        onConfirm={handleClearCache}
+      />
+
       <ProtectedPageWrapper>
         <SidebarLeft />
         <SidebarInset className="overflow-hidden">
@@ -520,15 +582,7 @@ function DashboardContent() {
               </Breadcrumb>
             </div>
             <div className="flex items-center gap-2 px-3">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 rounded-none text-xs"
-                onClick={handleClearCache}
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1" />
-                Clear Cache
-              </Button>
+              {/* Clear Cache button is hidden — triggered via Alt+Ctrl+C */}
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}
