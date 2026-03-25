@@ -1,152 +1,216 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// fb-table.tsx
-// ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-interface FB { id: number; quotation_amount?: number; quotation_number?: string; remarks?: string; date_created: string; date_updated?: string; company_name?: string; contact_number?: string; contact_person: string; source: string; status: string; referenceid: string; start_date?: string; end_date?: string; }
+interface FB {
+  id: number;
+  actual_sales?: number;
+  quotation_amount?: number;
+  quotation_number?: string;
+  remarks?: string;
+  date_created: string;
+  contact_number?: string;
+  contact_person: string;
+  source: string;
+  referenceid: string;
+  tsm?: string;
+  company_name?: string;
+  activity_reference_number?: string;
+}
+
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  Role: string;
+  TSM?: string;
+}
+
 interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
-interface FBProps { referenceid: string; target_quota?: string; dateCreatedFilterRange: any; setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>; userDetails: UserDetails; }
+interface FBProps { referenceid: string; dateCreatedFilterRange: any; userDetails: UserDetails; }
 
-const PAGE_SIZE = 10;
 const fmtPHP = (v: number) => v.toLocaleString(undefined, { style: "currency", currency: "PHP" });
-
-function computeDuration(start?: string, end?: string): string {
-  if (!start || !end) return "—";
-  const s = new Date(start).getTime(), e = new Date(end).getTime();
-  if (isNaN(s) || isNaN(e) || e < s) return "—";
-  const m = Math.floor((e - s) / 60_000);
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
-}
-
-function toPlainDate(value: Date | string): string {
-  const d = typeof value === "string" ? new Date(value) : value;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
   const [activities, setActivities] = useState<FB[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [page, setPage] = useState(1);
-  const [agents, setAgents] = useState<any[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState("all");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedTsm, setSelectedTsm] = useState<string | null>(null);
+  const [companySearch, setCompanySearch] = useState("");
 
   const fetchActivities = useCallback(() => {
-    if (!referenceid) { setActivities([]); return; }
+    if (!referenceid) return setActivities([]);
     setLoading(true); setError(null);
     const url = new URL("/api/reports/manager/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-    if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
-    if (dateCreatedFilterRange?.to)   url.searchParams.append("to",   toPlainDate(dateCreatedFilterRange.to));
+    if (dateCreatedFilterRange?.from) url.searchParams.append("from", new Date(dateCreatedFilterRange.from).toISOString());
+    if (dateCreatedFilterRange?.to) url.searchParams.append("to", new Date(dateCreatedFilterRange.to).toISOString());
     fetch(url.toString())
-      .then(async r => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
+      .then(r => r.ok ? r.json() : Promise.reject("Failed to fetch activities"))
       .then(d => setActivities(d.activities || []))
-      .catch(e => setError(e.message))
+      .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     fetchActivities();
     if (!referenceid) return;
-    const ch = supabase.channel(`fb:${referenceid}`).on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `manager=eq.${referenceid}` }, ({ eventType, new: n, old: o }: any) => {
-      setActivities(c => eventType === "INSERT" ? (c.some(a => a.id === n.id) ? c : [...c, n]) : eventType === "UPDATE" ? c.map(a => a.id === n.id ? n : a) : c.filter(a => a.id !== o.id));
-    }).subscribe();
+    const ch = supabase.channel(`fb:${referenceid}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `manager=eq.${referenceid}` },
+        (payload) => {
+          const n = payload.new as FB, o = payload.old as FB;
+          setActivities(c => {
+            if (payload.eventType === "INSERT") return c.some(a => a.id === n.id) ? c : [...c, n];
+            if (payload.eventType === "UPDATE") return c.map(a => a.id === n.id ? n : a);
+            if (payload.eventType === "DELETE") return c.filter(a => a.id !== o.id);
+            return c;
+          });
+        }
+      ).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [referenceid, fetchActivities]);
 
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`).then(r => r.json()).then(setAgents).catch(() => {});
+    fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
+      .then(r => r.json())
+      .then(setAgents)
+      .catch(() => { });
   }, [userDetails.referenceid]);
 
   const agentMap = useMemo(() => {
-    const m: Record<string, { name: string; picture: string }> = {};
-    agents.forEach(a => { if (a.ReferenceID) m[a.ReferenceID.toLowerCase()] = { name: `${a.Firstname} ${a.Lastname}`, picture: a.profilePicture || "" }; });
-    return m;
+    const map: Record<string, Agent & { name: string }> = {};
+    agents.forEach(a => { if (a.ReferenceID) map[a.ReferenceID.toLowerCase()] = { ...a, name: `${a.Firstname} ${a.Lastname}` }; });
+    return map;
   }, [agents]);
 
-  const filtered = useMemo(() => {
-    const s = searchTerm.toLowerCase();
-    return activities
-      .filter(i => i.source?.toLowerCase() === "facebook marketplace")
-      .filter(i => !s || i.company_name?.toLowerCase().includes(s) || i.quotation_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s))
-      .filter(i => selectedAgent === "all" || i.referenceid === selectedAgent)
-      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
-  }, [activities, searchTerm, selectedAgent]);
+  const tsmSummary = useMemo(() => {
+    const tsmAgents = agents.filter(a => a.Role === "Territory Sales Manager");
+    return tsmAgents.map(tsm => {
+      const tsmId = tsm.ReferenceID.toLowerCase();
+      const fbCompanies = Array.from(new Set(
+        activities.filter(a => {
+          const agent = agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "";
+          return agent.toLowerCase() === tsmId && a.source === "Facebook Marketplace" && a.company_name;
+        }).map(a => a.company_name!)
+      ));
+      const totalSales = activities.filter(a => {
+        const agent = agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "";
+        return agent.toLowerCase() === tsmId && a.source === "Facebook Marketplace";
+      }).reduce((sum, a) => sum + (a.actual_sales ?? 0), 0);
 
-  useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
-  const total = useMemo(() => filtered.reduce((s, i) => s + (i.quotation_amount ?? 0), 0), [filtered]);
-  const uniqueCount = useMemo(() => new Set(filtered.map(i => i.quotation_number).filter(Boolean)).size, [filtered]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+      return { tsmId, tsmName: `${tsm.Firstname} ${tsm.Lastname}`, totalSales, accountCount: fbCompanies.length, fbCompanies };
+    }).sort((a, b) => b.totalSales - a.totalSales);
+  }, [agents, activities, agentMap]);
+
+  const selectedCompanies = useMemo(() => {
+    if (!selectedTsm) return [];
+    return activities
+      .filter(a => {
+        const tsmId = (agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "").toLowerCase();
+        return tsmId === selectedTsm && a.source === "Facebook Marketplace" && a.company_name?.toLowerCase().includes(companySearch.toLowerCase());
+      })
+      .map(a => ({
+        company: a.company_name!,
+        agent: agentMap[a.referenceid.toLowerCase()]?.name ?? a.referenceid,
+        contact: a.contact_person,
+        remarks: a.remarks
+      }));
+  }, [selectedTsm, companySearch, activities, agentMap]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input placeholder="Search company, quotation no., remarks..." className="max-w-xs text-xs" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        <Select value={selectedAgent} onValueChange={v => { setSelectedAgent(v); setPage(1); }}>
-          <SelectTrigger className="w-[200px] text-xs"><SelectValue placeholder="Filter by Agent" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Agents</SelectItem>{agents.map(a => <SelectItem className="capitalize" key={a.ReferenceID} value={a.ReferenceID}>{a.Firstname} {a.Lastname}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      {filtered.length > 0 && (
-        <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
-          <span>Records: <span className="font-semibold text-gray-700">{filtered.length}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>Unique Quotations: <span className="font-semibold text-gray-700">{uniqueCount}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>Total: <span className="font-semibold text-gray-700">{fmtPHP(total)}</span></span>
+      {loading && <div className="py-10 text-xs text-gray-400 text-center">Loading...</div>}
+      {error && <div className="py-10 text-xs text-red-500 text-center">{error}</div>}
+
+      {/* TSM Summary View */}
+      {!selectedTsm && (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 text-[11px]">
+                <TableHead className="text-gray-500">TSM</TableHead>
+                <TableHead className="text-gray-500 text-right">Total Sales</TableHead>
+                <TableHead className="text-gray-500 text-right">FB Marketplace Count</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tsmSummary.map(item => (
+                <TableRow
+                  key={item.tsmId}
+                  className="text-xs font-mono hover:bg-gray-50/60 cursor-pointer"
+                  onClick={() => setSelectedTsm(item.tsmId)}
+                >
+                  <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                  <TableCell className="text-right text-green-600 font-semibold">{fmtPHP(item.totalSales)}</TableCell>
+                  <TableCell className="text-right text-gray-700">{item.accountCount}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <tfoot>
+              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                <TableCell className="text-gray-500">Total</TableCell>
+                <TableCell className="text-right text-green-600">
+                  {fmtPHP(tsmSummary.reduce((sum, tsm) => sum + tsm.totalSales, 0))}
+                </TableCell>
+                <TableCell className="text-right text-gray-700">
+                  {tsmSummary.reduce((sum, tsm) => sum + tsm.accountCount, 0)}
+                </TableCell>
+              </TableRow>
+            </tfoot>
+          </Table>
         </div>
       )}
-      {loading ? <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
-        : error ? <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
-        : filtered.length === 0 ? <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No Facebook Marketplace records found.</div>
-        : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 text-[11px]">
-                  <TableHead className="text-gray-500">Agent</TableHead>
-                  <TableHead className="text-gray-500">Date</TableHead>
-                  <TableHead className="text-gray-500 text-right">Amount</TableHead>
-                  <TableHead className="text-gray-500">Quotation No.</TableHead>
-                  <TableHead className="text-gray-500">Company</TableHead>
-                  <TableHead className="text-gray-500">Contact Person</TableHead>
-                  <TableHead className="text-gray-500">Contact No.</TableHead>
-                  <TableHead className="text-gray-500 whitespace-nowrap">Duration</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map(item => {
-                  const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
-                  const dur  = computeDuration(item.start_date, item.end_date);
-                  return (
-                    <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
-                      <TableCell><div className="flex items-center gap-2">{info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}<span className="capitalize text-gray-700">{info?.name ?? "-"}</span></div></TableCell>
-                      <TableCell className="text-gray-500 whitespace-nowrap">{String(item.date_created).slice(0, 10)}</TableCell>
-                      <TableCell className="text-right text-gray-700">{item.quotation_amount != null ? fmtPHP(item.quotation_amount) : "-"}</TableCell>
-                      <TableCell className="uppercase text-gray-700">{item.quotation_number || "-"}</TableCell>
-                      <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
-                      <TableCell className="capitalize text-gray-600">{item.contact_person || "-"}</TableCell>
-                      <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{dur === "—" ? <span className="text-gray-300">—</span> : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{dur}</span>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              <TableFooter><TableRow className="bg-gray-50 text-xs font-semibold font-mono"><TableCell colSpan={2} className="text-gray-500">Total</TableCell><TableCell className="text-right text-gray-800">{fmtPHP(total)}</TableCell><TableCell colSpan={5} /></TableRow></TableFooter>
-            </Table>
+
+      {/* Companies View */}
+      {selectedTsm && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+              onClick={() => { setSelectedTsm(null); setCompanySearch(""); }}
+            >
+              &larr; Back
+            </button>
+            <Input
+              placeholder="Search company..."
+              value={companySearch}
+              onChange={e => setCompanySearch(e.target.value)}
+              className="text-xs w-60"
+            />
           </div>
-        )}
-      {pageCount > 1 && (<Pagination><PaginationContent className="flex items-center space-x-4 justify-center text-xs"><PaginationItem><PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) setPage(page - 1); }} aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : ""} /></PaginationItem><div className="px-4 font-medium select-none text-gray-600">{page} / {pageCount}</div><PaginationItem><PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }} aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : ""} /></PaginationItem></PaginationContent></Pagination>)}
+          <Table className="mt-2">
+            <TableHeader>
+              <TableRow className="bg-gray-50 text-[11px]">
+                <TableHead className="text-gray-500">Agent</TableHead>
+                <TableHead className="text-gray-500">Company Name</TableHead>
+                <TableHead className="text-gray-500">Contact Person</TableHead>
+                <TableHead className="text-gray-500">Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {selectedCompanies.length === 0 ? (
+                <TableRow>
+                  <TableCell className="text-gray-400 text-xs text-center py-2" colSpan={3}>
+                    No companies found.
+                  </TableCell>
+                </TableRow>
+              ) : selectedCompanies.map((c, idx) => (
+                <TableRow key={idx}>
+                  <TableCell className="text-gray-700 text-xs">{c.agent}</TableCell>
+                  <TableCell className="text-gray-700 text-xs">{c.company}</TableCell>
+                  <TableCell className="text-gray-700 text-xs capitalize">{c.contact}</TableCell>
+                  <TableCell className="text-gray-700 text-xs capitalize">{c.remarks}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 };

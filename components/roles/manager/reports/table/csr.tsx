@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface CSR {
   id: number;
+  quotation_number?: string;
   quotation_amount?: number;
+  quotation_status?: string;
   ticket_reference_number?: string;
   remarks?: string;
   date_created: string;
@@ -20,10 +22,22 @@ interface CSR {
   contact_number?: string;
   contact_person: string;
   type_client: string;
+  type_activity: string;
   status: string;
+  source: string;
   referenceid: string;
   start_date?: string;
   end_date?: string;
+  tsm?: string;
+}
+
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  Role: string;
+  TSM?: string;
+  profilePicture?: string;
 }
 
 interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
@@ -40,16 +54,31 @@ interface CSRProps {
 const PAGE_SIZE = 10;
 const fmtPHP = (v: number) => v.toLocaleString(undefined, { style: "currency", currency: "PHP" });
 
+const QUOTATION_STATUSES = [
+  "Pending Client Approval",
+  "For Bidding",
+  "Nego",
+  "Order Complete",
+  "Convert to SO",
+  "Loss Price is Too High",
+  "Lead Time Issue",
+  "Out of Stock",
+  "Insufficient Stock",
+  "Lost Bid",
+  "Canvass Only",
+  "Did Not Meet the Specs",
+  "Decline / Disapproved",
+] as const;
+
 function computeDuration(start?: string, end?: string): string {
   if (!start || !end) return "—";
   const startMs = new Date(start).getTime();
-  const endMs   = new Date(end).getTime();
+  const endMs = new Date(end).getTime();
   if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return "—";
   const totalMinutes = Math.floor((endMs - startMs) / 60_000);
   return `${Math.floor(totalMinutes / 60)}h ${String(totalMinutes % 60).padStart(2, "0")}m`;
 }
 
-// date_created is DATE — always send plain "YYYY-MM-DD" to the API
 function toPlainDate(value: Date | string): string {
   const d = typeof value === "string" ? new Date(value) : value;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -59,30 +88,28 @@ function toPlainDate(value: Date | string): string {
 
 export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
   const [activities, setActivities] = useState<CSR[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [page,       setPage]       = useState(1);
-  const [agents,     setAgents]     = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("all");
+  const [expandedTsmId, setExpandedTsmId] = useState<string | null>(null);
 
-  // ─── Fetch ───────────────────────────────────────────────────────────────────
+  // ─── Fetch activities ────────────────────────────────────────────────────────
   const fetchActivities = useCallback(() => {
     if (!referenceid) { setActivities([]); return; }
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
 
     const url = new URL("/api/reports/manager/fetch", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
-
-    // Plain YYYY-MM-DD — date_created is DATE, not TIMESTAMPTZ
     if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
-    if (dateCreatedFilterRange?.to)   url.searchParams.append("to",   toPlainDate(dateCreatedFilterRange.to));
+    if (dateCreatedFilterRange?.to) url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
 
     fetch(url.toString())
-      .then(async (res) => { if (!res.ok) throw new Error("Failed to fetch activities"); return res.json(); })
-      .then((data) => setActivities(data.activities || []))
-      .catch((err) => setError(err.message))
+      .then(async r => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
+      .then(d => setActivities(d.activities || []))
+      .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
@@ -90,138 +117,279 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   useEffect(() => {
     fetchActivities();
     if (!referenceid) return;
+
     const ch = supabase.channel(`csr:${referenceid}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `manager=eq.${referenceid}` },
-        ({ eventType, new: n, old: o }: any) => {
-          setActivities(c =>
-            eventType === "INSERT" ? (c.some(a => a.id === n.id) ? c : [...c, n]) :
-            eventType === "UPDATE" ? c.map(a => a.id === n.id ? n : a) :
-            c.filter(a => a.id !== o.id)
-          );
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "history", filter: `manager=eq.${referenceid}` },
+        (payload) => {
+          const n = payload.new as CSR, o = payload.old as CSR;
+          setActivities(c => {
+            if (payload.eventType === "INSERT") return c.some(a => a.id === n.id) ? c : [...c, n];
+            if (payload.eventType === "UPDATE") return c.map(a => a.id === n.id ? n : a);
+            if (payload.eventType === "DELETE") return c.filter(a => a.id !== o.id);
+            return c;
+          });
         }
       ).subscribe();
+
     return () => { supabase.removeChannel(ch); };
   }, [referenceid, fetchActivities]);
 
-  // ─── Agents ──────────────────────────────────────────────────────────────────
+  // ─── Fetch agents — same endpoint as SITable ─────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`)
-      .then(r => r.json()).then(setAgents).catch(() => {});
+    fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
+      .then(r => r.json())
+      .then(setAgents)
+      .catch(() => { });
   }, [userDetails.referenceid]);
 
+  // ─── Agent lookup map — same pattern as SITable ───────────────────────────────
   const agentMap = useMemo(() => {
-    const m: Record<string, { name: string; picture: string }> = {};
-    agents.forEach(a => { if (a.ReferenceID) m[a.ReferenceID.toLowerCase()] = { name: `${a.Firstname} ${a.Lastname}`, picture: a.profilePicture || "" }; });
+    const m: Record<string, Agent & { name: string }> = {};
+    agents.forEach(a => {
+      if (a.ReferenceID)
+        m[a.ReferenceID.toLowerCase()] = { ...a, name: `${a.Firstname} ${a.Lastname}` };
+    });
     return m;
   }, [agents]);
 
-  // ─── Filter — no client-side date re-filter; API already scoped by date ──────
-  const filtered = useMemo(() => {
-    const s = searchTerm.toLowerCase();
-    return activities
-      .filter(i => i.type_client?.toLowerCase() === "csr client")
-      .filter(i => !s || (i.company_name?.toLowerCase().includes(s) || i.ticket_reference_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s)))
-      .filter(i => selectedAgent === "all" || i.referenceid === selectedAgent)
-      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
-  }, [activities, searchTerm, selectedAgent]);
+  const tsmAgents = useMemo(
+    () => agents.filter(a => a.Role === "Territory Sales Manager"),
+    [agents]
+  );
 
-  useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
+  // ─── Base filtered activities ─────────────────────────────────────────────────
+  const baseActivities = useMemo(() =>
+    activities
+      .filter(i => i.source === "CSR Endorsement")
+      .filter(i => i.type_activity === "Quotation Preparation")
+      .filter(i => !!i.ticket_reference_number),
+    [activities]
+  );
 
-  const total       = useMemo(() => filtered.reduce((s, i) => s + (i.quotation_amount ?? 0), 0), [filtered]);
-  const uniqueCount = useMemo(() => new Set(filtered.map(i => i.ticket_reference_number).filter(Boolean)).size, [filtered]);
-  const pageCount   = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated   = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+  // ─── TSM Summary — same matching pattern as SITable ──────────────────────────
+  const tsmSummary = useMemo(() => {
+    const summaryMap = new Map<string, {
+      tsmId: string;
+      tsmName: string;
+      quoteDoneCount: number;
+      statusCounts: Record<string, number>;
+      totalAmount: number;
+    }>();
+
+    tsmAgents.forEach(tsm => {
+      const tsmId = tsm.ReferenceID.toLowerCase();
+      summaryMap.set(tsmId, {
+        tsmId,
+        tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
+        quoteDoneCount: 0,
+        statusCounts: Object.fromEntries(QUOTATION_STATUSES.map(s => [s, 0])),
+        totalAmount: 0,
+      });
+    });
+
+    baseActivities.forEach(row => {
+      const agent = agentMap[row.referenceid?.toLowerCase() ?? ""];
+      const tsmId = (agent?.TSM ?? row.tsm ?? "").toLowerCase();
+      if (!tsmId || !summaryMap.has(tsmId)) return;
+      const entry = summaryMap.get(tsmId)!;
+
+      if (row.status === "Quote-Done") entry.quoteDoneCount += 1;
+
+      const qs = row.quotation_status ?? "";
+      if (qs && qs in entry.statusCounts) entry.statusCounts[qs] += 1;
+
+      entry.totalAmount += row.quotation_amount ?? 0;
+    });
+
+    return Array.from(summaryMap.values()).sort((a, b) => b.quoteDoneCount - a.quoteDoneCount);
+  }, [baseActivities, agentMap, tsmAgents]);
+
+  // ─── Expanded TSA details — same pattern as SITable ──────────────────────────
+  const expandedTsaGroups = useMemo(() => {
+    if (!expandedTsmId) return [];
+
+    const rowsForTsm = baseActivities.filter(row => {
+      const agent = agentMap[row.referenceid?.toLowerCase() ?? ""];
+      const derivedTsmId = (agent?.TSM ?? row.tsm ?? "").toLowerCase();
+      return derivedTsmId === expandedTsmId;
+    });
+
+    const byTsa = new Map<string, { tsaName: string; tsaPicture: string; rows: CSR[] }>();
+    rowsForTsm.forEach(row => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown TSA";
+      const tsaPicture = tsaAgent?.profilePicture || "";
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, tsaPicture, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
+  }, [expandedTsmId, baseActivities, agentMap]);
+
+  useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange, expandedTsmId]);
+
+  const total = useMemo(() =>
+    expandedTsaGroups.flatMap(g => g.rows).reduce((s, i) => s + (i.quotation_amount ?? 0), 0),
+    [expandedTsaGroups]
+  );
 
   /* ================= RENDER ================= */
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input placeholder="Search company, ticket no., remarks..." className="max-w-xs text-xs" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        <Select value={selectedAgent} onValueChange={v => { setSelectedAgent(v); setPage(1); }}>
-          <SelectTrigger className="w-[200px] text-xs"><SelectValue placeholder="Filter by Agent" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Agents</SelectItem>
-            {agents.map(a => <SelectItem className="capitalize" key={a.ReferenceID} value={a.ReferenceID}>{a.Firstname} {a.Lastname}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
 
-      {filtered.length > 0 && (
-        <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
-          <span>Records: <span className="font-semibold text-gray-700">{filtered.length}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>Unique Tickets: <span className="font-semibold text-gray-700">{uniqueCount}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>Total: <span className="font-semibold text-gray-700">{fmtPHP(total)}</span></span>
+      {/* ── TSM Summary Table ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+      ) : error ? (
+        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+      ) : tsmSummary.length === 0 ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No CSR quotation records found.</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 text-[11px]">
+                <TableHead className="text-gray-500 whitespace-nowrap">TSM</TableHead>
+                <TableHead className="text-gray-500 text-right whitespace-nowrap">Quote Done</TableHead>
+                {QUOTATION_STATUSES.map(s => (
+                  <TableHead key={s} className="text-gray-500 text-right whitespace-nowrap">{s}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tsmSummary.map(item => {
+                const isExpanded = expandedTsmId === item.tsmId;
+                return (
+                  <TableRow
+                    key={item.tsmId}
+                    className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                    onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                  >
+                    <TableCell className="font-semibold text-gray-700 uppercase whitespace-nowrap">{item.tsmName}</TableCell>
+                    <TableCell className="text-right text-blue-600 font-semibold">
+                      {item.quoteDoneCount > 0 ? item.quoteDoneCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                    </TableCell>
+                    {QUOTATION_STATUSES.map(s => (
+                      <TableCell key={s} className="text-right text-gray-700">
+                        {item.statusCounts[s] > 0 ? item.statusCounts[s].toLocaleString() : <span className="text-gray-300">—</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                <TableCell className="text-gray-500">Total</TableCell>
+                <TableCell className="text-right text-blue-600">
+                  {tsmSummary.reduce((s, i) => s + i.quoteDoneCount, 0).toLocaleString()}
+                </TableCell>
+                {QUOTATION_STATUSES.map(s => (
+                  <TableCell key={s} className="text-right text-gray-700">
+                    {tsmSummary.reduce((sum, i) => sum + i.statusCounts[s], 0).toLocaleString()}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
       )}
 
-      {loading ? <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
-        : error ? <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
-        : filtered.length === 0 ? <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No CSR endorsement records found.</div>
-        : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 text-[11px]">
-                  <TableHead className="text-gray-500">Agent</TableHead>
-                  <TableHead className="text-gray-500">Date</TableHead>
-                  <TableHead className="text-gray-500">Ticket Ref No.</TableHead>
-                  <TableHead className="text-gray-500 text-right">Amount</TableHead>
-                  <TableHead className="text-gray-500">Company</TableHead>
-                  <TableHead className="text-gray-500">Contact Person</TableHead>
-                  <TableHead className="text-gray-500">Contact No.</TableHead>
-                  <TableHead className="text-gray-500 whitespace-nowrap">Duration</TableHead>
-                  <TableHead className="text-gray-500">Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map(item => {
-                  const info     = agentMap[item.referenceid?.toLowerCase() ?? ""];
-                  const duration = computeDuration(item.start_date, item.end_date);
-                  return (
-                    <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}
-                          <span className="capitalize text-gray-700">{info?.name ?? "-"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-gray-500 whitespace-nowrap">{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                      <TableCell className="uppercase text-gray-700">{item.ticket_reference_number || "-"}</TableCell>
-                      <TableCell className="text-right text-gray-700">{item.quotation_amount != null ? fmtPHP(item.quotation_amount) : "-"}</TableCell>
-                      <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
-                      <TableCell className="capitalize text-gray-600">{item.contact_person || "-"}</TableCell>
-                      <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {duration === "—" ? <span className="text-gray-300">—</span> : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{duration}</span>}
-                      </TableCell>
-                      <TableCell className="capitalize text-gray-500">{item.remarks || "-"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              <TableFooter>
-                <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                  <TableCell colSpan={3} className="text-gray-500">Total</TableCell>
-                  <TableCell className="text-right text-gray-800">{fmtPHP(total)}</TableCell>
-                  <TableCell colSpan={5} />
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </div>
-        )}
-
-      {pageCount > 1 && (
-        <Pagination>
-          <PaginationContent className="flex items-center space-x-4 justify-center text-xs">
-            <PaginationItem><PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) setPage(page - 1); }} aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : ""} /></PaginationItem>
-            <div className="px-4 font-medium select-none text-gray-600">{page} / {pageCount}</div>
-            <PaginationItem><PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }} aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : ""} /></PaginationItem>
-          </PaginationContent>
-        </Pagination>
+      {/* ── Expanded TSA Details ── */}
+      {expandedTsmId && (
+        <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
+          <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">TSA Details</p>
+          {expandedTsaGroups.length === 0 ? (
+            <div className="text-xs text-gray-500 italic py-2">No CSR records under this TSM.</div>
+          ) : (
+            expandedTsaGroups.map(group => (
+              <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    {group.tsaPicture
+                      ? <img src={group.tsaPicture} alt={group.tsaName} className="w-6 h-6 rounded-full object-cover border border-white shadow-sm" />
+                      : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500">{group.tsaName[0]}</div>
+                    }
+                    <p className="text-xs font-semibold text-gray-700 uppercase">
+                      {group.tsaName}{" "}
+                      <span className="text-gray-400 font-normal">({group.rows.length} records)</span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-3 mt-2">
+                    <Input
+                      placeholder="Search company, ticket no., remarks..."
+                      className="max-w-xs text-xs"
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 text-[11px]">
+                        <TableHead className="text-gray-500 whitespace-nowrap">Date</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Ticket Ref No.</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Quotation No.</TableHead>
+                        <TableHead className="text-gray-500 text-right whitespace-nowrap">Amount</TableHead>
+                        <TableHead className="text-gray-500">Company</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Contact Person</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Contact No.</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Duration</TableHead>
+                        <TableHead className="text-gray-500">Status</TableHead>
+                        <TableHead className="text-gray-500 whitespace-nowrap">Quotation Status</TableHead>
+                        <TableHead className="text-gray-500">Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.rows
+                        .filter(row => {
+                          const s = searchTerm.toLowerCase();
+                          return !s || row.company_name?.toLowerCase().includes(s) || row.ticket_reference_number?.toLowerCase().includes(s) || row.remarks?.toLowerCase().includes(s);
+                        })
+                        .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime())
+                        .map(row => {
+                          const duration = computeDuration(row.start_date, row.end_date);
+                          return (
+                            <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
+                              <TableCell className="text-gray-500 whitespace-nowrap">{new Date(row.date_created).toLocaleDateString()}</TableCell>
+                              <TableCell className="uppercase text-gray-700 whitespace-nowrap">{row.ticket_reference_number || "-"}</TableCell>
+                              <TableCell className="text-gray-700">{row.quotation_number || "-"}</TableCell>
+                              <TableCell className="text-right text-gray-700">{row.quotation_amount != null ? fmtPHP(row.quotation_amount) : "-"}</TableCell>
+                              <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
+                              <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
+                              <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {duration === "—"
+                                  ? <span className="text-gray-300">—</span>
+                                  : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{duration}</span>
+                                }
+                              </TableCell>
+                              <TableCell className="text-gray-500">{row.status || "-"}</TableCell>
+                              <TableCell className="text-gray-500">{row.quotation_status || "-"}</TableCell>
+                              <TableCell className="capitalize text-gray-500">{row.remarks || "-"}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                        <TableCell colSpan={3} className="text-gray-500">Subtotal</TableCell>
+                        <TableCell className="text-right text-gray-800">
+                          {fmtPHP(group.rows.reduce((s, r) => s + (r.quotation_amount ?? 0), 0))}
+                        </TableCell>
+                        <TableCell colSpan={7} />
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       )}
     </div>
   );

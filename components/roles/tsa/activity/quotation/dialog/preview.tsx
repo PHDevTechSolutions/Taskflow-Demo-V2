@@ -14,6 +14,10 @@ type Item = {
     unitPrice: number;
     totalAmount: number;
     remarks: string;
+    /** True when this item originates from an SPF 1 (procurement-approved) record */
+    isSpf1?: boolean;
+    /** Lead time string from procurement — shown as a badge below the SKU for SPF 1 items */
+    procurementLeadTime?: string;
 };
 
 type Payload = {
@@ -165,8 +169,23 @@ export const Preview: React.FC<PreviewProps> = ({
                                         )}
                                     </td>
                                     <td className="p-4 border-r border-black align-top">
-                                        <p className="font-black text-[#121212] text-xs uppercase mb-1">{item.title}</p>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <p className="font-black text-[#121212] text-xs uppercase">{item.title}</p>
+                                            {item.isSpf1 && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-600 text-white shrink-0">
+                                                    SPF
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
+                                        {item.isSpf1 && item.procurementLeadTime && (
+                                            <div className="mb-2 flex items-center gap-1.5">
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Lead Time:</span>
+                                                <span className="text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">
+                                                    {item.procurementLeadTime}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div
                                             className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
                                             dangerouslySetInnerHTML={{ __html: item.product_description }}

@@ -95,9 +95,9 @@ const ALL_STATUSES = [
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
 const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  HOT:  { badge: "bg-red-50 text-red-600 border border-red-200",      dot: "bg-red-500"   },
+  HOT: { badge: "bg-red-50 text-red-600 border border-red-200", dot: "bg-red-500" },
   WARM: { badge: "bg-amber-50 text-amber-600 border border-amber-200", dot: "bg-amber-400" },
-  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200",    dot: "bg-blue-400"  },
+  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200", dot: "bg-blue-400" },
   DONE: { badge: "bg-green-50 text-green-600 border border-green-200", dot: "bg-green-500" },
 };
 
@@ -106,21 +106,21 @@ const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
 function computeDuration(start?: string, end?: string): string {
   if (!start || !end) return "—";
   const startMs = new Date(start).getTime();
-  const endMs   = new Date(end).getTime();
+  const endMs = new Date(end).getTime();
   if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return "—";
   const totalMinutes = Math.floor((endMs - startMs) / 60_000);
-  const hours        = Math.floor(totalMinutes / 60);
-  const minutes      = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 
 /* ================= DATE HELPER ================= */
 
 function toPlainDate(value: Date | string): string {
-  const d     = typeof value === "string" ? new Date(value) : value;
-  const year  = d.getFullYear();
+  const d = typeof value === "string" ? new Date(value) : value;
+  const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day   = String(d.getDate()).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -133,10 +133,10 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<Quotation[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [agents, setAgents]               = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [expandedTsmId, setExpandedTsmId] = useState<string | null>(null);
 
   // ─── Fetch activities ────────────────────────────────────────────────────────
@@ -355,11 +355,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         const count = item.statusCounts[status] ?? 0;
                         const priority = PRIORITY_MAP[status];
                         const colorClass =
-                          priority === "HOT"  ? "text-red-600 font-semibold" :
-                          priority === "WARM" ? "text-amber-600 font-semibold" :
-                          priority === "DONE" ? "text-green-600 font-semibold" :
-                          priority === "COLD" ? "text-blue-500 font-semibold" :
-                          "text-gray-700";
+                          priority === "HOT" ? "text-red-600 font-semibold" :
+                            priority === "WARM" ? "text-amber-600 font-semibold" :
+                              priority === "DONE" ? "text-green-600 font-semibold" :
+                                priority === "COLD" ? "text-blue-500 font-semibold" :
+                                  "text-gray-700";
                         return (
                           <TableCell
                             key={status}
@@ -374,6 +374,22 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 );
               })}
             </TableBody>
+            <tfoot>
+              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">
+                  {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right">
+                  {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                </TableCell>
+                {ALL_STATUSES.map((status) => (
+                  <TableCell key={status} className="text-right">
+                    {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </tfoot>
           </Table>
         </div>
       )}

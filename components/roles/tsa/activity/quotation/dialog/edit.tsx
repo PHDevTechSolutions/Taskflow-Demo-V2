@@ -101,6 +101,10 @@ interface ProductItem {
   product_sku?: string;
   item_remarks?: string;
   discount?: number;
+  /** True when this item originates from an SPF 1 (procurement-approved) record */
+  isSpf1?: boolean;
+  /** Lead time from procurement — extracted from the saved description HTML for display */
+  procurementLeadTime?: string;
 }
 
 function splitAndTrim(value?: string): string[] {
@@ -569,6 +573,20 @@ export default function TaskListEditDialog({
           ? (baseAmount * discount) / 100
           : 0;
       const totalAmount = baseAmount - discountedAmount;
+
+      // Detect SPF 1 items: the description HTML contains the "Procurement" section
+      // header written by formatProcurementLeadHtml (saved during quotation creation).
+      const descHtml = p.description?.trim() ? p.description : (p.product_description || "");
+      const isSpf1 = p.isSpf1 ?? descHtml.includes(">Procurement<");
+
+      // Extract lead time text from the saved procurement HTML block if present.
+      // The HTML pattern is: <td ...>Project lead time</td><td ...>VALUE</td>
+      let procurementLeadTime = p.procurementLeadTime ?? "";
+      if (!procurementLeadTime && isSpf1) {
+        const leadMatch = descHtml.match(/Project lead time<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+        if (leadMatch) procurementLeadTime = leadMatch[1].trim();
+      }
+
       return {
         itemNo: index + 1,
         qty,
@@ -576,11 +594,11 @@ export default function TaskListEditDialog({
         title: p.product_title ?? "",
         sku: p.product_sku ?? "",
         remarks: p.item_remarks ?? "",
-        product_description: p.description?.trim()
-          ? p.description
-          : p.product_description || "",
+        product_description: descHtml,
         unitPrice,
         totalAmount,
+        isSpf1,
+        procurementLeadTime,
       };
     });
 
@@ -1057,8 +1075,16 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
+        // Build the SPF badge + lead time HTML snippet for the PDF row (SPF 1 items only)
+        const spfBadgeHtml = item.isSpf1
+          ? `<span style="display:inline-block;background:#dc2626;color:white;padding:1px 5px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;border-radius:2px;margin-left:5px;vertical-align:middle;">SPF</span>`
+          : "";
+        const leadTimeHtml = item.isSpf1 && item.procurementLeadTime
+          ? `<div style="margin:3px 0 4px;display:flex;align-items:center;gap:4px;"><span style="font-size:7px;font-weight:900;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;">Lead Time:</span><span style="font-size:7.5px;font-weight:900;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;padding:1px 5px;">${item.procurementLeadTime}</span></div>`
+          : "";
+
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><div style="display:flex;align-items:center;"><p class="product-title" style="margin:0;">${item.title}</p>${spfBadgeHtml}</div>${leadTimeHtml}${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           pdf.addPage([612, 936]);
@@ -1108,7 +1134,77 @@ export default function TaskListEditDialog({
       currentY += footerBlock.h;
 
       const logisticsBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;"><div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div><div class="logistics-container"><div class="logistics-row"><div class="logistics-label bg-yellow-header">Included:</div><div class="logistics-value bg-yellow-content"><p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p><p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p></div></div><div class="logistics-row"><div class="logistics-label bg-yellow-header">Excluded:</div><div class="logistics-value bg-yellow-content"><p>All lamp poles are subject to a delivery charge.</p><p>Installation and all hardware/accessories not indicated above.</p><p>Freight charges, arrastre, and other processing fees.</p></div></div><div class="logistics-row"><div class="logistics-label">Notes:</div><div class="logistics-value bg-yellow-note" style="font-style:italic;"><p>Deliveries are up to the vehicle unloading point only.</p><p>Additional shipping fee applies for other areas not mentioned above.</p><p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p><span class="text-red-strong"><u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u></span></div></div></div><div class="terms-section"><div class="terms-header">Terms and Conditions</div><div class="terms-grid"><div class="terms-label">Availability:</div><div class="terms-val terms-highlight"><p>*5-7 days if on stock upon receipt of approved PO.</p><p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p><p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p></div><div class="terms-label">Warranty:</div><div class="terms-val terms-highlight"><p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p><p>*Shipping costs for warranty claims are for customers' account.</p></div><div class="terms-label">SO Validity:</div><div class="terms-val"><p>Sales order has <b style="color:red;">validity period of 14 working days.</b> Any sales order not confirmed and no verified payment within this <b style="color:red;">14-day period will be automatically cancelled.</b></p></div><div class="terms-label">Storage:</div><div class="terms-val terms-highlight"><p>Storage fee of 10% of the value of the orders per month <b style="color:red;">(10% / 30 days = 0.33% per day).</b></p></div><div class="terms-label">Return:</div><div class="terms-val terms-highlight"><p><b style="color:red;"><u>7 days return policy -</u></b> if the product received is defective, damaged, or incomplete.</p></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;">
+        <div class="variance-footnote">*PHOTO MAY VARY FROM ACTUAL UNIT</div>
+        <div class="logistics-container">
+        <div class="logistics-row">
+        <div class="logistics-label bg-yellow-header">Included:</div>
+        <div class="logistics-value bg-yellow-content">
+        <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
+        <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
+        </div>
+        </div>
+        <div class="logistics-row">
+        <div class="logistics-label bg-yellow-header">Excluded:</div>
+        <div class="logistics-value bg-yellow-content">
+        <p>All lamp poles are subject to a delivery charge.</p>
+        <p>Installation and all hardware/accessories not indicated above.</p>
+        <p>Freight charges, arrastre, and other processing fees.</p>
+        </div>
+        </div>
+        <div class="logistics-row">
+        <div class="logistics-label">Notes:</div>
+        <div class="logistics-value bg-yellow-note" style="font-style:italic;">
+        <p>Deliveries are up to the vehicle unloading point only.</p>
+        <p>Additional shipping fee applies for other areas not mentioned above.</p>
+        <p>Subject to confirmation upon getting the actual weight and dimensions of the items.</p>
+        <span class="text-red-strong">
+        <u>In cases of client error, there will be a 10% restocking fee for returns, refunds, and exchanges.</u>
+        </span>
+        </div>
+        </div>
+        </div>
+        <div class="terms-section">
+        <div class="terms-header">Terms and Conditions</div>
+        <div class="terms-grid">
+        <div class="terms-label">Availability:</div>
+        <div class="terms-val terms-highlight">
+        <p>*5-7 days if on stock upon receipt of approved PO.</p>
+        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment.</p>
+        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
+        </div>
+        <div class="terms-label">Warranty:</div>
+        <div class="terms-val terms-highlight">
+        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+        <p>The warranty will be VOID under the following circumstances:</p>
+        <p>*If the unit is being tampered with.</p>
+        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+        <p>*Shipping costs for warranty claims are for customers' account.</p>
+        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
+        </div>
+        <div class="terms-label">SO Validity:</div>
+        <div class="terms-val">
+        <p>Sales order has <b style="color:red;">validity period of 14 working days.</b> Any sales order not confirmed and no verified payment within this <b style="color:red;">14-day period will be automatically cancelled.</b>
+        </p>
+        </div>
+        <div class="terms-label">Storage:</div>
+        <div class="terms-val terms-highlight">
+        <p>Storage fee of 10% of the value of the orders per month <b style="color:red;">(10% / 30 days = 0.33% per day).</b>
+        </p>
+        </div>
+        <div class="terms-label">Return:</div>
+        <div class="terms-val terms-highlight">
+        <p>
+        <b style="color:red;">
+        <u>7 days return policy -</u>
+        </b> if the product received is defective, damaged, or incomplete.</p>
+        </div>
+        </div>
+        </div>
+        </div>`,
       );
       if (currentY + logisticsBlock.h > pdfHeight - BOTTOM_MARGIN) {
         pdf.addPage([612, 936]);
@@ -1871,7 +1967,7 @@ export default function TaskListEditDialog({
           </div></div>{/* end BODY */}
 
           <DialogFooter className="mt-4 flex justify-between items-center">
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 p-2">
               <Button
                 className="bg-[#121212] rounded-none hover:bg-black text-white px-8 p-6 flex gap-2 items-center"
                 onClick={() => setIsPreviewOpen(true)}
@@ -1892,6 +1988,7 @@ export default function TaskListEditDialog({
                   >
                     <FileText /> PDF
                   </Button>
+                  
                   <Button
                     type="button"
                     onClick={DownloadExcel}

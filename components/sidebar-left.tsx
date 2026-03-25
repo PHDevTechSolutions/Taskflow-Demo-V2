@@ -155,7 +155,6 @@ const data = {
         { name: "SO Summary", url: "/roles/manager/reports/so", icon: ShoppingCart },
         { name: "Sales Invoice Summary", url: "/roles/manager/reports/si", icon: File },
         { name: "CSR Inquiry Summary", url: "/roles/manager/reports/csr", icon: Phone },
-        { name: "SPF Summary", url: "/roles/manager/reports/spf", icon: ClipboardPenLine },
         { name: "FB Marketplace", url: "/roles/manager/reports/fb", icon: ShoppingBag },
 
         // Admin
