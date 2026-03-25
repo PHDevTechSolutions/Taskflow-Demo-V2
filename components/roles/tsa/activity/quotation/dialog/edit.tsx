@@ -101,6 +101,10 @@ interface ProductItem {
   product_sku?: string;
   item_remarks?: string;
   discount?: number;
+  /** True when this item originates from an SPF 1 (procurement-approved) record */
+  isSpf1?: boolean;
+  /** Lead time from procurement — extracted from the saved description HTML for display */
+  procurementLeadTime?: string;
 }
 
 function splitAndTrim(value?: string): string[] {
@@ -569,6 +573,20 @@ export default function TaskListEditDialog({
           ? (baseAmount * discount) / 100
           : 0;
       const totalAmount = baseAmount - discountedAmount;
+
+      // Detect SPF 1 items: the description HTML contains the "Procurement" section
+      // header written by formatProcurementLeadHtml (saved during quotation creation).
+      const descHtml = p.description?.trim() ? p.description : (p.product_description || "");
+      const isSpf1 = p.isSpf1 ?? descHtml.includes(">Procurement<");
+
+      // Extract lead time text from the saved procurement HTML block if present.
+      // The HTML pattern is: <td ...>Project lead time</td><td ...>VALUE</td>
+      let procurementLeadTime = p.procurementLeadTime ?? "";
+      if (!procurementLeadTime && isSpf1) {
+        const leadMatch = descHtml.match(/Project lead time<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+        if (leadMatch) procurementLeadTime = leadMatch[1].trim();
+      }
+
       return {
         itemNo: index + 1,
         qty,
@@ -576,11 +594,11 @@ export default function TaskListEditDialog({
         title: p.product_title ?? "",
         sku: p.product_sku ?? "",
         remarks: p.item_remarks ?? "",
-        product_description: p.description?.trim()
-          ? p.description
-          : p.product_description || "",
+        product_description: descHtml,
         unitPrice,
         totalAmount,
+        isSpf1,
+        procurementLeadTime,
       };
     });
 
@@ -1057,8 +1075,16 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
+        // Build the SPF badge + lead time HTML snippet for the PDF row (SPF 1 items only)
+        const spfBadgeHtml = item.isSpf1
+          ? `<span style="display:inline-block;background:#dc2626;color:white;padding:1px 5px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;border-radius:2px;margin-left:5px;vertical-align:middle;">SPF</span>`
+          : "";
+        const leadTimeHtml = item.isSpf1 && item.procurementLeadTime
+          ? `<div style="margin:3px 0 4px;display:flex;align-items:center;gap:4px;"><span style="font-size:7px;font-weight:900;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;">Lead Time:</span><span style="font-size:7.5px;font-weight:900;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;padding:1px 5px;">${item.procurementLeadTime}</span></div>`
+          : "";
+
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><div style="display:flex;align-items:center;"><p class="product-title" style="margin:0;">${item.title}</p>${spfBadgeHtml}</div>${leadTimeHtml}${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           pdf.addPage([612, 936]);

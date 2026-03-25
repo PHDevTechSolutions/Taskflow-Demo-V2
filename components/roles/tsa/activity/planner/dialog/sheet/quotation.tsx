@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { supabase } from "@/utils/supabase";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -107,6 +108,9 @@ interface Props {
   managerDetails: SupervisorDetails | null;
   tsmDetails: SupervisorDetails | null;
   signature: string | null;
+
+  /** Logged-in TSA cluster id — SPF 1 list is filtered to this user's requests when set */
+  referenceid?: string;
 }
 
 const Quotation_SOURCES = [
@@ -140,7 +144,43 @@ interface SelectedProduct extends Product {
   discount: number;
   isDiscounted?: boolean;
   cloudinaryPublicId?: string;
+  /** Minimum order qty from PD/procurement — sales may enter equal or higher */
+  procurementMinQty?: number;
+  procurementLeadTime?: string;
+  procurementLockedPrice?: boolean;
+  procurementItemCode?: string;
 }
+
+type SpfCreationRow = {
+  id: number;
+  spf_number?: string | null;
+  status?: string | null;
+  company_name?: string | null;
+  supplier_brand?: string | null;
+  contact_name?: string | null;
+  contact_number?: string | null;
+  final_selling_cost?: string | null;
+  proj_lead_time?: string | null;
+  project_lead_time?: string | null;
+  manager?: string | null;
+  item_code?: string | null;
+  // NOTE: Column names vary in DB; we read via fallbacks below.
+  [key: string]: any;
+};
+
+type SpfOfferProduct = {
+  title: string;
+  sku: string;
+  quantity: number;
+  /** Shown as unit price — from procurement `final_selling_cost` (not unit cost) */
+  finalSellingPrice: number;
+  imageUrl: string;
+  technicalSpecification: string;
+  packagingDetails: string;
+  factoryDetails: string;
+  url: string;
+  leadTime: string;
+};
 
 function extractTsmPrefix(tsm: string): string {
   if (!tsm) return "";
@@ -217,7 +257,8 @@ export function QuotationSheet(props: Props) {
     salesManagerEmail,
     managerDetails,
     tsmDetails,
-    signature
+    signature,
+    referenceid: tsaReferenceId,
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -246,6 +287,12 @@ export function QuotationSheet(props: Props) {
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
   const [isSpfMode, setIsSpfMode] = useState(false);
+  const [isSpf1Mode, setIsSpf1Mode] = useState(false);
+  const [spf1Loading, setSpf1Loading] = useState(false);
+  const [spf1Error, setSpf1Error] = useState<string | null>(null);
+  const [spf1Records, setSpf1Records] = useState<SpfCreationRow[]>([]);
+  const [spf1Search, setSpf1Search] = useState("");
+  const [spf1Selected, setSpf1Selected] = useState<SpfCreationRow | null>(null);
   const [spfUploading, setSpfUploading] = useState(false);
   const [spfManualProduct, setSpfManualProduct] = useState({
     title: "",
@@ -304,6 +351,205 @@ export function QuotationSheet(props: Props) {
       setFollowUpDate("");
     }
   }, [callType, useToday]);
+
+  const splitByPipe = (value?: string | null) =>
+    (value || "")
+      .split("|")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+  const splitByRow = (value?: string | null) =>
+    (value || "")
+      .split("|ROW|")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+  const splitComma = (value?: string | null) =>
+    (value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+  const explodeRowGroups = (value?: string | null): string[] => {
+    const groups = splitByRow(value);
+    if (groups.length === 0) return splitComma(value);
+    return groups.flatMap((g) => splitComma(g));
+  };
+
+  const summarizeProcField = (value?: string | null, max = 2): string => {
+    const items = explodeRowGroups(value)
+      .map((v) => v.replace(/\|ROW\|/g, "").trim())
+      .filter((v) => v && v !== "-" && v !== "--");
+    const unique = Array.from(new Set(items));
+    if (unique.length === 0) return "—";
+    const head = unique.slice(0, max).join(", ");
+    return unique.length > max ? `${head}...` : head;
+  };
+
+  const explodeTechSpecs = (value?: string | null): string[] => {
+    const v = (value || "").trim();
+    if (!v) return [];
+
+    // Prefer the |ROW| separator — this is the clean multi-item format
+    const rowGroups = splitByRow(v);
+    if (rowGroups.length > 0) return rowGroups;
+
+    // NOTE: Do NOT split on plain "||" here.
+    // The DB sometimes embeds "||" inside a single item's field value as an
+    // artifact (e.g. "Dimensions: 631mm || LAMP DETAILS~~CCT: ...").
+    // Splitting on "||" would create phantom extra spec blocks from one item.
+    // Treat the entire string as one spec block per item instead.
+    return [v];
+  };
+
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const formatSpfTechSpecToHtml = (raw: string): string => {
+    const text = (raw || "").trim();
+    if (!text) return '<span class="text-gray-400 italic">No specifications provided.</span>';
+
+    // ── DB ARTIFACT CLEANUP ───────────────────────────────────────────────────
+    // The DB sometimes writes a field value that ends with "|| NEXT_GROUP~~..."
+    // (a legacy artifact where the multi-item separator `||` leaked into the
+    // last column of a spec table).  We normalise this into the standard `@@`
+    // group-separator format so the parser below handles it correctly.
+    //
+    // Pattern:  "...some value || GROUP_NAME~~key: value"
+    // Fix:      replace " || GROUP_NAME~~" with "@@GROUP_NAME~~"
+    //
+    // We only do this when the token after `||` looks like a spec-group header,
+    // i.e. it is followed by `~~` (the key:value separator used in this format).
+    const normalised = text.replace(/\s*\|\|\s*([^|@~]+~~)/g, "@@$1");
+
+    // Example format after normalisation:
+    // GROUP~~key: value;;key: value@@GROUP 2~~key: value
+    const groups = normalised.split("@@").map((g) => g.trim()).filter(Boolean);
+
+    const out: string[] = [];
+    for (const g of groups) {
+      const [groupTitleRaw, ...rest] = g.split("~~");
+      const groupTitle = escapeHtml((groupTitleRaw || "").trim());
+      const body = rest.join("~~").trim();
+      const lines = body
+        .split(";;")
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      out.push(`
+<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
+${groupTitle || "SPECIFICATIONS"}
+</div>`);
+
+      if (lines.length === 0) {
+        continue;
+      }
+
+      out.push(`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`);
+      for (const line of lines) {
+        const idx = line.indexOf(":");
+        const name = escapeHtml((idx >= 0 ? line.slice(0, idx) : line).trim());
+        const value = escapeHtml((idx >= 0 ? line.slice(idx + 1) : "").trim());
+        out.push(`
+<tr>
+  <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><strong>${name}</strong></td>
+  <td style="border:1px solid #e5e7eb;padding:4px">${value}</td>
+</tr>`);
+      }
+      out.push(`</table>`);
+    }
+
+    return out.join("\n");
+  };
+
+  const formatProcurementLeadHtml = (lead: string): string => {
+    const t = (lead || "").trim();
+    if (!t) return "";
+    return `
+<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
+Procurement
+</div>
+<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">
+<tr>
+  <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><strong>Project lead time</strong></td>
+  <td style="border:1px solid #e5e7eb;padding:4px">${escapeHtml(t)}</td>
+</tr>
+</table>`;
+  };
+
+  const parseSpfCreationProducts = (row: SpfCreationRow): SpfOfferProduct[] => {
+    // In `spf_creation` export, multi-items are stored as:
+    // - groups separated by `|ROW|`
+    // - inside each group, items separated by commas
+    const skus = explodeRowGroups(row.item_code);
+    const qtys = explodeRowGroups(row.product_offer_qty);
+    const sellingPrices = explodeRowGroups(row.final_selling_cost);
+    const leadRaw = row.proj_lead_time ?? row.project_lead_time;
+    const leadTimes = explodeRowGroups(leadRaw);
+    const imgs = explodeRowGroups(row.product_offer_image);
+    const techSpecs = explodeTechSpecs(row.product_offer_technical_specification);
+    const packaging = explodeRowGroups(row.product_offer_packaging_details);
+    const factory = explodeRowGroups(row.product_offer_factory_address);
+    const urls: string[] = [];
+
+    const maxLen = skus.length || Math.max(
+      qtys.length,
+      sellingPrices.length,
+      leadTimes.length,
+      imgs.length,
+      1
+    );
+
+    return Array.from({ length: maxLen }, (_, i) => ({
+      title: (skus[i] || `SPF ITEM ${i + 1}`).toUpperCase(),
+      sku: (skus[i] || skus[0] || "").toUpperCase(),
+      quantity: Math.max(0, parseInt(qtys[i] || "0", 10) || 0),
+      finalSellingPrice: Math.max(0, parseFloat(sellingPrices[i] || "0") || 0),
+      imageUrl: imgs[i] || "",
+      technicalSpecification: techSpecs[i] || "",
+      packagingDetails: packaging[i] || "",
+      factoryDetails: factory[i] || "",
+      url: urls[i] || "",
+      leadTime: leadTimes[i] || leadTimes[0] || "",
+    })).filter((p) => p.sku.trim().length > 0);
+  };
+
+  useEffect(() => {
+    if (!isSpf1Mode) return;
+    let cancelled = false;
+
+    (async () => {
+      setSpf1Loading(true);
+      setSpf1Error(null);
+      try {
+        let q = supabase
+          .from("spf_creation")
+          .select("*")
+          .eq("status", "Approved By Procurement");
+        if (tsaReferenceId?.trim()) {
+          q = q.eq("referenceid", tsaReferenceId.trim());
+        }
+        const { data, error } = await q.order("date_created", { ascending: false });
+
+        if (error) throw error;
+        const rows = (data || []) as unknown as SpfCreationRow[];
+        if (!cancelled) setSpf1Records(rows);
+      } catch (err: any) {
+        if (!cancelled) setSpf1Error(err?.message || "Failed to load SPF 1 records.");
+      } finally {
+        if (!cancelled) setSpf1Loading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSpf1Mode, tsaReferenceId]);
 
   useEffect(() => {
     setUseToday(false);
@@ -688,6 +934,8 @@ export function QuotationSheet(props: Props) {
         unitPrice,
         discount,
         totalAmount,
+        isSpf1: typeof p.id === "string" && p.id.startsWith("spf1-"),
+        procurementLeadTime: p.procurementLeadTime ?? "",
       };
     });
 
@@ -1752,7 +2000,7 @@ export function QuotationSheet(props: Props) {
         >
           {/* HEADER */}
           <div className="flex flex-col border-b border-gray-200 shrink-0">
-            <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center justify-between pl-8 pr-5 py-4 sm:pl-10 sm:pr-6">
               <div className="flex items-center gap-3">
                 <DialogTitle className="font-black text-base tracking-tight">Select Products</DialogTitle>
                 {selectedProducts.length > 0 && (
@@ -1795,18 +2043,18 @@ export function QuotationSheet(props: Props) {
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
           <div
-            className={`h-full grid gap-0 lg:gap-4 lg:p-4 p-0 overflow-y-auto ${selectedProducts.length === 0
+            className={`h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto ${selectedProducts.length === 0
               ? "grid-cols-1"
-              : "grid-cols-1 lg:grid-cols-[300px_1fr] lg:overflow-hidden"
+              : "grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
               }`}
           >
 
             {/* Left side: Search + checkbox selected */}
-            <div className={`flex-col gap-3 overflow-y-auto px-3 lg:px-0 pt-3 lg:pt-0 h-full ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+            <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
               <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
 
                 {/* Source Switcher */}
-                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                   {[
                     { source: "shopify", label: "Shopify", icon: "🛍️" },
                     { source: "firebase_shopify", label: "CMS", icon: "📦" },
@@ -1815,8 +2063,8 @@ export function QuotationSheet(props: Props) {
                     <button
                       key={s}
                       type="button"
-                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
+                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
                     >
                       <span className="text-sm mb-0.5">{icon}</span>
                       <span>{label}</span>
@@ -1824,11 +2072,19 @@ export function QuotationSheet(props: Props) {
                   ))}
                   <button
                     type="button"
-                    onClick={() => { setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                    onClick={() => { setIsSpfMode(true); setIsSpf1Mode(false); setSearchTerm(""); setSearchResults([]); }}
                     className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                   >
                     <span className="text-sm mb-0.5">📋</span>
                     <span>SPF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
+                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                  >
+                    <span className="text-sm mb-0.5">🧾</span>
+                    <span>SPF 1</span>
                   </button>
                 </div>
 
@@ -2001,6 +2257,167 @@ export function QuotationSheet(props: Props) {
                       Add SPF Product
                     </Button>
                   </div>
+                ) : isSpf1Mode ? (
+                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF 1</span>
+                        <span className="text-[9px] text-red-400 italic">— approved SPF list</span>
+                      </div>
+                      {spf1Loading && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">
+                          Loading…
+                        </span>
+                      )}
+                    </div>
+
+                    <Input
+                      type="text"
+                      className="uppercase rounded-none bg-white"
+                      placeholder="Search SPF number..."
+                      value={spf1Search}
+                      onChange={(e) => setSpf1Search(e.target.value)}
+                    />
+
+                    {spf1Error && (
+                      <div className="text-[11px] text-red-600 font-medium">
+                        {spf1Error}
+                      </div>
+                    )}
+
+                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                      {spf1Records
+                        .filter((r) => {
+                          const q = spf1Search.trim().toLowerCase();
+                          if (!q) return true;
+                          return (r.spf_number || "").toLowerCase().includes(q);
+                        })
+                        .map((r) => (
+                          <div
+                            key={r.id}
+                            className={`w-full rounded-none border transition overflow-hidden ${
+                              spf1Selected?.id === r.id
+                                ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
+                                : "border-red-200 bg-white shadow-sm"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (spf1Selected?.id === r.id) {
+                                  setSpf1Selected(null);
+                                  return;
+                                }
+                                setSpf1Selected(r);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
+                            >
+                              <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
+                                {r.spf_number || `SPF #${r.id}`}
+                              </div>
+                              <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
+                                {spf1Selected?.id === r.id ? "▾" : "▸"}
+                              </span>
+                            </button>
+
+                            {spf1Selected?.id === r.id && (
+                              <div className="border-t border-red-100 bg-gray-50/90">
+                                <div className="ml-2 border-l-2 border-red-400 pl-3 pr-2 py-2.5 space-y-3">
+                                  <div className="text-[10px] text-gray-700 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                    <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
+                                      Ref: {r.referenceid || "—"}
+                                    </span>
+                                    <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {summarizeProcField(r.company_name)}</span>
+                                    <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {summarizeProcField(r.supplier_brand)}</span>
+                                    <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {summarizeProcField(r.contact_name)}</span>
+                                    <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {summarizeProcField(r.contact_number)}</span>
+                                    <span className="truncate col-span-2"><span className="font-bold text-gray-600">Project lead time:</span> {summarizeProcField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setMobilePanelTab("products")}
+                                    className="w-full text-left text-[10px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 py-1 border-t border-red-100/80"
+                                  >
+                                    View selected in quotation list →
+                                  </button>
+
+                                  <div className="space-y-2 pt-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Line items</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setSpf1Selected(null); }}
+                                        className="text-[9px] font-black uppercase tracking-wider text-red-600 hover:text-red-800"
+                                      >
+                                        Collapse
+                                      </button>
+                                    </div>
+                                    {parseSpfCreationProducts(r).map((p, idx) => (
+                                      <div key={`${r.id}-${idx}`} className="border border-gray-200 bg-white p-2 shadow-sm">
+                                        <div className="flex items-start gap-2">
+                                          {p.imageUrl ? (
+                                            <img
+                                              src={p.imageUrl}
+                                              alt={p.title}
+                                              className="w-12 h-12 object-cover border border-gray-200 shrink-0"
+                                            />
+                                          ) : (
+                                            <div className="w-12 h-12 bg-gray-50 border border-gray-200 shrink-0" />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-[10px] font-black uppercase tracking-wider text-gray-800 truncate font-mono">
+                                              {p.sku || p.title}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 mt-0.5 grid grid-cols-2 gap-x-2">
+                                              <span className="truncate"><span className="font-bold">Min qty:</span> {p.quantity}</span>
+                                              <span className="truncate"><span className="font-bold">Price:</span> ₱{p.finalSellingPrice.toFixed(2)}</span>
+                                              <span className="truncate col-span-2"><span className="font-bold">Lead:</span> {p.leadTime || "—"}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="mt-2">
+                                          <Button
+                                            type="button"
+                                            disabled={p.quantity <= 0}
+                                            className="w-full rounded-none bg-red-600 hover:bg-red-700 text-white h-8 text-[11px] font-black uppercase tracking-wider"
+                                            onClick={() => {
+                                              const specHtml = formatSpfTechSpecToHtml(p.technicalSpecification || "");
+                                              const leadHtml = formatProcurementLeadHtml(p.leadTime || "");
+                                              setSelectedProducts((prev) => [
+                                                ...prev,
+                                                {
+                                                  id: `spf1-${crypto.randomUUID()}`,
+                                                  uid: crypto.randomUUID(),
+                                                  title: p.sku ? p.sku.toUpperCase() : p.title,
+                                                  description: `${specHtml}${leadHtml}`,
+                                                  skus: p.sku ? [p.sku] : [],
+                                                  images: p.imageUrl ? [{ src: p.imageUrl }] : [],
+                                                  quantity: Math.max(1, p.quantity),
+                                                  price: p.finalSellingPrice,
+                                                  discount: 0,
+                                                  isDiscounted: false,
+                                                  procurementMinQty: p.quantity,
+                                                  procurementLeadTime: p.leadTime,
+                                                  procurementLockedPrice: true,
+                                                  procurementItemCode: p.sku || "",
+                                                },
+                                              ]);
+                                              setMobilePanelTab("products");
+                                            }}
+                                          >
+                                            {p.quantity <= 0 ? "No PD qty" : "Add to quotation"}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 ) : (
                   !isManualEntry && (
                     <>
@@ -2115,7 +2532,7 @@ ${spec.value}
               </div>
 
               {/* Search Results — only shown when not in SPF mode */}
-              {!isSpfMode && !isManualEntry && searchResults.length > 0 && (
+              {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
                 <>
                   <div className="text-xs text-green-600 mb-2">
                     Note: you can choose the same products.
@@ -2403,16 +2820,23 @@ ${spec.value}
                                 >
                                   {p.title}
                                 </div>
+                                {p.procurementLeadTime && (
+                                  <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
+                                    Lead Time: {p.procurementLeadTime}
+                                  </div>
+                                )}
                                 </div>
                               </td>
 
                               <td className="border border-gray-300 p-1 sm:p-2">
                                 <Input
                                   type="number"
-                                  min={1}
+                                  min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
                                   value={p.quantity}
                                   onChange={(e) => {
-                                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                                    const raw = parseInt(e.target.value, 10) || 1;
+                                    const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
+                                    const val = Math.max(floor, raw);
                                     setSelectedProducts((prev) => {
                                       const copy = [...prev];
                                       copy[idx] = { ...copy[idx], quantity: val };
@@ -2421,6 +2845,11 @@ ${spec.value}
                                   }}
                                   className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
                                 />
+                                {p.procurementMinQty != null && p.procurementMinQty > 0 && (
+                                  <div className="text-[9px] text-gray-500 mt-1">
+                                    Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
+                                  </div>
+                                )}
                               </td>
 
                               <td className="border border-gray-300 p-1 sm:p-2">
@@ -2429,7 +2858,9 @@ ${spec.value}
                                   min={0}
                                   step="0.01"
                                   value={p.price}
+                                  readOnly={p.procurementLockedPrice}
                                   onChange={(e) => {
+                                    if (p.procurementLockedPrice) return;
                                     const val = Math.max(0, parseFloat(e.target.value) || 0);
                                     setSelectedProducts((prev) => {
                                       const copy = [...prev];
@@ -2437,8 +2868,13 @@ ${spec.value}
                                       return copy;
                                     });
                                   }}
-                                  className="w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs"
+                                  className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                 />
+                                {p.procurementLockedPrice && (
+                                  <div className="text-[9px] text-gray-500 mt-1">
+                                    Final selling price (locked)
+                                  </div>
+                                )}
                               </td>
 
                               <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
@@ -2656,7 +3092,7 @@ ${spec.value}
             ⚠️ Quotation Number only appears on the final downloaded quotation.
           </div>
 
-          <DialogFooter className="flex flex-col gap-2 px-4 py-3 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
             {/* Mobile total — hidden on desktop (shown in header instead) */}
             {selectedProducts.length > 0 && (
               <div className="flex items-center justify-between lg:hidden">
@@ -2790,8 +3226,23 @@ ${spec.value}
                               )}
                             </td>
                             <td className="p-4 border-r border-black align-top">
-                              <p className="font-black text-[#121212] text-xs uppercase mb-1">{item.title}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-black text-[#121212] text-xs uppercase">{item.title}</p>
+                                {item.isSpf1 && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-600 text-white shrink-0">
+                                    SPF
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
+                              {item.isSpf1 && item.procurementLeadTime && (
+                                <div className="mb-2 flex items-center gap-1.5">
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Lead Time:</span>
+                                  <span className="text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">
+                                    {item.procurementLeadTime}
+                                  </span>
+                                </div>
+                              )}
                               <div
                                 className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ __html: item.description }}
