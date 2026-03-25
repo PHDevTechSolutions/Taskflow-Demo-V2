@@ -2,13 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  query,
-  onSnapshot,
-  Timestamp,
-  where,
-} from "firebase/firestore";
+import { collection, query, onSnapshot, Timestamp, where, } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
 import {
   Dialog,
