@@ -21,11 +21,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: "Missing TSM ID." }, { status: 400 });
     }
 
-    // ✅ Safer query: trim & lower, deduplicate by company_name
+    // ✅ Only return accounts with status 'Removed', deduplicated by company_name
     const accounts = await Xchire_sql`
       SELECT DISTINCT ON (company_name) *
       FROM accounts
       WHERE TRIM(LOWER(tsm)) = LOWER(${tsm})
+        AND TRIM(LOWER(status)) = 'removed'
       ORDER BY company_name, date_removed ASC, id ASC
       LIMIT ${safeLimit}
       OFFSET ${safeOffset};

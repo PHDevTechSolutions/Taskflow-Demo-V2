@@ -98,7 +98,7 @@ export function RequestTable({
 
     const filteredData = useMemo(() => {
         // Hard filter: show only rows with Removed status.
-        let data = localPosts.filter((item) => normalizeStatus(item.status) === "removed");
+        let data = [...localPosts];
 
         data = data.filter((item) => {
             const matchesSearch =
