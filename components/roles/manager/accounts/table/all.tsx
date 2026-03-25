@@ -123,20 +123,28 @@ function getTypeClientStyle(type: string) {
 
 /* ─── Stat Card ───────────────────────────────────────────────────── */
 
-function StatCard({ label, value, accent, onClick, clickable, sublabel }: {
+function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive }: {
   label: string; value: number | string; accent: string;
-  onClick?: () => void; clickable?: boolean; sublabel?: string;
+  onClick?: () => void; clickable?: boolean; sublabel?: string; isActive?: boolean;
 }) {
   return (
     <div onClick={onClick}
-      className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-indigo-200" : ""}`}
+      className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all duration-150
+        ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-indigo-200" : ""}
+        ${isActive ? "ring-2 ring-indigo-500 border-indigo-400 shadow-md -translate-y-0.5" : ""}`}
       style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{ background: `radial-gradient(circle at 80% 20%, ${accent}, transparent 70%)` }} />
       <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</span>
       <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
       {sublabel && <span className="text-[10px] text-gray-400 mt-0.5">{sublabel}</span>}
-      {clickable && <span className="text-[10px] text-indigo-400 font-semibold">Click to view</span>}
+      {isActive && (
+        <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
+          Filtering active
+        </span>
+      )}
+      {!isActive && clickable && <span className="text-[10px] text-indigo-400 font-semibold">Click to filter</span>}
     </div>
   );
 }
@@ -699,8 +707,9 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [selectedAgentId,   setSelectedAgentId]   = useState<string>("");
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
 
-  const [search,      setSearch]      = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [search,           setSearch]           = useState("");
+  const [currentPage,      setCurrentPage]      = useState(1);
+  const [typeClientFilter, setTypeClientFilter] = useState<string | null>(null);
 
   const [historyOpen,    setHistoryOpen]    = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
@@ -763,14 +772,21 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     posts.filter((a) => a.status?.toLowerCase() === "active"),
   [posts]);
 
-  // ── FIX: Set of active company names (lowercase) — source of truth ──
+  // ── Type client filter applied on top of active accounts ──
+  const typeClientFilteredAccounts = useMemo(() =>
+    typeClientFilter
+      ? allActiveAccounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter)
+      : allActiveAccounts,
+  [allActiveAccounts, typeClientFilter]);
+
+  // ── Set of active company names (lowercase) — source of truth ──
   const activeCompanyNames = useMemo(() => {
     const s = new Set<string>();
     allActiveAccounts.forEach((a) => s.add(a.company_name.toLowerCase()));
     return s;
   }, [allActiveAccounts]);
 
-  // ── FIX: Filter allActivities to only include companies still in active accounts ──
+  // ── Filter allActivities to only include companies still in active accounts ──
   const activeFilteredActivities = useMemo(() =>
     allActivities.filter((a) =>
       a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
@@ -779,11 +795,11 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const tsmIds = useMemo(() => {
     const s = new Set<string>();
-    allActiveAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
+    typeClientFilteredAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
     return [...s];
-  }, [allActiveAccounts]);
+  }, [typeClientFilteredAccounts]);
 
-  // ── FIX: activityKeySet now uses activeFilteredActivities ──
+  // ── activityKeySet uses activeFilteredActivities ──
   const activityKeySet = useMemo(() => {
     const s = new Set<string>();
     activeFilteredActivities.forEach((a) => {
@@ -798,7 +814,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return `name:${account.company_name.toLowerCase()}`;
   };
 
-  // ── FIX: companiesWithActivity now uses activityKeySet derived from activeFilteredActivities ──
+  // ── companiesWithActivity uses activityKeySet derived from activeFilteredActivities ──
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
     allActiveAccounts.forEach((a) => {
@@ -807,7 +823,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return s;
   }, [allActiveAccounts, activityKeySet]);
 
-  // ── FIX: activityCountMap now uses activeFilteredActivities ──
+  // ── activityCountMap uses activeFilteredActivities ──
   const activityCountMap = useMemo(() => {
     const refCount: Record<string, number> = {};
     const nameCount: Record<string, number> = {};
@@ -835,16 +851,16 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const tsmData = useMemo(() => {
     return tsmIds.map((tsmId) => {
-      const tsmAccounts = allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === tsmId);
+      const tsmAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === tsmId);
       const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
       const tsmName = agentMap[tsmId] ?? tsmAccounts[0]?.tsm ?? tsmId;
       return { tsmId, tsmName, accountCount: tsmAccounts.length, agentCount: agentIds.length };
     }).sort((a, b) => b.accountCount - a.accountCount);
-  }, [tsmIds, allActiveAccounts, agentMap]);
+  }, [tsmIds, typeClientFilteredAccounts, agentMap]);
 
   const agentsUnderTSM = useMemo(() => {
     if (!selectedTSMId) return [];
-    const tsmAccounts = allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    const tsmAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
     return agentIds.map((agentId) => {
       const agentAccounts = tsmAccounts.filter((a) => a.referenceid?.toLowerCase() === agentId);
@@ -852,33 +868,40 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       const withoutAct = agentAccounts.length - withAct;
       return { agentId, agentName: agentMap[agentId] ?? agentId, accountCount: agentAccounts.length, withActivity: withAct, withoutActivity: withoutAct };
     }).sort((a, b) => b.accountCount - a.accountCount);
-  }, [selectedTSMId, allActiveAccounts, agentMap, companiesWithActivity]);
+  }, [selectedTSMId, typeClientFilteredAccounts, agentMap, companiesWithActivity]);
 
   const agentAccounts = useMemo(() => {
     if (!selectedAgentId) return [];
-    return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-  }, [selectedAgentId, allActiveAccounts]);
+    return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+  }, [selectedAgentId, typeClientFilteredAccounts]);
 
   const withActivityAccounts    = useMemo(() => agentAccounts.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
   const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
 
   const scopedBase = useMemo(() => {
-    if (drillLevel === "tsm")   return allActiveAccounts;
-    if (drillLevel === "agent") return allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    if (drillLevel === "tsm")   return typeClientFilteredAccounts;
+    if (drillLevel === "agent") return typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     return agentAccounts;
-  }, [drillLevel, allActiveAccounts, selectedTSMId, agentAccounts]);
+  }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, agentAccounts]);
 
   const scopedWithActivity    = useMemo(() => scopedBase.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
   const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
 
+  // ── Unfiltered scoped base for type client count cards (always shows all types) ──
+  const unfilteredScopedBase = useMemo(() => {
+    if (drillLevel === "tsm")   return allActiveAccounts;
+    if (drillLevel === "agent") return allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
+    return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+  }, [drillLevel, allActiveAccounts, selectedTSMId, selectedAgentId]);
+
   const typeClientCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    scopedBase.forEach((a) => {
+    unfilteredScopedBase.forEach((a) => {
       const t = (a.type_client ?? "Unknown").toUpperCase();
       c[t] = (c[t] ?? 0) + 1;
     });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [scopedBase]);
+  }, [unfilteredScopedBase]);
 
   const filteredAccounts = useMemo(() => {
     const q = search.toLowerCase();
@@ -899,22 +922,24 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     setSelectedTSMId(""); setSelectedTSMName("");
     setSelectedAgentId(""); setSelectedAgentName("");
     setSearch("");
+    setTypeClientFilter(null);
   };
   const goToAgent = (tsmId: string, tsmName: string) => {
     setSelectedTSMId(tsmId); setSelectedTSMName(tsmName);
     setDrillLevel("agent");
     setSelectedAgentId(""); setSelectedAgentName("");
     setSearch("");
+    setTypeClientFilter(null);
   };
   const goToAccounts = (agentId: string, agentName: string) => {
     setSelectedAgentId(agentId); setSelectedAgentName(agentName);
     setDrillLevel("accounts");
     setSearch("");
+    setTypeClientFilter(null);
   };
 
-  // ── FIX: openHistory guards against companies not in active accounts ──
+  // ── openHistory guards against companies not in active accounts ──
   const openHistory = (companyName: string, source: ListSource = null) => {
-    // Only open history if the company still exists in active accounts
     const isActive = activeCompanyNames.has(companyName.toLowerCase());
     if (!isActive) return;
 
@@ -923,7 +948,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     setHistoryOpen(true);
     setLoadingHistory(true);
 
-    // Use activeFilteredActivities so only records tied to active companies are shown
     const filtered = activeFilteredActivities.filter((a) =>
       (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
     );
@@ -989,6 +1013,20 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
+        {/* ── Active type client filter banner ── */}
+        {typeClientFilter && (
+          <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+            Type filter: <strong>{typeClientFilter}</strong>
+            <button
+              onClick={() => setTypeClientFilter(null)}
+              className="ml-1 text-indigo-400 hover:text-indigo-700 transition-colors flex items-center"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
+
         {loadingActivities && (
           <div className="flex items-center gap-2 text-[11px] text-indigo-500 font-medium">
             <div className="w-3 h-3 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
@@ -1009,7 +1047,15 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             onClick={() => setActiveListOpen("without")}
           />
           {typeClientCounts.map(([type, count], i) => (
-            <StatCard key={type} label={type} value={count} accent={accentColors[i % accentColors.length]} />
+            <StatCard
+              key={type}
+              label={type}
+              value={count}
+              accent={accentColors[i % accentColors.length]}
+              clickable
+              isActive={typeClientFilter === type}
+              onClick={() => setTypeClientFilter((prev) => prev === type ? null : type)}
+            />
           ))}
         </div>
 
@@ -1057,7 +1103,11 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <Users size={32} strokeWidth={1} />
                   <p className="text-sm font-medium">No TSM data found</p>
-                  <p className="text-[11px] text-slate-400">Make sure accounts have a TSM field set</p>
+                  <p className="text-[11px] text-slate-400">
+                    {typeClientFilter
+                      ? `No accounts with type "${typeClientFilter}" found`
+                      : "Make sure accounts have a TSM field set"}
+                  </p>
                 </div>
               ) : tsmData.map((tsm) => (
                 <TSMRowCard
@@ -1077,6 +1127,9 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <User size={32} strokeWidth={1} />
                   <p className="text-sm font-medium">No agents found under this TSM</p>
+                  {typeClientFilter && (
+                    <p className="text-[11px] text-slate-400">No "{typeClientFilter}" accounts assigned here</p>
+                  )}
                 </div>
               ) : agentsUnderTSM.map((agent) => (
                 <AgentRowCard
