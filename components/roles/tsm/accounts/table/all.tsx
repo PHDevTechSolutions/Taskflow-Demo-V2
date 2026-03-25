@@ -827,8 +827,15 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       const t = (a.type_client ?? "Unknown").toUpperCase();
       c[t] = (c[t] ?? 0) + 1;
     });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [unfilteredScopedBase]);
+    let entries = Object.entries(c).sort((a, b) => b[1] - a[1]);
+
+    // ← THIS IS THE KEY LINE
+    if (typeClientFilter) {
+      entries = entries.filter(([type]) => type === typeClientFilter);
+    }
+
+    return entries;
+  }, [unfilteredScopedBase, typeClientFilter]); // ← Add typeClientFilter here
 
   const agentsData = useMemo(() => {
     const map: Record<string, Account[]> = {};
