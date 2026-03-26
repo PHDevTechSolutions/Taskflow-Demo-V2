@@ -676,13 +676,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         />
                       ) : (
                         <span
-                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${item.tsm_approved_status === "Approved"
-                            ? "bg-green-100 text-green-700"
-                            : item.tsm_approved_status === "Pending"
-                              ? "bg-orange-100 text-orange-700"
-                              : item.tsm_approved_status === "Decline"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-gray-100 text-gray-600"
+                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold 
+                            ${item.tsm_approved_status === "Approved" ||
+                              item.tsm_approved_status === "Approved By Sales Head"
+                              ? "bg-green-100 text-green-700"
+                              : item.tsm_approved_status === "Pending"
+                                ? "bg-orange-100 text-orange-700"
+                                : item.tsm_approved_status === "Decline"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-gray-100 text-gray-600"
                             }`}
                         >
                           {item.tsm_approved_status}

@@ -53,6 +53,10 @@ interface ProductItem {
     product_sku?: string;
     item_remarks?: string;
     discount?: number;
+    procurementMinQty?: number;
+    procurementLeadTime?: string;
+    procurementLockedPrice?: boolean;
+    cloudinaryPublicId?: string;
 }
 
 interface TaskListEditDialogProps {
@@ -131,6 +135,9 @@ export default function TaskListEditDialog({
     tsmcontact,
     managername,
     deliveryFee,
+    restockingFee,
+    whtType,
+    quotationSubject,
 
     // Signatories
     agentName,
@@ -145,7 +152,7 @@ export default function TaskListEditDialog({
 
     // Sales Head Signature
     signature,
-    vatType: initialVatType,
+    vatType,
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [previewStates, setPreviewStates] = useState<boolean[]>([]);
@@ -153,8 +160,24 @@ export default function TaskListEditDialog({
 
     const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
     const [discount] = useState(0);
-    const [vatType] = useState<"vat_inc" | "vat_exe" | "zero_rated">(
-        (initialVatType as "vat_inc" | "vat_exe" | "zero_rated") || "zero_rated"
+    const initialVatType: "vat_inc" | "vat_exe" | "zero_rated" =
+        vatType === "vat_inc" || vatType === "vat_exe" || vatType === "zero_rated"
+            ? vatType
+            : "zero_rated";
+    const [vatTypeState, setVatTypeState] = React.useState<
+        "vat_inc" | "vat_exe" | "zero_rated"
+    >(initialVatType);
+    const [deliveryFeeState, setDeliveryFeeState] = useState<string>(
+        deliveryFee ?? "",
+    );
+    const [restockingFeeState, setRestockingFeeState] = useState<string>(
+        restockingFee ?? "",
+    );
+    const [whtTypeState, setWhtTypeState] = useState<string>(
+        whtType ?? "none",
+    );
+    const [quotationSubjectState, setQuotationSubjectState] = useState<string>(
+        quotationSubject ?? "For Quotation",
     );
     // Confirmation dialog state
 
@@ -258,12 +281,9 @@ export default function TaskListEditDialog({
             // Use the 'product_xxx' fields which are updated by handleProductChange
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
-            const isDiscounted = checkedRows[index] ?? false; // Use the row's checked state
-
+            const isDiscounted = checkedRows[index] ?? false;
             const baseAmount = qty * unitPrice;
-            const discountedAmount = (isDiscounted && vatType === "vat_inc")
-                ? (baseAmount * discount) / 100
-                : 0;
+            const discountedAmount = isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
             const totalAmount = baseAmount - discountedAmount;
 
             return {
@@ -277,8 +297,23 @@ export default function TaskListEditDialog({
                     p.description?.trim() ? p.description : p.product_description || "",
                 unitPrice,
                 totalAmount,
+                isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
+                    const rawD = p.product_description || p.description || "";
+                    return rawD.includes("Project lead time");
+                })()),
+                procurementLeadTime: (() => {
+                    if (p.procurementLeadTime) return p.procurementLeadTime;
+                    const rawD = p.product_description || p.description || "";
+                    const m = rawD.match(/Project lead time<\/strong><\/td><td[^>]*>([^<]+)/);
+                    return m?.[1]?.trim() ?? "";
+                })(),
             };
         });
+
+        const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+        const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+        const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+        const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
         return {
             referenceNo: quotationNumber ?? "DRAFT-XXXX",
@@ -291,10 +326,32 @@ export default function TaskListEditDialog({
             subject: "For Quotation",
             items,
             vatTypeLabel:
-                vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-            vatType,
-            totalPrice: quotationAmount,
-            deliveryFee: deliveryFee ?? "0",
+                vatType === "vat_inc"
+                    ? "VAT Inc"
+                    : vatType === "vat_exe"
+                        ? "VAT Exe"
+                        : "Zero-Rated",
+            totalPrice: totalPriceWithDelivery,
+            deliveryFee: deliveryFeeState ?? "",
+            vatType: vatTypeState ?? null,
+            restockingFee: parseFloat(restockingFeeState) || 0,
+            whtType: whtTypeState ?? "none",
+            whtLabel:
+                whtTypeState === "wht_1" ? "EWT 1% (Goods)" :
+                    whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
+            whtBase: vatTypeState === "vat_inc"
+                ? totalPriceWithDelivery / 1.12
+                : totalPriceWithDelivery,
+            whtAmount:
+                whtTypeState !== "none"
+                    ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+                    : 0,
+            netAmountToCollect:
+                totalPriceWithDelivery - (
+                    whtTypeState !== "none"
+                        ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+                        : 0
+                ),
             salesRepresentative: salesRepresentativeName,
             salesemail,
             salescontact: contact ?? "",

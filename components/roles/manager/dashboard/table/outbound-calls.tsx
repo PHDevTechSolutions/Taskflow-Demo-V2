@@ -44,7 +44,7 @@ const pct = (num: number, den: number) =>
   den > 0 ? ((num / den) * 100).toFixed(2) + "%" : "0.00%";
 
 const convBadge = (count: number) => (
-  <span className="ml-1 text-green-600 text-[10px] font-medium">({count})</span>
+  <span className="ml-1 text-green-600 text-[12px] font-medium">{count}</span>
 );
 
 /* ================= COMPONENT ================= */
@@ -250,18 +250,12 @@ export function OutboundCallsTableCard({
                   <TableHead className="text-gray-500 text-center">OB Target</TableHead>
                   <TableHead className="text-gray-500 text-center">Successful Calls</TableHead>
                   <TableHead className="text-gray-500 text-center">Achievement</TableHead>
-                  <TableHead className="text-gray-500 text-center">
-                    Calls → Quote
-                    <span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span>
-                  </TableHead>
-                  <TableHead className="text-gray-500 text-center">
-                    Quote → SO
-                    <span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span>
-                  </TableHead>
-                  <TableHead className="text-gray-500 text-center">
-                    SO → SI
-                    <span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span>
-                  </TableHead>
+                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">Quote Based on OB Successful</TableHead>
+                  <TableHead className="text-gray-500 text-center">Calls → Quote<span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span></TableHead>
+                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SO Based on OB Successful</TableHead>
+                  <TableHead className="text-gray-500 text-center">Quote → SO<span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span></TableHead>
+                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SI Based on OB Successful</TableHead>
+                  <TableHead className="text-gray-500 text-center">SO → SI<span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span></TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -303,23 +297,33 @@ export function OutboundCallsTableCard({
                         </span>
                       </TableCell>
 
+                      <TableCell className="text-center font-bold">
+                        {convBadge(stat.numQuotes)}
+                      </TableCell>
+
                       {/* Calls → Quote */}
                       <TableCell className="text-center">
                         <span className="text-gray-700">{stat.callsToQuote}</span>
-                        {convBadge(stat.numQuotes)}
+                      </TableCell>
+
+                      <TableCell className="text-center font-bold">
+                      {convBadge(stat.numSO)}
                       </TableCell>
 
                       {/* Quote → SO */}
                       <TableCell className="text-center">
                         <span className="text-gray-700">{stat.quoteToSO}</span>
-                        {convBadge(stat.numSO)}
+                      </TableCell>
+
+                      <TableCell className="text-center font-bold">
+                      {convBadge(stat.numSI)}
                       </TableCell>
 
                       {/* SO → SI */}
                       <TableCell className="text-center">
                         <span className="text-gray-700">{stat.soToSI}</span>
-                        {convBadge(stat.numSI)}
                       </TableCell>
+
                     </TableRow>
                   );
                 })}
@@ -332,9 +336,12 @@ export function OutboundCallsTableCard({
                   <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.length}</TableCell>
                   <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>
                   <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
-                  <TableCell className="text-center">{totals.callsToQuote}{convBadge(totals.numQuotes)}</TableCell>
-                  <TableCell className="text-center">{totals.quoteToSO}{convBadge(totals.numSO)}</TableCell>
-                  <TableCell className="text-center">{totals.soToSI}{convBadge(totals.numSI)}</TableCell>
+                  <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>
+                  <TableCell className="text-center">{totals.callsToQuote}</TableCell>
+                  <TableCell className="text-center">{convBadge(totals.numSO)}</TableCell>
+                  <TableCell className="text-center">{totals.quoteToSO}</TableCell>
+                  <TableCell className="text-center">{convBadge(totals.numSI)}</TableCell>
+                  <TableCell className="text-center">{totals.soToSI}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

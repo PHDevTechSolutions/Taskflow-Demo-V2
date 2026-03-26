@@ -62,6 +62,10 @@ interface ProductItem {
     product_sku?: string;
     item_remarks?: string;
     discount?: number;
+    procurementMinQty?: number;
+    procurementLeadTime?: string;
+    procurementLockedPrice?: boolean;
+    cloudinaryPublicId?: string;
 }
 
 interface TaskListEditDialogProps {
@@ -128,19 +132,38 @@ export default function TaskListEditDialog({
     tsmcontact,
     managername,
     deliveryFee,
+    restockingFee,
+    whtType,
+    quotationSubject,
     agentName,
     agentSignature,
     agentContactNumber,
     agentEmailAddress,
     tsmName,
     signature,
-    vatType: initialVatType,
+    vatType,
 }: TaskListEditDialogProps) {
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
     const [discount] = useState(0);
-    const [vatType] = useState<"vat_inc" | "vat_exe" | "zero_rated">(
-        (initialVatType as "vat_inc" | "vat_exe" | "zero_rated") || "zero_rated"
+    const initialVatType: "vat_inc" | "vat_exe" | "zero_rated" =
+        vatType === "vat_inc" || vatType === "vat_exe" || vatType === "zero_rated"
+            ? vatType
+            : "zero_rated";
+    const [vatTypeState, setVatTypeState] = React.useState<
+        "vat_inc" | "vat_exe" | "zero_rated"
+    >(initialVatType);
+    const [deliveryFeeState, setDeliveryFeeState] = useState<string>(
+        deliveryFee ?? "",
+    );
+    const [restockingFeeState, setRestockingFeeState] = useState<string>(
+        restockingFee ?? "",
+    );
+    const [whtTypeState, setWhtTypeState] = useState<string>(
+        whtType ?? "none",
+    );
+    const [quotationSubjectState, setQuotationSubjectState] = useState<string>(
+        quotationSubject ?? "For Quotation",
     );
     const [quotationAmount, setQuotationAmount] = useState<number>(0);
 
@@ -227,23 +250,20 @@ export default function TaskListEditDialog({
         const emailUsername = email?.split("@")[0] ?? "";
 
         let emailDomain = "";
-        if (quotation_type === "Disruptive Solutions Inc") {
+        if (quotation_type === "Disruptive Solutions Inc")
             emailDomain = "disruptivesolutionsinc.com";
-        } else if (quotation_type === "Ecoshift Corporation") {
+        else if (quotation_type === "Ecoshift Corporation")
             emailDomain = "ecoshiftcorp.com";
-        } else {
-            emailDomain = email?.split("@")[1] ?? "";
-        }
-
-        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+        else emailDomain = email?.split("@")[1] ?? "";
+        const salesemail =
+            emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
 
         const items = products.map((p, index) => {
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
             const isDiscounted = checkedRows[index] ?? false;
             const baseAmount = qty * unitPrice;
-            const discountedAmount =
-                isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
+            const discountedAmount = isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
             const totalAmount = baseAmount - discountedAmount;
 
             return {
@@ -257,8 +277,23 @@ export default function TaskListEditDialog({
                     p.description?.trim() ? p.description : p.product_description || "",
                 unitPrice,
                 totalAmount,
+                isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
+                    const rawD = p.product_description || p.description || "";
+                    return rawD.includes("Project lead time");
+                })()),
+                procurementLeadTime: (() => {
+                    if (p.procurementLeadTime) return p.procurementLeadTime;
+                    const rawD = p.product_description || p.description || "";
+                    const m = rawD.match(/Project lead time<\/strong><\/td><td[^>]*>([^<]+)/);
+                    return m?.[1]?.trim() ?? "";
+                })(),
             };
         });
+
+        const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+        const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+        const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+        const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
         return {
             referenceNo: quotationNumber || "DRAFT-XXXX",
@@ -271,10 +306,32 @@ export default function TaskListEditDialog({
             subject: "For Quotation",
             items,
             vatTypeLabel:
-                vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-            vatType,
-            totalPrice: quotationAmount,
-            deliveryFee: deliveryFee ?? "0",
+                vatType === "vat_inc"
+                    ? "VAT Inc"
+                    : vatType === "vat_exe"
+                        ? "VAT Exe"
+                        : "Zero-Rated",
+            totalPrice: totalPriceWithDelivery,
+            deliveryFee: deliveryFeeState ?? "",
+            vatType: vatTypeState ?? null,
+            restockingFee: parseFloat(restockingFeeState) || 0,
+            whtType: whtTypeState ?? "none",
+            whtLabel:
+                whtTypeState === "wht_1" ? "EWT 1% (Goods)" :
+                    whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
+            whtBase: vatTypeState === "vat_inc"
+                ? totalPriceWithDelivery / 1.12
+                : totalPriceWithDelivery,
+            whtAmount:
+                whtTypeState !== "none"
+                    ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+                    : 0,
+            netAmountToCollect:
+                totalPriceWithDelivery - (
+                    whtTypeState !== "none"
+                        ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+                        : 0
+                ),
             salesRepresentative: salesRepresentativeName,
             salesemail,
             salescontact: contact ?? "",
@@ -568,9 +625,15 @@ export default function TaskListEditDialog({
               </div>
               <div class="terms-label">Warranty:</div>
               <div class="terms-val terms-highlight">
-                <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
-                <p>Warranty VOID if: tampered, altered, misused, damaged by liquids, or product is phased out.</p>
+                <p>One (2) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                <p>The warranty will be VOID under the following circumstances:</p>
+                <p>*If the unit is being tampered with.</p>
+                <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
                 <p>*Shipping costs for warranty claims are for customers' account.</p>
+                <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
               </div>
               <div class="terms-label">SO Validity:</div>
               <div class="terms-val">
@@ -771,12 +834,8 @@ export default function TaskListEditDialog({
                             <XIcon className="w-3.5 h-3.5" />
                             Decline
                         </Button>
-                        <Button
-                            onClick={DownloadPDF}
-                            className="rounded-none h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1.5"
-                        >
-                            <FileText className="w-3.5 h-3.5" />
-                            Download PDF
+                        <Button type="button" onClick={DownloadPDF} className="rounded-none h-9 px-6 bg-yellow-600 flex items-center gap-2">
+                            <FileText /> PDF
                         </Button>
                     </DialogFooter>
                 </DialogContent>

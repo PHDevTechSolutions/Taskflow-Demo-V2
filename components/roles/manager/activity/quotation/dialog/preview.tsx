@@ -149,7 +149,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-47 text-right">UNIT PRICE</th>
+                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
                                 <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>

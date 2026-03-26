@@ -15,14 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { sileo } from "sileo";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Item,
   ItemActions,
   ItemContent,
@@ -101,10 +93,10 @@ interface ProductItem {
   product_sku?: string;
   item_remarks?: string;
   discount?: number;
-  /** True when this item originates from an SPF 1 (procurement-approved) record */
-  isSpf1?: boolean;
-  /** Lead time from procurement — extracted from the saved description HTML for display */
+  procurementMinQty?: number;
   procurementLeadTime?: string;
+  procurementLockedPrice?: boolean;
+  cloudinaryPublicId?: string;
 }
 
 function splitAndTrim(value?: string): string[] {
@@ -115,6 +107,121 @@ function splitAndTrim(value?: string): string[] {
 function splitDescription(value?: string): string[] {
   if (!value) return [];
   return value.split("||").map((v) => v.trim());
+}
+
+// ── SPF 1 types ──────────────────────────────────────────────────────────────
+type SpfCreationRow = {
+  id: number;
+  spf_number?: string | null;
+  status?: string | null;
+  company_name?: string | null;
+  supplier_brand?: string | null;
+  contact_name?: string | null;
+  contact_number?: string | null;
+  final_selling_cost?: string | null;
+  proj_lead_time?: string | null;
+  project_lead_time?: string | null;
+  manager?: string | null;
+  item_code?: string | null;
+  referenceid?: string | null;
+  [key: string]: any;
+};
+
+type SpfOfferProduct = {
+  title: string;
+  sku: string;
+  quantity: number;
+  finalSellingPrice: number;
+  imageUrl: string;
+  technicalSpecification: string;
+  packagingDetails: string;
+  factoryDetails: string;
+  url: string;
+  leadTime: string;
+};
+
+function spfSplitByRow(value?: string | null): string[] {
+  return (value || "").split("|ROW|").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+function spfSplitComma(value?: string | null): string[] {
+  return (value || "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+function spfExplodeRowGroups(value?: string | null): string[] {
+  const groups = spfSplitByRow(value);
+  if (groups.length === 0) return spfSplitComma(value);
+  return groups.flatMap((g) => spfSplitComma(g));
+}
+function spfExplodeTechSpecs(value?: string | null): string[] {
+  const v = (value || "").trim();
+  if (!v) return [];
+  const rowGroups = spfSplitByRow(v);
+  if (rowGroups.length > 0) return rowGroups;
+  return [v];
+}
+function spfSummarizeField(value?: string | null, max = 2): string {
+  const items = spfExplodeRowGroups(value)
+    .map((v) => v.replace(/\|ROW\|/g, "").trim())
+    .filter((v) => v && v !== "-" && v !== "--");
+  const unique = Array.from(new Set(items));
+  if (unique.length === 0) return "—";
+  const head = unique.slice(0, max).join(", ");
+  return unique.length > max ? `${head}...` : head;
+}
+function parseSpfCreationProducts(row: SpfCreationRow): SpfOfferProduct[] {
+  const skus = spfExplodeRowGroups(row.item_code);
+  const qtys = spfExplodeRowGroups(row.product_offer_qty);
+  const sellingPrices = spfExplodeRowGroups(row.final_selling_cost);
+  const leadRaw = row.proj_lead_time ?? row.project_lead_time;
+  const leadTimes = spfExplodeRowGroups(leadRaw);
+  const imgs = spfExplodeRowGroups(row.product_offer_image);
+  const techSpecs = spfExplodeTechSpecs(row.product_offer_technical_specification);
+  const packaging = spfExplodeRowGroups(row.product_offer_packaging_details);
+  const factory = spfExplodeRowGroups(row.product_offer_factory_address);
+  const maxLen = skus.length || Math.max(qtys.length, sellingPrices.length, leadTimes.length, imgs.length, 1);
+  return Array.from({ length: maxLen }, (_, i) => ({
+    title: (skus[i] || `SPF ITEM ${i + 1}`).toUpperCase(),
+    sku: (skus[i] || skus[0] || "").toUpperCase(),
+    quantity: Math.max(0, parseInt(qtys[i] || "0", 10) || 0),
+    finalSellingPrice: Math.max(0, parseFloat(sellingPrices[i] || "0") || 0),
+    imageUrl: imgs[i] || "",
+    technicalSpecification: techSpecs[i] || "",
+    packagingDetails: packaging[i] || "",
+    factoryDetails: factory[i] || "",
+    url: "",
+    leadTime: leadTimes[i] || leadTimes[0] || "",
+  })).filter((p) => p.sku.trim().length > 0);
+}
+function escapeHtmlSpf(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+function formatSpfTechSpecToHtml(raw: string): string {
+  const text = (raw || "").trim();
+  if (!text) return '<span style="color:#9ca3af;font-style:italic;">No specifications provided.</span>';
+  const normalised = text.replace(/\s*\|\|\s*([^|@~]+~~)/g, "@@$1");
+  const groups = normalised.split("@@").map((g) => g.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const g of groups) {
+    const [groupTitleRaw, ...rest] = g.split("~~");
+    const groupTitle = escapeHtmlSpf((groupTitleRaw || "").trim());
+    const body = rest.join("~~").trim();
+    const lines = body.split(";;").map((l) => l.trim()).filter(Boolean);
+    out.push(`<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">${groupTitle || "SPECIFICATIONS"}</div>`);
+    if (lines.length === 0) continue;
+    out.push(`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`);
+    for (const line of lines) {
+      const idx = line.indexOf(":");
+      const name = escapeHtmlSpf((idx >= 0 ? line.slice(0, idx) : line).trim());
+      const value = escapeHtmlSpf((idx >= 0 ? line.slice(idx + 1) : "").trim());
+      out.push(`<tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><strong>${name}</strong></td><td style="border:1px solid #e5e7eb;padding:4px">${value}</td></tr>`);
+    }
+    out.push(`</table>`);
+  }
+  return out.join("\n");
+}
+function formatProcurementLeadHtml(lead: string): string {
+  const t = (lead || "").trim();
+  if (!t) return "";
+  return `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">Procurement</div><table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px"><tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><strong>Project lead time</strong></td><td style="border:1px solid #e5e7eb;padding:4px">${escapeHtmlSpf(t)}</td></tr></table>`;
 }
 
 interface Product {
@@ -280,6 +387,12 @@ export default function TaskListEditDialog({
     "shopify" | "firebase_shopify" | "firebase_taskflow"
   >("shopify");
   const [isSpfMode, setIsSpfMode] = useState(false);
+  const [isSpf1Mode, setIsSpf1Mode] = useState(false);
+  const [spf1Loading, setSpf1Loading] = useState(false);
+  const [spf1Error, setSpf1Error] = useState<string | null>(null);
+  const [spf1Records, setSpf1Records] = useState<SpfCreationRow[]>([]);
+  const [spf1Search, setSpf1Search] = useState("");
+  const [spf1Selected, setSpf1Selected] = useState<SpfCreationRow | null>(null);
   const [spfUploading, setSpfUploading] = useState(false);
   const [spfManualProduct, setSpfManualProduct] = useState({
     title: "",
@@ -368,23 +481,42 @@ export default function TaskListEditDialog({
       remarks.length,
     );
 
+    // Parse lead time out of saved description HTML
+    const parseLeadTime = (desc: string): string => {
+      const match = desc.match(/Project lead time<\/strong><\/td><td[^>]*>([^<]+)/);
+      return match?.[1]?.trim() ?? "";
+    };
+
+    // Detect SPF1 product by presence of procurement block in description
+    const isSpf1Desc = (desc: string): boolean =>
+      desc.includes("Project lead time") || desc.includes(">Procurement<");
+
     const arr: ProductItem[] = [];
     for (let i = 0; i < maxLen; i++) {
+      const desc = descriptions[i] ?? "";
+      const qty = quantities[i] ?? "";
+      const amt = amounts[i] ?? "";
+      const leadTime = parseLeadTime(desc);
+      const isSpf1 = isSpf1Desc(desc);
+
       arr.push({
-        product_quantity: quantities[i] ?? "",
-        product_amount: amounts[i] ?? "",
+        product_quantity: qty,
+        product_amount: amt,
         product_title: titles[i] ?? "",
-        product_description: descriptions[i] ?? "",
+        product_description: desc,
         product_photo: photos[i] ?? "",
         product_sku: sku[i] ?? "",
         item_remarks: remarks[i] ?? "",
-        quantity: 0,
-        description: "",
-        skus: undefined,
-        title: "",
-        images: undefined,
+        quantity: parseFloat(qty) || 0,
+        description: desc,
+        skus: sku[i] ? [sku[i]] : undefined,
+        title: titles[i] ?? "",
+        images: photos[i] ? [{ src: photos[i] }] : undefined,
         isDiscounted: false,
-        price: 0,
+        price: parseFloat(amt) || 0,
+        procurementLeadTime: leadTime || undefined,
+        procurementMinQty: isSpf1 ? (parseFloat(qty) || undefined) : undefined,
+        procurementLockedPrice: isSpf1 ? true : undefined,
       });
     }
     setProducts(arr);
@@ -441,6 +573,33 @@ export default function TaskListEditDialog({
       return newProducts;
     });
   };
+
+  // ── SPF 1: fetch approved SPF records when SPF1 panel is opened ────────────
+  useEffect(() => {
+    if (!isSpf1Mode) return;
+    let cancelled = false;
+    (async () => {
+      setSpf1Loading(true);
+      setSpf1Error(null);
+      try {
+        let q = supabase
+          .from("spf_creation")
+          .select("*")
+          .eq("status", "Approved By Procurement");
+        if (item.referenceid?.trim()) {
+          q = q.eq("referenceid", item.referenceid.trim());
+        }
+        const { data, error } = await q.order("date_created", { ascending: false });
+        if (error) throw error;
+        if (!cancelled) setSpf1Records((data || []) as unknown as SpfCreationRow[]);
+      } catch (err: any) {
+        if (!cancelled) setSpf1Error(err?.message || "Failed to load SPF 1 records.");
+      } finally {
+        if (!cancelled) setSpf1Loading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isSpf1Mode, item.referenceid]);
 
   const handleRemoveRow = (index: number) => {
     setProducts((prev) => {
@@ -551,9 +710,9 @@ export default function TaskListEditDialog({
   const onClickSave = () => setShowConfirmDialog(true);
 
   const getQuotationPayload = () => {
-    const salesRepresentativeName =
-      `${firstname ?? ""} ${lastname ?? ""}`.trim();
+    const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
     const emailUsername = email?.split("@")[0] ?? "";
+
     let emailDomain = "";
     if (quotation_type === "Disruptive Solutions Inc")
       emailDomain = "disruptivesolutionsinc.com";
@@ -567,38 +726,35 @@ export default function TaskListEditDialog({
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
       const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
       const isDiscounted = checkedRows[index] ?? false;
+      const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
       const baseAmount = qty * unitPrice;
-      const discountedAmount =
-        isDiscounted && vatType === "vat_inc"
-          ? (baseAmount * discount) / 100
-          : 0;
+      const discountedAmount = isDiscounted && rowDiscount > 0 ? (baseAmount * rowDiscount) / 100 : 0;
       const totalAmount = baseAmount - discountedAmount;
-
-      // Detect SPF 1 items: the description HTML contains the "Procurement" section
-      // header written by formatProcurementLeadHtml (saved during quotation creation).
-      const descHtml = p.description?.trim() ? p.description : (p.product_description || "");
-      const isSpf1 = p.isSpf1 ?? descHtml.includes(">Procurement<");
-
-      // Extract lead time text from the saved procurement HTML block if present.
-      // The HTML pattern is: <td ...>Project lead time</td><td ...>VALUE</td>
-      let procurementLeadTime = p.procurementLeadTime ?? "";
-      if (!procurementLeadTime && isSpf1) {
-        const leadMatch = descHtml.match(/Project lead time<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
-        if (leadMatch) procurementLeadTime = leadMatch[1].trim();
-      }
 
       return {
         itemNo: index + 1,
         qty,
-        photo: p.product_photo ?? "",
+        photo: p.product_photo ?? p.images?.[0]?.src ?? "",
         title: p.product_title ?? "",
-        sku: p.product_sku ?? "",
-        remarks: p.item_remarks ?? "",
-        product_description: descHtml,
+        sku: p.product_sku ?? p.skus?.[0] ?? "",
+        itemRemarks: p.item_remarks ?? "",
+        product_description: p.description?.trim()
+          ? p.description
+          : p.product_description || "",
         unitPrice,
+        discount: rowDiscount,
         totalAmount,
-        isSpf1,
-        procurementLeadTime,
+        isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
+          const rawD = p.product_description || p.description || "";
+          return rawD.includes("Project lead time");
+        })()),
+        procurementLeadTime: (() => {
+          if (p.procurementLeadTime) return p.procurementLeadTime;
+          const rawD = p.product_description || p.description || "";
+          const m = rawD.match(/Project lead time<\/strong><\/td><td[^>]*>([^<]+)/);
+          return m?.[1]?.trim() ?? "";
+        })(),
+        remarks: p.item_remarks ?? "",
       };
     });
 
@@ -630,13 +786,16 @@ export default function TaskListEditDialog({
       salestsmemail: tsmemail ?? "",
       salestsmcontact: tsmcontact ?? "",
       salesmanagername: managername ?? "",
-      vatType: vatType ?? null,
+      vatType: vatTypeState ?? null,
       deliveryFee: deliveryFeeState ?? "",
       restockingFee: parseFloat(restockingFeeState) || 0,
       whtType: whtTypeState ?? "none",
       whtLabel:
         whtTypeState === "wht_1" ? "EWT 1% (Goods)" :
-        whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
+          whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
+      whtBase: vatTypeState === "vat_inc"
+        ? totalPriceWithDelivery / 1.12
+        : totalPriceWithDelivery,
       whtAmount:
         whtTypeState !== "none"
           ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
@@ -777,14 +936,14 @@ export default function TaskListEditDialog({
         title: product.title || "",
         images: product.images || [],
         isDiscounted: false,
+        discount: 0,
         price: parseFloat(product.price || "0") || 0,
         quantity: 1,
       },
     ]);
     setSearchTerm("");
     setSearchResults([]);
-    setIsManualEntry(true);
-    setTimeout(() => setIsManualEntry(false), 100);
+    setMobilePanelTab("products");
   };
 
   useEffect(() => {
@@ -1075,16 +1234,8 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
-        // Build the SPF badge + lead time HTML snippet for the PDF row (SPF 1 items only)
-        const spfBadgeHtml = item.isSpf1
-          ? `<span style="display:inline-block;background:#dc2626;color:white;padding:1px 5px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;border-radius:2px;margin-left:5px;vertical-align:middle;">SPF</span>`
-          : "";
-        const leadTimeHtml = item.isSpf1 && item.procurementLeadTime
-          ? `<div style="margin:3px 0 4px;display:flex;align-items:center;gap:4px;"><span style="font-size:7px;font-weight:900;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;">Lead Time:</span><span style="font-size:7.5px;font-weight:900;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;padding:1px 5px;">${item.procurementLeadTime}</span></div>`
-          : "";
-
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><div style="display:flex;align-items:center;"><p class="product-title" style="margin:0;">${item.title}</p>${spfBadgeHtml}</div>${leadTimeHtml}${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr></table></div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           pdf.addPage([612, 936]);
@@ -1108,15 +1259,15 @@ export default function TaskListEditDialog({
       const _restockingNum = payload.restockingFee || 0;
       const _netSales = payload.totalPrice - _deliveryNum - _restockingNum;
       const _vatBreak = payload.vatTypeLabel === "VAT Inc"
-        ? `<tr><td class="sum-gray-lbl">Less: VAT (12/112)</td><td class="sum-gray-val">₱${(payload.totalPrice*(12/112)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr${payload.whtType&&payload.whtType!=="none"?"":" class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice/1.12).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>${payload.whtType&&payload.whtType!=="none"?`<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`:""}`
-        : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel==="VAT Exe"?"VAT Exempt":"Zero-Rated"}</td></tr>`;
-      const _whtBadge = payload.whtType&&payload.whtType!=="none"
+        ? `<tr><td class="sum-gray-lbl">Less: VAT (12/112)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
+        : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}</td></tr>`;
+      const _whtBadge = payload.whtType && payload.whtType !== "none"
         ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>` : "";
-      const _finalLbl = payload.whtType&&payload.whtType!=="none" ? "Net Amount to Collect" : "Total Amount Due";
-      const _finalAmt = (payload.netAmountToCollect??payload.totalPrice).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+      const _finalLbl = payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due";
+      const _finalAmt = (payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
       const footerBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container" style="border-bottom:2px solid black;"><div class="summary-wrap"><div class="summary-left"><div class="summary-tax-title">Tax Type:</div><div class="tax-options"><span class="${payload.vatTypeLabel==="VAT Inc"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="VAT Inc"?"●":"○"} VAT Inc</span><span class="${payload.vatTypeLabel==="VAT Exe"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="VAT Exe"?"●":"○"} VAT Exe</span><span class="${payload.vatTypeLabel==="Zero-Rated"?"tax-active":"tax-inactive"}">${payload.vatTypeLabel==="Zero-Rated"?"●":"○"} Zero-Rated</span></div>${_whtBadge}</div><div class="summary-right"><table class="sum-tbl"><tr><td class="sum-lbl">Net Sales ${payload.vatTypeLabel==="VAT Inc"?"(VAT Inc)":"(Non-VAT)"}</td><td class="sum-val">₱${_netSales.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr><td class="sum-lbl">Delivery Charge</td><td class="sum-val">₱${_deliveryNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr class="sum-divider"><td class="sum-lbl">Restocking Fee</td><td class="sum-val">₱${_restockingNum.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr><tr><td class="sum-total-lbl">Total Invoice Amount</td><td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>${_vatBreak}<tr class="sum-final-row"><td class="sum-final-lbl">${_finalLbl}</td><td class="sum-final-val">₱${_finalAmt}</td></tr></table></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container" style="border-bottom:2px solid black;"><div class="summary-wrap"><div class="summary-left"><div class="summary-tax-title">Tax Type:</div><div class="tax-options"><span class="${payload.vatTypeLabel === "VAT Inc" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc</span><span class="${payload.vatTypeLabel === "VAT Exe" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe</span><span class="${payload.vatTypeLabel === "Zero-Rated" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated</span></div>${_whtBadge}</div><div class="summary-right"><table class="sum-tbl"><tr><td class="sum-lbl">Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}</td><td class="sum-val">₱${_netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-lbl">Delivery Charge</td><td class="sum-val">₱${_deliveryNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr class="sum-divider"><td class="sum-lbl">Restocking Fee</td><td class="sum-val">₱${_restockingNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-total-lbl">Total Invoice Amount</td><td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${_vatBreak}<tr class="sum-final-row"><td class="sum-final-lbl">${_finalLbl}</td><td class="sum-final-val">₱${_finalAmt}</td></tr></table></div></div></div></div>`,
       );
       if (currentY + footerBlock.h > pdfHeight - BOTTOM_MARGIN) {
         pdf.addPage([612, 936]);
@@ -1176,14 +1327,14 @@ export default function TaskListEditDialog({
         <div class="terms-label">Warranty:</div>
         <div class="terms-val terms-highlight">
         <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
-        <p>The warranty will be VOID under the following circumstances:</p>
-        <p>*If the unit is being tampered with.</p>
-        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
-        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
-        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
-        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
-        <p>*Shipping costs for warranty claims are for customers' account.</p>
-        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
+                <p>The warranty will be VOID under the following circumstances:</p>
+                <p>*If the unit is being tampered with.</p>
+                <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+                <p>*Shipping costs for warranty claims are for customers' account.</p>
+                <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
         </div>
         <div class="terms-label">SO Validity:</div>
         <div class="terms-val">
@@ -1198,8 +1349,7 @@ export default function TaskListEditDialog({
         <div class="terms-label">Return:</div>
         <div class="terms-val terms-highlight">
         <p>
-        <b style="color:red;">
-        <u>7 days return policy -</u>
+        <b style="color:red;"><u>7 days return policy -</u>
         </b> if the product received is defective, damaged, or incomplete.</p>
         </div>
         </div>
@@ -1253,13 +1403,14 @@ export default function TaskListEditDialog({
       const qty = parseFloat(product.product_quantity ?? "0") || 0;
       const amt = parseFloat(product.product_amount ?? "0") || 0;
       const lineTotal = qty * amt;
-      if (vatType === "vat_exe") {
-        const disc = product.discount ?? 12;
+      const isChecked = checkedRows[index] ?? false;
+      if (isChecked) {
+        const disc = product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0);
         return acc + lineTotal * (1 - disc / 100);
       }
       return acc + lineTotal;
     }, 0);
-  }, [products, vatType]);
+  }, [products, checkedRows, vatTypeState]);
 
   useEffect(() => {
     setQuotationAmount(subtotal);
@@ -1268,12 +1419,12 @@ export default function TaskListEditDialog({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="h-[95vh] overflow-hidden p-0 w-full flex flex-col" style={{ maxWidth: "90vw", width: "98vw" }}>
+        <DialogContent className="h-[95vh] overflow-hidden p-0 w-full flex flex-col" style={{ maxWidth: "95vw", width: "100vw" }}>
           {/* HEADER */}
           <div className="flex flex-col border-b border-gray-200 shrink-0">
-            <div className="flex items-center justify-between px-5 py-3">
-              <DialogTitle className="font-black text-sm tracking-tight">
-                Edit Quotation: {item.quotation_number || item.id} — {item.quotation_type}
+            <div className="flex items-center justify-between pl-8 pr-5 py-4 sm:pl-10 sm:pr-6">
+              <DialogTitle className="font-black text-base tracking-tight">
+                Edit Quotations: {item.quotation_number || item.id} — {item.quotation_type}
               </DialogTitle>
               <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
                 Duration:{" "}
@@ -1297,7 +1448,7 @@ export default function TaskListEditDialog({
               </button>
               <button type="button" onClick={() => setMobilePanelTab("products")}
                 className={`flex-1 py-2.5 border-b-2 transition-colors ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}>
-                🛒 Products
+                🛒 Products ({products.length})
               </button>
             </div>
           </div>
@@ -1305,707 +1456,900 @@ export default function TaskListEditDialog({
 
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
-          <div className="h-full grid gap-0 lg:gap-4 lg:p-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[300px_1fr] lg:overflow-hidden">
-            {/* Left side: Search + history */}
-            <div className={`flex-col gap-3 overflow-y-auto px-3 lg:px-0 pt-3 lg:pt-0 h-full ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
-              <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
-                {/* Source Switcher with SPF */}
-                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                  {[
-                    { source: "shopify", label: "Shopify", icon: "🛍️" },
-                    { source: "firebase_shopify", label: "CMS", icon: "📦" },
-                    { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
-                  ].map(({ source: s, label, icon }) => (
-                    <button key={s} type="button"
-                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+            <div className="h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden">
+              {/* Left side: Search + history */}
+              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+                <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
+                  {/* Source Switcher with SPF + SPF 1 */}
+                  <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                    {[
+                      { source: "shopify", label: "Shopify", icon: "🛍️" },
+                      { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                      { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
+                    ].map(({ source: s, label, icon }) => (
+                      <button key={s} type="button"
+                        onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                        className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                      >
+                        <span className="text-sm mb-0.5">{icon}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                    <button type="button"
+                      onClick={() => { setIsSpfMode(true); setIsSpf1Mode(false); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
-                      <span className="text-sm mb-0.5">{icon}</span>
-                      <span>{label}</span>
+                      <span className="text-sm mb-0.5">📋</span>
+                      <span>SPF</span>
                     </button>
-                  ))}
-                  <button type="button"
-                    onClick={() => { setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
-                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
-                  >
-                    <span className="text-sm mb-0.5">📋</span>
-                    <span>SPF</span>
-                  </button>
-                </div>
+                    <button type="button"
+                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                    >
+                      <span className="text-sm mb-0.5">🧾</span>
+                      <span>SPF 1</span>
+                    </button>
+                  </div>
 
-                {/* SPF Form OR Search */}
-                {isSpfMode ? (
-                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
-                      <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
-                    </div>
-                    {/* Cloudinary Image Upload */}
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Image (optional)</label>
+                  {/* SPF Manual Form / SPF1 Panel / Normal Search */}
+                  {isSpfMode ? (
+                    <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
-                          <ImagePlus className="w-4 h-4 text-red-400" />
-                          <span className="text-[10px] font-bold uppercase text-red-500">
-                            {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change" : "Upload"}
-                          </span>
-                          <input type="file" accept="image/*" className="hidden" disabled={spfUploading}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setSpfUploading(true);
-                              try {
-                                if (spfManualProduct.cloudinaryPublicId) await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
-                                const formData = new FormData();
-                                formData.append("file", file);
-                                const res = await fetch("/api/cloudinary/upload", { method: "POST", body: formData });
-                                const data = await res.json();
-                                if (data.url) setSpfManualProduct(prev => ({ ...prev, imageUrl: data.url, cloudinaryPublicId: data.publicId || "" }));
-                              } catch (err) { console.error("Upload failed:", err); }
-                              finally { setSpfUploading(false); }
-                            }}
-                          />
-                        </label>
-                        {spfManualProduct.imageUrl && (
-                          <button type="button" onClick={async () => { await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId); setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" })); }} className="p-1 text-red-500 hover:text-red-700">
-                            <Trash className="w-4 h-4" />
-                          </button>
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
+                        <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
+                      </div>
+                      {/* Cloudinary Image Upload */}
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Image (optional)</label>
+                        <div className="flex items-center gap-2">
+                          <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                            <ImagePlus className="w-4 h-4 text-red-400" />
+                            <span className="text-[10px] font-bold uppercase text-red-500">
+                              {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change" : "Upload"}
+                            </span>
+                            <input type="file" accept="image/*" className="hidden" disabled={spfUploading}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setSpfUploading(true);
+                                try {
+                                  if (spfManualProduct.cloudinaryPublicId) await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                  const formData = new FormData();
+                                  formData.append("file", file);
+                                  const res = await fetch("/api/cloudinary/upload", { method: "POST", body: formData });
+                                  const data = await res.json();
+                                  if (data.url) setSpfManualProduct(prev => ({ ...prev, imageUrl: data.url, cloudinaryPublicId: data.publicId || "" }));
+                                } catch (err) { console.error("Upload failed:", err); }
+                                finally { setSpfUploading(false); }
+                              }}
+                            />
+                          </label>
+                          {spfManualProduct.imageUrl && (
+                            <button type="button" onClick={async () => { await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId); setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" })); }} className="p-1 text-red-500 hover:text-red-700">
+                              <Trash className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        {spfManualProduct.imageUrl && <img src={spfManualProduct.imageUrl} alt="preview" className="w-16 h-16 object-cover border border-gray-200 mt-1 rounded-sm" />}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
+                        <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
+                        <Input type="text" placeholder="Enter item code..." value={spfManualProduct.sku} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))} className="rounded-none text-xs uppercase" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="flex flex-col gap-0.5">
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
+                          <Input type="number" min={1} value={spfManualProduct.quantity} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))} className="rounded-none text-xs" />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
+                          <Input type="number" min={0} step="0.01" value={spfManualProduct.price} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))} className="rounded-none text-xs" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
+                        <Textarea placeholder="Enter description..." value={spfManualProduct.description} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))} rows={3} className="rounded text-xs" />
+                      </div>
+                      <Button type="button" disabled={!spfManualProduct.title}
+                        onClick={() => {
+                          const newProduct: any = {
+                            title: spfManualProduct.title.toUpperCase(),
+                            product_title: spfManualProduct.title.toUpperCase(),
+                            product_description: spfManualProduct.description,
+                            product_sku: spfManualProduct.sku,
+                            product_quantity: String(spfManualProduct.quantity),
+                            product_amount: String(spfManualProduct.price),
+                            product_photo: spfManualProduct.imageUrl,
+                            images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
+                            skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
+                            description: spfManualProduct.description,
+                            price: spfManualProduct.price,
+                            quantity: spfManualProduct.quantity,
+                            isDiscounted: false,
+                            discount: 0,
+                            cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
+                          };
+                          setProducts(prev => [...prev, newProduct]);
+                          setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
+                          setMobilePanelTab("products");
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" /> Add SPF Product
+                      </Button>
+                    </div>
+                  ) : isSpf1Mode ? (
+                    <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF 1</span>
+                          <span className="text-[9px] text-red-400 italic">— approved SPF list</span>
+                        </div>
+                        {spf1Loading && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Loading…</span>
                         )}
                       </div>
-                      {spfManualProduct.imageUrl && <img src={spfManualProduct.imageUrl} alt="preview" className="w-16 h-16 object-cover border border-gray-200 mt-1 rounded-sm" />}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
-                      <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
-                      <Input type="text" placeholder="Enter item code..." value={spfManualProduct.sku} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))} className="rounded-none text-xs uppercase" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
-                        <Input type="number" min={1} value={spfManualProduct.quantity} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))} className="rounded-none text-xs" />
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
-                        <Input type="number" min={0} step="0.01" value={spfManualProduct.price} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))} className="rounded-none text-xs" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
-                      <Textarea placeholder="Enter description..." value={spfManualProduct.description} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))} rows={3} className="rounded text-xs" />
-                    </div>
-                    <Button type="button" disabled={!spfManualProduct.title}
-                      onClick={() => {
-                        const newProduct: any = {
-                          title: spfManualProduct.title.toUpperCase(),
-                          product_title: spfManualProduct.title.toUpperCase(),
-                          product_description: spfManualProduct.description,
-                          product_sku: spfManualProduct.sku,
-                          product_quantity: String(spfManualProduct.quantity),
-                          product_amount: String(spfManualProduct.price),
-                          product_photo: spfManualProduct.imageUrl,
-                          images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
-                          skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
-                          description: spfManualProduct.description,
-                          price: spfManualProduct.price,
-                          quantity: spfManualProduct.quantity,
-                          isDiscounted: false,
-                          discount: 0,
-                          cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
-                        };
-                        setProducts(prev => [...prev, newProduct]);
-                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
-                        setMobilePanelTab("products");
-                      }}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" /> Add SPF Product
-                    </Button>
-                  </div>
-                ) : (
-                  !isManualEntry && (
-                  <>
-                    <FieldLabel>Product Name</FieldLabel>
-                    <Input
-                      type="text"
-                      className="uppercase"
-                      value={searchTerm}
-                      placeholder="Search product by Title or SKU..."
-                      onChange={async (e) => {
-                        if (isManualEntry) return;
-                        const rawValue = e.target.value;
-                        setSearchTerm(rawValue);
-                        if (rawValue.length < 2) {
-                          setSearchResults([]);
-                          return;
-                        }
-                        setIsSearching(true);
-                        try {
-                          if (productSource === "shopify") {
-                            const res = await fetch(
-                              `/api/shopify/products?q=${rawValue.toLowerCase()}`,
-                            );
-                            const data = await res.json();
-                            setSearchResults(data.products || []);
-                          } else {
-                            const searchUpper = rawValue.toUpperCase();
-                            const websiteFilter =
-                              productSource === "firebase_shopify"
-                                ? "Shopify"
-                                : "Taskflow";
-                            const q = query(
-                              collection(db, "products"),
-                              where(
-                                "websites",
-                                "array-contains",
-                                websiteFilter,
-                              ),
-                            );
-                            const querySnapshot = await getDocs(q);
-                            const firebaseResults = querySnapshot.docs
-                              .map((doc) => {
-                                const data = doc.data();
-                                let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                let rawSpecsText = "";
-                                if (Array.isArray(data.technicalSpecs)) {
-                                  data.technicalSpecs.forEach((group: any) => {
-                                    rawSpecsText += ` ${group.specGroup}`;
-                                    specsHtml += `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">${group.specGroup}</div>`;
-                                    specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
-                                    group.specs?.forEach((spec: any) => {
-                                      rawSpecsText += ` ${spec.name} ${spec.value}`;
-                                      specsHtml += `<tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><b>${spec.name}</b></td><td style="border:1px solid #e5e7eb;padding:4px">${spec.value}</td></tr>`;
-                                    });
-                                    specsHtml += `</table>`;
-                                  });
-                                }
-                                return {
-                                  id: doc.id,
-                                  title: data.name || "No Name",
-                                  price:
-                                    data.salePrice || data.regularPrice || 0,
-                                  description: specsHtml,
-                                  images: data.mainImage
-                                    ? [{ src: data.mainImage }]
-                                    : [],
-                                  skus: data.itemCode ? [data.itemCode] : [],
-                                  discount: 0,
-                                  tempSearchMetadata: (
-                                    data.name +
-                                    " " +
-                                    (data.itemCode || "") +
-                                    " " +
-                                    rawSpecsText
-                                  ).toUpperCase(),
-                                };
-                              })
-                              .filter((p) =>
-                                p.tempSearchMetadata.includes(searchUpper),
-                              );
-                            setSearchResults(firebaseResults);
-                          }
-                        } catch (err) {
-                          console.error("Search error:", err);
-                        } finally {
-                          setIsSearching(false);
-                        }
-                      }}
-                    />
-                    {isSearching && (
-                      <p className="text-[10px] animate-pulse">
-                        Searching Source...
-                      </p>
-                    )}
-                  </>
-                  )
-                )}
-                {/* End SPF ternary */}
-              </div>
 
-              <div className="overflow-auto border rounded p-2 bg-white grow">
-                {searchResults.length === 0 && searchTerm.length >= 2 && (
-                  <p className="text-xs text-center text-gray-500 mt-8">
-                    No products found.
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  {searchResults.map((product) => (
-                    <div
-                      key={product.id}
-                      className="cursor-pointer border rounded p-2 hover:shadow-md flex space-x-3"
-                      onClick={() => handleAddProduct(product)}
-                    >
-                      {product.images?.[0]?.src ? (
-                        <img
-                          src={product.images[0].src}
-                          alt={product.title}
-                          className="w-16 h-16 object-contain rounded border"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-400">
-                          No Image
-                        </div>
+                      <Input
+                        type="text"
+                        className="uppercase rounded-none bg-white"
+                        placeholder="Search SPF number..."
+                        value={spf1Search}
+                        onChange={(e) => setSpf1Search(e.target.value)}
+                      />
+
+                      {spf1Error && (
+                        <div className="text-[11px] text-red-600 font-medium">{spf1Error}</div>
                       )}
-                      <div className="flex flex-col justify-center">
-                        <span className="font-semibold text-xs">
-                          {product.title}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          ITEM CODE: {product.skus?.join(", ") || "None"}
-                        </span>
+
+                      <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                        {spf1Records
+                          .filter((r) => {
+                            const q = spf1Search.trim().toLowerCase();
+                            if (!q) return true;
+                            return (r.spf_number || "").toLowerCase().includes(q);
+                          })
+                          .map((r) => (
+                            <div
+                              key={r.id}
+                              className={`w-full rounded-none border transition overflow-hidden ${spf1Selected?.id === r.id
+                                ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
+                                : "border-red-200 bg-white shadow-sm"
+                                }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (spf1Selected?.id === r.id) { setSpf1Selected(null); return; }
+                                  setSpf1Selected(r);
+                                }}
+                                className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
+                              >
+                                <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
+                                  {r.spf_number || `SPF #${r.id}`}
+                                </div>
+                                <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
+                                  {spf1Selected?.id === r.id ? "▾" : "▸"}
+                                </span>
+                              </button>
+
+                              {spf1Selected?.id === r.id && (
+                                <div className="border-t border-red-100 bg-gray-50/90">
+                                  <div className="ml-2 border-l-2 border-red-400 pl-3 pr-2 py-2.5 space-y-3">
+                                    <div className="text-[10px] text-gray-700 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                      <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
+                                        Ref: {r.referenceid || "—"}
+                                      </span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {spfSummarizeField(r.company_name)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {spfSummarizeField(r.supplier_brand)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {spfSummarizeField(r.contact_name)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {spfSummarizeField(r.contact_number)}</span>
+                                      <span className="truncate col-span-2"><span className="font-bold text-gray-600">Lead time:</span> {spfSummarizeField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setMobilePanelTab("products")}
+                                      className="w-full text-left text-[10px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 py-1 border-t border-red-100/80"
+                                    >
+                                      View selected in quotation list →
+                                    </button>
+                                    <div className="space-y-2 pt-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Line items</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setSpf1Selected(null); }}
+                                          className="text-[9px] font-black uppercase tracking-wider text-red-600 hover:text-red-800"
+                                        >
+                                          Collapse
+                                        </button>
+                                      </div>
+                                      {parseSpfCreationProducts(r).map((p, idx) => (
+                                        <div key={`${r.id}-${idx}`} className="border border-gray-200 bg-white p-2 shadow-sm">
+                                          <div className="flex items-start gap-2">
+                                            {p.imageUrl ? (
+                                              <img src={p.imageUrl} alt={p.title} className="w-12 h-12 object-cover border border-gray-200 shrink-0" />
+                                            ) : (
+                                              <div className="w-12 h-12 bg-gray-50 border border-gray-200 shrink-0" />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-[10px] font-black uppercase tracking-wider text-gray-800 truncate font-mono">
+                                                {p.sku || p.title}
+                                              </div>
+                                              <div className="text-[10px] text-gray-500 mt-0.5 grid grid-cols-2 gap-x-2">
+                                                <span className="truncate"><span className="font-bold">Min qty:</span> {p.quantity}</span>
+                                                <span className="truncate"><span className="font-bold">Price:</span> ₱{p.finalSellingPrice.toFixed(2)}</span>
+                                                <span className="truncate col-span-2"><span className="font-bold">Lead:</span> {p.leadTime || "—"}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="mt-2">
+                                            <Button
+                                              type="button"
+                                              disabled={p.quantity <= 0}
+                                              className="w-full rounded-none bg-red-600 hover:bg-red-700 text-white h-8 text-[11px] font-black uppercase tracking-wider"
+                                              onClick={() => {
+                                                const specHtml = formatSpfTechSpecToHtml(p.technicalSpecification || "");
+                                                const leadHtml = formatProcurementLeadHtml(p.leadTime || "");
+                                                const newProduct: any = {
+                                                  title: p.sku ? p.sku.toUpperCase() : p.title,
+                                                  product_title: p.sku ? p.sku.toUpperCase() : p.title,
+                                                  product_description: `${specHtml}${leadHtml}`,
+                                                  description: `${specHtml}${leadHtml}`,
+                                                  product_sku: p.sku || "",
+                                                  product_quantity: String(Math.max(1, p.quantity)),
+                                                  product_amount: String(p.finalSellingPrice),
+                                                  product_photo: p.imageUrl || "",
+                                                  images: p.imageUrl ? [{ src: p.imageUrl }] : [],
+                                                  skus: p.sku ? [p.sku] : [],
+                                                  price: p.finalSellingPrice,
+                                                  quantity: Math.max(1, p.quantity),
+                                                  isDiscounted: false,
+                                                  discount: 0,
+                                                  item_remarks: "",
+                                                  procurementMinQty: p.quantity,
+                                                  procurementLeadTime: p.leadTime,
+                                                  procurementLockedPrice: true,
+                                                };
+                                                setProducts(prev => [...prev, newProduct]);
+                                                setMobilePanelTab("products");
+                                              }}
+                                            >
+                                              {p.quantity <= 0 ? "No PD qty" : "Add to quotation"}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    !isManualEntry && (
+                      <>
+                        <FieldLabel>Product Name</FieldLabel>
+                        <Input
+                          type="text"
+                          className="uppercase"
+                          value={searchTerm}
+                          placeholder="Search product by Title or SKU..."
+                          onChange={async (e) => {
+                            if (isManualEntry) return;
+                            const rawValue = e.target.value;
+                            setSearchTerm(rawValue);
+                            if (rawValue.length < 2) {
+                              setSearchResults([]);
+                              return;
+                            }
+                            setIsSearching(true);
+                            try {
+                              if (productSource === "shopify") {
+                                const res = await fetch(
+                                  `/api/shopify/products?q=${rawValue.toLowerCase()}`,
+                                );
+                                const data = await res.json();
+                                setSearchResults(data.products || []);
+                              } else {
+                                const searchUpper = rawValue.toUpperCase();
+                                const websiteFilter =
+                                  productSource === "firebase_shopify"
+                                    ? "Shopify"
+                                    : "Taskflow";
+                                const q = query(
+                                  collection(db, "products"),
+                                  where(
+                                    "websites",
+                                    "array-contains",
+                                    websiteFilter,
+                                  ),
+                                );
+                                const querySnapshot = await getDocs(q);
+                                const firebaseResults = querySnapshot.docs
+                                  .map((doc) => {
+                                    const data = doc.data();
+                                    let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                    let rawSpecsText = "";
+                                    if (Array.isArray(data.technicalSpecs)) {
+                                      data.technicalSpecs.forEach((group: any) => {
+                                        rawSpecsText += ` ${group.specGroup}`;
+                                        specsHtml += `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">${group.specGroup}</div>`;
+                                        specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+                                        group.specs?.forEach((spec: any) => {
+                                          rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                          specsHtml += `<tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><b>${spec.name}</b></td><td style="border:1px solid #e5e7eb;padding:4px">${spec.value}</td></tr>`;
+                                        });
+                                        specsHtml += `</table>`;
+                                      });
+                                    }
+                                    return {
+                                      id: doc.id,
+                                      title: data.name || "No Name",
+                                      price:
+                                        data.salePrice || data.regularPrice || 0,
+                                      description: specsHtml,
+                                      images: data.mainImage
+                                        ? [{ src: data.mainImage }]
+                                        : [],
+                                      skus: data.itemCode ? [data.itemCode] : [],
+                                      discount: 0,
+                                      tempSearchMetadata: (
+                                        data.name +
+                                        " " +
+                                        (data.itemCode || "") +
+                                        " " +
+                                        rawSpecsText
+                                      ).toUpperCase(),
+                                    };
+                                  })
+                                  .filter((p) =>
+                                    p.tempSearchMetadata.includes(searchUpper),
+                                  );
+                                setSearchResults(firebaseResults);
+                              }
+                            } catch (err) {
+                              console.error("Search error:", err);
+                            } finally {
+                              setIsSearching(false);
+                            }
+                          }}
+                        />
+                        {isSearching && (
+                          <p className="text-[10px] animate-pulse">
+                            Searching Source...
+                          </p>
+                        )}
+                      </>
+                    )
+                  )}
+                  {/* End SPF ternary */}
                 </div>
-              </div>
 
-              <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
-                <h3 className="text-sm font-semibold mb-2">
-                  Revised Quotations History
-                </h3>
-                {revisedQuotations.length === 0 ? (
-                  <p>No revised quotations found.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {revisedQuotations.map((q) => (
-                      <Item
-                        key={q.id}
-                        className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""}`}
-                        onClick={() => setSelectedRevisedQuotation(q)}
-                      >
-                        <ItemContent>
-                          <ItemTitle className="font-semibold text-sm">
-                            {q.version || "N/A"}
-                          </ItemTitle>
-                          <ItemDescription className="text-xs text-gray-600">
-                            <div>
-                              <strong>Product Title:</strong>{" "}
-                              {q.product_title || "N/A"}
+                {/* Search Results — only shown when not in SPF mode */}
+                {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
+                  <>
+                    <div className="text-xs text-green-600 mb-2">
+                      Note: you can choose the same products.
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 overflow-auto border rounded p-2 bg-white grow">
+                      {searchResults.map((product) => (
+                        <div
+                          key={product.id}
+                          className="cursor-pointer border rounded-sm p-2 hover:shadow-md flex gap-3 items-center bg-white"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleAddProduct(product)}
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-[#121212] text-white shrink-0 hover:bg-gray-800"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          {product.images?.[0]?.src ? (
+                            <img
+                              src={product.images[0].src}
+                              alt={product.title}
+                              className="w-14 h-14 object-contain rounded border shrink-0"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-400 shrink-0">
+                              No Image
                             </div>
-                            <div>
-                              <strong>Amount:</strong>{" "}
-                              {q.quotation_amount ?? "N/A"}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              <span>
-                                <strong>Start:</strong>{" "}
-                                {q.start_date
-                                  ? new Date(q.start_date).toLocaleString()
-                                  : "N/A"}
-                              </span>
-                              <br />
-                              <span>
-                                <strong>End:</strong>{" "}
-                                {q.end_date
-                                  ? new Date(q.end_date).toLocaleString()
-                                  : "N/A"}
-                              </span>
-                            </div>
-                          </ItemDescription>
-                        </ItemContent>
-                      </Item>
-                    ))}
-                  </div>
+                          )}
+                          <div className="flex flex-col justify-center min-w-0">
+                            <span className="font-semibold text-xs truncate">{product.title}</span>
+                            <span className="text-[10px] text-blue-600 font-bold">
+                              {product.skus?.length ? `ITEM CODE: ${product.skus.join(", ")}` : "No item code"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
-              </div>
-            </div>
 
-            {/* Right side: Products table */}
-            <div className={`flex-col overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 ${mobilePanelTab === "search" ? "hidden lg:flex" : "flex"}`}>
-              <div className="flex flex-col gap-2 border rounded p-3 bg-gray-50">
-                {/* Subject */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest w-14 shrink-0">Subject</span>
-                  <input
-                    type="text"
-                    value={quotationSubjectState}
-                    onChange={(e) => setQuotationSubjectState(e.target.value)}
-                    placeholder="For Quotation"
-                    className="border border-gray-200 rounded px-2 py-1 text-[10px] font-medium uppercase flex-1 focus:outline-none focus:border-gray-400 bg-white"
-                  />
+                {/* Empty state when search has no results */}
+                {!isSpfMode && !isSpf1Mode && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && (
+                  <p className="text-xs text-center text-gray-500 mt-4">No products found.</p>
+                )}
+
+                <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
+                  <h3 className="text-sm font-semibold mb-2">
+                    Revised Quotations History
+                  </h3>
+                  {revisedQuotations.length === 0 ? (
+                    <p>No revised quotations found.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {revisedQuotations.map((q) => (
+                        <Item
+                          key={q.id}
+                          className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""}`}
+                          onClick={() => setSelectedRevisedQuotation(q)}
+                        >
+                          <ItemContent>
+                            <ItemTitle className="font-semibold text-sm">
+                              {q.version || "N/A"}
+                            </ItemTitle>
+                            <ItemDescription className="text-xs text-gray-600">
+                              <div>
+                                <strong>Product Title:</strong>{" "}
+                                {q.product_title || "N/A"}
+                              </div>
+                              <div>
+                                <strong>Amount:</strong>{" "}
+                                {q.quotation_amount ?? "N/A"}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                <span>
+                                  <strong>Start:</strong>{" "}
+                                  {q.start_date
+                                    ? new Date(q.start_date).toLocaleString()
+                                    : "N/A"}
+                                </span>
+                                <br />
+                                <span>
+                                  <strong>End:</strong>{" "}
+                                  {q.end_date
+                                    ? new Date(q.end_date).toLocaleString()
+                                    : "N/A"}
+                                </span>
+                              </div>
+                            </ItemDescription>
+                          </ItemContent>
+                        </Item>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {/* VAT + EWT */}
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">VAT</span>
-                    <RadioGroup
-                      value={vatTypeState}
-                      onValueChange={(value) => {
+              </div>
+
+              {/* Right side: Products table */}
+              <div className={`flex-col overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${mobilePanelTab === "search" ? "hidden lg:flex" : "flex"}`}>
+
+                {/* Controls bar - matching quotation layout */}
+                <div className="flex flex-col gap-2 mb-3">
+                  <div className="hidden lg:flex items-center justify-between mb-1">
+                    <h4 className="font-black text-sm tracking-tight">
+                      Product List
+                      <span className="ml-2 text-xs font-normal text-gray-400">({products.length} item{products.length !== 1 ? "s" : ""})</span>
+                    </h4>
+                  </div>
+                  <h4 className="font-bold text-xs lg:hidden">Products: ({products.length})</h4>
+
+                  {/* Subject + VAT + EWT — single compact toolbar */}
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
+                    {/* Subject */}
+                    <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
+                      <input
+                        type="text"
+                        value={quotationSubjectState}
+                        onChange={(e) => setQuotationSubjectState(e.target.value)}
+                        placeholder="For Quotation"
+                        className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                      />
+                    </div>
+                    {/* VAT */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
+                      <RadioGroup value={vatTypeState} onValueChange={(value) => {
                         const v = value as "vat_inc" | "vat_exe" | "zero_rated";
                         setVatTypeState(v);
                         setDiscount(v === "vat_exe" ? 12 : 0);
-                      }}
-                      className="flex items-center gap-3"
-                    >
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="vat_inc" id="vat-inc" />
-                        <label htmlFor="vat-inc" className="text-xs cursor-pointer">VAT Inc</label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="vat_exe" id="vat-exe" />
-                        <label htmlFor="vat-exe" className="text-xs cursor-pointer">
-                          VAT Exe <span className="text-red-600 text-[10px]">(12%)</span>
-                        </label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="zero_rated" id="zero-rated" />
-                        <label htmlFor="zero-rated" className="text-xs cursor-pointer">Zero Rated</label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                  <div className="w-px h-4 bg-gray-300 hidden sm:block" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">EWT</span>
-                    <RadioGroup
-                      value={whtTypeState}
-                      onValueChange={setWhtTypeState}
-                      className="flex items-center gap-3"
-                    >
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="none" id="ewt-none" />
-                        <label htmlFor="ewt-none" className="text-xs cursor-pointer">None</label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="wht_1" id="ewt-1" />
-                        <label htmlFor="ewt-1" className="text-xs cursor-pointer">1% (Goods)</label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <RadioGroupItem value="wht_2" id="ewt-2" />
-                        <label htmlFor="ewt-2" className="text-xs cursor-pointer">2% (Services)</label>
-                      </div>
-                    </RadioGroup>
+                      }} className="flex gap-2">
+                        {[{ v: "vat_inc", l: "Inc" }, { v: "vat_exe", l: "Exe" }, { v: "zero_rated", l: "0%" }].map(({ v, l }) => (
+                          <div key={v} className="flex items-center gap-0.5">
+                            <RadioGroupItem value={v} id={`edit-vat-${v}`} />
+                            <label htmlFor={`edit-vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatTypeState === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    {/* EWT */}
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
+                      <RadioGroup value={whtTypeState} onValueChange={setWhtTypeState} className="flex gap-2">
+                        {[{ v: "none", l: "None" }, { v: "wht_1", l: "1%" }, { v: "wht_2", l: "2%" }].map(({ v, l }) => (
+                          <div key={v} className="flex items-center gap-0.5">
+                            <RadioGroupItem value={v} id={`edit-ewt-${v}`} />
+                            <label htmlFor={`edit-ewt-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtTypeState === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="overflow-x-auto">
-              <table className="w-full text-xs table-auto border-collapse border border-gray-300">
-                <thead>
-                  <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
-                    <th className="border border-gray-700 p-2 text-center w-10">
-                      <Input
-                        type="checkbox"
-                        className="w-4 h-4"
-                        checked={
-                          Object.keys(checkedRows).length === products.length &&
-                          products.length > 0
-                        }
-                        onChange={(e) => {
-                          setCheckedRows(
-                            e.target.checked
-                              ? products.reduce(
-                                  (acc, _, idx) => ({ ...acc, [idx]: true }),
-                                  {},
-                                )
-                              : {},
-                          );
-                        }}
-                      />
-                    </th>
-                    <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
-                    <th className="border border-gray-700 p-2 text-center font-bold w-16">Qty</th>
-                    <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
-                    <th className="border border-gray-700 p-2 text-center font-bold hidden sm:table-cell">Discount</th>
-                    <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
-                    <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="text-center p-4 text-xs">
-                        No products found.
-                      </td>
-                    </tr>
-                  )}
-                  {products.map((product, index) => {
-                    const qty =
-                      parseFloat(product.product_quantity ?? "0") || 0;
-                    const amt = parseFloat(product.product_amount ?? "0") || 0;
-                    const lineTotal = qty * amt;
-                    const isChecked = checkedRows[index] || false;
-                    return (
-                      <React.Fragment key={index}>
-                        <tr className="align-middle">
-                          <td className="border border-gray-300 p-2 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <Input
-                                type="checkbox"
-                                className="w-4 h-4"
-                                checked={isChecked}
-                                onChange={(e) =>
-                                  setCheckedRows((prev) => ({
-                                    ...prev,
-                                    [index]: e.target.checked,
-                                  }))
-                                }
-                              />
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                step={0.01}
-                                value={
-                                  product.discount ??
-                                  (vatTypeState === "vat_exe" ? 12 : 0)
-                                }
-                                onChange={(e) => {
-                                  const val = Math.max(
-                                    0,
-                                    Math.min(
-                                      100,
-                                      parseFloat(e.target.value) || 0,
-                                    ),
-                                  );
-                                  setProducts((prev) => {
-                                    const copy = [...prev];
-                                    copy[index] = {
-                                      ...copy[index],
-                                      discount: val,
-                                    };
-                                    return copy;
-                                  });
-                                }}
-                                className="w-16 border-none p-0 text-xs text-center"
-                              />
-                            </div>
-                          </td>
-                          <td className="p-2 align-top">
-                            <div className="flex gap-3">
-                              {product.product_photo && (
-                                <img
-                                  src={product.product_photo}
-                                  alt={`Product ${index + 1}`}
-                                  className="max-h-20 w-auto object-contain rounded-sm border"
-                                />
-                              )}
-                              <div className="flex-1">
-                                <Textarea
-                                  value={product.product_title ?? ""}
-                                  onChange={(e) =>
-                                    handleProductChange(
-                                      index,
-                                      "product_title",
-                                      e.target.value,
-                                    )
-                                  }
-                                  className="border-none p-1 shadow-none text-xs resize-none w-full"
-                                />
-                                <div className="text-xs text-gray-500">
-                                  ITEM CODE:{" "}
-                                  {product.product_sku ? (
-                                    product.product_sku
-                                  ) : (
-                                    <i>None</i>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={product.product_quantity ?? ""}
-                              onChange={(e) =>
-                                handleProductChange(
-                                  index,
-                                  "product_quantity",
-                                  e.target.value,
-                                )
-                              }
-                              className="border-none shadow-none text-xs text-center"
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                    <thead>
+                      <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                        <th className="border border-gray-700 p-2 text-center w-10">
+                          <label className="flex items-center justify-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Object.keys(checkedRows).length === products.length && products.length > 0}
+                              onChange={(e) => {
+                                setCheckedRows(
+                                  e.target.checked
+                                    ? products.reduce((acc, _, idx) => ({ ...acc, [idx]: true }), {})
+                                    : {},
+                                );
+                              }}
                             />
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={product.product_amount ?? ""}
-                              onChange={(e) =>
-                                handleProductChange(
-                                  index,
-                                  "product_amount",
-                                  e.target.value,
-                                )
-                              }
-                              className="border-none shadow-none text-xs text-center"
-                            />
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center">
-                            {vatType === "vat_exe"
-                              ? `₱${(lineTotal * ((product.discount ?? 12) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                              : "₱0.00"}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center">
-                            ₱
-                            {(isChecked && vatType === "vat_exe"
-                              ? lineTotal * (1 - (product.discount ?? 12) / 100)
-                              : lineTotal
-                            ).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center">
-                            <div className="flex justify-center gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => toggleDescription(index)}
-                                className="flex items-center gap-1 text-xs rounded-none"
-                              >
-                                {openDescription[index] ? (
-                                  <>
-                                    <EyeOff size={16} /> Hide
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye size={16} /> View
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                className="text-xs rounded-none"
-                                onClick={() => handleRemoveRow(index)}
-                              >
-                                <Trash className="text-red-600" />
-                              </Button>
-                            </div>
+                            <span className="font-bold">Disc%</span>
+                          </label>
+                        </th>
+                        <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
+                        <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
+                        <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
+                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="text-center p-4 text-xs text-gray-400 italic">
+                            No products found.
                           </td>
                         </tr>
-                        {openDescription[index] && (
-                          <tr className="border-b bg-gray-50">
-                            <td colSpan={8} className="p-3">
-                              <div className="font-semibold mb-1">
-                                Description
-                              </div>
-                              <div
-                                className="max-h-[250px] overflow-auto border rounded bg-white p-2"
-                                style={{ fontSize: "11px", lineHeight: "1.4" }}
-                                dangerouslySetInnerHTML={{
-                                  __html:
-                                    product.description ||
-                                    product.product_description ||
-                                    '<span class="italic text-gray-400">No specifications provided.</span>',
-                                }}
+                      )}
+                      {products.map((product, index) => {
+                        const qty = parseFloat(product.product_quantity ?? "0") || 0;
+                        const amt = parseFloat(product.product_amount ?? "0") || 0;
+                        const baseAmount = qty * amt;
+                        const isChecked = checkedRows[index] || false;
+                        const rowDiscount = isChecked
+                          ? (product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+                          : 0;
+                        const discountedAmount = isChecked ? (baseAmount * rowDiscount) / 100 : 0;
+                        const totalAfterDiscount = baseAmount - discountedAmount;
+                        return (
+                          <React.Fragment key={index}>
+                            <tr className="even:bg-gray-50 align-middle">
+                              {/* Disc% */}
+                              <td className="border border-gray-300 p-2">
+                                <div className="flex items-center justify-start gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => setCheckedRows((prev) => ({ ...prev, [index]: e.target.checked }))}
+                                  />
+                                  {isChecked && (
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      value={product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                                        setProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[index] = { ...copy[index], discount: val };
+                                          return copy;
+                                        });
+                                      }}
+                                      className="w-14 p-0 border-none rounded-none text-xs text-center"
+                                    />
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Remarks */}
+                              <td className="hidden sm:table-cell border border-gray-300 p-1">
+                                <Textarea
+                                  value={product.item_remarks ?? ""}
+                                  onChange={(e) => handleProductChange(index, "item_remarks", e.target.value)}
+                                  placeholder="Enter any remarks here..."
+                                  rows={3}
+                                  className="capitalize rounded-none text-[10px] w-full p-1 border-none shadow-none resize-none"
+                                />
+                              </td>
+
+                              {/* Product */}
+                              <td className="p-1 sm:p-2">
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  {/* Photo — check both sources */}
+                                  {(product.product_photo || product.images?.[0]?.src) ? (
+                                    <img
+                                      src={product.product_photo || product.images?.[0]?.src}
+                                      alt={`Product ${index + 1}`}
+                                      className="w-8 h-8 sm:w-12 sm:h-12 object-contain rounded shrink-0 border border-gray-100"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-50 border border-gray-200 rounded shrink-0 flex items-center justify-center">
+                                      <span className="text-[8px] text-gray-300">IMG</span>
+                                    </div>
+                                  )}
+                                  {(() => {
+                                    // Resolve lead time: prefer stored field, fallback parse from description HTML
+                                    const rawDesc = product.product_description || product.description || "";
+                                    const parsedLead = (() => {
+                                      const m = rawDesc.match(/Project lead time<\/strong><\/td><td[^>]*>([^<]+)/);
+                                      return m?.[1]?.trim() ?? "";
+                                    })();
+                                    const displayLead = product.procurementLeadTime || parsedLead;
+                                    return (
+                                      <div className="flex-1 min-w-0">
+                                        {/* Title + Lead Time badge inline */}
+                                        <div className="flex items-start gap-2 flex-wrap">
+                                          <div
+                                            contentEditable
+                                            suppressContentEditableWarning
+                                            className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words font-semibold"
+                                            onBlur={(e) => {
+                                              handleProductChange(index, "product_title", e.currentTarget.innerText);
+                                            }}
+                                            dangerouslySetInnerHTML={{ __html: product.product_title ?? "" }}
+                                          />
+                                          {displayLead && (
+                                            <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide whitespace-nowrap">
+                                              LEAD TIME: {displayLead}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {/* Item code */}
+                                        {(product.product_sku || product.skus?.[0]) && (
+                                          <div className="text-[10px] text-blue-600 font-bold mt-0.5">
+                                            ITEM CODE: {product.product_sku || product.skus?.[0]}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </td>
+
+                              {/* Qty */}
+                              <td className="border border-gray-300 p-1 sm:p-2">
+                                <Input
+                                  type="number"
+                                  min={product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1}
+                                  step="any"
+                                  value={product.product_quantity ?? ""}
+                                  onChange={(e) => {
+                                    const raw = parseFloat(e.target.value) || 1;
+                                    const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
+                                    handleProductChange(index, "product_quantity", String(Math.max(floor, raw)));
+                                  }}
+                                  className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs text-center border-none shadow-none"
+                                />
+                                {product.procurementMinQty != null && product.procurementMinQty > 0 && (
+                                  <div className="text-[9px] text-gray-500 mt-1 text-center">
+                                    Min (PD): <span className="font-bold">{product.procurementMinQty}</span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Unit Price */}
+                              <td className="border border-gray-300 p-1 sm:p-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  value={product.product_amount ?? ""}
+                                  readOnly={product.procurementLockedPrice}
+                                  onChange={(e) => {
+                                    if (product.procurementLockedPrice) return;
+                                    handleProductChange(index, "product_amount", e.target.value);
+                                  }}
+                                  className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs text-center border-none shadow-none ${product.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
+                                />
+                                {product.procurementLockedPrice && (
+                                  <div className="text-[9px] text-gray-500 mt-1 text-center">
+                                    Final selling price (locked)
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Discount amount */}
+                              <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
+                                {isChecked && discountedAmount > 0 ? `₱${discountedAmount.toFixed(2)}` : "₱0.00"}
+                              </td>
+
+                              {/* Subtotal */}
+                              <td className="border border-gray-300 p-2 font-semibold text-center">
+                                ₱{totalAfterDiscount.toFixed(2)}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="border border-gray-300 text-center p-2">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => toggleDescription(index)}
+                                    className="flex items-center rounded-none gap-1 px-2"
+                                  >
+                                    {openDescription[index] ? (
+                                      <><EyeOff className="w-4 h-4" /><span className="hidden sm:inline">Hide</span></>
+                                    ) : (
+                                      <><Eye className="w-4 h-4" /><span className="hidden sm:inline">View</span></>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    className="flex items-center rounded-none gap-1"
+                                    onClick={() => handleRemoveRow(index)}
+                                  >
+                                    <Trash className="text-red-600" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {openDescription[index] && (
+                              <tr className="even:bg-[#F9FAFA]">
+                                <td colSpan={8} className="border border-gray-300 p-4 align-top">
+                                  <label className="block text-xs font-medium mb-1">Description:</label>
+                                  <div
+                                    className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        product.description ||
+                                        product.product_description ||
+                                        '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                    }}
+                                  />
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold text-xs">
+                      <tr>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
+                        <td className="border border-gray-300 p-2"></td>
+                        <td className="border border-gray-300 p-2 text-center font-black">
+                          {products.reduce((acc, p) => acc + (parseFloat(p.product_quantity ?? "0") || 0), 0)}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-black">
+                          {products.reduce((acc, p) => acc + (parseFloat(p.product_amount ?? "0") || 0), 0).toFixed(2)}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
+                          ₱{products.reduce((acc, p, idx) => {
+                            const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
+                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
+                            return acc + (base * disc) / 100;
+                          }, 0).toFixed(2)}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-black">
+                          ₱{products.reduce((acc, p, idx) => {
+                            const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
+                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
+                            return acc + base - (base * disc) / 100;
+                          }, 0).toFixed(2)}
+                        </td>
+                        <td className="border border-gray-300 p-2"></td>
+                      </tr>
+
+                      {/* Delivery & Restocking Fee — desktop inside table */}
+                      <tr className="hidden sm:table-row">
+                        <td colSpan={4} className="border border-gray-300 p-2"></td>
+                        <td colSpan={4} className="border border-gray-300 p-2">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                placeholder="0.00"
+                                value={deliveryFeeState}
+                                onChange={(e) => setDeliveryFeeState(e.target.value)}
                               />
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
-              <div className="border border-gray-300 p-2">
-                <div className="flex flex-wrap items-center justify-end gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Delivery Fee:</span>
-                    <div className="flex items-center border border-gray-300 px-2 py-1">
-                      <span className="text-xs mr-1">₱</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        className="w-20 text-right outline-none bg-transparent text-xs"
-                        placeholder="0.00"
-                        value={deliveryFeeState}
-                        onChange={(e) => setDeliveryFeeState(e.target.value)}
-                      />
-                    </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                placeholder="0.00"
+                                value={restockingFeeState}
+                                onChange={(e) => setRestockingFeeState(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Delivery & Restocking Fee — mobile only */}
+                <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
+                  <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
+                    <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                      placeholder="0.00"
+                      value={deliveryFeeState}
+                      onChange={(e) => setDeliveryFeeState(e.target.value)}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Restocking Fee:</span>
-                    <div className="flex items-center border border-gray-300 px-2 py-1">
-                      <span className="text-xs mr-1">₱</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        className="w-20 text-right outline-none bg-transparent text-xs"
-                        placeholder="0.00"
-                        value={restockingFeeState}
-                        onChange={(e) => setRestockingFeeState(e.target.value)}
-                      />
-                    </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                      placeholder="0.00"
+                      value={restockingFeeState}
+                      onChange={(e) => setRestockingFeeState(e.target.value)}
+                    />
                   </div>
                 </div>
+
               </div>
             </div>
+
+          </div>{/* end BODY */}
+
+          {/* Note bar */}
+          <div className="text-[10px] text-red-500 text-center italic px-3 py-1.5 bg-red-50 border-t border-red-200 shrink-0">
+            ⚠️ Quotation Number only appears on the final downloaded quotation.
           </div>
 
-          <div className="flex justify-end">
-            <div className="inline-block text-right font-semibold text-sm border border-yellow-500 p-4 bg-yellow-50 space-y-1 min-w-[220px]">
-              <div className="text-gray-500 text-xs">
-                Subtotal: ₱{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              {parseFloat(deliveryFeeState) > 0 && (
-                <div className="text-gray-500 text-xs">
-                  Delivery Fee: ₱{parseFloat(deliveryFeeState).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
-              {parseFloat(restockingFeeState) > 0 && (
-                <div className="text-gray-500 text-xs">
-                  Restocking Fee: ₱{parseFloat(restockingFeeState).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
-              {whtTypeState !== "none" && (
-                <div className="text-blue-600 text-xs">
-                  EWT ({whtTypeState === "wht_1" ? "1%" : "2%"}): −₱{(
-                    (quotationAmount / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
-                  ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
-              <div className="border-t border-yellow-400 pt-1 text-sm font-black">
-                Total: ₱{quotationAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-          </div></div>{/* end BODY */}
-
-          <DialogFooter className="mt-4 flex justify-between items-center">
-            <div className="flex space-x-2 p-2">
+          <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2">
               <Button
-                className="bg-[#121212] rounded-none hover:bg-black text-white px-8 p-6 flex gap-2 items-center"
+                className="flex-1 lg:flex-none bg-[#121212] rounded-none hover:bg-black text-white flex gap-2 items-center h-12 px-6"
                 onClick={() => setIsPreviewOpen(true)}
               >
                 <Eye className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-wider">
-                  Review Quotation
-                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" ||
-                ApprovedStatus === "Approved By Sales Head") && (
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    onClick={DownloadPDF}
-                    className="rounded-xs p-6 bg-yellow-600 flex items-center gap-2"
-                  >
+              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
+                <>
+                  <Button type="button" onClick={DownloadPDF} className="rounded-none h-12 px-6 bg-yellow-600 flex items-center gap-2">
                     <FileText /> PDF
                   </Button>
-                  
-                  <Button
-                    type="button"
-                    onClick={DownloadExcel}
-                    className="rounded-xs p-6 bg-green-600 flex items-center gap-2"
-                  >
+                  <Button type="button" onClick={DownloadExcel} className="rounded-none h-12 px-6 bg-green-600 flex items-center gap-2">
                     <FileSpreadsheet /> Excel
                   </Button>
-                </div>
+                </>
               )}
-              <Button
-                variant="outline"
-                className="rounded-none p-6"
-                onClick={onClose}
-              >
+
+              <Button variant="outline" className="rounded-none h-12 px-6 border-2" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={onClickSave} className="rounded-none p-6">
+              <Button onClick={onClickSave} className="rounded-none h-12 px-6">
                 Save
               </Button>
             </div>

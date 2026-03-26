@@ -39,7 +39,14 @@ interface Completed {
     address: string;
     contact_person: string;
     tsm_approved_status: string;
+    quotation_status: string;
     delivery_fee: string;
+
+    quotation_subject: string;
+    quotation_vatable: string;
+    restocking_fee: string;
+    item_remarks?: string;
+    vat_type: string;
 
     // Signatories — Agent
     agent_name: string;
@@ -502,6 +509,10 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                         address: editItem.address,
                         contact_person: editItem.contact_person,
                     }}
+                    vatType={editItem.vat_type}
+                    restockingFee={editItem.restocking_fee ?? ""}
+                    whtType={editItem.quotation_vatable ?? "none"}
+                    quotationSubject={editItem.quotation_subject ?? "For Quotation"}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
