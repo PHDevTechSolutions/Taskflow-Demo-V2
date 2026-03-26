@@ -170,6 +170,13 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [editStatusMode, setEditStatusMode] = useState(false);
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
 
+  // ── Master password dialog ───────────────────────────────────────────────
+  const [pwDialogOpen, setPwDialogOpen] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
+
+  const MASTER_PASSWORD = "PHDEVTECH";
+
   useEffect(() => {
     if (tsmDetailsProp !== undefined) setTsmDetails(tsmDetailsProp);
   }, [tsmDetailsProp]);
@@ -291,15 +298,21 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const handler = (e: KeyboardEvent) => {
       if (e.altKey && e.ctrlKey && e.key.toLowerCase() === "e") {
         e.preventDefault();
-        setEditStatusMode((prev) => {
-          if (prev) setPendingStatuses({}); // discard on toggle-off
-          return !prev;
-        });
+        if (editStatusMode) {
+          // Already on — toggle off directly, no password needed
+          setEditStatusMode(false);
+          setPendingStatuses({});
+        } else {
+          // Toggle on — require password first
+          setPwInput("");
+          setPwError(false);
+          setPwDialogOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [editStatusMode]);
 
   // ── Save a single row's inline status ───────────────────────────────────
   const saveStatus = async (item: Completed) => {
@@ -498,7 +511,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           {editStatusMode && (
             <span className="status-edit-mode-badge">
               <PenIcon className="w-3 h-3" />
-              Status Edit ON &nbsp;·&nbsp; Alt+Ctrl+E to exit
+              Status Edit ON
             </span>
           )}
 
@@ -641,7 +654,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             const value = e.target.value
                               .toLowerCase()
                               .replace(/\b\w/g, (c) => c.toUpperCase()); // capitalize each word
-                      
+
                             setPendingStatuses((prev) => ({
                               ...prev,
                               [item.id]: value,
@@ -663,15 +676,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         />
                       ) : (
                         <span
-                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${
-                            item.tsm_approved_status === "Approved"
-                              ? "bg-green-100 text-green-700"
-                              : item.tsm_approved_status === "Pending"
+                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold ${item.tsm_approved_status === "Approved"
+                            ? "bg-green-100 text-green-700"
+                            : item.tsm_approved_status === "Pending"
                               ? "bg-orange-100 text-orange-700"
                               : item.tsm_approved_status === "Decline"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
                         >
                           {item.tsm_approved_status}
                         </span>
@@ -739,11 +751,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       ₱
                       {displayValue(item.quotation_amount) !== ""
                         ? parseFloat(
-                            displayValue(item.quotation_amount),
-                          ).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
+                          displayValue(item.quotation_amount),
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
                         : "-"}
                     </TableCell>
                     <TableCell>
@@ -796,6 +808,75 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           ApprovedStatus={editItem.tsm_approved_status}
           autoAction={editAutoAction}
         />
+      )}
+
+      {/* ── Master Password Dialog ── */}
+      {pwDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setPwDialogOpen(false); }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-80 p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <PenIcon className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-800">Status Edit — Authorization</h2>
+            </div>
+            <p className="text-xs text-gray-500">
+              Enter the master password to enable inline status editing.
+            </p>
+            <input
+              autoFocus
+              type="password"
+              placeholder="Master password"
+              value={pwInput}
+              onChange={(e) => { setPwInput(e.target.value); setPwError(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (pwInput === MASTER_PASSWORD) {
+                    setEditStatusMode(true);
+                    setPwDialogOpen(false);
+                  } else {
+                    setPwError(true);
+                    setPwInput("");
+                  }
+                }
+                if (e.key === "Escape") setPwDialogOpen(false);
+              }}
+              className={`border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 transition-all ${pwError
+                ? "border-red-400 focus:ring-red-200 bg-red-50"
+                : "border-gray-300 focus:ring-blue-200"
+                }`}
+            />
+            {pwError && (
+              <p className="text-xs text-red-500 -mt-2 flex items-center gap-1">
+                <AlertCircleIcon className="w-3 h-3" /> Incorrect password. Try again.
+              </p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="ghost"
+                className="text-xs rounded-lg"
+                onClick={() => setPwDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="text-xs rounded-lg"
+                onClick={() => {
+                  if (pwInput === MASTER_PASSWORD) {
+                    setEditStatusMode(true);
+                    setPwDialogOpen(false);
+                  } else {
+                    setPwError(true);
+                    setPwInput("");
+                  }
+                }}
+              >
+                Unlock
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <AccountsActiveDeleteDialog
