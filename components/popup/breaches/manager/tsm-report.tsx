@@ -169,7 +169,28 @@ export default function TSMReports() {
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
+  const [workingDays, setWorkingDays] = useState<number>(() => {
+    if (typeof window === "undefined") return 26;
+    return Number(localStorage.getItem("tsm_report_workingDays")) || 26;
+  });
+
+  // Per-TSM agent count stored as a JSON map: { [refId]: count }
+  const [agentsByTsm, setAgentsByTsm] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      return JSON.parse(localStorage.getItem("tsm_report_agentsByTsm") || "{}");
+    } catch { return {}; }
+  });
+
   // ── Sync userId ───────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    localStorage.setItem("tsm_report_workingDays", String(workingDays));
+  }, [workingDays]);
+
+  useEffect(() => {
+    localStorage.setItem("tsm_report_agentsByTsm", JSON.stringify(agentsByTsm));
+  }, [agentsByTsm]);
 
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
@@ -426,6 +447,15 @@ export default function TSMReports() {
       setOutboundWeekly(weeklyCount);
       setOutboundMonthly(monthlyCount);
 
+      // ← add this block
+      const agentCount = agentsByTsm[selectedRefId] || 1;
+      setDenominators((prev) => ({
+        ...prev,
+        daily: agentCount * 20,
+        weekly: agentCount * 20 * 6,
+        monthly: agentCount * 20 * workingDays,
+      }));
+
       setPendingClientApprovalCount(
         activities.filter((a) => a.status === "Quote-Done" && a.quotation_status === "Pending Client Approval").length
       );
@@ -441,7 +471,7 @@ export default function TSMReports() {
     } finally {
       setLoadingTime(false);
     }
-  }, [activities, fromDate]);
+  }, [activities, fromDate, workingDays, agentsByTsm, selectedRefId]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
   //
@@ -490,7 +520,7 @@ export default function TSMReports() {
 
     // Step 4 — Covered vs Uncovered (based on active cluster only)
     const touchedCompanies = new Set(clusterActivities.map((a) => a.company_name!.toLowerCase()));
-    const covered   = clusterAccounts.filter((acc) => acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase()));
+    const covered = clusterAccounts.filter((acc) => acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase()));
     const uncovered = clusterAccounts.filter((acc) => acc.company_name && !touchedCompanies.has(acc.company_name.toLowerCase()));
 
     setCoveredAccounts(covered);
@@ -500,8 +530,8 @@ export default function TSMReports() {
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach((acc) => {
       const type = acc.type_client ?? "";
-      if (type === "top50")     seg.top50++;
-      else if (type === "next30")    seg.next30++;
+      if (type === "top50") seg.top50++;
+      else if (type === "next30") seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
       else if (type === "newclient") seg.newClient++;
@@ -555,13 +585,13 @@ export default function TSMReports() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const overdueEntries    = Object.entries(overdueByCompany);
-  const visibleOverdue    = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
-  const newClientEntries  = Object.entries(newClientByCompany);
+  const overdueEntries = Object.entries(overdueByCompany);
+  const visibleOverdue = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
+  const newClientEntries = Object.entries(newClientByCompany);
   const visibleNewClients = showAllNewClients ? newClientEntries : newClientEntries.slice(0, 5);
 
-  const isAnySyncing  = loadingActivities || loadingOverdue;
-  const dailyPct      = denominators.daily > 0
+  const isAnySyncing = loadingActivities || loadingOverdue;
+  const dailyPct = denominators.daily > 0
     ? Math.min(100, Math.round((outboundDaily / denominators.daily) * 100))
     : 0;
   const selectedAgent = agents.find((a) => a.ReferenceID === selectedRefId);
@@ -611,11 +641,10 @@ export default function TSMReports() {
                     <button
                       key={agent.ReferenceID}
                       onClick={() => setSelectedRefId(agent.ReferenceID)}
-                      className={`text-[9px] font-bold uppercase px-2 py-1 border transition-colors ${
-                        isActive
+                      className={`text-[9px] font-bold uppercase px-2 py-1 border transition-colors ${isActive
                           ? "bg-gray-900 text-white border-gray-900"
                           : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
-                      }`}
+                        }`}
                     >
                       {agent.Lastname}, {agent.Firstname}
                     </button>
@@ -625,16 +654,51 @@ export default function TSMReports() {
             )}
           </div>
 
-          <div>
-            <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-              Target Date
-            </label>
-            <Input
-              type="date"
-              className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-              value={fromDate}
-              onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
-            />
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Target Date
+              </label>
+              <Input
+                type="date"
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={fromDate}
+                onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Agents ({selectedRefId ? (agentsByTsm[selectedRefId] || 0) : "—"})
+              </label>
+              <Input
+                type="number"
+                min={0}
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={selectedRefId ? (agentsByTsm[selectedRefId] || "") : ""}
+                placeholder="e.g. 5"
+                disabled={!selectedRefId}
+                onChange={(e) => {
+                  if (!selectedRefId) return;
+                  const val = Number(e.target.value) || 0;
+                  setAgentsByTsm((prev) => ({ ...prev, [selectedRefId]: val }));
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Working Days
+              </label>
+              <select
+                className="h-7 w-full text-[11px] rounded-none bg-white border border-gray-200 px-2 text-gray-700 font-mono cursor-pointer"
+                value={workingDays}
+                onChange={(e) => setWorkingDays(Number(e.target.value))}
+              >
+                <option value={26}>26 days</option>
+                <option value={22}>22 days</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -666,10 +730,9 @@ export default function TSMReports() {
           <SectionCard
             title="Outbound Performance"
             badge={
-              <span className={`text-[9px] font-black px-2 py-0.5 ${
-                dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
-                dailyPct >= 50  ? "bg-amber-100 text-amber-700" :
-                "bg-red-100 text-red-600"}`}>
+              <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
+                  dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
+                    "bg-red-100 text-red-600"}`}>
                 {dailyPct}% Today
               </span>
             }
@@ -677,9 +740,8 @@ export default function TSMReports() {
             <div className="mb-3">
               <div className="h-1 bg-gray-100 w-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-500 ${
-                    dailyPct >= 100 ? "bg-emerald-500" :
-                    dailyPct >= 50  ? "bg-amber-500" : "bg-red-500"}`}
+                  className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500" :
+                      dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
                   style={{ width: `${dailyPct}%` }}
                 />
               </div>
@@ -689,8 +751,8 @@ export default function TSMReports() {
             </p>
             <div className="grid grid-cols-3 gap-1 text-center">
               {[
-                { label: "Daily",   value: outboundDaily,   denom: denominators.daily },
-                { label: "Weekly",  value: outboundWeekly,  denom: denominators.weekly },
+                { label: "Daily", value: outboundDaily, denom: denominators.daily },
+                { label: "Weekly", value: outboundWeekly, denom: denominators.weekly },
                 { label: "Monthly", value: outboundMonthly, denom: denominators.monthly },
               ].map(({ label, value, denom }, i) => (
                 <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
@@ -718,12 +780,12 @@ export default function TSMReports() {
               </div>
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[
-                  { label: "Top 50",  val: clientSegments.top50,    denom: denominators.top50 },
-                  { label: "Next 30", val: clientSegments.next30,   denom: denominators.next30 },
-                  { label: "Bal 20",  val: clientSegments.balance20, denom: denominators.bal20 },
-                  { label: "CSR",     val: clientSegments.csrClient, denom: denominators.csrClient },
-                  { label: "New",     val: clientSegments.newClient, denom: denominators.newClient },
-                  { label: "TSA",     val: clientSegments.tsaClient, denom: denominators.tsaClient },
+                  { label: "Top 50", val: clientSegments.top50, denom: denominators.top50 },
+                  { label: "Next 30", val: clientSegments.next30, denom: denominators.next30 },
+                  { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
+                  { label: "CSR", val: clientSegments.csrClient, denom: denominators.csrClient },
+                  { label: "New", val: clientSegments.newClient, denom: denominators.newClient },
+                  { label: "TSA", val: clientSegments.tsaClient, denom: denominators.tsaClient },
                 ].map(({ label, val, denom }) => (
                   <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                     <p className="text-[8px] text-gray-400 uppercase">{label}</p>
@@ -842,9 +904,9 @@ export default function TSMReports() {
               </div>
             ) : (
               <div className="space-y-1">
-                <StatRow label="TSA Response Time"     value={formatHoursToHMS(avgResponseTime)} />
-                <StatRow label="Non-Quotation HT"      value={formatHoursToHMS(avgNonQuotationHT)} />
-                <StatRow label="Quotation HT"          value={formatHoursToHMS(avgQuotationHT)} />
+                <StatRow label="TSA Response Time" value={formatHoursToHMS(avgResponseTime)} />
+                <StatRow label="Non-Quotation HT" value={formatHoursToHMS(avgNonQuotationHT)} />
+                <StatRow label="Quotation HT" value={formatHoursToHMS(avgQuotationHT)} />
                 <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)} />
               </div>
             )}
@@ -854,10 +916,10 @@ export default function TSMReports() {
           <SectionCard title="Closing of Quotation" accent="border-l-red-500">
             <div className="space-y-1">
               {[
-                { label: "Pending Client Approval",   value: pendingClientApprovalCount },
-                { label: "SPF — Pending Client",      value: spfPendingClientApproval },
+                { label: "Pending Client Approval", value: pendingClientApprovalCount },
+                { label: "SPF — Pending Client", value: spfPendingClientApproval },
                 { label: "SPF — Pending Procurement", value: spfPendingProcurement },
-                { label: "SPF — Pending PD",          value: spfPendingPD },
+                { label: "SPF — Pending PD", value: spfPendingPD },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>
@@ -871,10 +933,10 @@ export default function TSMReports() {
 
       {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
       {(() => {
-        const isCovered   = coverageDialogSource === "covered";
+        const isCovered = coverageDialogSource === "covered";
         const isUncovered = coverageDialogSource === "uncovered";
-        const dialogOpen  = isCovered || isUncovered;
-        const list        = isCovered ? coveredAccounts : uncoveredAccounts;
+        const dialogOpen = isCovered || isUncovered;
+        const list = isCovered ? coveredAccounts : uncoveredAccounts;
 
         const typeLabel = (normalized: string): string => {
           const map: Record<string, string> = {
@@ -885,8 +947,8 @@ export default function TSMReports() {
         };
 
         const typeColors: Record<string, string> = {
-          top50:     "bg-amber-100 text-amber-700 border-amber-200",
-          next30:    "bg-blue-100 text-blue-700 border-blue-200",
+          top50: "bg-amber-100 text-amber-700 border-amber-200",
+          next30: "bg-blue-100 text-blue-700 border-blue-200",
           balance20: "bg-violet-100 text-violet-700 border-violet-200",
           newclient: "bg-emerald-100 text-emerald-700 border-emerald-200",
           tsaclient: "bg-rose-100 text-rose-700 border-rose-200",
@@ -910,21 +972,19 @@ export default function TSMReports() {
                   <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
                     <button
                       onClick={() => setCoverageDialogSource("covered")}
-                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isCovered
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isCovered
                           ? "bg-emerald-600 text-white"
                           : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                        }`}
                     >
                       Covered · {coveredAccounts.length}
                     </button>
                     <button
                       onClick={() => setCoverageDialogSource("uncovered")}
-                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isUncovered
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isUncovered
                           ? "bg-amber-500 text-white"
                           : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                        }`}
                     >
                       Not Reached · {uncoveredAccounts.length}
                     </button>
