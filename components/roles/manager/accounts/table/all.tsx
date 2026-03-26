@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
   CalendarDays, ArrowLeft, FileText, Hash, Building2,
-  Users, ChevronRight, User,
+  Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
@@ -91,8 +91,8 @@ function activityInRange(dateStr: string | undefined, range: DateRange | undefin
   if (!dateStr) return false;
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return false;
-  if (range.from) { const f = new Date(range.from); f.setHours(0,0,0,0); if (d < f) return false; }
-  if (range.to)   { const t = new Date(range.to);   t.setHours(23,59,59,999); if (d > t) return false; }
+  if (range.from) { const f = new Date(range.from); f.setHours(0, 0, 0, 0); if (d < f) return false; }
+  if (range.to) { const t = new Date(range.to); t.setHours(23, 59, 59, 999); if (d > t) return false; }
   return true;
 }
 
@@ -106,18 +106,18 @@ function formatRangeLabel(range: DateRange | undefined): string {
 /* ─── Type client color map ───────────────────────────────────────── */
 
 const TYPE_CLIENT_STYLES: Record<string, { pill: string; dot: string }> = {
-  "TOP 50":     { pill: "bg-amber-100 text-amber-700 border-amber-200",       dot: "bg-amber-500" },
-  "NEXT 30":    { pill: "bg-blue-100 text-blue-700 border-blue-200",          dot: "bg-blue-500" },
-  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200",    dot: "bg-violet-500" },
+  "TOP 50": { pill: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  "NEXT 30": { pill: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
   "NEW CLIENT": { pill: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200",          dot: "bg-rose-500" },
-  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200",       dot: "bg-slate-400" },
+  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
 };
 
 function getTypeClientStyle(type: string) {
   return TYPE_CLIENT_STYLES[type?.toUpperCase()] ?? {
     pill: "bg-indigo-50 text-indigo-600 border-indigo-200",
-    dot:  "bg-indigo-400",
+    dot: "bg-indigo-400",
   };
 }
 
@@ -424,7 +424,7 @@ function ExportDialog({ open, onClose, rows, agentMap }: {
   const [lines, setLines] = useState<{ text: string; color: string }[]>([]);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
-  const bottomRef    = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const cancelledRef = useRef(false);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [lines]);
@@ -442,7 +442,7 @@ function ExportDialog({ open, onClose, rows, agentMap }: {
       push("> Building CSV headers...", "text-slate-500"); await sleep(120);
       push('  OK ["Agent","Company","Contact","Phone","Email","Region","Type","Industry","Status","Created"]', "text-emerald-400"); await sleep(180);
       push("> Processing rows...", "text-slate-500"); await sleep(100);
-      const headers = ["Agent","Company","Contact","Phone","Email","Address","Delivery","Region","Type","Industry","Status","Created"];
+      const headers = ["Agent", "Company", "Contact", "Phone", "Email", "Address", "Delivery", "Region", "Type", "Industry", "Status", "Created"];
       const csvLines: string[] = [headers.map((h) => `"${h}"`).join(",")];
       const logEvery = Math.max(1, Math.floor(rows.length / 25));
       for (let i = 0; i < rows.length; i++) {
@@ -532,12 +532,17 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 interface HistoryDialogProps {
   open: boolean; onClose: () => void; onBack: (() => void) | null;
   companyName: string | null; loading: boolean; records: Activity[];
+  account?: Account | null;
 }
 
-function HistoryDialog({ open, onClose, onBack, companyName, loading, records }: HistoryDialogProps) {
+function HistoryDialog({ open, onClose, onBack, companyName, loading, records, account }: HistoryDialogProps) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | number | null>(null);
   useEffect(() => { if (!open) { setSearch(""); setExpanded(null); } }, [open]);
+
+  const totalActualSales = useMemo(() =>
+    records.reduce((sum, r) => sum + (r.actual_sales ?? 0), 0),
+    [records]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -559,10 +564,10 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
   }, [records]);
 
   const typeStyles: Record<string, string> = {
-    Call:     "bg-sky-500/15 text-sky-300 border-sky-500/20",
-    Email:    "bg-violet-500/15 text-violet-300 border-violet-500/20",
-    Meeting:  "bg-amber-500/15 text-amber-300 border-amber-500/20",
-    Demo:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
+    Call: "bg-sky-500/15 text-sky-300 border-sky-500/20",
+    Email: "bg-violet-500/15 text-violet-300 border-violet-500/20",
+    Meeting: "bg-amber-500/15 text-amber-300 border-amber-500/20",
+    Demo: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
     Proposal: "bg-rose-500/15 text-rose-300 border-rose-500/20",
   };
   const getTypeStyle = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
@@ -604,6 +609,53 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
             ))}
           </div>
         )}
+
+        {/* ── Account info + total sales panel ── */}
+        <div className="px-6 py-3 border-b border-white/5 bg-[#0d1117] shrink-0">
+          <div className="flex flex-wrap items-start gap-4">
+            {/* Contact details */}
+            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {account?.contact_person && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <User size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono truncate">{account.contact_person}</span>
+                </div>
+              )}
+              {account?.contact_number && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <Phone size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono">{account.contact_number}</span>
+                </div>
+              )}
+              {account?.email_address && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <Mail size={11} className="text-slate-500 shrink-0" />
+                  <span className="text-slate-300 font-mono truncate">{account.email_address}</span>
+                </div>
+              )}
+              {(account?.address || account?.delivery_address) && (
+                <div className="flex items-start gap-2 text-[11px]">
+                  <MapPin size={11} className="text-slate-500 shrink-0 mt-px" />
+                  <span className="text-slate-300 font-mono leading-snug break-words">
+                    {account.address ?? account.delivery_address}
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Total actual sales */}
+            {totalActualSales > 0 && (
+              <div className="shrink-0 flex flex-col items-end gap-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold font-mono uppercase tracking-wide">
+                  <TrendingUp size={10} />
+                  Total Actual Sales
+                </div>
+                <span className="text-emerald-300 font-bold font-mono text-base tabular-nums">
+                  {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="px-6 py-3 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
@@ -665,23 +717,23 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
                 {isOpen && hasExtra && (
                   <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
-                      <DetailField label="Quotation No."    value={r.quotation_number} />
+                      <DetailField label="Quotation No." value={r.quotation_number} />
                       <DetailField label="Quotation Status" value={r.quotation_status} />
                       <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
-                      <DetailField label="SO Number"        value={r.so_number} />
-                      <DetailField label="SO Amount"        value={fmtCurrency(r.so_amount)} />
-                      <DetailField label="Actual Sales"     value={fmtCurrency(r.actual_sales)} />
-                      <DetailField label="DR Number"        value={r.dr_number} />
-                      <DetailField label="Delivery Date"    value={fmtDate(r.delivery_date)} />
-                      <DetailField label="Payment Terms"    value={r.payment_terms} />
-                      <DetailField label="Ticket Ref."      value={r.ticket_reference_number} />
-                      <DetailField label="Type Client"      value={r.type_client} />
-                      <DetailField label="Source"           value={r.source} />
-                      <DetailField label="Call Status"      value={r.call_status} />
-                      <DetailField label="Type"             value={r.call_type} />
-                      <DetailField label="Duration"         value={duration} />
-                      <DetailField label="Start Date"       value={fmtDate(r.start_date)} />
-                      <DetailField label="End Date"         value={fmtDate(r.end_date)} />
+                      <DetailField label="SO Number" value={r.so_number} />
+                      <DetailField label="SO Amount" value={fmtCurrency(r.so_amount)} />
+                      <DetailField label="Actual Sales" value={fmtCurrency(r.actual_sales)} />
+                      <DetailField label="DR Number" value={r.dr_number} />
+                      <DetailField label="Delivery Date" value={fmtDate(r.delivery_date)} />
+                      <DetailField label="Payment Terms" value={r.payment_terms} />
+                      <DetailField label="Ticket Ref." value={r.ticket_reference_number} />
+                      <DetailField label="Type Client" value={r.type_client} />
+                      <DetailField label="Source" value={r.source} />
+                      <DetailField label="Call Status" value={r.call_status} />
+                      <DetailField label="Type" value={r.call_type} />
+                      <DetailField label="Duration" value={duration} />
+                      <DetailField label="Start Date" value={fmtDate(r.start_date)} />
+                      <DetailField label="End Date" value={fmtDate(r.end_date)} />
                     </div>
                   </div>
                 )}
@@ -697,30 +749,31 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records }:
 /* ─── Main Component ──────────────────────────────────────────────── */
 
 export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: AccountsTableProps) {
-  const [agents,            setAgents]        = useState<any[]>([]);
-  const [allActivities,     setAllActivities] = useState<Activity[]>([]);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
-  const [drillLevel,        setDrillLevel]        = useState<DrillLevel>("tsm");
-  const [selectedTSMId,     setSelectedTSMId]     = useState<string>("");
-  const [selectedTSMName,   setSelectedTSMName]   = useState<string>("");
-  const [selectedAgentId,   setSelectedAgentId]   = useState<string>("");
+  const [drillLevel, setDrillLevel] = useState<DrillLevel>("tsm");
+  const [selectedTSMId, setSelectedTSMId] = useState<string>("");
+  const [selectedTSMName, setSelectedTSMName] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
 
-  const [search,           setSearch]           = useState("");
-  const [currentPage,      setCurrentPage]      = useState(1);
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [typeClientFilter, setTypeClientFilter] = useState<string | null>(null);
 
-  const [historyOpen,    setHistoryOpen]    = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
-  const [historySource,  setHistorySource]  = useState<ListSource>(null);
-  const [activities,     setActivities]     = useState<Activity[]>([]);
+  const [historySource, setHistorySource] = useState<ListSource>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [historyAccount, setHistoryAccount] = useState<Account | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [exportOpen,     setExportOpen]     = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [activeListOpen, setActiveListOpen] = useState<ListSource>(null);
 
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
-  const rangeLabel    = formatRangeLabel(dateCreatedFilterRange);
+  const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
 
   useEffect(() => {
     if (!userDetails.referenceid) return;
@@ -731,9 +784,9 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         return r.json();
       })
       .then((d) => {
-        if (Array.isArray(d))            setAgents(d);
+        if (Array.isArray(d)) setAgents(d);
         else if (Array.isArray(d?.data)) setAgents(d.data);
-        else                             setAgents([]);
+        else setAgents([]);
       })
       .catch(() => setAgents([]));
   }, [userDetails.referenceid]);
@@ -747,7 +800,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const timeout = setTimeout(() => controller.abort(), 30_000);
     const params = new URLSearchParams({ referenceid: userDetails.referenceid });
     if (dateCreatedFilterRange?.from) params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
-    if (dateCreatedFilterRange?.to)   params.set("to",   dateCreatedFilterRange.to.toISOString().slice(0, 10));
+    if (dateCreatedFilterRange?.to) params.set("to", dateCreatedFilterRange.to.toISOString().slice(0, 10));
     fetch(`/api/reports/manager/fetch?${params.toString()}`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
@@ -770,14 +823,14 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const allActiveAccounts = useMemo(() =>
     posts.filter((a) => a.status?.toLowerCase() === "active"),
-  [posts]);
+    [posts]);
 
   // ── Type client filter applied on top of active accounts ──
   const typeClientFilteredAccounts = useMemo(() =>
     typeClientFilter
       ? allActiveAccounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter)
       : allActiveAccounts,
-  [allActiveAccounts, typeClientFilter]);
+    [allActiveAccounts, typeClientFilter]);
 
   // ── Set of active company names (lowercase) — source of truth ──
   const activeCompanyNames = useMemo(() => {
@@ -791,7 +844,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     allActivities.filter((a) =>
       a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
     ),
-  [allActivities, activeCompanyNames]);
+    [allActivities, activeCompanyNames]);
 
   const tsmIds = useMemo(() => {
     const s = new Set<string>();
@@ -804,7 +857,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const s = new Set<string>();
     activeFilteredActivities.forEach((a) => {
       if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
-      else if (a.company_name)        s.add(`name:${a.company_name.toLowerCase()}`);
+      else if (a.company_name) s.add(`name:${a.company_name.toLowerCase()}`);
     });
     return s;
   }, [activeFilteredActivities]);
@@ -864,7 +917,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
     return agentIds.map((agentId) => {
       const agentAccounts = tsmAccounts.filter((a) => a.referenceid?.toLowerCase() === agentId);
-      const withAct    = agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
+      const withAct = agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
       const withoutAct = agentAccounts.length - withAct;
       return { agentId, agentName: agentMap[agentId] ?? agentId, accountCount: agentAccounts.length, withActivity: withAct, withoutActivity: withoutAct };
     }).sort((a, b) => b.accountCount - a.accountCount);
@@ -875,21 +928,21 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
   }, [selectedAgentId, typeClientFilteredAccounts]);
 
-  const withActivityAccounts    = useMemo(() => agentAccounts.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
+  const withActivityAccounts = useMemo(() => agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
   const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
 
   const scopedBase = useMemo(() => {
-    if (drillLevel === "tsm")   return typeClientFilteredAccounts;
+    if (drillLevel === "tsm") return typeClientFilteredAccounts;
     if (drillLevel === "agent") return typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     return agentAccounts;
   }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, agentAccounts]);
 
-  const scopedWithActivity    = useMemo(() => scopedBase.filter((a) =>  companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
+  const scopedWithActivity = useMemo(() => scopedBase.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
   const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
 
   // ── Unfiltered scoped base for type client count cards (always shows all types) ──
   const unfilteredScopedBase = useMemo(() => {
-    if (drillLevel === "tsm")   return allActiveAccounts;
+    if (drillLevel === "tsm") return allActiveAccounts;
     if (drillLevel === "agent") return allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
   }, [drillLevel, allActiveAccounts, selectedTSMId, selectedAgentId]);
@@ -900,8 +953,15 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       const t = (a.type_client ?? "Unknown").toUpperCase();
       c[t] = (c[t] ?? 0) + 1;
     });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [unfilteredScopedBase]);
+    let entries = Object.entries(c).sort((a, b) => b[1] - a[1]);
+
+    // ← THIS IS THE KEY LINE
+    if (typeClientFilter) {
+      entries = entries.filter(([type]) => type === typeClientFilter);
+    }
+
+    return entries;
+  }, [unfilteredScopedBase, typeClientFilter]); // ← Add typeClientFilter here
 
   const filteredAccounts = useMemo(() => {
     const q = search.toLowerCase();
@@ -913,7 +973,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     );
   }, [search, agentAccounts]);
 
-  const totalPages        = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => setCurrentPage(1), [search, selectedAgentId]);
 
@@ -943,7 +1003,10 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const isActive = activeCompanyNames.has(companyName.toLowerCase());
     if (!isActive) return;
 
+    const acct = allActiveAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
+
     setHistoryCompany(companyName);
+    setHistoryAccount(acct);
     setHistorySource(source);
     setHistoryOpen(true);
     setLoadingHistory(true);
@@ -956,7 +1019,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   };
 
   const handleHistoryBack = historySource ? () => setActiveListOpen(historySource) : null;
-  const accentColors = ["#6366f1","#f59e0b","#10b981","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6"];
+  const accentColors = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
 
   const listDesc = (count: number, type: "with" | "without") =>
     hasDateFilter
@@ -964,8 +1027,8 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       : `${count} accounts ${type === "with" ? "with at least one activity" : "with no recorded activities"}`;
 
   const overallCounts = useMemo(() => ({
-    total:      scopedBase.length,
-    withAct:    scopedWithActivity.length,
+    total: scopedBase.length,
+    withAct: scopedWithActivity.length,
     withoutAct: scopedWithoutActivity.length,
   }), [scopedBase, scopedWithActivity, scopedWithoutActivity]);
 
@@ -981,6 +1044,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         open={historyOpen} onClose={() => setHistoryOpen(false)}
         onBack={handleHistoryBack}
         companyName={historyCompany} loading={loadingHistory} records={activities}
+        account={historyAccount}
       />
 
       <AccountListDialog
@@ -1150,7 +1214,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b border-gray-100">
-                      {["Actions","Company","Contact","Phone","Email","Region","Type","Industry","Date"].map((h) => (
+                      {["Actions", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                       ))}
                     </TableRow>
@@ -1161,8 +1225,8 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                         <TableCell colSpan={9} className="text-center py-14 text-sm text-gray-400">No accounts found</TableCell>
                       </TableRow>
                     ) : paginatedAccounts.map((account) => {
-                      const hasAct    = companiesWithActivity.has(account.company_name.toLowerCase());
-                      const actCnt    = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+                      const hasAct = companiesWithActivity.has(account.company_name.toLowerCase());
+                      const actCnt = activityCountMap[account.company_name.toLowerCase()] ?? 0;
                       const typeStyle = getTypeClientStyle(account.type_client);
                       return (
                         <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors group">

@@ -2265,7 +2265,7 @@ export default function TaskListEditDialog({
           </div>
 
           <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap">
+            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2">
               <Button
                 className="flex-1 lg:flex-none bg-[#121212] rounded-none hover:bg-black text-white flex gap-2 items-center h-12 px-6"
                 onClick={() => setIsPreviewOpen(true)}

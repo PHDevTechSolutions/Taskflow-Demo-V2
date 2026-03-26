@@ -47,6 +47,8 @@ interface RequestTableProps {
     onRefreshAccountsAction: () => Promise<void>;
 }
 
+const normalizeStatus = (status?: string) => String(status ?? "").trim().toLowerCase();
+
 export function RequestTable({
     posts = [],
     userDetails,
@@ -95,7 +97,8 @@ export function RequestTable({
     }, [agents]);
 
     const filteredData = useMemo(() => {
-        let data = localPosts.filter((item) => item.status === "Removed");
+        // Hard filter: show only rows with Removed status.
+        let data = [...localPosts];
 
         data = data.filter((item) => {
             const matchesSearch =

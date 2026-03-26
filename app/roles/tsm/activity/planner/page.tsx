@@ -177,7 +177,7 @@ function DashboardContent() {
             setLoadingAccounts(true);
             try {
                 const response = await fetch(
-                    `/api/com-fetch-approval-account?tsm=${encodeURIComponent(
+                    `/api/com-fetch-approval-account-removal?tsm=${encodeURIComponent(
                         userDetails.referenceid
                     )}`
                 );
@@ -221,22 +221,23 @@ function DashboardContent() {
     const filteredData = useMemo(() => {
         let filteredPosts = posts;
 
-        // Filter by date range
         if (
             dateCreatedFilterRange &&
             dateCreatedFilterRange.from &&
             dateCreatedFilterRange.to
         ) {
-            const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
-            const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
+            const fromTime = new Date(dateCreatedFilterRange.from).setHours(0, 0, 0, 0);
+            const toTime = new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999);
 
             filteredPosts = filteredPosts.filter((item) => {
-                const createdDate = new Date(item.date_created).getTime();
-                return createdDate >= fromTime && createdDate <= toTime;
+                if (!item.date_removed) return false;
+
+                const removedTime = new Date(item.date_removed).getTime();
+
+                return removedTime >= fromTime && removedTime <= toTime;
             });
         }
 
-        // Filter by agent
         if (agentFilter !== "all") {
             filteredPosts = filteredPosts.filter((item) => item.tsm === agentFilter);
         }
@@ -247,7 +248,7 @@ function DashboardContent() {
     async function refreshAccounts() {
         try {
             const response = await fetch(
-                `/api/com-fetch-approval-account?tsm=${encodeURIComponent(
+                `/api/com-fetch-approval-account-removal?tsm=${encodeURIComponent(
                     userDetails.referenceid
                 )}`
             );
