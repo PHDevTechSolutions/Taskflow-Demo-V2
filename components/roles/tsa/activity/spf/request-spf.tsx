@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     AlertCircleIcon, PlusCircle, PenIcon, Trash2Icon,
-    Search, FileText, Loader2, Building2, User,
+    Search, FileText, Loader2, Building2, User, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -15,9 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-    Accordion, AccordionContent, AccordionItem, AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
     Dialog, DialogContent, DialogHeader,
     DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -26,6 +23,7 @@ import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Account {
+    id?: string;
     company_name: string;
     contact_person: string;
     contact_number: string;
@@ -74,7 +72,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
                     : "bg-gray-100 text-gray-500 border-gray-200";
 
     return (
-        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 border ${cls}`}>
+        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 border ${cls} rounded-sm`}>
             {status || "—"}
         </span>
     );
@@ -126,31 +124,31 @@ const HoldDeleteDialog: React.FC<DeleteDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="rounded-none max-w-sm p-0 overflow-hidden">
-                <div className="bg-red-600 px-5 py-4">
-                    <DialogTitle className="text-white text-sm font-black uppercase tracking-widest">
+            <DialogContent className="rounded-lg max-w-sm p-0 overflow-hidden border border-red-200">
+                <div className="bg-red-600 px-6 py-4">
+                    <DialogTitle className="text-white text-sm font-bold uppercase tracking-wider">
                         Delete SPF Record
                     </DialogTitle>
-                    {label && <p className="text-red-200 text-[11px] mt-0.5 truncate">{label}</p>}
+                    {label && <p className="text-red-200 text-xs mt-1">{label}</p>}
                 </div>
-                <div className="px-5 py-3 text-[11px] text-gray-500">
+                <div className="px-6 py-3 text-sm text-gray-600">
                     Hold the button to permanently delete this record.
                 </div>
-                <DialogFooter className="flex flex-col gap-2 px-5 pb-5">
+                <DialogFooter className="flex flex-col gap-2 px-6 pb-6">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}
-                        className="rounded-none h-9 text-xs uppercase font-bold tracking-wider">
+                        className="rounded-lg h-9 text-xs uppercase font-bold tracking-wide border-gray-300">
                         Cancel
                     </Button>
-                    <div className="relative overflow-hidden">
+                    <div className="relative overflow-hidden rounded-lg">
                         <Button variant="destructive" disabled={loading}
                             onMouseDown={startHold} onMouseUp={cancelHold} onMouseLeave={cancelHold}
                             onTouchStart={startHold} onTouchEnd={cancelHold}
-                            className="relative w-full rounded-none h-9 text-xs uppercase font-black tracking-wider">
-                            {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Deleting…</>
+                            className="relative w-full h-9 text-xs uppercase font-bold tracking-wide">
+                            {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Deleting…</>
                                 : progress > 0 ? `Hold… ${Math.round(progress)}%`
                                     : "Hold to Delete"}
                         </Button>
-                        <div className="absolute inset-0 bg-red-900/25 pointer-events-none"
+                        <div className="absolute inset-0 bg-red-900/30 pointer-events-none transition-all"
                             style={{ width: `${progress}%` }} />
                     </div>
                 </DialogFooter>
@@ -159,15 +157,77 @@ const HoldDeleteDialog: React.FC<DeleteDialogProps> = ({
     );
 };
 
+// ─── Pagination Component ─────────────────────────────────────────────────────
+
+interface PaginationProps {
+    total: number;
+    current: number;
+    perPage: number;
+    onPageChange: (page: number) => void;
+}
+
+const Pagination: React.FC<PaginationProps> = ({ total, current, perPage, onPageChange }) => {
+    const totalPages = Math.ceil(total / perPage);
+    return (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <div className="text-xs text-gray-600">
+                Showing {total === 0 ? 0 : (current - 1) * perPage + 1}–{Math.min(current * perPage, total)} of {total}
+            </div>
+            <div className="flex items-center gap-1">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(current - 1)}
+                    disabled={current === 1}
+                    className="rounded-lg h-8 w-8 p-0 border-gray-300"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => Math.abs(p - current) <= 1 || p === 1 || p === totalPages)
+                        .map((p, i, arr) => (
+                            <React.Fragment key={p}>
+                                {i > 0 && arr[i - 1] !== p - 1 && <span className="text-xs text-gray-400">…</span>}
+                                <Button
+                                    variant={p === current ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => onPageChange(p)}
+                                    className="rounded-lg h-8 w-8 p-0 text-xs font-bold"
+                                >
+                                    {p}
+                                </Button>
+                            </React.Fragment>
+                        ))}
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(current + 1)}
+                    disabled={current === totalPages}
+                    className="rounded-lg h-8 w-8 p-0 border-gray-300"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => {
-    const [activities, setActivities] = useState<SPFRecord[]>([]);
+    const [allActivities, setAllActivities] = useState<SPFRecord[]>([]);
+    const [allAccounts, setAllAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [accounts, setAccounts] = useState<Account[]>([]);
     const [accountsLoading, setAccountsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+
+    // Pagination
+    const [accountsPage, setAccountsPage] = useState(1);
+    const [recordsPage, setRecordsPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
 
     // Dialog state
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -181,7 +241,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
     const endTimerRef = useRef<number | null>(null);
 
-    // ─── Fetch accounts ─────────────────────────────────────────────────────────
+    // ─── Fetch accounts (all, not paginated on API level) ────────────────────────
 
     useEffect(() => {
         if (!referenceid) return;
@@ -192,13 +252,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 const active = (data.data || []).filter(
                     (a: any) => a.status?.toLowerCase() === "active"
                 );
-                setAccounts(active);
+                setAllAccounts(active);
             })
             .catch(console.error)
             .finally(() => setAccountsLoading(false));
     }, [referenceid]);
 
-    // ─── Fetch SPF records ───────────────────────────────────────────────────────
+    // ─── Fetch SPF records (all) ─────────────────────────────────────────────────
 
     const fetchActivities = useCallback(async () => {
         if (!referenceid) return;
@@ -209,7 +269,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             );
             if (!res.ok) throw new Error("Failed to fetch SPF records");
             const data = await res.json();
-            setActivities(data.activities || []);
+            setAllActivities(data.activities || []);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -252,6 +312,41 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             setLoadingSPF(false);
         }
     }, []);
+
+    // ─── Filter data based on search (searches entire dataset) ────────────────────
+
+    const searchLower = searchTerm.toLowerCase();
+    const filteredAccounts = useMemo(() =>
+        allAccounts.filter(
+            (a) =>
+                a.company_name.toLowerCase().includes(searchLower) ||
+                a.contact_person.toLowerCase().includes(searchLower) ||
+                a.address.toLowerCase().includes(searchLower)
+        ),
+        [allAccounts, searchLower]
+    );
+
+    const filteredActivities = useMemo(() =>
+        allActivities.filter(
+            (a) =>
+                a.customer_name.toLowerCase().includes(searchLower) ||
+                a.contact_person.toLowerCase().includes(searchLower) ||
+                a.spf_number.toLowerCase().includes(searchLower)
+        ),
+        [allActivities, searchLower]
+    );
+
+    // ─── Paginate filtered data ────────────────────────────────────────────────────
+
+    const paginatedAccounts = useMemo(() => {
+        const start = (accountsPage - 1) * ITEMS_PER_PAGE;
+        return filteredAccounts.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredAccounts, accountsPage]);
+
+    const paginatedActivities = useMemo(() => {
+        const start = (recordsPage - 1) * ITEMS_PER_PAGE;
+        return filteredActivities.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredActivities, recordsPage]);
 
     // ─── Open edit ───────────────────────────────────────────────────────────────
 
@@ -368,35 +463,22 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         fetchActivities();
     };
 
-    // ─── Filtered data ───────────────────────────────────────────────────────────
-
-    const s = searchTerm.toLowerCase();
-    const filteredAccounts = accounts.filter(
-        (a) => a.company_name.toLowerCase().includes(s) || a.contact_person.toLowerCase().includes(s)
-    );
-    const filteredActivities = activities.filter(
-        (a) =>
-            a.customer_name.toLowerCase().includes(s) ||
-            a.contact_person.toLowerCase().includes(s) ||
-            a.spf_number.toLowerCase().includes(s)
-    );
-
     // ─── Render ──────────────────────────────────────────────────────────────────
 
     if (loading)
         return (
             <div className="flex justify-center items-center h-40">
-                <Spinner className="size-7" />
+                <Spinner className="size-8" />
             </div>
         );
 
     if (error)
         return (
-            <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-                <AlertCircleIcon className="h-5 w-5 text-red-600" />
+            <Alert variant="destructive" className="flex items-start space-x-3 p-4">
+                <AlertCircleIcon className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
                 <div>
-                    <AlertTitle className="text-xs font-bold">Error Loading SPF Records</AlertTitle>
-                    <AlertDescription className="text-xs">{error}</AlertDescription>
+                    <AlertTitle className="text-sm font-bold">Error Loading SPF Records</AlertTitle>
+                    <AlertDescription className="text-sm mt-1">{error}</AlertDescription>
                 </div>
             </Alert>
         );
@@ -406,105 +488,99 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
             {/* ── Search bar ──────────────────────────────────────────────────── */}
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <Input
-                    className="pl-9 h-8 text-xs rounded-none border-gray-200"
-                    placeholder="Search accounts, SPF number, customer…"
+                    className="pl-9 h-10 text-sm rounded-lg border-gray-300 shadow-sm"
+                    placeholder="Search accounts, customers, SPF numbers, contacts…"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => { setSearchTerm(e.target.value); setAccountsPage(1); setRecordsPage(1); }}
                 />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
 
                 {/* ── Accounts panel ──────────────────────────────────────────────── */}
-                <div className="col-span-1 border border-gray-200 bg-white overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-                        <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-                            Accounts
-                        </span>
-                        {accounts.length > 0 && (
-                            <span className="text-[9px] font-bold bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full ml-auto">
-                                {filteredAccounts.length}
-                            </span>
-                        )}
+                <div className="col-span-1 border border-gray-200 bg-white rounded-lg overflow-hidden shadow-sm">
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100">
+                        <Building2 className="w-4 h-4 text-gray-600" />
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                                Accounts
+                            </h3>
+                            <p className="text-[11px] text-gray-500">
+                                {filteredAccounts.length} of {allAccounts.length}
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="overflow-y-auto max-h-[600px]">
+                    <div className="overflow-y-auto max-h-[600px] divide-y divide-gray-100">
                         {accountsLoading ? (
-                            <div className="flex items-center justify-center py-10 gap-2 text-gray-400">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span className="text-xs">Loading…</span>
+                            <div className="flex items-center justify-center py-12 text-gray-400">
+                                <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
-                        ) : filteredAccounts.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-gray-300 gap-2">
-                                <Building2 className="w-8 h-8 opacity-30" />
-                                <p className="text-xs text-gray-400">No accounts found</p>
+                        ) : paginatedAccounts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2 px-4">
+                                <Building2 className="w-10 h-10 opacity-20" />
+                                <p className="text-xs font-semibold text-center">No accounts found</p>
                             </div>
                         ) : (
-                            <Accordion type="single" collapsible className="w-full divide-y divide-gray-100">
-                                {filteredAccounts.map((acc, i) => (
-                                    <AccordionItem key={i} value={`acc-${i}`} className="border-0 px-0">
-
-                                        {/* ── Row: trigger (left) + Create button (right, always fixed) ── */}
-                                        <div className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors">
-                                            <AccordionTrigger className="p-0 hover:no-underline flex-1 min-w-0 text-xs font-semibold text-gray-700 text-left">
-                                                <span className="p-0 hover:no-underline text-xs font-medium">{acc.company_name}</span>
-                                            </AccordionTrigger>
-                                            <Button
-                                                size="sm"
-                                                className="h-7 rounded-none text-[10px] font-bold uppercase gap-1 px-2 shrink-0 ml-2 bg-gray-900 hover:bg-gray-700"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openContactSelection(acc);
-                                                }}
-                                                disabled={loadingSPF}
-                                            >
-                                                <PlusCircle className="w-3 h-3" /> Create
-                                            </Button>
+                            paginatedAccounts.map((acc, i) => (
+                                <div key={acc.id || i} className="p-3 hover:bg-blue-50 transition-colors">
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div className="min-w-0 flex-1">
+                                            <h4 className="text-xs font-bold text-gray-900 truncate">
+                                                {acc.company_name}
+                                            </h4>
+                                            <p className="text-[11px] text-gray-500 truncate">
+                                                {acc.contact_person}
+                                            </p>
                                         </div>
-
-                                        <AccordionContent className="px-3 pb-3 pt-0">
-                                            <div className="space-y-1.5 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
-                                                {[
-                                                    { label: "Contact", value: acc.contact_person },
-                                                    { label: "Number", value: acc.contact_number },
-                                                    { label: "Address", value: acc.address },
-                                                ].map(({ label, value }) => (
-                                                    <div key={label} className="flex gap-2">
-                                                        <span className="font-bold text-gray-400 w-14 shrink-0">{label}:</span>
-                                                        <span className="text-gray-600">{value || "—"}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                ))}
-                            </Accordion>
+                                        <Button
+                                            size="sm"
+                                            className="h-7 rounded-lg text-[10px] font-bold uppercase gap-1 px-2 shrink-0 bg-gray-900 hover:bg-gray-700"
+                                            onClick={() => openContactSelection(acc)}
+                                            disabled={loadingSPF}
+                                        >
+                                            <PlusCircle className="w-3 h-3" /> Create
+                                        </Button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 truncate">
+                                        {acc.address}
+                                    </p>
+                                </div>
+                            ))
                         )}
                     </div>
+
+                    {filteredAccounts.length > ITEMS_PER_PAGE && (
+                        <Pagination
+                            total={filteredAccounts.length}
+                            current={accountsPage}
+                            perPage={ITEMS_PER_PAGE}
+                            onPageChange={setAccountsPage}
+                        />
+                    )}
                 </div>
 
                 {/* ── SPF Records table ────────────────────────────────────────────── */}
-                <div className="col-span-3 border border-gray-200 bg-white overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-                        <FileText className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-                            SPF Records
-                        </span>
-                        {activities.length > 0 && (
-                            <span className="text-[9px] font-bold bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full ml-auto">
-                                {filteredActivities.length}
-                            </span>
-                        )}
+                <div className="col-span-3 border border-gray-200 bg-white rounded-lg overflow-hidden shadow-sm flex flex-col">
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100">
+                        <FileText className="w-4 h-4 text-gray-600" />
+                        <div className="flex-1">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                                SPF Records
+                            </h3>
+                            <p className="text-[11px] text-gray-500">
+                                {filteredActivities.length} of {allActivities.length}
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        {filteredActivities.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-14 text-gray-300 gap-2">
-                                <FileText className="w-8 h-8 opacity-30" />
-                                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">
+                    <div className="flex-1 overflow-x-auto">
+                        {paginatedActivities.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
+                                <FileText className="w-12 h-12 opacity-20" />
+                                <p className="text-sm font-semibold uppercase tracking-wide">
                                     No SPF records
                                 </p>
                             </div>
@@ -519,67 +595,76 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             "Payment", "Warranty", "Delivery Date",
                                             "Prepared By", "Approved By",
                                         ].map((h) => (
-                                            <TableHead key={h} className="text-[10px] font-black uppercase tracking-widest text-white whitespace-nowrap px-3 py-2.5">
+                                            <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap px-3 py-2.5">
                                                 {h}
                                             </TableHead>
                                         ))}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredActivities.map((item, idx) => (
+                                    {paginatedActivities.map((item, idx) => (
                                         <TableRow key={item.id}
-                                            className={`text-xs ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"} hover:bg-blue-50/40 transition-colors`}>
+                                            className={`text-xs ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-blue-50/60 transition-colors`}>
                                             <TableCell className="px-3 py-2 whitespace-nowrap">
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         title="Edit"
                                                         onClick={() => openEditDialog(item)}
-                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
                                                     >
-                                                        <PenIcon className="w-3 h-3" />
+                                                        <PenIcon className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
                                                         title="Delete"
                                                         onClick={() => { setDeleteTarget(item); setDeleteDialogOpen(true); }}
-                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
                                                     >
-                                                        <Trash2Icon className="w-3 h-3" />
+                                                        <Trash2Icon className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap">
                                                 <StatusBadge status={item.status} />
                                             </TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{item.spf_number}</TableCell>
-                                            <TableCell className="px-3 py-2 font-semibold whitespace-nowrap">{item.customer_name}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.contact_person}</TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{item.contact_number}</TableCell>
-                                            <TableCell className="px-3 py-2 max-w-[140px] truncate">{item.registered_address}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.delivery_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.billing_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.collection_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.payment_terms || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2">{item.warranty || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px]">{item.delivery_date || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.prepared_by || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.approved_by || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-700 font-semibold">{item.spf_number}</TableCell>
+                                            <TableCell className="px-3 py-2 font-semibold whitespace-nowrap text-gray-900">{item.customer_name}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-700 capitalize">{item.contact_person}</TableCell>
+                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-600">{item.contact_number}</TableCell>
+                                            <TableCell className="px-3 py-2 max-w-[140px] truncate text-gray-600">{item.registered_address}</TableCell>
+                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.delivery_address || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.billing_address || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.collection_address || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.payment_terms || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 text-gray-600">{item.warranty || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px] text-gray-600">{item.delivery_date || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.prepared_by || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.approved_by || "—"}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                         )}
                     </div>
+
+                    {filteredActivities.length > ITEMS_PER_PAGE && (
+                        <Pagination
+                            total={filteredActivities.length}
+                            current={recordsPage}
+                            perPage={ITEMS_PER_PAGE}
+                            onPageChange={setRecordsPage}
+                        />
+                    )}
                 </div>
             </div>
 
             {/* ── Contact selection dialog ─────────────────────────────────────── */}
             <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-                <DialogContent className="max-w-sm rounded-none p-0 overflow-hidden">
-                    <div className="bg-gray-900 px-5 py-4">
-                        <DialogTitle className="text-white text-sm font-black uppercase tracking-widest">
+                <DialogContent className="max-w-sm rounded-lg p-0 overflow-hidden border border-gray-200">
+                    <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-4">
+                        <DialogTitle className="text-white text-sm font-bold uppercase tracking-wide">
                             Select Contact
                         </DialogTitle>
-                        <p className="text-gray-400 text-[11px] mt-0.5">
+                        <p className="text-gray-400 text-xs mt-1.5">
                             {currentSPF.customer_name}
                         </p>
                     </div>
@@ -588,21 +673,21 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             <button
                                 key={i}
                                 onClick={() => selectContact(c.person, c.number)}
-                                className="flex items-center w-full gap-3 px-3 py-3 border border-gray-200 hover:bg-gray-50 hover:border-gray-400 transition-colors text-left"
+                                className="flex items-center w-full gap-3 px-4 py-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all text-left"
                             >
-                                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                    <User className="w-4 h-4 text-blue-600" />
+                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                    <User className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold text-gray-800 capitalize">{c.person}</p>
-                                    <p className="text-[11px] text-gray-400 font-mono">{c.number}</p>
+                                    <p className="text-sm font-bold text-gray-900 capitalize">{c.person}</p>
+                                    <p className="text-xs text-gray-500 font-mono">{c.number}</p>
                                 </div>
                             </button>
                         ))}
                     </div>
-                    <DialogFooter className="px-4 pb-4">
+                    <DialogFooter className="px-6 pb-6 bg-gray-50 border-t border-gray-100">
                         <Button variant="outline" onClick={() => setContactDialogOpen(false)}
-                            className="rounded-none h-8 text-xs uppercase font-bold tracking-wider w-full">
+                            className="rounded-lg h-9 text-xs uppercase font-bold tracking-wide w-full border-gray-300">
                             Cancel
                         </Button>
                     </DialogFooter>

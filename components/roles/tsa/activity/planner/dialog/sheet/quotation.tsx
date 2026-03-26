@@ -2070,7 +2070,7 @@ Procurement
               <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
 
                 {/* Source Switcher */}
-                <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                   {[
                     { source: "shopify", label: "Shopify", icon: "🛍️" },
                     { source: "firebase_shopify", label: "CMS", icon: "📦" },
@@ -2086,21 +2086,14 @@ Procurement
                       <span>{label}</span>
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => { setIsSpfMode(true); setIsSpf1Mode(false); setSearchTerm(""); setSearchResults([]); }}
-                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
-                  >
-                    <span className="text-sm mb-0.5">📋</span>
-                    <span>SPF</span>
-                  </button>
+                  
                   <button
                     type="button"
                     onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
                     className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                   >
                     <span className="text-sm mb-0.5">🧾</span>
-                    <span>SPF 1</span>
+                    <span>SPF</span>
                   </button>
                 </div>
 

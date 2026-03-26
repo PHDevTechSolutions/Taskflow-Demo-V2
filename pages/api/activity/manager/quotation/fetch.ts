@@ -38,6 +38,11 @@ const HISTORY_SELECT_COLUMNS = [
   "contact_person",
   "tsm_approved_status",
   "delivery_fee",
+  "vat_type",
+  "quotation_subject",
+  "quotation_vatable",
+  "restocking_fee",
+  "item_remarks",
 ].join(",");
 
 const SIGNATORIES_SELECT_COLUMNS = [

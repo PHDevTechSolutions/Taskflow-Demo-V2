@@ -63,21 +63,6 @@ type PreviewProps = {
     setIsPreviewOpen: (open: boolean) => void;
 };
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-const TaxOption = ({
-    label,
-    active,
-}: {
-    label: string;
-    active: boolean;
-}) => (
-    <span className={`flex items-center gap-1 ${active ? "text-gray-900 font-black" : "text-gray-400 font-medium"}`}>
-        <span className="text-[14px] leading-none">{active ? "●" : "○"}</span>
-        {label}
-    </span>
-);
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
@@ -161,7 +146,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                <th className="p-3 border-r border-black w-47 text-right">UNIT PRICE</th>
                                 <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
@@ -387,9 +372,15 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 label: "Warranty",
                                 content: (
                                     <div className="bg-yellow-50 p-2">
-                                        <p>One (1) year from delivery for all busted lights except damaged fixture.</p>
-                                        <p className="mt-1">VOID if: tampered, altered by unauthorized technicians, subjected to misuse/neglect/accident, liquid damage.</p>
+                                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                        <p>The warranty will be VOID under the following circumstances:</p>
+                                        <p>*If the unit is being tampered with.</p>
+                                        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                                        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                                        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                                        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
                                         <p>*Shipping costs for warranty claims are for customers' account.</p>
+                                        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
                                     </div>
                                 ),
                             },
