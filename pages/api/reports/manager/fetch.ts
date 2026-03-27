@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
-const BATCH_SIZE = 1_000;   // keep ≤ Supabase dashboard "Max Rows" setting
-const HARD_LIMIT = 500_000; // safety ceiling — raise if needed
+const BATCH_SIZE = 1_000;
+const HARD_LIMIT = 500_000;
 
 // ─── Selected columns ──────────────────────────────────────────────────────────
 const COLUMNS = `
@@ -38,8 +38,6 @@ const COLUMNS = `
 `.trim();
 
 // ─── Date helper ───────────────────────────────────────────────────────────────
-// date_created is a DATE column — always compare with plain "YYYY-MM-DD" strings.
-// Passing ISO timestamps causes silent mismatches or cast errors in PostgREST.
 function toDateString(value: string): string {
   return value.split("T")[0];
 }
@@ -74,11 +72,6 @@ async function fetchBatch(
     .order("id",           { ascending: false })
     .range(offset, offset + BATCH_SIZE - 1);
 
-  // ── KEY FIX: filter type_activity at the DB level ─────────────────────────
-  // Previously, the API fetched ALL activity types and let the frontend filter.
-  // This meant fetching 10–50x more rows than needed, causing sequential batch
-  // loops to time out on wide date ranges (e.g. March 1–23).
-  // Filtering here cuts the result set down to only relevant rows.
   if (typeActivity) {
     query = query.ilike("type_activity", typeActivity);
   }
@@ -113,23 +106,16 @@ export default async function handler(
     ({ fromDate, toDate } = currentMonthRange());
   }
 
-  // Optional type_activity filter passed from the frontend
   const activityFilter =
     typeof type_activity === "string" && type_activity.trim()
       ? type_activity.trim()
       : null;
 
-  // ── Step 1: Get total count first (single lightweight query) ──────────────
-  //
-  // WHY: Instead of sequential while-loop batches (slow, timeout-prone),
-  // we first get the exact count, then fire ALL batch requests in parallel
-  // using Promise.all. This turns N sequential round-trips into 1 + ceil(N/1000)
-  // parallel round-trips — massively faster for wide date ranges.
-  //
   try {
+    // ── Step 1: Get total count ───────────────────────────────────────────
     let countQuery = supabase
       .from("history")
-      .select("id", { count: "exact", head: true }) // head:true = no rows, just count
+      .select("id", { count: "exact", head: true })
       .eq("manager", referenceid)
       .gte("date_created", fromDate)
       .lte("date_created", toDate);
@@ -163,14 +149,7 @@ export default async function handler(
       });
     }
 
-    // ── Step 2: Fire all batch requests in PARALLEL ───────────────────────
-    //
-    // Sequential await in a while-loop = each batch waits for the previous.
-    // For 50 batches × 200ms = 10s timeout hit.
-    //
-    // Parallel Promise.all = all batches fire at once = ~200–500ms total
-    // regardless of how many batches there are.
-    //
+    // ── Step 2: Fire all batch requests in parallel ───────────────────────
     const offsets: number[] = [];
     for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
       offsets.push(offset);
@@ -182,12 +161,24 @@ export default async function handler(
       )
     );
 
-    // ── Step 3: Collect + check errors ────────────────────────────────────
+    // ── Step 3: Collect rows ──────────────────────────────────────────────
     const allActivities: any[] = [];
 
     for (let i = 0; i < batchResults.length; i++) {
       const { data, error } = batchResults[i];
+
       if (error) {
+        // PGRST103 = "Requested range not satisfiable"
+        // Fires when the offset overshoots the actual row count — can happen
+        // when the count query and batch queries race against live inserts/deletes.
+        // Safe to treat as an empty batch rather than a hard failure.
+        if ((error as any).code === "PGRST103") {
+          console.warn(
+            `[manager/fetch] range not satisfiable at offset=${offsets[i]} — skipping (row count likely changed mid-request)`
+          );
+          continue;
+        }
+
         console.error(
           `[manager/fetch] batch error at offset=${offsets[i]}:`,
           error.message,
@@ -195,6 +186,7 @@ export default async function handler(
         );
         return res.status(500).json({ message: error.message });
       }
+
       allActivities.push(...(data ?? []));
     }
 

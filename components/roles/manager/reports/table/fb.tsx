@@ -15,6 +15,7 @@ interface FB {
   contact_number?: string;
   contact_person: string;
   source: string;
+  status?: string;
   referenceid: string;
   tsm?: string;
   company_name?: string;
@@ -92,18 +93,28 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
     const tsmAgents = agents.filter(a => a.Role === "Territory Sales Manager");
     return tsmAgents.map(tsm => {
       const tsmId = tsm.ReferenceID.toLowerCase();
-      const fbCompanies = Array.from(new Set(
-        activities.filter(a => {
-          const agent = agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "";
-          return agent.toLowerCase() === tsmId && a.source === "Facebook Marketplace" && a.company_name;
-        }).map(a => a.company_name!)
-      ));
-      const totalSales = activities.filter(a => {
-        const agent = agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "";
-        return agent.toLowerCase() === tsmId && a.source === "Facebook Marketplace";
-      }).reduce((sum, a) => sum + (a.actual_sales ?? 0), 0);
 
-      return { tsmId, tsmName: `${tsm.Firstname} ${tsm.Lastname}`, totalSales, accountCount: fbCompanies.length, fbCompanies };
+      // All FB Marketplace rows under this TSM
+      const fbRows = activities.filter(a => {
+        const agentTsm = (agentMap[a.referenceid.toLowerCase()]?.TSM ?? a.tsm ?? "").toLowerCase();
+        return agentTsm === tsmId && a.source === "Facebook Marketplace";
+      });
+
+      const quoteCount = fbRows.filter(a => a.status === "Quote-Done").length;
+      const soCount    = fbRows.filter(a => a.status === "SO-Done").length;
+      const totalSales = fbRows.reduce((sum, a) => sum + (a.actual_sales ?? 0), 0);
+
+      const fbCompanies = Array.from(new Set(fbRows.filter(a => a.company_name).map(a => a.company_name!)));
+
+      return {
+        tsmId,
+        tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
+        quoteCount,
+        soCount,
+        totalSales,
+        accountCount: fbCompanies.length,
+        fbCompanies,
+      };
     }).sort((a, b) => b.totalSales - a.totalSales);
   }, [agents, activities, agentMap]);
 
@@ -118,7 +129,8 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
         company: a.company_name!,
         agent: agentMap[a.referenceid.toLowerCase()]?.name ?? a.referenceid,
         contact: a.contact_person,
-        remarks: a.remarks
+        remarks: a.remarks,
+        status: a.status,
       }));
   }, [selectedTsm, companySearch, activities, agentMap]);
 
@@ -134,8 +146,9 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500">TSM</TableHead>
-                <TableHead className="text-gray-500 text-right">Total Sales</TableHead>
-                <TableHead className="text-gray-500 text-right">FB Marketplace Count</TableHead>
+                <TableHead className="text-gray-500 text-right whitespace-nowrap">Quote Count</TableHead>
+                <TableHead className="text-gray-500 text-right whitespace-nowrap">SO Count</TableHead>
+                <TableHead className="text-gray-500 text-right whitespace-nowrap">Total Sales</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,19 +159,27 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
                   onClick={() => setSelectedTsm(item.tsmId)}
                 >
                   <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                  <TableCell className="text-right text-blue-600 font-semibold">
+                    {item.quoteCount > 0 ? item.quoteCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right text-violet-600 font-semibold">
+                    {item.soCount > 0 ? item.soCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                  </TableCell>
                   <TableCell className="text-right text-green-600 font-semibold">{fmtPHP(item.totalSales)}</TableCell>
-                  <TableCell className="text-right text-gray-700">{item.accountCount}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <tfoot>
               <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                 <TableCell className="text-gray-500">Total</TableCell>
-                <TableCell className="text-right text-green-600">
-                  {fmtPHP(tsmSummary.reduce((sum, tsm) => sum + tsm.totalSales, 0))}
+                <TableCell className="text-right text-blue-600">
+                  {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
                 </TableCell>
-                <TableCell className="text-right text-gray-700">
-                  {tsmSummary.reduce((sum, tsm) => sum + tsm.accountCount, 0)}
+                <TableCell className="text-right text-violet-600">
+                  {tsmSummary.reduce((sum, t) => sum + t.soCount, 0).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right text-green-600">
+                  {fmtPHP(tsmSummary.reduce((sum, t) => sum + t.totalSales, 0))}
                 </TableCell>
               </TableRow>
             </tfoot>
@@ -189,13 +210,14 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
                 <TableHead className="text-gray-500">Agent</TableHead>
                 <TableHead className="text-gray-500">Company Name</TableHead>
                 <TableHead className="text-gray-500">Contact Person</TableHead>
+                <TableHead className="text-gray-500">Status</TableHead>
                 <TableHead className="text-gray-500">Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {selectedCompanies.length === 0 ? (
                 <TableRow>
-                  <TableCell className="text-gray-400 text-xs text-center py-2" colSpan={3}>
+                  <TableCell className="text-gray-400 text-xs text-center py-2" colSpan={5}>
                     No companies found.
                   </TableCell>
                 </TableRow>
@@ -204,6 +226,7 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
                   <TableCell className="text-gray-700 text-xs">{c.agent}</TableCell>
                   <TableCell className="text-gray-700 text-xs">{c.company}</TableCell>
                   <TableCell className="text-gray-700 text-xs capitalize">{c.contact}</TableCell>
+                  <TableCell className="text-gray-700 text-xs">{c.status || "-"}</TableCell>
                   <TableCell className="text-gray-700 text-xs capitalize">{c.remarks}</TableCell>
                 </TableRow>
               ))}

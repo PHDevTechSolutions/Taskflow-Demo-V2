@@ -79,7 +79,7 @@ async function fetchBatch(
   return query;
 }
 
-// ─── Endorsed-ticket fetcher ───────────────────────────────────────────────────
+// ─── Endorsed-ticket map fetcher ───────────────────────────────────────────────
 // Fetches ALL endorsed-ticket rows for the given ticket_reference_numbers in
 // batches of 500 (PostgREST .in() limit) and returns a lookup map:
 //   ticket_reference_number → { tsm, agent }
@@ -89,11 +89,9 @@ async function fetchEndorsedTicketMap(
   const map: Record<string, { tsm: string | null; agent: string | null }> = {};
   if (!ticketRefs.length) return map;
 
-  // Deduplicate
   const unique = Array.from(new Set(ticketRefs.filter(Boolean)));
   const IN_BATCH = 500;
 
-  // Fire all .in() queries in parallel
   const chunks: string[][] = [];
   for (let i = 0; i < unique.length; i += IN_BATCH) {
     chunks.push(unique.slice(i, i + IN_BATCH));
@@ -111,7 +109,7 @@ async function fetchEndorsedTicketMap(
   for (const { data, error } of results) {
     if (error) {
       console.error("[endorsed-ticket] fetch error:", error.message);
-      continue; // non-fatal — merge will just leave those fields null
+      continue;
     }
     for (const row of data ?? []) {
       if (row.ticket_reference_number) {
@@ -124,6 +122,53 @@ async function fetchEndorsedTicketMap(
   }
 
   return map;
+}
+
+// ─── Endorsed-ticket rows + count per TSM ─────────────────────────────────────
+// Fetches endorsed-ticket rows filtered by date_created, returns:
+//   - rows: the raw rows (for drill-down display)
+//   - countsByTsm: unique ticket_reference_number count per lowercased tsm id
+async function fetchEndorsedTicketData(
+  fromDate: string,
+  toDate: string
+): Promise<{
+  rows: {
+    ticket_reference_number: string;
+    company_name: string | null;
+    contact_person: string | null;
+    contact_number: string | null;
+    tsm: string | null;
+    date_created: string | null;
+  }[];
+  countsByTsm: Record<string, number>;
+}> {
+  const { data, error } = await supabase
+    .from("endorsed-ticket")
+    .select("ticket_reference_number, company_name, contact_person, contact_number, tsm, date_created")
+    .gte("date_created", fromDate)
+    .lte("date_created", toDate)
+    .order("date_created", { ascending: false });
+
+  if (error) {
+    console.error("[endorsed-ticket] fetch data error:", error.message);
+    return { rows: [], countsByTsm: {} };
+  }
+
+  const rows = data ?? [];
+
+  // Count unique ticket_reference_numbers per tsm
+  const sets = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const tsmId = (row.tsm ?? "").toLowerCase();
+    if (!tsmId || !row.ticket_reference_number) continue;
+    if (!sets.has(tsmId)) sets.set(tsmId, new Set());
+    sets.get(tsmId)!.add(row.ticket_reference_number);
+  }
+
+  const countsByTsm: Record<string, number> = {};
+  sets.forEach((refs, tsmId) => { countsByTsm[tsmId] = refs.size; });
+
+  return { rows, countsByTsm };
 }
 
 // ─── Handler ───────────────────────────────────────────────────────────────────
@@ -186,62 +231,66 @@ export default async function handler(
       `DB count=${totalDbCount} | range=${fromDate} → ${toDate}`
     );
 
+    // ── Step 2: Fetch endorsed-ticket data per TSM (parallel with history) ───
+    // Run this alongside the history batches — no dependency on history data.
+    const endorsedTicketDataPromise = fetchEndorsedTicketData(fromDate, toDate);
+
     if (totalRows === 0) {
+      const { rows: endorsedTicketRows, countsByTsm: endorsedTicketCountsByTsm } =
+        await endorsedTicketDataPromise;
       return res.status(200).json({
-        activities: [],
-        total:      0,
-        count:      totalDbCount,
-        cached:     false,
-        range:      { from: fromDate, to: toDate },
+        activities:               [],
+        total:                    0,
+        count:                    totalDbCount,
+        cached:                   false,
+        range:                    { from: fromDate, to: toDate },
+        endorsedTicketCountsByTsm,
+        endorsedTicketRows,
       });
     }
 
-    // ── Step 2: Fetch all history batches in parallel ─────────────────────
+    // ── Step 3: Fetch all history batches in parallel ─────────────────────
     const offsets: number[] = [];
     for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
       offsets.push(offset);
     }
 
-    const batchResults = await Promise.all(
-      offsets.map((offset) =>
-        fetchBatch(referenceid, fromDate, toDate, activityFilter, offset, false)
-      )
-    );
+    const [batchResults, { rows: endorsedTicketRows, countsByTsm: endorsedTicketCountsByTsm }] =
+      await Promise.all([
+        Promise.all(
+          offsets.map((offset) =>
+            fetchBatch(referenceid, fromDate, toDate, activityFilter, offset, false)
+          )
+        ),
+        endorsedTicketDataPromise,
+      ]);
 
-    // ── Step 3: Collect history rows ──────────────────────────────────────
-    // ── Step 3: Collect history rows ──────────────────────────────────────
-const allActivities: any[] = [];
+    // ── Step 4: Collect history rows ──────────────────────────────────────
+    const allActivities: any[] = [];
 
-for (let i = 0; i < batchResults.length; i++) {
-  const { data, error } = batchResults[i];
+    for (let i = 0; i < batchResults.length; i++) {
+      const { data, error } = batchResults[i];
 
-  if (error) {
-    // PGRST103 = "Requested range not satisfiable"
-    // Fires when offset overshoots actual row count (race between
-    // count query and batch queries). Safe to treat as empty batch.
-    if ((error as any).code === "PGRST103") {
-      console.warn(
-        `[manager/fetch] range not satisfiable at offset=${offsets[i]} — skipping (row count likely changed mid-request)`
-      );
-      continue; // ← skip this batch, don't abort
+      if (error) {
+        if ((error as any).code === "PGRST103") {
+          console.warn(
+            `[manager/fetch] range not satisfiable at offset=${offsets[i]} — skipping`
+          );
+          continue;
+        }
+
+        console.error(
+          `[manager/fetch] batch error at offset=${offsets[i]}:`,
+          error.message,
+          error.code
+        );
+        return res.status(500).json({ message: error.message });
+      }
+
+      allActivities.push(...(data ?? []));
     }
 
-    console.error(
-      `[manager/fetch] batch error at offset=${offsets[i]}:`,
-      error.message,
-      error.code
-    );
-    return res.status(500).json({ message: error.message });
-  }
-
-  allActivities.push(...(data ?? []));
-}
-
-    // ── Step 4: Merge endorsed-ticket data ────────────────────────────────
-    // Collect all non-null ticket_reference_numbers from the fetched rows,
-    // then fetch their tsm + agent from endorsed-ticket in parallel batches.
-    // Merge back by ticket_reference_number — history rows without a matching
-    // ticket will get endorsed_tsm: null and endorsed_agent: null.
+    // ── Step 5: Merge endorsed-ticket tsm/agent data into history rows ────
     const ticketRefs = allActivities
       .map((a) => a.ticket_reference_number)
       .filter(Boolean) as string[];
@@ -261,15 +310,18 @@ for (let i = 0; i < batchResults.length; i++) {
     console.log(
       `[manager/fetch] fetched ${allActivities.length} rows ` +
       `in ${offsets.length} parallel batch(es). ` +
-      `Merged endorsed-ticket for ${Object.keys(endorsedMap).length} unique refs.`
+      `Merged endorsed-ticket for ${Object.keys(endorsedMap).length} unique refs. ` +
+      `TSM ticket counts: ${Object.keys(endorsedTicketCountsByTsm).length} TSMs.`
     );
 
     return res.status(200).json({
-      activities: merged,
-      total:      merged.length,
-      count:      totalDbCount,
-      cached:     false,
-      range:      { from: fromDate, to: toDate },
+      activities:               merged,
+      total:                    merged.length,
+      count:                    totalDbCount,
+      cached:                   false,
+      range:                    { from: fromDate, to: toDate },
+      endorsedTicketCountsByTsm,   // counts keyed by lowercased tsm id
+      endorsedTicketRows,          // raw rows for drill-down: company_name, ticket_reference_number, contact_person, contact_number
     });
   } catch (err) {
     console.error("[manager/fetch] server error:", err);

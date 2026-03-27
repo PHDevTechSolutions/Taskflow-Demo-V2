@@ -31,6 +31,15 @@ interface CSR {
   tsm?: string;
 }
 
+interface EndorsedTicketRow {
+  ticket_reference_number: string;
+  company_name: string | null;
+  contact_person: string | null;
+  contact_number: string | null;
+  tsm: string | null;
+  date_created: string | null;
+}
+
 interface Agent {
   ReferenceID: string;
   Firstname: string;
@@ -96,6 +105,10 @@ function toPlainDate(value: Date | string): string {
 
 export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
   const [activities, setActivities] = useState<CSR[]>([]);
+  const [endorsedTicketRows, setEndorsedTicketRows] = useState<EndorsedTicketRow[]>([]);
+  // endorsedTicketCountsByTsm: keyed by lowercased tsm ReferenceID → unique ticket count
+  // This comes directly from the endorsed-ticket table via the API.
+  const [endorsedTicketCountsByTsm, setEndorsedTicketCountsByTsm] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -103,24 +116,33 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("all");
   const [expandedTsmId, setExpandedTsmId] = useState<string | null>(null);
+  // Modal for ticket count drill-down
+  const [ticketModal, setTicketModal] = useState<{ tsmId: string; tsmName: string } | null>(null);
+  const [ticketModalSearch, setTicketModalSearch] = useState("");
 
   // ─── Fetch activities ────────────────────────────────────────────────────────
   const fetchActivities = useCallback(() => {
     if (!referenceid) { setActivities([]); return; }
     setLoading(true); setError(null);
-  
+
     const url = new URL("/api/reports/manager/fetch-endorse", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
     if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
     if (dateCreatedFilterRange?.to) url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
-  
+
     fetch(url.toString())
       .then(async r => {
         const json = await r.json().catch(() => ({ message: `HTTP ${r.status} — non-JSON response` }));
         if (!r.ok) throw new Error(json?.message || `HTTP ${r.status}`);
         return json;
       })
-      .then(d => setActivities(d.activities || []))
+      .then(d => {
+        setActivities(d.activities || []);
+        // Store the TSM ticket counts from endorsed-ticket (returned by API)
+        setEndorsedTicketCountsByTsm(d.endorsedTicketCountsByTsm || {});
+        // Store the raw endorsed-ticket rows for drill-down
+        setEndorsedTicketRows(d.endorsedTicketRows || []);
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
@@ -171,7 +193,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     [agents]
   );
 
-  // ─── Base filtered activities ─────────────────────────────────────────────────
+  // ─── Base filtered activities (Quotation Preparation only) ───────────────────
   const baseActivities = useMemo(() =>
     activities
       .filter(i => i.source === "CSR Endorsement")
@@ -181,6 +203,8 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   );
 
   // ─── TSM Summary ──────────────────────────────────────────────────────────────
+  // ticketCount → from endorsedTicketCountsByTsm (endorsed-ticket table, no history involved)
+  // quoteDoneCount → from history (status === "Quote-Done"), unchanged
   const tsmSummary = useMemo(() => {
     const summaryMap = new Map<string, {
       tsmId: string;
@@ -196,7 +220,8 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       summaryMap.set(tsmId, {
         tsmId,
         tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
-        ticketCount: 0,
+        // ← directly from endorsed-ticket table via API, no history derivation
+        ticketCount: endorsedTicketCountsByTsm[tsmId] ?? 0,
         quoteDoneCount: 0,
         statusCounts: Object.fromEntries(QUOTATION_STATUSES.map(s => [s, 0])),
         totalAmount: 0,
@@ -204,14 +229,10 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     });
 
     baseActivities.forEach(row => {
-      // endorsed-ticket.agent === row.referenceid — resolve TSM via agentMap
       const agent = agentMap[row.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? row.tsm ?? "").toLowerCase();
       if (!tsmId || !summaryMap.has(tsmId)) return;
       const entry = summaryMap.get(tsmId)!;
-
-      // Count every row with a ticket_reference_number (already filtered above)
-      entry.ticketCount += 1;
 
       if (row.status === "Quote-Done") entry.quoteDoneCount += 1;
 
@@ -222,7 +243,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.quoteDoneCount - a.quoteDoneCount);
-  }, [baseActivities, agentMap, tsmAgents]);
+  }, [baseActivities, agentMap, tsmAgents, endorsedTicketCountsByTsm]);
 
   // ─── Expanded TSA details ─────────────────────────────────────────────────────
   const expandedTsaGroups = useMemo(() => {
@@ -254,6 +275,21 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     [expandedTsaGroups]
   );
 
+  // ─── Modal rows for ticket drill-down ────────────────────────────────────────
+  const ticketModalRows = useMemo(() => {
+    if (!ticketModal) return [];
+    const s = ticketModalSearch.toLowerCase();
+    return endorsedTicketRows
+      .filter(r => (r.tsm ?? "").toLowerCase() === ticketModal.tsmId)
+      .filter(r =>
+        !s ||
+        r.company_name?.toLowerCase().includes(s) ||
+        r.ticket_reference_number?.toLowerCase().includes(s) ||
+        r.contact_person?.toLowerCase().includes(s) ||
+        r.contact_number?.toLowerCase().includes(s)
+      );
+  }, [ticketModal, ticketModalSearch, endorsedTicketRows]);
+
   /* ================= RENDER ================= */
   return (
     <div className="space-y-4">
@@ -262,7 +298,16 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       {loading ? (
         <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
       ) : error ? (
-        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
+          <p className="text-xs font-bold text-red-600 uppercase tracking-wide">Failed to load data</p>
+          <p className="text-xs text-red-500 font-mono break-all">{error}</p>
+          <button
+            onClick={fetchActivities}
+            className="text-[11px] font-semibold text-red-600 underline hover:text-red-800"
+          >
+            Retry
+          </button>
+        </div>
       ) : tsmSummary.length === 0 ? (
         <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
           No CSR quotation records found.
@@ -294,21 +339,25 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
                       {item.tsmName}
                     </TableCell>
 
-                    {/* Tickets Endorsed */}
-                    <TableCell className="text-right text-emerald-600 font-semibold">
+                    <TableCell
+                      className="text-right text-emerald-600 font-semibold cursor-pointer hover:underline"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setTicketModal({ tsmId: item.tsmId, tsmName: item.tsmName });
+                        setTicketModalSearch("");
+                      }}
+                    >
                       {item.ticketCount > 0
                         ? item.ticketCount.toLocaleString()
                         : <span className="text-gray-300">—</span>}
                     </TableCell>
 
-                    {/* Quote Done */}
                     <TableCell className="text-right text-blue-600 font-semibold">
                       {item.quoteDoneCount > 0
                         ? item.quoteDoneCount.toLocaleString()
                         : <span className="text-gray-300">—</span>}
                     </TableCell>
 
-                    {/* Per-status columns */}
                     {QUOTATION_STATUSES.map(s => (
                       <TableCell key={s} className="text-right text-gray-700">
                         {item.statusCounts[s] > 0
@@ -325,17 +374,14 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
               <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                 <TableCell className="text-gray-500">Total</TableCell>
 
-                {/* Tickets Endorsed total */}
                 <TableCell className="text-right text-emerald-600">
                   {tsmSummary.reduce((s, i) => s + i.ticketCount, 0).toLocaleString()}
                 </TableCell>
 
-                {/* Quote Done total */}
                 <TableCell className="text-right text-blue-600">
                   {tsmSummary.reduce((s, i) => s + i.quoteDoneCount, 0).toLocaleString()}
                 </TableCell>
 
-                {/* Per-status totals */}
                 {QUOTATION_STATUSES.map(s => (
                   <TableCell key={s} className="text-right text-gray-700">
                     {tsmSummary.reduce((sum, i) => sum + i.statusCounts[s], 0).toLocaleString()}
@@ -344,6 +390,85 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
               </TableRow>
             </TableFooter>
           </Table>
+        </div>
+      )}
+
+      {/* ── Ticket Drill-down Modal ── */}
+      {ticketModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={() => setTicketModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
+              <div>
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Endorsed Tickets — {ticketModal.tsmName}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  {ticketModalRows.length} ticket{ticketModalRows.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <button
+                onClick={() => setTicketModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-lg font-semibold leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="px-5 py-3 border-b">
+              <Input
+                placeholder="Search company, ticket no., contact..."
+                className="text-xs"
+                value={ticketModalSearch}
+                onChange={e => setTicketModalSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Table */}
+            <div className="overflow-auto flex-1">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 text-[11px] sticky top-0">
+                    <TableHead className="text-gray-500 whitespace-nowrap">Date</TableHead>
+                    <TableHead className="text-gray-500 whitespace-nowrap">Ticket Ref No.</TableHead>
+                    <TableHead className="text-gray-500">Company</TableHead>
+                    <TableHead className="text-gray-500 whitespace-nowrap">Contact Person</TableHead>
+                    <TableHead className="text-gray-500 whitespace-nowrap">Contact No.</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ticketModalRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-xs text-gray-400 italic py-8">
+                        No tickets found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    ticketModalRows.map((row, i) => (
+                      <TableRow key={`${row.ticket_reference_number}-${i}`} className="text-xs font-mono hover:bg-gray-50/60">
+                        <TableCell className="text-gray-500 whitespace-nowrap">
+                          {row.date_created ? new Date(row.date_created).toLocaleDateString() : "-"}
+                        </TableCell>
+                        <TableCell className="uppercase text-gray-700 whitespace-nowrap font-semibold">
+                          {row.ticket_reference_number || "-"}
+                        </TableCell>
+                        <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
+                        <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
+                        <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </div>
       )}
 
