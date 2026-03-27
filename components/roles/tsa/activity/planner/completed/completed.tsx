@@ -301,7 +301,7 @@ export const Completed: React.FC<NewTaskProps> = ({
             let badgeClass = "bg-gray-200 text-gray-800";
 
             if (item.status === "Completed") {
-              badgeClass = "bg-gray-400 text-white";
+              badgeClass = "bg-green-400 text-white";
             }
 
             return (

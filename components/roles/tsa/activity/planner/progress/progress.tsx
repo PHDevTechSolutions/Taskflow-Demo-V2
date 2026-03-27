@@ -263,20 +263,15 @@ export const Progress: React.FC<NewTaskProps> = ({
   const allowedStatuses = [
     "On-Progress",
     "Assisted",
-    "Quote-Done",
     "SO-Done",
-    "Not Assisted",
+    "Pending",
     "Cancelled",
   ];
 
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
-    .filter((a) => {
-      return (
-        !a.scheduled_date || a.scheduled_date === "" || a.status === "Cancelled"
-      );
-    })
+    
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) =>
@@ -535,7 +530,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
+                          {/*<DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               openDoneDialog(item.id);
@@ -543,7 +538,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                           >
                             <Check className="mr-2 text-red-500" /> Mark as
                             Pending
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>*/}
 
                           <DropdownMenuItem
                             disabled={updatingId === item.id}
@@ -821,6 +816,10 @@ export const Progress: React.FC<NewTaskProps> = ({
                   <p>
                     <strong>Date Created:</strong>{" "}
                     {new Date(item.date_created).toLocaleDateString()}
+                  </p>
+                  <p>
+                    <strong>Date Updated:</strong>{" "}
+                    {new Date(item.date_updated).toLocaleDateString()}
                   </p>
                 </AccordionContent>
               </AccordionItem>

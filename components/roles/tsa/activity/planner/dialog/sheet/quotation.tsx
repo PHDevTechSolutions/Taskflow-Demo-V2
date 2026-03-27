@@ -632,7 +632,7 @@ Procurement
     const totalWithDelivery = productTotal + deliveryFeeNumber + restockingFeeNumber;
 
     setQuotationAmount(totalWithDelivery.toFixed(2));
-    }, [selectedProducts, deliveryFee, restockingFee, discount]);
+  }, [selectedProducts, deliveryFee, restockingFee, discount]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -1828,7 +1828,6 @@ Procurement
                     <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
                   </label>
                 </Alert>
-
               ) : (
                 <></>
               )}
@@ -1879,43 +1878,50 @@ Procurement
                 </SelectContent>
               </Select>
 
-              <FieldLabel className="mt-3">Action</FieldLabel>
-              <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
-                {[
-                  {
-                    value: "Quote-Done",
-                    title: "Quote-Done",
-                    desc: "The quotation process is complete and finalized.",
-                  },
-                ].map((item) => (
-                  <FieldLabel key={item.value}>
-                    <Field orientation="horizontal" className="w-full items-start">
-                      {/* LEFT */}
-                      <FieldContent className="flex-1">
-                        <FieldTitle>{item.title}</FieldTitle>
-                        <FieldDescription>{item.desc}</FieldDescription>
+              {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
+              {quotationStatus && tsmApprovalStatus ? (
+                <>
+                  <FieldLabel className="mt-3">Action</FieldLabel>
+                  <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                    {[
+                      {
+                        value: "Quote-Done",
+                        title: "Quote-Done",
+                        desc: "The quotation process is complete and finalized.",
+                      },
+                    ].map((item) => (
+                      <FieldLabel key={item.value}>
+                        <Field orientation="horizontal" className="w-full items-start">
+                          {/* LEFT */}
+                          <FieldContent className="flex-1">
+                            <FieldTitle>{item.title}</FieldTitle>
+                            <FieldDescription>{item.desc}</FieldDescription>
 
-                        {/* Buttons only visible if selected */}
-                        {status === item.value && (
-                          <div className="mt-4 flex gap-2">
-                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
-                              <ArrowLeft /> Back
-                            </Button>
+                            {/* Buttons only visible if selected */}
+                            {status === item.value && (
+                              <div className="mt-4 flex gap-2">
+                                <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                                  <ArrowLeft /> Back
+                                </Button>
+                                <Button className="rounded-none" onClick={handleSaveClick}>
+                                  Save <CheckCircle2Icon />
+                                </Button>
+                              </div>
+                            )}
+                          </FieldContent>
 
-                            {/* Changed Save button handler */}
-                            <Button className="rounded-none" onClick={handleSaveClick}>
-                              Save <CheckCircle2Icon />
-                            </Button>
-                          </div>
-                        )}
-                      </FieldContent>
-
-                      {/* RIGHT */}
-                      <RadioGroupItem value={item.value} />
-                    </Field>
-                  </FieldLabel>
-                ))}
-              </RadioGroup>
+                          {/* RIGHT */}
+                          <RadioGroupItem value={item.value} />
+                        </Field>
+                      </FieldLabel>
+                    ))}
+                  </RadioGroup>
+                </>
+              ) : (
+                <p className="mt-3 text-xs text-gray-400 italic">
+                  Complete the Status and Approval Process fields above to proceed.
+                </p>
+              )}
             </FieldSet>
           </FieldGroup>
 
@@ -2058,440 +2064,439 @@ Procurement
 
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
-          <div
-            className={`h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto ${selectedProducts.length === 0
-              ? "grid-cols-1"
-              : "grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
-              }`}
-          >
+            <div
+              className={`h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto ${selectedProducts.length === 0
+                ? "grid-cols-1"
+                : "grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
+                }`}
+            >
 
-            {/* Left side: Search + checkbox selected */}
-            <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
-              <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
+              {/* Left side: Search + checkbox selected */}
+              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+                <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
 
-                {/* Source Switcher */}
-                <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                  {[
-                    { source: "shopify", label: "Shopify", icon: "🛍️" },
-                    { source: "firebase_shopify", label: "CMS", icon: "📦" },
-                    { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
-                  ].map(({ source: s, label, icon }) => (
+                  {/* Source Switcher */}
+                  <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                    {[
+                      { source: "shopify", label: "Shopify", icon: "🛍️" },
+                      { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                      { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
+                    ].map(({ source: s, label, icon }) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                        className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
+                      >
+                        <span className="text-sm mb-0.5">{icon}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
+
                     <button
-                      key={s}
                       type="button"
-                      onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
+                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
-                      <span className="text-sm mb-0.5">{icon}</span>
-                      <span>{label}</span>
+                      <span className="text-sm mb-0.5">🧾</span>
+                      <span>SPF</span>
                     </button>
-                  ))}
-                  
-                  <button
-                    type="button"
-                    onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
-                    className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
-                  >
-                    <span className="text-sm mb-0.5">🧾</span>
-                    <span>SPF</span>
-                  </button>
-                </div>
-
-                {/* SPF Manual Entry Form OR Normal Search Input — never both */}
-                {isSpfMode ? (
-                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
-                      <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
-                    </div>
-
-                    {/* Cloudinary Image Upload */}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-500">Product Image (optional)</label>
-                      <div className="flex items-center gap-2">
-                        <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
-                          <ImagePlus className="w-4 h-4 text-red-400" />
-                          <span className="text-[10px] font-bold uppercase text-red-500">
-                            {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change Image" : "Upload Image"}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            disabled={spfUploading}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setSpfUploading(true);
-                              try {
-                                // Delete old image if replacing
-                                if (spfManualProduct.cloudinaryPublicId) {
-                                  await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
-                                }
-                                const formData = new FormData();
-                                formData.append("file", file);
-                                const res = await fetch("/api/cloudinary/upload", {
-                                  method: "POST",
-                                  body: formData,
-                                });
-                                const data = await res.json();
-                                if (data.url) {
-                                  setSpfManualProduct(prev => ({
-                                    ...prev,
-                                    imageUrl: data.url,
-                                    cloudinaryPublicId: data.publicId || "",
-                                  }));
-                                }
-                              } catch (err) {
-                                console.error("Upload failed:", err);
-                              } finally {
-                                setSpfUploading(false);
-                              }
-                            }}
-                          />
-                        </label>
-                        {spfManualProduct.imageUrl && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
-                              setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" }));
-                            }}
-                            className="p-1 text-red-500 hover:text-red-700"
-                            title="Remove image"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      {spfManualProduct.imageUrl && (
-                        <img
-                          src={spfManualProduct.imageUrl}
-                          alt="preview"
-                          className="w-20 h-20 object-cover border border-gray-200 mt-1 rounded-sm"
-                        />
-                      )}
-                    </div>
-
-                    {/* Product Name */}
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
-                      <Input
-                        type="text"
-                        placeholder="Enter product name..."
-                        value={spfManualProduct.title}
-                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))}
-                        className="rounded-none text-xs uppercase"
-                      />
-                    </div>
-
-                    {/* SKU */}
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
-                      <Input
-                        type="text"
-                        placeholder="Enter item code..."
-                        value={spfManualProduct.sku}
-                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))}
-                        className="rounded-none text-xs uppercase"
-                      />
-                    </div>
-
-                    {/* Quantity & Price */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder="1"
-                          value={spfManualProduct.quantity}
-                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
-                          className="rounded-none text-xs"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          placeholder="0.00"
-                          value={spfManualProduct.price}
-                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))}
-                          className="rounded-none text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
-                      <Textarea
-                        placeholder="Enter product description or specifications..."
-                        value={spfManualProduct.description}
-                        onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))}
-                        rows={3}
-                        className="rounded text-xs"
-                      />
-                    </div>
-
-                    {/* Add Button */}
-                    <Button
-                      type="button"
-                      disabled={!spfManualProduct.title}
-                      onClick={() => {
-                        setSelectedProducts(prev => [
-                          ...prev,
-                          {
-                            id: `spf-${crypto.randomUUID()}`,
-                            uid: crypto.randomUUID(),
-                            title: spfManualProduct.title.toUpperCase(),
-                            description: spfManualProduct.description,
-                            skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
-                            images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
-                            quantity: spfManualProduct.quantity,
-                            price: spfManualProduct.price,
-                            discount: 0,
-                            isDiscounted: false,
-                            cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
-                          }
-                        ]);
-                        setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
-                        setMobilePanelTab("products"); // auto-switch to products view on mobile
-                      }}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 h-9 mt-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add SPF Product
-                    </Button>
                   </div>
-                ) : isSpf1Mode ? (
-                  <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
-                    <div className="flex items-center justify-between gap-2">
+
+                  {/* SPF Manual Entry Form OR Normal Search Input — never both */}
+                  {isSpfMode ? (
+                    <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF 1</span>
-                        <span className="text-[9px] text-red-400 italic">— approved SPF list</span>
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
+                        <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
                       </div>
-                      {spf1Loading && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">
-                          Loading…
-                        </span>
-                      )}
-                    </div>
 
-                    <Input
-                      type="text"
-                      className="uppercase rounded-none bg-white"
-                      placeholder="Search SPF number..."
-                      value={spf1Search}
-                      onChange={(e) => setSpf1Search(e.target.value)}
-                    />
-
-                    {spf1Error && (
-                      <div className="text-[11px] text-red-600 font-medium">
-                        {spf1Error}
-                      </div>
-                    )}
-
-                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                      {spf1Records
-                        .filter((r) => {
-                          const q = spf1Search.trim().toLowerCase();
-                          if (!q) return true;
-                          return (r.spf_number || "").toLowerCase().includes(q);
-                        })
-                        .map((r) => (
-                          <div
-                            key={r.id}
-                            className={`w-full rounded-none border transition overflow-hidden ${
-                              spf1Selected?.id === r.id
-                                ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
-                                : "border-red-200 bg-white shadow-sm"
-                            }`}
-                          >
+                      {/* Cloudinary Image Upload */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Product Image (optional)</label>
+                        <div className="flex items-center gap-2">
+                          <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                            <ImagePlus className="w-4 h-4 text-red-400" />
+                            <span className="text-[10px] font-bold uppercase text-red-500">
+                              {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change Image" : "Upload Image"}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={spfUploading}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setSpfUploading(true);
+                                try {
+                                  // Delete old image if replacing
+                                  if (spfManualProduct.cloudinaryPublicId) {
+                                    await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                  }
+                                  const formData = new FormData();
+                                  formData.append("file", file);
+                                  const res = await fetch("/api/cloudinary/upload", {
+                                    method: "POST",
+                                    body: formData,
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) {
+                                    setSpfManualProduct(prev => ({
+                                      ...prev,
+                                      imageUrl: data.url,
+                                      cloudinaryPublicId: data.publicId || "",
+                                    }));
+                                  }
+                                } catch (err) {
+                                  console.error("Upload failed:", err);
+                                } finally {
+                                  setSpfUploading(false);
+                                }
+                              }}
+                            />
+                          </label>
+                          {spfManualProduct.imageUrl && (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (spf1Selected?.id === r.id) {
-                                  setSpf1Selected(null);
-                                  return;
-                                }
-                                setSpf1Selected(r);
+                              onClick={async () => {
+                                await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" }));
                               }}
-                              className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
+                              className="p-1 text-red-500 hover:text-red-700"
+                              title="Remove image"
                             >
-                              <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
-                                {r.spf_number || `SPF #${r.id}`}
-                              </div>
-                              <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
-                                {spf1Selected?.id === r.id ? "▾" : "▸"}
-                              </span>
+                              <Trash className="w-4 h-4" />
                             </button>
+                          )}
+                        </div>
+                        {spfManualProduct.imageUrl && (
+                          <img
+                            src={spfManualProduct.imageUrl}
+                            alt="preview"
+                            className="w-20 h-20 object-cover border border-gray-200 mt-1 rounded-sm"
+                          />
+                        )}
+                      </div>
 
-                            {spf1Selected?.id === r.id && (
-                              <div className="border-t border-red-100 bg-gray-50/90">
-                                <div className="ml-2 border-l-2 border-red-400 pl-3 pr-2 py-2.5 space-y-3">
-                                  <div className="text-[10px] text-gray-700 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                                    <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
-                                      Ref: {r.referenceid || "—"}
-                                    </span>
-                                    <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {summarizeProcField(r.company_name)}</span>
-                                    <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {summarizeProcField(r.supplier_brand)}</span>
-                                    <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {summarizeProcField(r.contact_name)}</span>
-                                    <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {summarizeProcField(r.contact_number)}</span>
-                                    <span className="truncate col-span-2"><span className="font-bold text-gray-600">Project lead time:</span> {summarizeProcField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMobilePanelTab("products")}
-                                    className="w-full text-left text-[10px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 py-1 border-t border-red-100/80"
-                                  >
-                                    View selected in quotation list →
-                                  </button>
+                      {/* Product Name */}
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
+                        <Input
+                          type="text"
+                          placeholder="Enter product name..."
+                          value={spfManualProduct.title}
+                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))}
+                          className="rounded-none text-xs uppercase"
+                        />
+                      </div>
 
-                                  <div className="space-y-2 pt-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Line items</span>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setSpf1Selected(null); }}
-                                        className="text-[9px] font-black uppercase tracking-wider text-red-600 hover:text-red-800"
-                                      >
-                                        Collapse
-                                      </button>
-                                    </div>
-                                    {parseSpfCreationProducts(r).map((p, idx) => (
-                                      <div key={`${r.id}-${idx}`} className="border border-gray-200 bg-white p-2 shadow-sm">
-                                        <div className="flex items-start gap-2">
-                                          {p.imageUrl ? (
-                                            <img
-                                              src={p.imageUrl}
-                                              alt={p.title}
-                                              className="w-12 h-12 object-cover border border-gray-200 shrink-0"
-                                            />
-                                          ) : (
-                                            <div className="w-12 h-12 bg-gray-50 border border-gray-200 shrink-0" />
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <div className="text-[10px] font-black uppercase tracking-wider text-gray-800 truncate font-mono">
-                                              {p.sku || p.title}
-                                            </div>
-                                            <div className="text-[10px] text-gray-500 mt-0.5 grid grid-cols-2 gap-x-2">
-                                              <span className="truncate"><span className="font-bold">Min qty:</span> {p.quantity}</span>
-                                              <span className="truncate"><span className="font-bold">Price:</span> ₱{p.finalSellingPrice.toFixed(2)}</span>
-                                              <span className="truncate col-span-2"><span className="font-bold">Lead:</span> {p.leadTime || "—"}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="mt-2">
-                                          <Button
-                                            type="button"
-                                            disabled={p.quantity <= 0}
-                                            className="w-full rounded-none bg-red-600 hover:bg-red-700 text-white h-8 text-[11px] font-black uppercase tracking-wider"
-                                            onClick={() => {
-                                              const specHtml = formatSpfTechSpecToHtml(p.technicalSpecification || "");
-                                              const leadHtml = formatProcurementLeadHtml(p.leadTime || "");
-                                              setSelectedProducts((prev) => [
-                                                ...prev,
-                                                {
-                                                  id: `spf1-${crypto.randomUUID()}`,
-                                                  uid: crypto.randomUUID(),
-                                                  title: p.sku ? p.sku.toUpperCase() : p.title,
-                                                  description: `${specHtml}${leadHtml}`,
-                                                  skus: p.sku ? [p.sku] : [],
-                                                  images: p.imageUrl ? [{ src: p.imageUrl }] : [],
-                                                  quantity: Math.max(1, p.quantity),
-                                                  price: p.finalSellingPrice,
-                                                  discount: 0,
-                                                  isDiscounted: false,
-                                                  procurementMinQty: p.quantity,
-                                                  procurementLeadTime: p.leadTime,
-                                                  procurementLockedPrice: true,
-                                                  procurementItemCode: p.sku || "",
-                                                },
-                                              ]);
-                                              setMobilePanelTab("products");
-                                            }}
-                                          >
-                                            {p.quantity <= 0 ? "No PD qty" : "Add to quotation"}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                      {/* SKU */}
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
+                        <Input
+                          type="text"
+                          placeholder="Enter item code..."
+                          value={spfManualProduct.sku}
+                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))}
+                          className="rounded-none text-xs uppercase"
+                        />
+                      </div>
+
+                      {/* Quantity & Price */}
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="1"
+                            value={spfManualProduct.quantity}
+                            onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                            className="rounded-none text-xs"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="0.00"
+                            value={spfManualProduct.price}
+                            onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                            className="rounded-none text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
+                        <Textarea
+                          placeholder="Enter product description or specifications..."
+                          value={spfManualProduct.description}
+                          onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))}
+                          rows={3}
+                          className="rounded text-xs"
+                        />
+                      </div>
+
+                      {/* Add Button */}
+                      <Button
+                        type="button"
+                        disabled={!spfManualProduct.title}
+                        onClick={() => {
+                          setSelectedProducts(prev => [
+                            ...prev,
+                            {
+                              id: `spf-${crypto.randomUUID()}`,
+                              uid: crypto.randomUUID(),
+                              title: spfManualProduct.title.toUpperCase(),
+                              description: spfManualProduct.description,
+                              skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
+                              images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
+                              quantity: spfManualProduct.quantity,
+                              price: spfManualProduct.price,
+                              discount: 0,
+                              isDiscounted: false,
+                              cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
+                            }
+                          ]);
+                          setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
+                          setMobilePanelTab("products"); // auto-switch to products view on mobile
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 h-9 mt-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add SPF Product
+                      </Button>
                     </div>
-                  </div>
-                ) : (
-                  !isManualEntry && (
-                    <>
-                      <FieldLabel>Products:</FieldLabel>
+                  ) : isSpf1Mode ? (
+                    <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF 1</span>
+                          <span className="text-[9px] text-red-400 italic">— approved SPF list</span>
+                        </div>
+                        {spf1Loading && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">
+                            Loading…
+                          </span>
+                        )}
+                      </div>
+
                       <Input
                         type="text"
-                        className="uppercase rounded-none"
-                        placeholder="Search Product Name or Item Code.."
-                        value={searchTerm}
-                        onChange={async (e) => {
-                          if (isManualEntry) return;
-                          const rawValue = e.target.value;
-                          setSearchTerm(rawValue);
+                        className="uppercase rounded-none bg-white"
+                        placeholder="Search SPF number..."
+                        value={spf1Search}
+                        onChange={(e) => setSpf1Search(e.target.value)}
+                      />
 
-                          if (rawValue.length < 2) {
-                            setSearchResults([]);
-                            return;
-                          }
+                      {spf1Error && (
+                        <div className="text-[11px] text-red-600 font-medium">
+                          {spf1Error}
+                        </div>
+                      )}
 
-                          setIsSearching(true);
-                          try {
-                            if (productSource === 'shopify') {
-                              const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
-                              let data = await res.json();
-                              setSearchResults(data.products || []);
-                            } else if (
-                              productSource === "firebase_shopify" ||
-                              productSource === "firebase_taskflow"
-                            ) {
-                              const searchUpper = rawValue.toUpperCase();
+                      <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                        {spf1Records
+                          .filter((r) => {
+                            const q = spf1Search.trim().toLowerCase();
+                            if (!q) return true;
+                            return (r.spf_number || "").toLowerCase().includes(q);
+                          })
+                          .map((r) => (
+                            <div
+                              key={r.id}
+                              className={`w-full rounded-none border transition overflow-hidden ${spf1Selected?.id === r.id
+                                  ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
+                                  : "border-red-200 bg-white shadow-sm"
+                                }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (spf1Selected?.id === r.id) {
+                                    setSpf1Selected(null);
+                                    return;
+                                  }
+                                  setSpf1Selected(r);
+                                }}
+                                className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
+                              >
+                                <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
+                                  {r.spf_number || `SPF #${r.id}`}
+                                </div>
+                                <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
+                                  {spf1Selected?.id === r.id ? "▾" : "▸"}
+                                </span>
+                              </button>
 
-                              const websiteFilter =
-                                productSource === "firebase_shopify"
-                                  ? "Shopify"
-                                  : "Taskflow";
+                              {spf1Selected?.id === r.id && (
+                                <div className="border-t border-red-100 bg-gray-50/90">
+                                  <div className="ml-2 border-l-2 border-red-400 pl-3 pr-2 py-2.5 space-y-3">
+                                    <div className="text-[10px] text-gray-700 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                      <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
+                                        Ref: {r.referenceid || "—"}
+                                      </span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {summarizeProcField(r.company_name)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {summarizeProcField(r.supplier_brand)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {summarizeProcField(r.contact_name)}</span>
+                                      <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {summarizeProcField(r.contact_number)}</span>
+                                      <span className="truncate col-span-2"><span className="font-bold text-gray-600">Project lead time:</span> {summarizeProcField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setMobilePanelTab("products")}
+                                      className="w-full text-left text-[10px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 py-1 border-t border-red-100/80"
+                                    >
+                                      View selected in quotation list →
+                                    </button>
 
-                              const q = query(
-                                collection(db, "products"),
-                                where("websites", "array-contains", websiteFilter)
-                              );
+                                    <div className="space-y-2 pt-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Line items</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setSpf1Selected(null); }}
+                                          className="text-[9px] font-black uppercase tracking-wider text-red-600 hover:text-red-800"
+                                        >
+                                          Collapse
+                                        </button>
+                                      </div>
+                                      {parseSpfCreationProducts(r).map((p, idx) => (
+                                        <div key={`${r.id}-${idx}`} className="border border-gray-200 bg-white p-2 shadow-sm">
+                                          <div className="flex items-start gap-2">
+                                            {p.imageUrl ? (
+                                              <img
+                                                src={p.imageUrl}
+                                                alt={p.title}
+                                                className="w-12 h-12 object-cover border border-gray-200 shrink-0"
+                                              />
+                                            ) : (
+                                              <div className="w-12 h-12 bg-gray-50 border border-gray-200 shrink-0" />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-[10px] font-black uppercase tracking-wider text-gray-800 truncate font-mono">
+                                                {p.sku || p.title}
+                                              </div>
+                                              <div className="text-[10px] text-gray-500 mt-0.5 grid grid-cols-2 gap-x-2">
+                                                <span className="truncate"><span className="font-bold">Min qty:</span> {p.quantity}</span>
+                                                <span className="truncate"><span className="font-bold">Price:</span> ₱{p.finalSellingPrice.toFixed(2)}</span>
+                                                <span className="truncate col-span-2"><span className="font-bold">Lead:</span> {p.leadTime || "—"}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="mt-2">
+                                            <Button
+                                              type="button"
+                                              disabled={p.quantity <= 0}
+                                              className="w-full rounded-none bg-red-600 hover:bg-red-700 text-white h-8 text-[11px] font-black uppercase tracking-wider"
+                                              onClick={() => {
+                                                const specHtml = formatSpfTechSpecToHtml(p.technicalSpecification || "");
+                                                const leadHtml = formatProcurementLeadHtml(p.leadTime || "");
+                                                setSelectedProducts((prev) => [
+                                                  ...prev,
+                                                  {
+                                                    id: `spf1-${crypto.randomUUID()}`,
+                                                    uid: crypto.randomUUID(),
+                                                    title: p.sku ? p.sku.toUpperCase() : p.title,
+                                                    description: `${specHtml}${leadHtml}`,
+                                                    skus: p.sku ? [p.sku] : [],
+                                                    images: p.imageUrl ? [{ src: p.imageUrl }] : [],
+                                                    quantity: Math.max(1, p.quantity),
+                                                    price: p.finalSellingPrice,
+                                                    discount: 0,
+                                                    isDiscounted: false,
+                                                    procurementMinQty: p.quantity,
+                                                    procurementLeadTime: p.leadTime,
+                                                    procurementLockedPrice: true,
+                                                    procurementItemCode: p.sku || "",
+                                                  },
+                                                ]);
+                                                setMobilePanelTab("products");
+                                              }}
+                                            >
+                                              {p.quantity <= 0 ? "No PD qty" : "Add to quotation"}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : (
+                    !isManualEntry && (
+                      <>
+                        <FieldLabel>Products:</FieldLabel>
+                        <Input
+                          type="text"
+                          className="uppercase rounded-none"
+                          placeholder="Search Product Name or Item Code.."
+                          value={searchTerm}
+                          onChange={async (e) => {
+                            if (isManualEntry) return;
+                            const rawValue = e.target.value;
+                            setSearchTerm(rawValue);
 
-                              const querySnapshot = await getDocs(q);
+                            if (rawValue.length < 2) {
+                              setSearchResults([]);
+                              return;
+                            }
 
-                              const firebaseResults = querySnapshot.docs
-                                .map(doc => {
-                                  const data = doc.data();
+                            setIsSearching(true);
+                            try {
+                              if (productSource === 'shopify') {
+                                const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
+                                let data = await res.json();
+                                setSearchResults(data.products || []);
+                              } else if (
+                                productSource === "firebase_shopify" ||
+                                productSource === "firebase_taskflow"
+                              ) {
+                                const searchUpper = rawValue.toUpperCase();
 
-                                  let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                  let rawSpecsText = "";
+                                const websiteFilter =
+                                  productSource === "firebase_shopify"
+                                    ? "Shopify"
+                                    : "Taskflow";
 
-                                  if (Array.isArray(data.technicalSpecs)) {
-                                    data.technicalSpecs.forEach((group: any) => {
-                                      rawSpecsText += ` ${group.specGroup}`;
+                                const q = query(
+                                  collection(db, "products"),
+                                  where("websites", "array-contains", websiteFilter)
+                                );
 
-                                      specsHtml += `
+                                const querySnapshot = await getDocs(q);
+
+                                const firebaseResults = querySnapshot.docs
+                                  .map(doc => {
+                                    const data = doc.data();
+
+                                    let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                    let rawSpecsText = "";
+
+                                    if (Array.isArray(data.technicalSpecs)) {
+                                      data.technicalSpecs.forEach((group: any) => {
+                                        rawSpecsText += ` ${group.specGroup}`;
+
+                                        specsHtml += `
 <div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
 ${group.specGroup}
 </div>`;
 
-                                      specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+                                        specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
 
-                                      group.specs?.forEach((spec: any) => {
-                                        rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                        group.specs?.forEach((spec: any) => {
+                                          rawSpecsText += ` ${spec.name} ${spec.value}`;
 
-                                        specsHtml += `
+                                          specsHtml += `
 <tr>
 <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
 <b>${spec.name}</b>
@@ -2500,399 +2505,399 @@ ${group.specGroup}
 ${spec.value}
 </td>
 </tr>`;
+                                        });
+
+                                        specsHtml += `</table>`;
                                       });
+                                    }
 
-                                      specsHtml += `</table>`;
-                                    });
-                                  }
+                                    return {
+                                      id: doc.id,
+                                      title: data.name || "No Name",
+                                      price: data.salePrice || data.regularPrice || 0,
+                                      description: specsHtml,
+                                      images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                      skus: data.itemCode ? [data.itemCode] : [],
+                                      discount: 0,
+                                      tempSearchMetadata: (
+                                        data.name +
+                                        " " +
+                                        (data.itemCode || "") +
+                                        " " +
+                                        rawSpecsText
+                                      ).toUpperCase()
+                                    };
+                                  })
+                                  .filter(p => p.tempSearchMetadata.includes(searchUpper));
 
-                                  return {
-                                    id: doc.id,
-                                    title: data.name || "No Name",
-                                    price: data.salePrice || data.regularPrice || 0,
-                                    description: specsHtml,
-                                    images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                    skus: data.itemCode ? [data.itemCode] : [],
-                                    discount: 0,
-                                    tempSearchMetadata: (
-                                      data.name +
-                                      " " +
-                                      (data.itemCode || "") +
-                                      " " +
-                                      rawSpecsText
-                                    ).toUpperCase()
-                                  };
-                                })
-                                .filter(p => p.tempSearchMetadata.includes(searchUpper));
-
-                              setSearchResults(firebaseResults);
+                                setSearchResults(firebaseResults);
+                              }
+                            } catch (err) {
+                              console.error("Search Protocol Failure:", err);
+                            } finally {
+                              setIsSearching(false);
                             }
-                          } catch (err) {
-                            console.error("Search Protocol Failure:", err);
-                          } finally {
-                            setIsSearching(false);
-                          }
-                        }}
-                      />
-                      {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
-                    </>
-                  )
-                )}
-              </div>
-
-              {/* Search Results — only shown when not in SPF mode */}
-              {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
-                <>
-                  <div className="text-xs text-green-600 mb-2">
-                    Note: you can choose the same products.
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-4">
-                    {searchResults.map((item) => (
-                      <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
-                        <CardHeader className="flex items-center justify-between gap-3">
-                          <label className="flex items-center gap-2 cursor-pointer flex-1">
-                            <Button
-                              onClick={() => {
-                                setSelectedProducts((prev) => [
-                                  ...prev,
-                                  {
-                                    ...item,
-                                    uid: crypto.randomUUID(),
-                                    quantity: 1,
-                                    price: 0,
-                                    discount: 0,
-                                    description: item.description || "",
-                                  },
-                                ]);
-                                setMobilePanelTab("products"); // auto-switch to products view on mobile
-                              }}
-                              className="w-6 h-6 p-0 flex items-center justify-center rounded-full cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                            <CardTitle className="text-base text-xs font-semibold">
-                              {item.title}
-                            </CardTitle>
-                          </label>
-                        </CardHeader>
-
-                        <CardContent className="flex justify-center p-2">
-                          {item.images?.[0]?.src ? (
-                            <img
-                              src={item.images[0].src}
-                              alt={item.title}
-                              className="w-24 h-24 object-cover rounded"
-                            />
-                          ) : (
-                            <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400 cursor-not-allowed">
-                              No Image
-                            </div>
-                          )}
-                        </CardContent>
-
-                        <CardFooter className="text-xs text-gray-600">
-                          {item.skus && item.skus.length > 0
-                            ? `ITEM CODE${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
-                            : "No item code available"}
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* Selected Products checkboxes */}
-              <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[20vh] lg:max-h-[35vh] border border-dashed p-2 rounded-lg">
-                {selectedProducts.length === 0 && (
-                  <p className="text-xs text-gray-500">No products selected.</p>
-                )}
-
-                {selectedProducts.map((item, index) => (
-                  <div key={item.uid} className="flex flex-col">
-                    {index !== 0 && <Separator className="my-1" />}
-                    <label className="flex items-center gap-2 text-xs cursor-pointer font-bold">
-                      <input
-                        type="checkbox"
-                        checked
-                        className="accent-blue-500"
-                        onChange={() => {
-                          const toRemove = selectedProducts.find((p) => p.uid === item.uid);
-                          if (toRemove?.cloudinaryPublicId) {
-                            deleteCloudinaryImage(toRemove.cloudinaryPublicId);
-                          }
-                          setSelectedProducts((prev) =>
-                            prev.filter((p) => p.uid !== item.uid)
-                          );
-                          setVisibleDescriptions((prev) => {
-                            const copy = { ...prev };
-                            delete copy[item.uid];
-                            return copy;
-                          });
-                        }}
-                      />
-                      <span>{item.title}</span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right side: Selected Products as Table with Image & Editable Description */}
-            <div className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"}`}>
-              {selectedProducts.length > 0 && (
-                <>
-                  {/* Controls bar - desktop horizontal, mobile compact */}
-                  <div className="flex flex-col gap-2 mb-3">
-                    <div className="hidden lg:flex items-center justify-between mb-1">
-                      <h4 className="font-black text-sm tracking-tight">
-                        Product List
-                        <span className="ml-2 text-xs font-normal text-gray-400">({selectedProducts.length} item{selectedProducts.length !== 1 ? "s" : ""})</span>
-                      </h4>
-                    </div>
-                    <h4 className="font-bold text-xs lg:hidden">Selected Products: ({selectedProducts.length})</h4>
-
-                    {/* Subject + VAT + WHT — single compact toolbar */}
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
-                      {/* Subject */}
-                      <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
-                        <input
-                          type="text"
-                          value={quotationSubject}
-                          onChange={(e) => setQuotationSubject(e.target.value)}
-                          placeholder="For Quotation"
-                          className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                          }}
                         />
-                      </div>
+                        {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
+                      </>
+                    )
+                  )}
+                </div>
 
-                      {/* VAT */}
-                      <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
-                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
-                        <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-2">
-                          {[{v:"vat_inc",l:"Inc"},{v:"vat_exe",l:"Exe"},{v:"zero_rated",l:"0%"}].map(({v,l})=>(
-                            <div key={v} className="flex items-center gap-0.5">
-                              <RadioGroupItem value={v} id={`vat-${v}`} />
-                              <label htmlFor={`vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
+                {/* Search Results — only shown when not in SPF mode */}
+                {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
+                  <>
+                    <div className="text-xs text-green-600 mb-2">
+                      Note: you can choose the same products.
+                    </div>
 
-                      {/* EWT */}
-                      <div className="flex items-center gap-2 px-3 py-2">
-                        <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
-                        <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-2">
-                          {[{v:"none",l:"None"},{v:"wht_1",l:"1%"},{v:"wht_2",l:"2%"}].map(({v,l})=>(
-                            <div key={v} className="flex items-center gap-0.5">
-                              <RadioGroupItem value={v} id={`wht-${v}`} />
-                              <label htmlFor={`wht-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                            </div>
-                          ))}
-                        </RadioGroup>
+                    <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-4">
+                      {searchResults.map((item) => (
+                        <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
+                          <CardHeader className="flex items-center justify-between gap-3">
+                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                              <Button
+                                onClick={() => {
+                                  setSelectedProducts((prev) => [
+                                    ...prev,
+                                    {
+                                      ...item,
+                                      uid: crypto.randomUUID(),
+                                      quantity: 1,
+                                      price: 0,
+                                      discount: 0,
+                                      description: item.description || "",
+                                    },
+                                  ]);
+                                  setMobilePanelTab("products"); // auto-switch to products view on mobile
+                                }}
+                                className="w-6 h-6 p-0 flex items-center justify-center rounded-full cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                              <CardTitle className="text-base text-xs font-semibold">
+                                {item.title}
+                              </CardTitle>
+                            </label>
+                          </CardHeader>
+
+                          <CardContent className="flex justify-center p-2">
+                            {item.images?.[0]?.src ? (
+                              <img
+                                src={item.images[0].src}
+                                alt={item.title}
+                                className="w-24 h-24 object-cover rounded"
+                              />
+                            ) : (
+                              <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400 cursor-not-allowed">
+                                No Image
+                              </div>
+                            )}
+                          </CardContent>
+
+                          <CardFooter className="text-xs text-gray-600">
+                            {item.skus && item.skus.length > 0
+                              ? `ITEM CODE${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
+                              : "No item code available"}
+                          </CardFooter>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Selected Products checkboxes */}
+                <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[20vh] lg:max-h-[35vh] border border-dashed p-2 rounded-lg">
+                  {selectedProducts.length === 0 && (
+                    <p className="text-xs text-gray-500">No products selected.</p>
+                  )}
+
+                  {selectedProducts.map((item, index) => (
+                    <div key={item.uid} className="flex flex-col">
+                      {index !== 0 && <Separator className="my-1" />}
+                      <label className="flex items-center gap-2 text-xs cursor-pointer font-bold">
+                        <input
+                          type="checkbox"
+                          checked
+                          className="accent-blue-500"
+                          onChange={() => {
+                            const toRemove = selectedProducts.find((p) => p.uid === item.uid);
+                            if (toRemove?.cloudinaryPublicId) {
+                              deleteCloudinaryImage(toRemove.cloudinaryPublicId);
+                            }
+                            setSelectedProducts((prev) =>
+                              prev.filter((p) => p.uid !== item.uid)
+                            );
+                            setVisibleDescriptions((prev) => {
+                              const copy = { ...prev };
+                              delete copy[item.uid];
+                              return copy;
+                            });
+                          }}
+                        />
+                        <span>{item.title}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right side: Selected Products as Table with Image & Editable Description */}
+              <div className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"}`}>
+                {selectedProducts.length > 0 && (
+                  <>
+                    {/* Controls bar - desktop horizontal, mobile compact */}
+                    <div className="flex flex-col gap-2 mb-3">
+                      <div className="hidden lg:flex items-center justify-between mb-1">
+                        <h4 className="font-black text-sm tracking-tight">
+                          Product List
+                          <span className="ml-2 text-xs font-normal text-gray-400">({selectedProducts.length} item{selectedProducts.length !== 1 ? "s" : ""})</span>
+                        </h4>
+                      </div>
+                      <h4 className="font-bold text-xs lg:hidden">Selected Products: ({selectedProducts.length})</h4>
+
+                      {/* Subject + VAT + WHT — single compact toolbar */}
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
+                        {/* Subject */}
+                        <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
+                          <input
+                            type="text"
+                            value={quotationSubject}
+                            onChange={(e) => setQuotationSubject(e.target.value)}
+                            placeholder="For Quotation"
+                            className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                          />
+                        </div>
+
+                        {/* VAT */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
+                          <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-2">
+                            {[{ v: "vat_inc", l: "Inc" }, { v: "vat_exe", l: "Exe" }, { v: "zero_rated", l: "0%" }].map(({ v, l }) => (
+                              <div key={v} className="flex items-center gap-0.5">
+                                <RadioGroupItem value={v} id={`vat-${v}`} />
+                                <label htmlFor={`vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </div>
+
+                        {/* EWT */}
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
+                          <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-2">
+                            {[{ v: "none", l: "None" }, { v: "wht_1", l: "1%" }, { v: "wht_2", l: "2%" }].map(({ v, l }) => (
+                              <div key={v} className="flex items-center gap-0.5">
+                                <RadioGroupItem value={v} id={`wht-${v}`} />
+                                <label htmlFor={`wht-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="overflow-x-auto">
-                  <table className="w-full text-xs table-auto border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
-                        <th className="border border-gray-700 p-2 text-center w-10">
-                          <label className="flex items-center justify-center gap-1 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedProducts.every((p) => p.isDiscounted)}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setSelectedProducts((prev) =>
-                                  prev.map((p) => ({
-                                    ...p,
-                                    isDiscounted: checked,
-                                    discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
-                                  }))
-                                );
-                              }}
-                            />
-                            <span className="font-bold">Disc%</span>
-                          </label>
-                        </th>
-                        <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
-                        <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
-                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
-                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
-                        <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
-                        <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
-                        <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedProducts.map((p, idx) => {
-                        const isDiscounted = p.isDiscounted ?? false;
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                        <thead>
+                          <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                            <th className="border border-gray-700 p-2 text-center w-10">
+                              <label className="flex items-center justify-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProducts.every((p) => p.isDiscounted)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setSelectedProducts((prev) =>
+                                      prev.map((p) => ({
+                                        ...p,
+                                        isDiscounted: checked,
+                                        discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
+                                      }))
+                                    );
+                                  }}
+                                />
+                                <span className="font-bold">Disc%</span>
+                              </label>
+                            </th>
+                            <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
+                            <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
+                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
+                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
+                            <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
+                            <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
+                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedProducts.map((p, idx) => {
+                            const isDiscounted = p.isDiscounted ?? false;
 
-                        // default discount based on VAT type
-                        const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
-                        const rowDiscount = p.discount ?? defaultDiscount;
+                            // default discount based on VAT type
+                            const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
+                            const rowDiscount = p.discount ?? defaultDiscount;
 
-                        const baseAmount = p.price * p.quantity;
-                        const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
-                        const totalAfterDiscount = baseAmount - discountedAmount;
+                            const baseAmount = p.price * p.quantity;
+                            const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
+                            const totalAfterDiscount = baseAmount - discountedAmount;
 
-                        const isExpanded = expandedRows[p.uid] ?? false;
+                            const isExpanded = expandedRows[p.uid] ?? false;
 
-                        return (
-                          <React.Fragment key={p.uid}>
-                            <tr
-                              className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "" : ""}`}
+                            return (
+                              <React.Fragment key={p.uid}>
+                                <tr
+                                  className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "" : ""}`}
 
-                            >
-                              <td className="border border-gray-300 p-4">
-                                <div className="flex items-center justify-start gap-2">
-                                  {/* Styled Checkbox */}
-                                  <input
-                                    type="checkbox"
-                                    checked={isDiscounted}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setSelectedProducts((prev) => {
-                                        const copy = [...prev];
-                                        copy[idx] = {
-                                          ...copy[idx],
-                                          isDiscounted: checked,
-                                          discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
-                                        };
-                                        return copy;
-                                      });
-                                    }}
-                                  />
+                                >
+                                  <td className="border border-gray-300 p-4">
+                                    <div className="flex items-center justify-start gap-2">
+                                      {/* Styled Checkbox */}
+                                      <input
+                                        type="checkbox"
+                                        checked={isDiscounted}
+                                        onChange={(e) => {
+                                          const checked = e.target.checked;
+                                          setSelectedProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[idx] = {
+                                              ...copy[idx],
+                                              isDiscounted: checked,
+                                              discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
+                                            };
+                                            return copy;
+                                          });
+                                        }}
+                                      />
 
-                                  {/* Discount Input */}
-                                  {isDiscounted && (
+                                      {/* Discount Input */}
+                                      {isDiscounted && (
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          step="0.01"
+                                          value={p.discount ?? 0}
+                                          onChange={(e) => {
+                                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                            setSelectedProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[idx] = { ...copy[idx], discount: val };
+                                              return copy;
+                                            });
+                                          }}
+                                          className="w-15 p-0 border-none rounded-none"
+                                        />
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  <td className="hidden sm:table-cell">
+                                    <Textarea
+                                      value={p.itemRemarks || ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[idx] = { ...copy[idx], itemRemarks: val };
+                                          return copy;
+                                        });
+                                      }}
+                                      placeholder="Enter any remarks here..."
+                                      rows={3}
+                                      className="capitalize rounded-none text-[10px] w-full p-1"
+                                    />
+                                  </td>
+
+                                  <td className="p-1 sm:p-2">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                      {/* Product Image */}
+                                      <img
+                                        src={p.images?.[0]?.src || "/Taskflow.png"}
+                                        alt={p.title}
+                                        className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
+                                      />
+
+                                      {/* Product Title (Editable) */}
+                                      <div
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
+                                        onBlur={(e) => {
+                                          const html = e.currentTarget.innerHTML; // keep HTML
+                                          setSelectedProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[idx] = { ...copy[idx], description: html };
+                                            return copy;
+                                          });
+                                        }}
+                                      >
+                                        {p.title}
+                                      </div>
+                                      {p.procurementLeadTime && (
+                                        <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
+                                          Lead Time: {p.procurementLeadTime}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  <td className="border border-gray-300 p-1 sm:p-2">
+                                    <Input
+                                      type="number"
+                                      min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
+                                      value={p.quantity}
+                                      onChange={(e) => {
+                                        const raw = parseInt(e.target.value, 10) || 1;
+                                        const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
+                                        const val = Math.max(floor, raw);
+                                        setSelectedProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[idx] = { ...copy[idx], quantity: val };
+                                          return copy;
+                                        });
+                                      }}
+                                      className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
+                                    />
+                                    {p.procurementMinQty != null && p.procurementMinQty > 0 && (
+                                      <div className="text-[9px] text-gray-500 mt-1">
+                                        Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
+                                      </div>
+                                    )}
+                                  </td>
+
+                                  <td className="border border-gray-300 p-1 sm:p-2">
                                     <Input
                                       type="number"
                                       min={0}
                                       step="0.01"
-                                      value={p.discount ?? 0}
+                                      value={p.price}
+                                      readOnly={p.procurementLockedPrice}
                                       onChange={(e) => {
+                                        if (p.procurementLockedPrice) return;
                                         const val = Math.max(0, parseFloat(e.target.value) || 0);
                                         setSelectedProducts((prev) => {
                                           const copy = [...prev];
-                                          copy[idx] = { ...copy[idx], discount: val };
+                                          copy[idx] = { ...copy[idx], price: val };
                                           return copy;
                                         });
                                       }}
-                                      className="w-15 p-0 border-none rounded-none"
+                                      className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                     />
-                                  )}
-                                </div>
-                              </td>
+                                    {p.procurementLockedPrice && (
+                                      <div className="text-[9px] text-gray-500 mt-1">
+                                        Final selling price (locked)
+                                      </div>
+                                    )}
+                                  </td>
 
-                              <td className="hidden sm:table-cell">
-                                <Textarea
-                                  value={p.itemRemarks || ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], itemRemarks: val };
-                                      return copy;
-                                    });
-                                  }}
-                                  placeholder="Enter any remarks here..."
-                                  rows={3}
-                                  className="capitalize rounded-none text-[10px] w-full p-1"
-                                />
-                              </td>
+                                  <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
+                                    {isDiscounted && discountedAmount > 0
+                                      ? `₱${discountedAmount.toFixed(2)}`
+                                      : "₱0.00"}
+                                  </td>
 
-                              <td className="p-1 sm:p-2">
-                                <div className="flex items-center gap-1 sm:gap-2">
-                                {/* Product Image */}
-                                <img
-                                  src={p.images?.[0]?.src || "/Taskflow.png"}
-                                  alt={p.title}
-                                  className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
-                                />
-
-                                {/* Product Title (Editable) */}
-                                <div
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
-                                  onBlur={(e) => {
-                                    const html = e.currentTarget.innerHTML; // keep HTML
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], description: html };
-                                      return copy;
-                                    });
-                                  }}
-                                >
-                                  {p.title}
-                                </div>
-                                {p.procurementLeadTime && (
-                                  <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
-                                    Lead Time: {p.procurementLeadTime}
-                                  </div>
-                                )}
-                                </div>
-                              </td>
-
-                              <td className="border border-gray-300 p-1 sm:p-2">
-                                <Input
-                                  type="number"
-                                  min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
-                                  value={p.quantity}
-                                  onChange={(e) => {
-                                    const raw = parseInt(e.target.value, 10) || 1;
-                                    const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
-                                    const val = Math.max(floor, raw);
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], quantity: val };
-                                      return copy;
-                                    });
-                                  }}
-                                  className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
-                                />
-                                {p.procurementMinQty != null && p.procurementMinQty > 0 && (
-                                  <div className="text-[9px] text-gray-500 mt-1">
-                                    Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
-                                  </div>
-                                )}
-                              </td>
-
-                              <td className="border border-gray-300 p-1 sm:p-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={p.price}
-                                  readOnly={p.procurementLockedPrice}
-                                  onChange={(e) => {
-                                    if (p.procurementLockedPrice) return;
-                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], price: val };
-                                      return copy;
-                                    });
-                                  }}
-                                  className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
-                                />
-                                {p.procurementLockedPrice && (
-                                  <div className="text-[9px] text-gray-500 mt-1">
-                                    Final selling price (locked)
-                                  </div>
-                                )}
-                              </td>
-
-                              <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
-                                {isDiscounted && discountedAmount > 0
-                                  ? `₱${discountedAmount.toFixed(2)}`
-                                  : "₱0.00"}
-                              </td>
-
-                              {/* <td className="border border-gray-300 p-2 text-right">
+                                  {/* <td className="border border-gray-300 p-2 text-right">
                                 <div className="flex items-center gap-1 justify-end">
                                   <span className="text-gray-400 text-xs">₱</span>
                                   <Input
@@ -2913,54 +2918,54 @@ ${spec.value}
                                 </div>
                               </td> */}
 
-                              <td className="border border-gray-300 p-2 font-semibold text-center">
-                                ₱{totalAfterDiscount.toFixed(2)}
-                              </td>
+                                  <td className="border border-gray-300 p-2 font-semibold text-center">
+                                    ₱{totalAfterDiscount.toFixed(2)}
+                                  </td>
 
-                              <td className="border border-gray-300 text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    onClick={() => toggleRow(p.uid)}
-                                    className="flex items-center rounded-none gap-1 px-2"
-                                  >
-                                    {expandedRows[p.uid] ? (
-                                      <>
-                                        <EyeOff className="w-4 h-4" />
-                                        <span className="hidden sm:inline">Hide</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Eye className="w-4 h-4" />
-                                        <span className="hidden sm:inline">View</span>
-                                      </>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center rounded-none gap-1"
-                                    onClick={() => {
-                                      if (p.cloudinaryPublicId) {
-                                        deleteCloudinaryImage(p.cloudinaryPublicId);
-                                      }
-                                      setSelectedProducts((prev) =>
-                                        prev.filter((item) => item.uid !== p.uid)
-                                      );
-                                      setVisibleDescriptions((prev) => {
-                                        const copy = { ...prev };
-                                        delete copy[p.uid];
-                                        return copy;
-                                      });
-                                    }}
-                                  >
-                                    <Trash className="text-red-600" />
-                                  </Button>
+                                  <td className="border border-gray-300 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => toggleRow(p.uid)}
+                                        className="flex items-center rounded-none gap-1 px-2"
+                                      >
+                                        {expandedRows[p.uid] ? (
+                                          <>
+                                            <EyeOff className="w-4 h-4" />
+                                            <span className="hidden sm:inline">Hide</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Eye className="w-4 h-4" />
+                                            <span className="hidden sm:inline">View</span>
+                                          </>
+                                        )}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        className="flex items-center rounded-none gap-1"
+                                        onClick={() => {
+                                          if (p.cloudinaryPublicId) {
+                                            deleteCloudinaryImage(p.cloudinaryPublicId);
+                                          }
+                                          setSelectedProducts((prev) =>
+                                            prev.filter((item) => item.uid !== p.uid)
+                                          );
+                                          setVisibleDescriptions((prev) => {
+                                            const copy = { ...prev };
+                                            delete copy[p.uid];
+                                            return copy;
+                                          });
+                                        }}
+                                      >
+                                        <Trash className="text-red-600" />
+                                      </Button>
 
-                                </div>
-                              </td>
-                            </tr>
-                            {/* need to fix */}
-                            {/* <tr className="even:bg-gray-50">
+                                    </div>
+                                  </td>
+                                </tr>
+                                {/* need to fix */}
+                                {/* <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
                                 <div
@@ -2981,118 +2986,118 @@ ${spec.value}
                                 />
                               </td>
                             </tr> */}
-                            {/* SECTION: Product Technical Specifications (Read-Only) */}
-                            {isExpanded && (
-                              <tr className="even:bg-[#F9FAFA]">
-                                <td colSpan={7} className="border border-gray-300 p-4 align-top">
-                                  <label className="block text-xs font-medium mb-1">Description:</label>
-                                  <div
-                                    className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        p.description ||
-                                        '<span class="text-gray-400 italic">No specifications provided.</span>',
-                                    }}
+                                {/* SECTION: Product Technical Specifications (Read-Only) */}
+                                {isExpanded && (
+                                  <tr className="even:bg-[#F9FAFA]">
+                                    <td colSpan={7} className="border border-gray-300 p-4 align-top">
+                                      <label className="block text-xs font-medium mb-1">Description:</label>
+                                      <div
+                                        className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            p.description ||
+                                            '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                        }}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+
+                        </tbody>
+                        <tfoot className="bg-gray-100 font-bold text-xs">
+                          <tr>
+                            <td className="border border-gray-300 p-2 text-center"></td>
+                            <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
+                            <td className="border border-gray-300 p-2"></td>
+                            <td className="border border-gray-300 p-2 text-center font-black">
+                              {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center font-black">
+                              {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
+                              ₱{selectedProducts.reduce((acc, p) => {
+                                const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                const baseAmount = p.price * p.quantity;
+                                return acc + (baseAmount * discount) / 100;
+                              }, 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center font-black">
+                              ₱{selectedProducts.reduce((acc, p) => {
+                                const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                const baseAmount = p.price * p.quantity;
+                                return acc + baseAmount - (baseAmount * discount) / 100;
+                              }, 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 p-2"></td>
+                          </tr>
+
+                          {/* Delivery & Restocking Fee Row — desktop only inside table */}
+                          <tr className="hidden sm:table-row">
+                            <td colSpan={4} className="border border-gray-300 p-2"></td>
+                            <td colSpan={4} className="border border-gray-300 p-2">
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                    placeholder="0.00"
+                                    value={deliveryFee}
+                                    onChange={(e) => setDeliveryFee(e.target.value)}
                                   />
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-
-                    </tbody>
-                    <tfoot className="bg-gray-100 font-bold text-xs">
-                      <tr>
-                        <td className="border border-gray-300 p-2 text-center"></td>
-                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
-                        <td className="border border-gray-300 p-2"></td>
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
-                        </td>
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
-                        </td>
-                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
-                          ₱{selectedProducts.reduce((acc, p) => {
-                            const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                            const baseAmount = p.price * p.quantity;
-                            return acc + (baseAmount * discount) / 100;
-                          }, 0).toFixed(2)}
-                        </td>
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          ₱{selectedProducts.reduce((acc, p) => {
-                            const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                            const baseAmount = p.price * p.quantity;
-                            return acc + baseAmount - (baseAmount * discount) / 100;
-                          }, 0).toFixed(2)}
-                        </td>
-                        <td className="border border-gray-300 p-2"></td>
-                      </tr>
-
-                      {/* Delivery & Restocking Fee Row — desktop only inside table */}
-                      <tr className="hidden sm:table-row">
-                        <td colSpan={4} className="border border-gray-300 p-2"></td>
-                        <td colSpan={4} className="border border-gray-300 p-2">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                placeholder="0.00"
-                                value={deliveryFee}
-                                onChange={(e) => setDeliveryFee(e.target.value)}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                placeholder="0.00"
-                                value={restockingFee}
-                                onChange={(e) => setRestockingFee(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                  </div>
-
-                  {/* Delivery & Restocking Fee — mobile only, below table */}
-                  <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
-                    <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
-                      <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
-                        placeholder="0.00"
-                        value={deliveryFee}
-                        onChange={(e) => setDeliveryFee(e.target.value)}
-                      />
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                    placeholder="0.00"
+                                    value={restockingFee}
+                                    onChange={(e) => setRestockingFee(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
-                    <div className="flex items-center justify-between py-1.5">
-                      <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
-                        placeholder="0.00"
-                        value={restockingFee}
-                        onChange={(e) => setRestockingFee(e.target.value)}
-                      />
+
+                    {/* Delivery & Restocking Fee — mobile only, below table */}
+                    <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
+                        <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                          placeholder="0.00"
+                          value={deliveryFee}
+                          onChange={(e) => setDeliveryFee(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between py-1.5">
+                        <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                          placeholder="0.00"
+                          value={restockingFee}
+                          onChange={(e) => setRestockingFee(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
           </div>{/* end BODY */}
 

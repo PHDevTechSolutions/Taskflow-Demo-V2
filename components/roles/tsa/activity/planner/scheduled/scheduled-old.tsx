@@ -245,9 +245,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       if (searchTerm.trim() !== "") {
         // skip date filter when searching
       } else {
-        // ✅ ALWAYS TODAY ONLY
-        if (itemScheduledDate !== todayStr) {
-          return false;
+        if (dateCreatedFilterRange?.from) {
+          const fromStr = toLocalDateString(dateCreatedFilterRange.from);
+          const toStr = dateCreatedFilterRange.to
+            ? toLocalDateString(dateCreatedFilterRange.to)
+            : fromStr;
+
+          if (itemScheduledDate < fromStr || itemScheduledDate > toStr) {
+            return false;
+          }
+        } else {
+          if (itemScheduledDate !== todayStr) {
+            return false;
+          }
         }
       }
 
@@ -257,7 +267,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         const termLower = searchTerm.toLowerCase();
 
         const activityValues = Object.values(item)
-          .map((v) => (v != null ? v.toString() : ""))
+          .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
           .join(" ")
           .toLowerCase();
 
@@ -266,7 +276,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         const historyValues = item.relatedHistoryItems
           .map((h) =>
             Object.values(h)
-              .map((v) => (v != null ? v.toString() : ""))
+              .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
               .join(" ")
               .toLowerCase(),
           )
@@ -281,12 +291,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     })
     .sort(
       (a, b) =>
-        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
     );
-
-  useEffect(() => {
-    onCountChange?.(filteredActivities.length);
-  }, [filteredActivities]);
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -605,6 +611,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const selectedTicketReferenceNumber =
     selectedActivity?.ticket_reference_number || null;
 
+  useEffect(() => {
+    onCountChange?.(filteredActivities.length);
+  }, [filteredActivities.length]);
 
   if (loading) {
     return (
@@ -824,30 +833,30 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       {!["assisted", "not assisted"].includes(
                         item.status.toLowerCase(),
                       ) && (
-                          <Badge
-                            variant={badgeProps.variant}
-                            className={`font-mono rounded-sm shadow-md p-2 border-none text-[10px] ${badgeProps.className || ""}`}
-                          >
-                            <CheckCircle2 />
-                            {item.status.replace("-", " ")} /{" "}
-                            {item.relatedHistoryItems.some(
-                              (h) =>
-                                h.quotation_status && h.quotation_status !== "-",
-                            ) && (
-                                <p>
-                                  <span className="uppercase">
-                                    {Array.from(
-                                      new Set(
-                                        item.relatedHistoryItems
-                                          .map((h) => h.quotation_status ?? "-")
-                                          .filter((v) => v !== "-"),
-                                      ),
-                                    ).join(", ")}
-                                  </span>
-                                </p>
-                              )}
-                          </Badge>
-                        )}
+                        <Badge
+                          variant={badgeProps.variant}
+                          className={`font-mono rounded-sm shadow-md p-2 border-none text-[10px] ${badgeProps.className || ""}`}
+                        >
+                          <CheckCircle2 />
+                          {item.status.replace("-", " ")} /{" "}
+                          {item.relatedHistoryItems.some(
+                            (h) =>
+                              h.quotation_status && h.quotation_status !== "-",
+                          ) && (
+                            <p>
+                              <span className="uppercase">
+                                {Array.from(
+                                  new Set(
+                                    item.relatedHistoryItems
+                                      .map((h) => h.quotation_status ?? "-")
+                                      .filter((v) => v !== "-"),
+                                  ),
+                                ).join(", ")}
+                              </span>
+                            </p>
+                          )}
+                        </Badge>
+                      )}
 
                       {item.relatedHistoryItems.some(
                         (h: HistoryItem) =>
@@ -923,8 +932,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <HoverCard>
                               <HoverCardTrigger asChild>
                                 <Badge
-                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined ? "bg-red-600 text-white" : "bg-blue-900 text-white"
-                                    }`}
+                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${
+                                    isDeclined ? "bg-red-600 text-white" : "bg-blue-900 text-white"
+                                  }`}
                                 >
                                   {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
                                 </Badge>
@@ -966,122 +976,122 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         {item.relatedHistoryItems.some(
                           (h) => h.ticket_reference_number && h.ticket_reference_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Ticket Reference Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.ticket_reference_number ?? "-")
-                                      .filter((v) => v !== "-"),
-                                  ),
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Ticket Reference Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.ticket_reference_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.so_number && h.so_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Sales Order Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.so_number ?? "-")
-                                      .filter((v) => v !== "-"),
-                                  ),
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Sales Order Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.so_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.quotation_number && h.quotation_number !== "-",
                         ) && (
-                            <p>
-                              <strong>Quotation Number:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.quotation_number ?? "-")
-                                      .filter((v) => v !== "-"),
-                                  ),
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Quotation Number:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.quotation_number ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.call_type && h.call_type !== "-",
                         ) && (
-                            <p>
-                              <strong>Type:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.call_type ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Type:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.call_type ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.source && h.source !== "-",
                         ) && (
-                            <p>
-                              <strong>Source:</strong>{" "}
-                              <span className="uppercase">
-                                {Array.from(
-                                  new Set(
-                                    item.relatedHistoryItems
-                                      .map((h) => h.source ?? "-")
-                                      .filter((v) => v !== "-"),
-                                  ),
-                                ).join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>Source:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(
+                                new Set(
+                                  item.relatedHistoryItems
+                                    .map((h) => h.source ?? "-")
+                                    .filter((v) => v !== "-"),
+                                ),
+                              ).join(", ")}
+                            </span>
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.quotation_amount !== null && h.quotation_amount !== undefined,
                         ) && (
-                            <p>
-                              <strong>Total Quotation Amount:</strong>{" "}
-                              {item.relatedHistoryItems
-                                .reduce((total, h) => total + (h.quotation_amount ?? 0), 0)
-                                .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                            </p>
-                          )}
+                          <p>
+                            <strong>Total Quotation Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => total + (h.quotation_amount ?? 0), 0)
+                              .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                          </p>
+                        )}
 
                         {item.relatedHistoryItems.some(
                           (h) => h.so_amount !== null && h.so_amount !== undefined,
                         ) && (
-                            <p>
-                              <strong>Total SO Amount:</strong>{" "}
-                              {item.relatedHistoryItems
-                                .reduce((total, h) => total + (h.so_amount ?? 0), 0)
-                                .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                            </p>
-                          )}
+                          <p>
+                            <strong>Total SO Amount:</strong>{" "}
+                            {item.relatedHistoryItems
+                              .reduce((total, h) => total + (h.so_amount ?? 0), 0)
+                              .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                          </p>
+                        )}
 
                         <Separator className="mb-2 mt-2" />
 
                         {item.relatedHistoryItems.some(
                           (h) => h.tsm_approved_status && h.tsm_approved_status !== "-",
                         ) && (
-                            <p>
-                              <strong>TSM Feedback:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.tsm_approved_status ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
                       </>
                     )}
 
