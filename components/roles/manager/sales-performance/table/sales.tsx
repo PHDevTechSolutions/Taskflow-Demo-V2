@@ -107,34 +107,34 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
       <p className={`text-xs font-bold mb-2 ${hit ? "text-green-600" : "text-red-500"}`}>
         {hit ? "✓ Hit" : "✗ Missed"}
       </p>
-      {data.agentsBreakdown?.length > 0 && (
+      {data.breakdown?.length > 0 && (
         <>
           <p className="text-gray-400 font-semibold uppercase tracking-wide text-[10px] mb-1">
-            Agent Breakdown
+            {data.breakdownLabel ?? "Breakdown"}
           </p>
           <div className="space-y-1.5">
-            {data.agentsBreakdown
+            {data.breakdown
               .sort((a: any, b: any) => b.sales - a.sales)
-              .map((agent: any, i: number) => (
+              .map((item: any, i: number) => (
                 <div key={i} className="flex flex-col gap-0.5 border-b border-gray-100 pb-1 last:border-0 last:pb-0">
                   <div className="flex justify-between gap-4 items-center">
-                    <span className="capitalize text-gray-700 font-semibold">{agent.name}</span>
-                    <span className={`text-xs font-bold ${agent.hit ? "text-green-600" : "text-red-500"}`}>
-                      {agent.hit ? "✓ Hit" : "✗ Missed"}
+                    <span className="capitalize text-gray-700 font-semibold">{item.name}</span>
+                    <span className={`text-xs font-bold ${item.hit ? "text-green-600" : "text-red-500"}`}>
+                      {item.hit ? "✓ Hit" : "✗ Missed"}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
                     <span>Quota</span>
                     <span className="font-medium text-gray-600 text-right">
-                      {agent.dailyQuota.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                      {item.dailyQuota.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                     </span>
                     <span>Sales</span>
-                    <span className={`font-medium text-right ${agent.hit ? "text-green-600" : "text-red-500"}`}>
-                      {agent.sales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                    <span className={`font-medium text-right ${item.hit ? "text-green-600" : "text-red-500"}`}>
+                      {item.sales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                     </span>
                     <span>Variance</span>
-                    <span className={`font-medium text-right ${agent.hit ? "text-green-600" : "text-red-500"}`}>
-                      {(agent.sales - agent.dailyQuota).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                    <span className={`font-medium text-right ${item.hit ? "text-green-600" : "text-red-500"}`}>
+                      {(item.sales - item.dailyQuota).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                     </span>
                   </div>
                 </div>
@@ -258,7 +258,6 @@ export const SalesTable: React.FC<SalesProps> = ({
 
   const parPercentage = (workingDaysSoFar / totalWorkingDays) * 100;
 
-  // Quota: full month quota when no date filter; prorate only when date filter is active
   const hasDateRange = !!(dateCreatedFilterRange?.from && dateCreatedFilterRange?.to);
   const getProratedQuota = (fullQuota: number) =>
     hasDateRange
@@ -323,17 +322,21 @@ export const SalesTable: React.FC<SalesProps> = ({
         const totalActualSales = agentsUnder.reduce((sum, d) => sum + d.totalActualSales, 0);
         const totalVariance = totalProratedQuota - totalActualSales;
         const achievement = totalProratedQuota === 0 ? 0 : (totalActualSales / totalProratedQuota) * 100;
+        const fullMonthQuota = agentsUnder.reduce((sum, d) => sum + d.fullMonthQuota, 0);
+        const dailyQuota = fullMonthQuota / totalWorkingDays;
         return {
           tsmId,
           tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
           totalProratedQuota,
           totalActualSales,
           totalVariance,
+          fullMonthQuota,
+          dailyQuota,
           parPercentage,
           percentToPlan: Math.round(achievement),
         };
       });
-  }, [agents, salesDataPerAgent, parPercentage]);
+  }, [agents, salesDataPerAgent, parPercentage, totalWorkingDays]);
 
   // ─── Drill-down: agents under selected TSM ────────────────────────────────
   const agentsUnderSelectedTSM = useMemo(() => {
@@ -367,9 +370,13 @@ export const SalesTable: React.FC<SalesProps> = ({
     { proratedQuota: 0, totalActualSales: 0, variance: 0 }
   ), [filteredAgentDrillDown]);
 
-  // ─── Chart: scope changes based on drill-down state ───────────────────────
-  const chartAgents = selectedTSMId ? agentsUnderSelectedTSM : salesDataPerAgent;
+  // ─── Helper ───────────────────────────────────────────────────────────────
+  const toLocalDateStr = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
 
+  // ─── Daily chart: TSM view vs agent drill-down view ───────────────────────
   const dailyChartData = useMemo(() => {
     const days: Record<string, any>[] = [];
     const cursor = new Date(fromDate);
@@ -377,62 +384,128 @@ export const SalesTable: React.FC<SalesProps> = ({
     const end = new Date(toDate);
     end.setHours(23, 59, 59, 999);
 
-    const totalFullQuota = chartAgents.reduce((sum, d) => sum + d.fullMonthQuota, 0);
-    const dailyQuota = totalFullQuota / totalWorkingDays;
+    if (!selectedTSMId) {
+      // ── Default view: group by TSM ──────────────────────────────────────
+      // Total daily quota = sum of all TSM daily quotas
+      const totalDailyQuota = salesDataPerTSM.reduce((sum, t) => sum + t.dailyQuota, 0);
 
-    const agentNameMap: Record<string, string> = {};
-    const agentDailyQuotaMap: Record<string, number> = {};
-    chartAgents.forEach((d) => {
-      const agent = agents.find((a) => a.ReferenceID.toLowerCase() === d.agentId.toLowerCase());
-      const key = d.agentId.toLowerCase();
-      agentNameMap[key] = agent ? `${agent.Firstname} ${agent.Lastname}` : d.agentId;
-      agentDailyQuotaMap[key] = d.fullMonthQuota / totalWorkingDays;
-    });
+      // Map: tsmId → { name, dailyQuota }
+      const tsmInfoMap: Record<string, { name: string; dailyQuota: number }> = {};
+      salesDataPerTSM.forEach((t) => {
+        tsmInfoMap[t.tsmId] = { name: t.tsmName, dailyQuota: t.dailyQuota };
+      });
 
-    const toLocalDateStr = (d: Date) => {
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    };
+      // Map: agentId (lowercase) → tsmId (lowercase)
+      const agentToTsm: Record<string, string> = {};
+      salesDataPerAgent.forEach((d) => { agentToTsm[d.agentId.toLowerCase()] = d.tsmId; });
 
-    while (cursor <= end) {
-      if (cursor.getDay() !== 0) {
-        const dateStr = toLocalDateStr(cursor);
-        const label = cursor.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-        const agentSalesMap: Record<string, number> = {};
-        let dayTotal = 0;
+      while (cursor <= end) {
+        if (cursor.getDay() !== 0) {
+          const dateStr = toLocalDateStr(cursor);
+          const label = cursor.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 
-        activities
-          .filter((a) => {
-            if (!a.delivery_date) return false;
-            if (selectedTSMId) {
-              const agentData = salesDataPerAgent.find(
-                (d) => d.agentId.toLowerCase() === a.referenceid.toLowerCase()
-              );
-              if (!agentData || agentData.tsmId !== selectedTSMId) return false;
-            }
-            if (selectedAgent !== "all" && a.referenceid.toLowerCase() !== selectedAgent.toLowerCase())
-              return false;
-            return toLocalDateStr(new Date(a.delivery_date)) === dateStr;
-          })
-          .forEach((a) => {
-            const key = a.referenceid.toLowerCase();
-            agentSalesMap[key] = (agentSalesMap[key] ?? 0) + (a.actual_sales ?? 0);
-            dayTotal += a.actual_sales ?? 0;
+          // Sum sales per TSM for this day
+          const tsmSalesMap: Record<string, number> = {};
+          let dayTotal = 0;
+
+          activities
+            .filter((a) => {
+              if (!a.delivery_date) return false;
+              return toLocalDateStr(new Date(a.delivery_date)) === dateStr;
+            })
+            .forEach((a) => {
+              const tsmId = agentToTsm[a.referenceid.toLowerCase()];
+              if (!tsmId) return;
+              tsmSalesMap[tsmId] = (tsmSalesMap[tsmId] ?? 0) + (a.actual_sales ?? 0);
+              dayTotal += a.actual_sales ?? 0;
+            });
+
+          const breakdown = Object.entries(tsmSalesMap).map(([tsmId, sales]) => {
+            const info = tsmInfoMap[tsmId];
+            const dq = Math.round(info?.dailyQuota ?? 0);
+            return {
+              name: info?.name ?? tsmId,
+              sales,
+              dailyQuota: dq,
+              hit: sales >= dq,
+            };
           });
 
-        const agentsBreakdown = Object.entries(agentSalesMap).map(([refId, sales]) => ({
-          name: agentNameMap[refId] || refId,
-          sales,
-          dailyQuota: Math.round(agentDailyQuotaMap[refId] ?? 0),
-          hit: sales >= (agentDailyQuotaMap[refId] ?? 0),
-        }));
-
-        days.push({ date: label, actualSales: dayTotal, dailyQuota: Math.round(dailyQuota), agentsBreakdown });
+          days.push({
+            date: label,
+            actualSales: dayTotal,
+            dailyQuota: Math.round(totalDailyQuota),
+            breakdown,
+            breakdownLabel: "TSM Breakdown",
+          });
+        }
+        cursor.setDate(cursor.getDate() + 1);
       }
-      cursor.setDate(cursor.getDate() + 1);
+    } else {
+      // ── Drill-down view: group by agent under selected TSM ──────────────
+      const drillAgents = selectedAgent === "all"
+        ? agentsUnderSelectedTSM
+        : agentsUnderSelectedTSM.filter((d) => d.agentId.toLowerCase() === selectedAgent.toLowerCase());
+
+      const totalDailyQuota = drillAgents.reduce((sum, d) => sum + d.fullMonthQuota / totalWorkingDays, 0);
+
+      const agentNameMap: Record<string, string> = {};
+      const agentDailyQuotaMap: Record<string, number> = {};
+      drillAgents.forEach((d) => {
+        const agent = agents.find((a) => a.ReferenceID.toLowerCase() === d.agentId.toLowerCase());
+        agentNameMap[d.agentId.toLowerCase()] = agent ? `${agent.Firstname} ${agent.Lastname}` : d.agentId;
+        agentDailyQuotaMap[d.agentId.toLowerCase()] = d.fullMonthQuota / totalWorkingDays;
+      });
+
+      const drillAgentIds = new Set(drillAgents.map((d) => d.agentId.toLowerCase()));
+
+      while (cursor <= end) {
+        if (cursor.getDay() !== 0) {
+          const dateStr = toLocalDateStr(cursor);
+          const label = cursor.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+
+          const agentSalesMap: Record<string, number> = {};
+          let dayTotal = 0;
+
+          activities
+            .filter((a) => {
+              if (!a.delivery_date) return false;
+              if (!drillAgentIds.has(a.referenceid.toLowerCase())) return false;
+              return toLocalDateStr(new Date(a.delivery_date)) === dateStr;
+            })
+            .forEach((a) => {
+              const key = a.referenceid.toLowerCase();
+              agentSalesMap[key] = (agentSalesMap[key] ?? 0) + (a.actual_sales ?? 0);
+              dayTotal += a.actual_sales ?? 0;
+            });
+
+          const breakdown = Object.entries(agentSalesMap).map(([refId, sales]) => {
+            const dq = Math.round(agentDailyQuotaMap[refId] ?? 0);
+            return {
+              name: agentNameMap[refId] || refId,
+              sales,
+              dailyQuota: dq,
+              hit: sales >= dq,
+            };
+          });
+
+          days.push({
+            date: label,
+            actualSales: dayTotal,
+            dailyQuota: Math.round(totalDailyQuota),
+            breakdown,
+            breakdownLabel: "Agent Breakdown",
+          });
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
+
     return days;
-  }, [fromDate, toDate, activities, chartAgents, salesDataPerAgent, totalWorkingDays, selectedAgent, selectedTSMId, agents]);
+  }, [
+    fromDate, toDate, activities, salesDataPerTSM, salesDataPerAgent,
+    agentsUnderSelectedTSM, totalWorkingDays, selectedAgent, selectedTSMId, agents,
+  ]);
 
   if (loadingActivities) {
     return <div className="flex justify-center items-center h-40"><Spinner className="size-8" /></div>;
@@ -454,7 +527,6 @@ export const SalesTable: React.FC<SalesProps> = ({
     <div className="space-y-6">
       {/* Filters Row */}
       <div className="flex flex-wrap gap-3 items-center">
-        {/* Agent filter — only visible in drill-down view */}
         {selectedTSMId && (
           <Select value={selectedAgent} onValueChange={setSelectedAgent}>
             <SelectTrigger className="w-[220px] text-xs">
@@ -660,14 +732,17 @@ export const SalesTable: React.FC<SalesProps> = ({
       <div className="rounded-md border p-4 bg-white shadow-sm font-mono">
         <h2 className="font-semibold text-sm mb-1">
           Daily Sales Trend
-          {selectedTSMId && (
+          {selectedTSMId ? (
             <span className="text-gray-400 font-normal ml-2 text-xs capitalize">
-              — {selectedTSMName}
+              — {selectedTSMName} (by Agent)
             </span>
+          ) : (
+            <span className="text-gray-400 font-normal ml-2 text-xs">— by TSM</span>
           )}
         </h2>
         <p className="text-xs text-gray-400 mb-4">
           Bar shows actual sales per working day vs. daily quota target (dashed line).
+          Hover for {selectedTSMId ? "agent" : "TSM"} breakdown.
           <span className="ml-2 inline-flex items-center gap-1">
             <span className="inline-block w-3 h-3 rounded-sm bg-green-500"></span> Hit
             <span className="inline-block w-3 h-3 rounded-sm bg-red-400 ml-2"></span> Missed
