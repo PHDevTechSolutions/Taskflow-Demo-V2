@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -11,37 +11,31 @@ import { SidebarRight } from "@/components/sidebar-right";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
-
-import { SalesTable } from "@/components/roles/admin/sales-performance/table/sales";
-
+import { sileo } from "sileo";
 import { type DateRange } from "react-day-picker";
+
+import { AgentList } from "@/components/roles/admin/dashboard/list";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 interface UserDetails {
     referenceid: string;
     tsm: string;
     manager: string;
-    firstname: string;
-    lastname: string;
-    role: string;
+    target_quota: string;
 }
 
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
 
-    const [userDetails, setUserDetails] = useState<UserDetails>({ 
-        referenceid: "", 
-        tsm: "", 
-        manager: "", 
-        firstname: "", 
-        lastname: "", 
-        role: "", 
+    const [userDetails, setUserDetails] = useState<UserDetails>({
+        referenceid: "",
+        tsm: "",
+        manager: "",
+        target_quota: "",
     });
 
     const [loadingUser, setLoadingUser] = useState(true);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
         DateRange | undefined
@@ -49,14 +43,12 @@ function DashboardContent() {
 
     const queryUserId = searchParams?.get("id") ?? "";
 
-    // Sync URL query param with userId context
     useEffect(() => {
         if (queryUserId && queryUserId !== userId) {
             setUserId(queryUserId);
         }
     }, [queryUserId, userId, setUserId]);
 
-    // Fetch user details when userId changes
     useEffect(() => {
         if (!userId) {
             setLoadingUser(false);
@@ -75,15 +67,43 @@ function DashboardContent() {
                     referenceid: data.ReferenceID || "",
                     tsm: data.TSM || "",
                     manager: data.Manager || "",
-                    firstname: data.Firstname || "",
-                    lastname: data.Lastname || "",
-                    role: data.Role || "",
+                    target_quota: data.TargetQuota || "",
                 });
 
-                toast.success("User data loaded successfully!");
+                sileo.success({
+                    title: "Success",
+                    description: "User data loaded successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error("Failed to connect to server. Please try again later or refresh your network connection");
+                sileo.warning({
+                    title: "Failed",
+                    description: "Error fetching user data:",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
             } finally {
                 setLoadingUser(false);
             }
@@ -91,8 +111,6 @@ function DashboardContent() {
 
         fetchUserData();
     }, [userId]);
-
-    const loading = loadingUser || loadingAccounts;
 
     return (
         <>
@@ -106,23 +124,18 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Sales Performance</BreadcrumbPage>
+                                        <BreadcrumbPage className="line-clamp-1">Employee List</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
                         </div>
                     </header>
 
-                    <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        <div>
-                            <SalesTable
-                                referenceid={userDetails.referenceid}
-                                dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                userDetails={userDetails}
-                            />
-                        </div>
-                    </main>
+                    <AgentList
+                        referenceid={userDetails.referenceid}
+                        dateCreatedFilterRange={dateCreatedFilterRange}
+                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                    />
                 </SidebarInset>
 
                 <SidebarRight

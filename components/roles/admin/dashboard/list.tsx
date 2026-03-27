@@ -14,7 +14,7 @@ import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sale
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
 
 import ReactSelect from "react-select";
-import { Building2, PhoneForwarded } from 'lucide-react';
+import { Building2, PhoneForwarded, X } from 'lucide-react';
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot, DocumentData, limit } from "firebase/firestore";
 
@@ -49,6 +49,8 @@ interface Agent {
     Role: string;
     TargetQuota: string;
     Connection: string;
+    Manager: string;
+    TSM: string;
 }
 
 interface AgentMeeting {
@@ -182,37 +184,57 @@ export function AgentList({
             .finally(() => setLoadingHistory(false));
     }, []);
 
-    /* =========================
-       FILTER LOGIC (TODAY DEFAULT)
-    ========================= */
+    // ─── Filter history ──────────────────────────────────────────────────────
     const filteredHistory = useMemo(() => {
         if (!history.length) return [];
-
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from)
-            : new Date();
-
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to)
-            : from;
-
+        const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : new Date();
+        const to   = dateCreatedFilterRange?.to   ? new Date(dateCreatedFilterRange.to)   : new Date(from);
         from.setHours(0, 0, 0, 0);
         to.setHours(23, 59, 59, 999);
+
+        const selectedAgentObj = selectedAgent === "all"
+            ? null
+            : agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
+
+        // Helper to get all agent IDs under a hierarchy
+        const getAgentIdsUnder = (id: string, role: string) => {
+            const ids = new Set<string>();
+            if (role === "Manager") {
+                // Get all TSMs under this Manager
+                const tsms = agents.filter(a => a.Role === "Territory Sales Manager" && (a.Manager ?? "").toLowerCase() === id.toLowerCase());
+                tsms.forEach(tsm => {
+                    ids.add(tsm.ReferenceID.toLowerCase());
+                    // Get all TSAs under each TSM
+                    agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === tsm.ReferenceID.toLowerCase())
+                          .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
+                });
+            } else if (role === "Territory Sales Manager") {
+                // Get all TSAs under this TSM
+                agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === id.toLowerCase())
+                      .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
+            }
+            return ids;
+        };
+
+        const hierarchyAgentIds = selectedAgentObj && (selectedAgentObj.Role === "Manager" || selectedAgentObj.Role === "Territory Sales Manager")
+            ? getAgentIdsUnder(selectedAgentObj.ReferenceID, selectedAgentObj.Role)
+            : null;
 
         return history.filter((item) => {
             const createdAt = new Date(item.date_created);
             if (isNaN(createdAt.getTime())) return false;
-
             if (createdAt < from || createdAt > to) return false;
-
             if (selectedAgent === "all") return true;
 
-            return (
-                item.referenceid.toLowerCase() ===
-                selectedAgent.toLowerCase()
-            );
+            // If a Manager or TSM is selected, include their own records AND all records from agents under them.
+            if (hierarchyAgentIds) {
+                return item.referenceid.toLowerCase() === selectedAgent.toLowerCase() || hierarchyAgentIds.has(item.referenceid.toLowerCase());
+            }
+
+            // If a specific TSA is selected, include only that agent's records.
+            return item.referenceid.toLowerCase() === selectedAgent.toLowerCase();
         });
-    }, [history, selectedAgent, dateCreatedFilterRange]);
+    }, [history, selectedAgent, dateCreatedFilterRange, agents]);
 
     useEffect(() => {
         if (!agents.length) return;
@@ -344,6 +366,14 @@ export function AgentList({
 
     const selectedOption = agentOptions.find(opt => opt.value === selectedAgent);
 
+    // ─── Derived ─────────────────────────────────────────────────────────────
+    const selectedAgentObj = useMemo(
+        () => selectedAgent !== "all"
+            ? agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase())
+            : undefined,
+        [selectedAgent, agents]
+    );
+
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
             {loadingHistory ? (
@@ -352,21 +382,35 @@ export function AgentList({
                 <div className="text-center text-red-500 py-10">{errorHistory}</div>
             ) : (
                 <>
-                    {/* AGENT FILTER */}
-                    <ReactSelect
-                        options={agentOptions}
-                        value={selectedOption}
-                        onChange={(option) => setSelectedAgent(option?.value ?? "all")}
-                        placeholder="Filter by Agent"
-                        isSearchable={true}
-                        styles={{
-                            control: (base) => ({ ...base, fontSize: 12 }),
-                            menu: (base) => ({ ...base, fontSize: 12 }),
-                        }}
-                        className="capitalize"
-                    />
+                    {/* ── Active filter chip ── */}
+                    {selectedAgent !== "all" && selectedAgentObj && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Filtering by:</span>
+                            <div className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                <img
+                                    src={selectedAgentObj.profilePicture || "/Taskflow.png"}
+                                    alt=""
+                                    className="w-4 h-4 rounded-full object-cover"
+                                />
+                                {selectedAgentObj.Firstname} {selectedAgentObj.Lastname} ({selectedAgentObj.Role})
+                                <button
+                                    onClick={() => setSelectedAgent("all")}
+                                    className="ml-1 hover:text-red-500 transition-colors"
+                                    aria-label="Clear filter"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 gap-4 mt-2">
+                        <AgentActivityLogs
+                            agents={agents}
+                            selectedAgent={selectedAgent}
+                            onSelectAgent={setSelectedAgent}
+                        />
+
                         {/* CARD 1 – AGENT SUMMARY */}
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(
@@ -392,13 +436,6 @@ export function AgentList({
 
                             />;
                         })()}
-
-                        {selectedAgent == "all" && (
-                            <AgentActivityLogs
-                                agents={agents}
-                                agentActivityMap={agentActivityMap}
-                            />
-                        )}
 
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());

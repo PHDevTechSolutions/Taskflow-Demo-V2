@@ -7,7 +7,7 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
-  CalendarDays, ArrowLeft, FileText, Hash, Building2,
+  CalendarDays, ArrowLeft, FileText, Hash, Building2, Briefcase,
   Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
@@ -60,7 +60,7 @@ interface AccountsTableProps {
 }
 
 type ListSource = "with" | "without" | null;
-type DrillLevel = "tsm" | "agent" | "accounts";
+type DrillLevel = "manager" | "tsm" | "agent" | "accounts";
 
 const ITEMS_PER_PAGE = 20;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -152,20 +152,31 @@ function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive
 /* ─── Breadcrumb ──────────────────────────────────────────────────── */
 
 function DrillBreadcrumb({
-  level, tsmName, agentName, onClickTsm, onClickAgent,
+  level, managerName, tsmName, agentName, onClickManager, onClickTsm, onClickAgent,
 }: {
-  level: DrillLevel; tsmName?: string; agentName?: string;
-  onClickTsm: () => void; onClickAgent?: () => void;
+  level: DrillLevel; managerName?: string; tsmName?: string; agentName?: string;
+  onClickManager: () => void; onClickTsm?: () => void; onClickAgent?: () => void;
 }) {
   return (
     <div className="flex items-center gap-1.5 text-[11px] font-medium flex-wrap">
       <button
-        onClick={onClickTsm}
-        className={`transition-colors ${level === "tsm" ? "text-slate-800 font-bold pointer-events-none" : "text-indigo-500 hover:text-indigo-700"}`}
+        onClick={onClickManager}
+        className={`transition-colors ${level === "manager" ? "text-slate-800 font-bold pointer-events-none" : "text-indigo-500 hover:text-indigo-700"}`}
       >
-        All TSM
+        All Managers
       </button>
-      {level !== "tsm" && tsmName && (
+      {level !== "manager" && managerName && (
+        <>
+          <ChevronRight size={11} className="text-slate-300 shrink-0" />
+          <button
+            onClick={onClickTsm}
+            className={`capitalize transition-colors ${level === "tsm" ? "text-slate-800 font-bold pointer-events-none" : "text-indigo-500 hover:text-indigo-700"}`}
+          >
+            {managerName}
+          </button>
+        </>
+      )}
+      {level !== "manager" && level !== "tsm" && tsmName && (
         <>
           <ChevronRight size={11} className="text-slate-300 shrink-0" />
           <button
@@ -182,6 +193,34 @@ function DrillBreadcrumb({
           <span className="text-slate-800 font-bold capitalize">{agentName}</span>
         </>
       )}
+    </div>
+  );
+}
+
+/* ─── Manager Row Card ────────────────────────────────────────────── */
+
+function ManagerRowCard({ name, accountCount, tsmCount, onClick }: {
+  name: string; accountCount: number; tsmCount: number; onClick: () => void;
+}) {
+  return (
+    <div onClick={onClick}
+      className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all duration-150 group">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+          <Briefcase size={16} className="text-blue-500" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-slate-800 capitalize leading-snug">{name}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">{tsmCount} TSM{tsmCount !== 1 ? "s" : ""}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        <div className="text-right">
+          <p className="text-lg font-bold text-slate-800 tabular-nums">{accountCount.toLocaleString()}</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">accounts</p>
+        </div>
+        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
+      </div>
     </div>
   );
 }
@@ -753,7 +792,9 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
-  const [drillLevel, setDrillLevel] = useState<DrillLevel>("tsm");
+  const [drillLevel, setDrillLevel] = useState<DrillLevel>("manager");
+  const [selectedManagerId, setSelectedManagerId] = useState<string>("");
+  const [selectedManagerName, setSelectedManagerName] = useState<string>("");
   const [selectedTSMId, setSelectedTSMId] = useState<string>("");
   const [selectedTSMName, setSelectedTSMName] = useState<string>("");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
@@ -776,8 +817,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
 
   useEffect(() => {
-    if (!userDetails.referenceid) return;
-    fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`)
+    fetch(`/api/fetch-all-users-admin`)
       .then((r) => {
         if (r.status === 404) return [];
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -789,19 +829,18 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         else setAgents([]);
       })
       .catch(() => setAgents([]));
-  }, [userDetails.referenceid]);
+  }, []);
 
   useEffect(() => {
-    if (!userDetails.referenceid) return;
     let cancelled = false;
     setLoadingActivities(true);
     setAllActivities([]);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
-    const params = new URLSearchParams({ referenceid: userDetails.referenceid });
+    const params = new URLSearchParams();
     if (dateCreatedFilterRange?.from) params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
     if (dateCreatedFilterRange?.to) params.set("to", dateCreatedFilterRange.to.toISOString().slice(0, 10));
-    fetch(`/api/reports/manager/fetch?${params.toString()}`, { signal: controller.signal })
+    fetch(`/api/reports/admin/fetch?${params.toString()}`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
         if (cancelled) return;
@@ -811,7 +850,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       .catch((err) => { if (cancelled || err?.name === "AbortError") return; setAllActivities([]); })
       .finally(() => { clearTimeout(timeout); if (!cancelled) setLoadingActivities(false); });
     return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
-  }, [userDetails.referenceid, dateCreatedFilterRange]);
+  }, [dateCreatedFilterRange]);
 
   const agentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -846,11 +885,77 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     ),
     [allActivities, activeCompanyNames]);
 
+  // ── Hierarchy Helper ──
+  // We need to know which Manager is linked to which TSM, and which TSM to which Agent.
+  // We'll derive this from the 'agents' array (users collection).
+  const hierarchyMap = useMemo(() => {
+    const managers = new Set<string>();
+    const tsmToManager: Record<string, string> = {};
+    const agentToTSM: Record<string, string> = {};
+
+    (Array.isArray(agents) ? agents : []).forEach((a) => {
+      const ref = (a.ReferenceID || "").toLowerCase();
+      if (!ref) return;
+
+      if (a.Role === "Manager") {
+        managers.add(ref);
+      } else if (a.Role === "Territory Sales Manager") {
+        if (a.Manager) tsmToManager[ref] = a.Manager.toLowerCase();
+      } else if (a.Role === "Territory Sales Associate") {
+        if (a.TSM) agentToTSM[ref] = a.TSM.toLowerCase();
+      }
+    });
+
+    return { managers: [...managers], tsmToManager, agentToTSM };
+  }, [agents]);
+
+  const managerIds = useMemo(() => {
+    // Get all unique manager IDs from accounts that have a TSM assigned
+    const s = new Set<string>();
+    typeClientFilteredAccounts.forEach((a) => {
+      if (a.tsm) {
+        const tsmId = a.tsm.toLowerCase();
+        const managerId = hierarchyMap.tsmToManager[tsmId];
+        if (managerId) s.add(managerId);
+      }
+    });
+    return [...s];
+  }, [typeClientFilteredAccounts, hierarchyMap]);
+
+  const managerData = useMemo(() => {
+    return managerIds.map((managerId) => {
+      const managerName = agentMap[managerId] ?? managerId;
+      // TSMs under this manager
+      const tsms = Object.entries(hierarchyMap.tsmToManager)
+        .filter(([_, mId]) => mId === managerId)
+        .map(([tsmId]) => tsmId);
+
+      // Accounts under it
+      const managerAccounts = typeClientFilteredAccounts.filter((a) =>
+        a.tsm && tsms.includes(a.tsm.toLowerCase())
+      );
+
+      return { managerId, managerName, accountCount: managerAccounts.length, tsmCount: tsms.length };
+    }).sort((a, b) => b.accountCount - a.accountCount);
+  }, [managerIds, typeClientFilteredAccounts, agentMap, hierarchyMap]);
+
   const tsmIds = useMemo(() => {
     const s = new Set<string>();
-    typeClientFilteredAccounts.forEach((a) => { if (a.tsm) s.add(a.tsm.toLowerCase()); });
+    typeClientFilteredAccounts.forEach((a) => {
+      if (a.tsm) {
+        const tsmId = a.tsm.toLowerCase();
+        // If we have a selected manager, only include TSMs under that manager
+        if (selectedManagerId) {
+          if (hierarchyMap.tsmToManager[tsmId] === selectedManagerId) {
+            s.add(tsmId);
+          }
+        } else {
+          s.add(tsmId);
+        }
+      }
+    });
     return [...s];
-  }, [typeClientFilteredAccounts]);
+  }, [typeClientFilteredAccounts, selectedManagerId, hierarchyMap]);
 
   // ── activityKeySet uses activeFilteredActivities ──
   const activityKeySet = useMemo(() => {
@@ -932,20 +1037,22 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
 
   const scopedBase = useMemo(() => {
-    if (drillLevel === "tsm") return typeClientFilteredAccounts;
+    if (drillLevel === "manager") return typeClientFilteredAccounts;
+    if (drillLevel === "tsm") return typeClientFilteredAccounts.filter((a) => a.tsm && hierarchyMap.tsmToManager[a.tsm.toLowerCase()] === selectedManagerId);
     if (drillLevel === "agent") return typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     return agentAccounts;
-  }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, agentAccounts]);
+  }, [drillLevel, typeClientFilteredAccounts, selectedManagerId, selectedTSMId, agentAccounts, hierarchyMap]);
 
   const scopedWithActivity = useMemo(() => scopedBase.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
   const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
 
   // ── Unfiltered scoped base for type client count cards (always shows all types) ──
   const unfilteredScopedBase = useMemo(() => {
-    if (drillLevel === "tsm") return allActiveAccounts;
+    if (drillLevel === "manager") return allActiveAccounts;
+    if (drillLevel === "tsm") return allActiveAccounts.filter((a) => a.tsm && hierarchyMap.tsmToManager[a.tsm.toLowerCase()] === selectedManagerId);
     if (drillLevel === "agent") return allActiveAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     return allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-  }, [drillLevel, allActiveAccounts, selectedTSMId, selectedAgentId]);
+  }, [drillLevel, allActiveAccounts, selectedManagerId, selectedTSMId, selectedAgentId, hierarchyMap]);
 
   const typeClientCounts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -977,7 +1084,16 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => setCurrentPage(1), [search, selectedAgentId]);
 
-  const goToTSM = () => {
+  const goToManager = () => {
+    setDrillLevel("manager");
+    setSelectedManagerId(""); setSelectedManagerName("");
+    setSelectedTSMId(""); setSelectedTSMName("");
+    setSelectedAgentId(""); setSelectedAgentName("");
+    setSearch("");
+    setTypeClientFilter(null);
+  };
+  const goToTSM = (managerId: string, managerName: string) => {
+    setSelectedManagerId(managerId); setSelectedManagerName(managerName);
     setDrillLevel("tsm");
     setSelectedTSMId(""); setSelectedTSMName("");
     setSelectedAgentId(""); setSelectedAgentName("");
@@ -1128,18 +1244,22 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             <div className="mr-auto">
               <DrillBreadcrumb
                 level={drillLevel}
+                managerName={selectedManagerName}
                 tsmName={selectedTSMName}
                 agentName={selectedAgentName}
-                onClickTsm={goToTSM}
-                onClickAgent={drillLevel === "accounts"
-                  ? () => goToAgent(selectedTSMId, selectedTSMName)
-                  : undefined}
+                onClickManager={goToManager}
+                onClickTsm={() => goToTSM(selectedManagerId, selectedManagerName)}
+                onClickAgent={() => goToAgent(selectedTSMId, selectedTSMName)}
               />
             </div>
 
-            {drillLevel !== "tsm" && (
+            {drillLevel !== "manager" && (
               <button
-                onClick={drillLevel === "accounts" ? () => goToAgent(selectedTSMId, selectedTSMName) : goToTSM}
+                onClick={
+                  drillLevel === "accounts" ? () => goToAgent(selectedTSMId, selectedTSMName) :
+                  drillLevel === "agent" ? () => goToTSM(selectedManagerId, selectedManagerName) :
+                  goToManager
+                }
                 className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-indigo-600 border rounded-lg px-2.5 py-1.5 hover:border-indigo-300 transition-colors">
                 <ArrowLeft size={11} /> Back
               </button>
@@ -1161,17 +1281,31 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             )}
           </div>
 
+          {drillLevel === "manager" && (
+            <div className="p-4 space-y-2.5">
+              {managerData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+                  <Briefcase size={32} strokeWidth={1} />
+                  <p className="text-sm font-medium">No manager data found</p>
+                </div>
+              ) : managerData.map((manager) => (
+                <ManagerRowCard
+                  key={manager.managerId}
+                  name={manager.managerName}
+                  accountCount={manager.accountCount}
+                  tsmCount={manager.tsmCount}
+                  onClick={() => goToTSM(manager.managerId, manager.managerName)}
+                />
+              ))}
+            </div>
+          )}
+
           {drillLevel === "tsm" && (
             <div className="p-4 space-y-2.5">
               {tsmData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <Users size={32} strokeWidth={1} />
                   <p className="text-sm font-medium">No TSM data found</p>
-                  <p className="text-[11px] text-slate-400">
-                    {typeClientFilter
-                      ? `No accounts with type "${typeClientFilter}" found`
-                      : "Make sure accounts have a TSM field set"}
-                  </p>
                 </div>
               ) : tsmData.map((tsm) => (
                 <TSMRowCard

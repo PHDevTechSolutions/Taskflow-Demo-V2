@@ -1,46 +1,35 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-import redis from "@/lib/redis";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const fromDate = req.query.from as string | undefined;
-  const toDate = req.query.to as string | undefined;
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { referenceid, from, to, role } = req.query;
 
-  // Create cache key based on date range (or all if no filter)
-  const cacheKey = fromDate && toDate
-    ? `history:${fromDate}:${toDate}`
-    : "history:all";
+  // Validate from and to as strings (optional)
+  const fromDate = typeof from === "string" ? from : undefined;
+  const toDate = typeof to === "string" ? to : undefined;
 
   try {
-    // Check Redis cache first
-    const cached = await redis.get(cacheKey);
-
-    if (cached && typeof cached === "string") {
-      return res
-        .status(200)
-        .json({ activities: JSON.parse(cached), cached: true });
-    }
-
-    // Build query with optional date filters
+    // Build query
     let query = supabase.from("history").select("*");
 
-    if (fromDate && toDate) {
-      query = query.gte("si_date", fromDate).lte("si_date", toDate);
+    // If the user is not a Super Admin, filter by referenceid
+    if (role !== "Super Admin") {
+      if (!referenceid || typeof referenceid !== "string") {
+        res.status(400).json({ message: "Missing or invalid referenceid" });
+        return;
+      }
+      query = query.eq("manager", referenceid);
     }
 
-    // Fetch data from Supabase
+    // Add date filtering if from and to are valid
+    if (fromDate && toDate) {
+      query = query.gte("delivery_date", fromDate).lte("delivery_date", toDate);
+    }
+
     const { data, error } = await query;
 
     if (error) {
       return res.status(500).json({ message: error.message });
-    }
-
-    // Cache results for 5 minutes
-    if (data) {
-      await redis.set(cacheKey, JSON.stringify(data), { ex: 300 });
     }
 
     return res.status(200).json({ activities: data, cached: false });

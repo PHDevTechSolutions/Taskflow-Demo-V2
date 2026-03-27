@@ -1,45 +1,47 @@
+// /api/com-fetch-cluster-account-manager/route.ts
+
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 
-const DATABASE_URL = process.env.TASKFLOW_DB_URL;
-
-if (!DATABASE_URL) {
-  throw new Error("TASKFLOW_DB_URL is not set");
+const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
+if (!Xchire_databaseUrl) {
+  throw new Error("TASKFLOW_DB_URL is not set in the environment variables.");
 }
+const Xchire_sql = neon(Xchire_databaseUrl);
 
-const sql = neon(DATABASE_URL);
+const DEFAULT_LIMIT = 1000;
 
 export async function GET(req: Request) {
   try {
-    // ✅ No query params needed
-    const accounts = await sql`
-      SELECT
-        account_reference_number
-      FROM accounts;
+    const Xchire_url = new URL(req.url);
+    const limit  = parseInt(Xchire_url.searchParams.get("limit")  ?? `${DEFAULT_LIMIT}`, 10);
+    const offset = parseInt(Xchire_url.searchParams.get("offset") ?? "0", 10);
+
+    const safeLimit  = isNaN(limit)  || limit  < 1 ? DEFAULT_LIMIT : limit;
+    const safeOffset = isNaN(offset) || offset < 0 ? 0             : offset;
+
+    // ── Super Admin behavior: Fetch ALL active accounts ──
+    const Xchire_fetch = await Xchire_sql`
+        SELECT *
+        FROM accounts
+        WHERE LOWER(status) = 'active'
+        ORDER BY date_created ASC, id ASC
+        LIMIT ${safeLimit}
+        OFFSET ${safeOffset};
     `;
 
     return NextResponse.json(
-      { success: true, data: accounts },
-      {
-        status: 200,
-        headers: {
-          // Cache response briefly
-          "Cache-Control": "private, max-age=60",
-        },
-      }
+      { success: true, data: Xchire_fetch },
+      { status: 200 }
     );
-  } catch (error: any) {
-    console.error("Accounts API error:", error);
 
+  } catch (Xchire_error: any) {
+    console.error("Error fetching accounts:", Xchire_error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch accounts",
-      },
+      { success: false, error: Xchire_error.message || "Failed to fetch accounts." },
       { status: 500 }
     );
   }
 }
 
-// Still dynamic, but lighter
 export const dynamic = "force-dynamic";

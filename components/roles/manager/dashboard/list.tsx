@@ -155,16 +155,21 @@ export function AgentList({
             ? null
             : agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
 
-        const tsmHandledAgentIds = selectedAgentObj?.Role === "Territory Sales Manager"
-            ? new Set(
+        // Helper to get all agent IDs under a TSM
+        const getAgentIdsUnderTSM = (tsmId: string) => {
+            return new Set(
                 agents
                     .filter(
                         (a) =>
                             a.Role === "Territory Sales Associate" &&
-                            (a.TSM ?? "").toLowerCase() === selectedAgentObj.ReferenceID.toLowerCase()
+                            (a.TSM ?? "").toLowerCase() === tsmId.toLowerCase()
                     )
                     .map((a) => a.ReferenceID.toLowerCase())
-            )
+            );
+        };
+
+        const tsmHandledAgentIds = selectedAgentObj?.Role === "Territory Sales Manager"
+            ? getAgentIdsUnderTSM(selectedAgentObj.ReferenceID)
             : null;
 
         return history.filter((item) => {
@@ -173,9 +178,9 @@ export function AgentList({
             if (createdAt < from || createdAt > to) return false;
             if (selectedAgent === "all") return true;
 
-            // If a TSM is selected, include all records from TSA agents under that TSM.
+            // If a TSM is selected, include their own records AND all records from TSA agents under that TSM.
             if (selectedAgentObj?.Role === "Territory Sales Manager") {
-                return tsmHandledAgentIds?.has(item.referenceid.toLowerCase()) ?? false;
+                return item.referenceid.toLowerCase() === selectedAgent.toLowerCase() || (tsmHandledAgentIds?.has(item.referenceid.toLowerCase()) ?? false);
             }
 
             // If a specific TSA/agent is selected, include only that agent's records.
