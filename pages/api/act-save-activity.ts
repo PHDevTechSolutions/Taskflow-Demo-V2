@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
-import redis from "../../lib/redis";
 
 const safe = (v: any) => (v === undefined || v === "" ? null : v);
 
@@ -52,6 +51,8 @@ export default async function handler(
 
       so_number,
       so_amount,
+      so_status,
+      payment_status,
       si_date,
       dr_number,
       actual_sales,
@@ -190,6 +191,8 @@ export default async function handler(
 
         so_number: safe(so_number),
         so_amount: safe(so_amount),
+        so_status: safe(so_status),
+        payment_status: safe(payment_status),
         si_date: safe(si_date),
         dr_number: safe(dr_number),
         actual_sales: safe(actual_sales),

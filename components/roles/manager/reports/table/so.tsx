@@ -31,16 +31,8 @@ interface SO {
   type_activity: string;
   status: string;
   referenceid: string;
+  call_type: string;
   tsm?: string;
-}
-
-interface Quotation {
-  id: number;
-  quotation_status?: string;
-  activity_reference_number?: string;
-  referenceid: string;
-  tsm?: string;
-  type_activity: string;
 }
 
 interface Agent {
@@ -92,7 +84,6 @@ export const SOTable: React.FC<SOProps> = ({
   userDetails,
 }) => {
   const [activities, setActivities] = useState<SO[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,32 +117,9 @@ export const SOTable: React.FC<SOProps> = ({
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
-  // ─── Fetch Quotations (for "Converted to SO" count) ──────────────────────────
-  const fetchQuotations = useCallback(() => {
-    if (!referenceid) { setQuotations([]); return; }
-
-    const url = new URL("/api/reports/manager/fetch", window.location.origin);
-    url.searchParams.append("referenceid", referenceid);
-    url.searchParams.append("type_activity", "quotation preparation");
-
-    if (dateCreatedFilterRange?.from)
-      url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
-    if (dateCreatedFilterRange?.to)
-      url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
-
-    fetch(url.toString())
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch quotations");
-        return res.json();
-      })
-      .then((data) => setQuotations(data.activities || []))
-      .catch(() => setQuotations([]));
-  }, [referenceid, dateCreatedFilterRange]);
-
   // ─── Realtime subscription ───────────────────────────────────────────────────
   useEffect(() => {
     fetchActivities();
-    fetchQuotations();
     if (!referenceid) return;
 
     const channel = supabase
@@ -172,7 +140,7 @@ export const SOTable: React.FC<SOProps> = ({
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [referenceid, fetchActivities, fetchQuotations]);
+  }, [referenceid, fetchActivities]);
 
   // ─── Fetch agents ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -231,17 +199,20 @@ export const SOTable: React.FC<SOProps> = ({
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
 
   // ─── TSM Summary ─────────────────────────────────────────────────────────────
-  // SO-Done   = SO rows where status === "DONE" (or use your actual done flag)
-  // Converted = Quotation rows where quotation_status === "CONVERT TO SO"
-  //             linked via activity_reference_number
   const tsmSummary = useMemo(() => {
     const summaryMap = new Map<string, {
       tsmId: string;
       tsmName: string;
       soCount: number;
-      soDone: number;
-      convertedToSO: number;
       totalSOAmount: number;
+      regularSO: number;
+      willingToWait: number;
+      spfSpecial: number;
+      spfLocal: number;
+      spfForeign: number;
+      promo: number;
+      fbMarketplace: number;
+      internalOrder: number;
     }>();
 
     // Initialize from official TSM list
@@ -251,9 +222,15 @@ export const SOTable: React.FC<SOProps> = ({
         tsmId,
         tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
         soCount: 0,
-        soDone: 0,
-        convertedToSO: 0,
         totalSOAmount: 0,
+        regularSO: 0,
+        willingToWait: 0,
+        spfSpecial: 0,
+        spfLocal: 0,
+        spfForeign: 0,
+        promo: 0,
+        fbMarketplace: 0,
+        internalOrder: 0,
       });
     });
 
@@ -269,24 +246,19 @@ export const SOTable: React.FC<SOProps> = ({
         row.soCount += 1;
         row.totalSOAmount += item.so_amount ?? 0;
 
-        if (item.status?.toUpperCase() === "SO-DONE") {
-          row.soDone += 1;
-        }
-      });
-
-    // Count "Converted to SO" from quotations per TSM
-    quotations
-      .filter((q) => q.quotation_status?.toUpperCase() === "CONVERT TO SO")
-      .forEach((q) => {
-        const agent = agentMap[q.referenceid?.toLowerCase() ?? ""];
-        const tsmId = (agent?.TSM ?? q.tsm ?? "").toLowerCase();
-        if (!tsmId || !summaryMap.has(tsmId)) return;
-
-        summaryMap.get(tsmId)!.convertedToSO += 1;
+        const ct = (item.call_type ?? "").toLowerCase().trim();
+        if (ct === "regular so")                 row.regularSO++;
+        else if (ct === "willing to wait")        row.willingToWait++;
+        else if (ct === "spf - special project")  row.spfSpecial++;
+        else if (ct === "spf - local")            row.spfLocal++;
+        else if (ct === "spf - foreign")          row.spfForeign++;
+        else if (ct === "promo")                  row.promo++;
+        else if (ct === "fb marketplace")         row.fbMarketplace++;
+        else if (ct === "internal order")         row.internalOrder++;
       });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.soCount - a.soCount);
-  }, [activities, quotations, agentMap, tsmAgents]);
+  }, [activities, agentMap, tsmAgents]);
 
   // ─── Expanded TSA details under selected TSM ─────────────────────────────────
   const expandedTsaGroups = useMemo(() => {
@@ -310,6 +282,12 @@ export const SOTable: React.FC<SOProps> = ({
     return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
   }, [expandedTsmId, filtered, agentMap]);
 
+  const callTypeKeys = [
+    "regularSO", "willingToWait", "spfSpecial",
+    "spfLocal", "spfForeign", "promo",
+    "fbMarketplace", "internalOrder",
+  ] as const;
+
   /* ================= RENDER ================= */
   return (
     <div className="space-y-4">
@@ -330,10 +308,18 @@ export const SOTable: React.FC<SOProps> = ({
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500">TSM</TableHead>
                 <TableHead className="text-gray-500 text-left">SO Count</TableHead>
-                <TableHead className="text-gray-500 text-left">Converted to SO</TableHead>
                 <TableHead className="text-gray-500 text-right">Total SO Amount</TableHead>
+                <TableHead className="text-gray-500 text-left">Regular SO</TableHead>
+                <TableHead className="text-gray-500 text-left">Willing to Wait</TableHead>
+                <TableHead className="text-gray-500 text-left">SPF - Special Project</TableHead>
+                <TableHead className="text-gray-500 text-left">SPF - Local</TableHead>
+                <TableHead className="text-gray-500 text-left">SPF - Foreign</TableHead>
+                <TableHead className="text-gray-500 text-left">Promo</TableHead>
+                <TableHead className="text-gray-500 text-left">FB Marketplace</TableHead>
+                <TableHead className="text-gray-500 text-left">Internal Order</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {tsmSummary.map((item) => {
                 const isExpanded = expandedTsmId === item.tsmId;
@@ -345,26 +331,34 @@ export const SOTable: React.FC<SOProps> = ({
                   >
                     <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
                     <TableCell className="text-left">{item.soCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-left text-red-600 font-semibold">
-                      {item.convertedToSO > 0 ? item.convertedToSO : <span className="text-gray-300">—</span>}
-                    </TableCell>
                     <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSOAmount)}</TableCell>
+                    {callTypeKeys.map((key) => (
+                      <TableCell key={key} className="text-left">
+                        {item[key] > 0
+                          ? <span className="font-semibold text-gray-700">{item[key]}</span>
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </TableCell>
+                    ))}
                   </TableRow>
                 );
               })}
             </TableBody>
+
             <TableFooter>
               <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                 <TableCell className="text-gray-500">Total</TableCell>
                 <TableCell className="text-left text-gray-700">
                   {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
                 </TableCell>
-                <TableCell className="text-left text-red-600">
-                  {tsmSummary.reduce((s, i) => s + i.convertedToSO, 0).toLocaleString()}
-                </TableCell>
                 <TableCell className="text-right text-gray-800">
                   {fmt(tsmSummary.reduce((s, i) => s + i.totalSOAmount, 0))}
                 </TableCell>
+                {callTypeKeys.map((key) => (
+                  <TableCell key={key} className="text-left text-gray-700">
+                    {tsmSummary.reduce((s, i) => s + i[key], 0).toLocaleString()}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableFooter>
           </Table>
@@ -397,7 +391,6 @@ export const SOTable: React.FC<SOProps> = ({
                 </div>
 
                 <div className="overflow-x-auto">
-
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50 text-[11px]">
@@ -407,6 +400,7 @@ export const SOTable: React.FC<SOProps> = ({
                         <TableHead className="text-gray-500">Company</TableHead>
                         <TableHead className="text-gray-500">Contact Person</TableHead>
                         <TableHead className="text-gray-500">Contact No.</TableHead>
+                        <TableHead className="text-gray-500">Call Type</TableHead>
                         <TableHead className="text-gray-500">Status</TableHead>
                         <TableHead className="text-gray-500">Remarks</TableHead>
                       </TableRow>
@@ -424,10 +418,11 @@ export const SOTable: React.FC<SOProps> = ({
                           <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
                           <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
                           <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
+                          <TableCell className="text-gray-600">{row.call_type || "-"}</TableCell>
                           <TableCell>
                             {row.status ? (
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
-                                ${row.status.toUpperCase() === "DONE"
+                                ${row.status.toUpperCase() === "SO-DONE"
                                   ? "bg-green-50 text-green-600 border border-green-200"
                                   : "bg-gray-50 text-gray-500 border border-gray-200"
                                 }`}>
@@ -447,7 +442,7 @@ export const SOTable: React.FC<SOProps> = ({
                         <TableCell className="text-right text-gray-800">
                           {fmt(group.rows.reduce((s, r) => s + (r.so_amount ?? 0), 0))}
                         </TableCell>
-                        <TableCell colSpan={5} />
+                        <TableCell colSpan={6} />
                       </TableRow>
                     </TableFooter>
                   </Table>

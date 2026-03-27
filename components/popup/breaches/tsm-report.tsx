@@ -83,34 +83,6 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase";
 
-// Fixed outbound counts per TSM per month (hardcoded business logic)
-const getFixedCount = (refId: string, date: Date): number => {
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-
-  const feb2026: Record<string, number> = {
-    "RT-NCR-815758": 11,
-    "MF-PH-840897": 7,
-    "AB-NCR-288130": 11,
-    "AS-NCR-146592": 4,
-    "MP-CDO-613398": 4,
-    "JG-NCR-713768": 1,
-    "JM-CBU-702043": 3,
-  };
-  const marchOnwards: Record<string, number> = {
-    "RT-NCR-815758": 12,
-    "MF-PH-840897": 5,
-    "AB-NCR-288130": 11,
-    "AS-NCR-146592": 4,
-    "MP-CDO-613398": 4,
-    "JG-NCR-713768": 1,
-    "JM-CBU-702043": 2,
-  };
-
-  if (year === 2026 && month === 2) return feb2026[refId] ?? 0;
-  if (year > 2026 || (year === 2026 && month >= 3)) return marchOnwards[refId] ?? 0;
-  return 0;
-};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -205,7 +177,25 @@ export default function TSMReports() {
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
+  const [totalAgents, setTotalAgents] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    return Number(localStorage.getItem("tsm_solo_totalAgents")) || 0;
+  });
+
+  const [workingDays, setWorkingDays] = useState<number>(() => {
+    if (typeof window === "undefined") return 26;
+    return Number(localStorage.getItem("tsm_solo_workingDays")) || 26;
+  });
+
   // ── Sync userId from URL ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    localStorage.setItem("tsm_solo_totalAgents", String(totalAgents));
+  }, [totalAgents]);
+
+  useEffect(() => {
+    localStorage.setItem("tsm_solo_workingDays", String(workingDays));
+  }, [workingDays]);
 
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
@@ -399,8 +389,6 @@ export default function TSMReports() {
       const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
 
-      const fixedCount = getFixedCount(userDetails.referenceid, targetDate);
-
       const dailyActivities = activities.filter((act) => {
         const t = new Date(act.date_created).getTime();
         return t >= startOfDay.getTime() && t <= endOfDay.getTime();
@@ -443,9 +431,10 @@ export default function TSMReports() {
         );
       }).length;
 
-      const dailyDenom = fixedCount ? fixedCount * 20 : 20;
-      const weeklyDenom = fixedCount ? fixedCount * 20 * 5 : 120;
-      const monthlyDenom = fixedCount ? fixedCount * 20 * 26 : 520;
+      const agentCount = totalAgents > 0 ? totalAgents : 1;
+      const dailyDenom = agentCount * 20;
+      const weeklyDenom = agentCount * 20 * 6;
+      const monthlyDenom = agentCount * 20 * workingDays;
 
       setOutboundDaily(dailyCount);
       setOutboundWeekly(weeklyCount);
@@ -472,7 +461,7 @@ export default function TSMReports() {
     } finally {
       setLoadingTime(false);
     }
-  }, [activities, fromDate, userDetails.referenceid]);
+  }, [activities, fromDate, userDetails.referenceid, totalAgents, workingDays]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
   //
@@ -493,17 +482,17 @@ export default function TSMReports() {
       setClientSegments({ top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0, outbound: 0 });
       return;
     }
-  
+
     const fromDateObj = new Date(fromDate);
     const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
     const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-  
+
     // Step 1 — Normalize cluster company names
     const clusterCompanyMap = new Map<string, Activity>();
     clusterAccounts.forEach(acc => {
       if (acc.company_name) clusterCompanyMap.set(acc.company_name.toLowerCase(), acc);
     });
-  
+
     // Step 2 — Filter activities to only include cluster companies
     const clusterActivities = activities.filter(act =>
       act.company_name &&
@@ -512,22 +501,22 @@ export default function TSMReports() {
       new Date(act.date_created).getTime() >= monthStart &&
       new Date(act.date_created).getTime() <= monthEnd
     );
-  
+
     // Step 3 — Unique activities by reference number
     const uniqueByRef: Record<string, Activity> = {};
     clusterActivities.forEach(act => {
       if (act.activity_reference_number) uniqueByRef[act.activity_reference_number] = act;
     });
     setUniqueActivitiesList(Object.values(uniqueByRef));
-  
+
     // Step 4 — Covered vs Uncovered
     const touchedCompanies = new Set(clusterActivities.map(a => a.company_name!.toLowerCase()));
     const covered = clusterAccounts.filter(acc => acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase()));
     const uncovered = clusterAccounts.filter(acc => acc.company_name && !touchedCompanies.has(acc.company_name.toLowerCase()));
-  
+
     setCoveredAccounts(covered);
     setUncoveredAccounts(uncovered);
-  
+
     // Step 5 — Compute segment counts for covered only
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach(acc => {
@@ -539,7 +528,7 @@ export default function TSMReports() {
       else if (type === "newclient") seg.newClient++;
       else if (type === "tsaclient") seg.tsaClient++;
     });
-  
+
     setUniqueClientReach(covered.length);
     setClientSegments({ ...seg, outbound: covered.length });
   }, [activities, clusterAccounts, fromDate]);
@@ -629,16 +618,56 @@ export default function TSMReports() {
               placeholder="Reference ID"
             />
           </div>
-          <div>
-            <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-              Target Date
-            </label>
-            <Input
-              type="date"
-              className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-              value={fromDate}
-              onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
-            />
+          <div className="grid grid-cols-3 gap-3">
+
+            {/* Total Agents */}
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Total Agents
+              </label>
+              <Input
+                type="number"
+                min={0}
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={totalAgents === 0 ? "" : totalAgents}
+                placeholder="e.g. 12"
+                onChange={(e) => setTotalAgents(Number(e.target.value) || 0)}
+              />
+            </div>
+
+            {/* From Date */}
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Date
+              </label>
+              <Input
+                type="date"
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={fromDate}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setToDate(e.target.value);
+                }}
+              />
+            </div>
+
+            {/* Working Days */}
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Working Days
+              </label>
+              <select
+                className="h-7 w-full text-[11px] rounded-none bg-white border border-gray-200 px-2 text-gray-700 font-mono cursor-pointer"
+                value={workingDays}
+                onChange={(e) => setWorkingDays(Number(e.target.value))}
+              >
+                <option value={26}>26d</option>
+                <option value={22}>22d</option>
+              </select>
+            </div>
+
+            {/* (Optional empty slot or future field) */}
+            <div />
           </div>
         </div>
         <Button
@@ -664,8 +693,8 @@ export default function TSMReports() {
             title="Outbound Touchbase"
             badge={
               <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
-                  dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
-                    "bg-red-100 text-red-600"}`}>
+                dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-600"}`}>
                 {dailyPct}% Today
               </span>
             }
@@ -674,7 +703,7 @@ export default function TSMReports() {
               <div className="h-1 bg-gray-100 w-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500" :
-                      dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                    dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
                   style={{ width: `${dailyPct}%` }}
                 />
               </div>
@@ -929,8 +958,8 @@ export default function TSMReports() {
                     <button
                       onClick={() => setCoverageDialogSource("covered")}
                       className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isCovered
-                          ? "bg-emerald-600 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-white text-gray-500 hover:bg-gray-50"
                         }`}
                     >
                       Covered · {coveredAccounts.length}
@@ -938,8 +967,8 @@ export default function TSMReports() {
                     <button
                       onClick={() => setCoverageDialogSource("uncovered")}
                       className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isUncovered
-                          ? "bg-amber-500 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
+                        ? "bg-amber-500 text-white"
+                        : "bg-white text-gray-500 hover:bg-gray-50"
                         }`}
                     >
                       Not Reached · {uncoveredAccounts.length}

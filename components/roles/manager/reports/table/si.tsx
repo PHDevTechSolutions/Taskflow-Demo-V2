@@ -277,8 +277,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500">TSM</TableHead>
-                <TableHead className="text-gray-500 text-right">SO</TableHead>
-                <TableHead className="text-gray-500 text-right">SI / Delivered</TableHead>
+                <TableHead className="text-gray-500 text-right">Total SO</TableHead>
+                <TableHead className="text-gray-500 text-right">Total SI / Delivered</TableHead>
                 <TableHead className="text-gray-500 text-right">Total SI Amount</TableHead>
               </TableRow>
             </TableHeader>

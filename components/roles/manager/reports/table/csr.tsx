@@ -40,7 +40,15 @@ interface Agent {
   profilePicture?: string;
 }
 
-interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
+interface UserDetails {
+  referenceid: string;
+  tsm: string;
+  manager: string;
+  firstname: string;
+  lastname: string;
+  profilePicture: string;
+}
+
 interface CSRProps {
   referenceid: string;
   target_quota?: string;
@@ -100,14 +108,18 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   const fetchActivities = useCallback(() => {
     if (!referenceid) { setActivities([]); return; }
     setLoading(true); setError(null);
-
-    const url = new URL("/api/reports/manager/fetch", window.location.origin);
+  
+    const url = new URL("/api/reports/manager/fetch-endorse", window.location.origin);
     url.searchParams.append("referenceid", referenceid);
     if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
     if (dateCreatedFilterRange?.to) url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
-
+  
     fetch(url.toString())
-      .then(async r => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
+      .then(async r => {
+        const json = await r.json().catch(() => ({ message: `HTTP ${r.status} — non-JSON response` }));
+        if (!r.ok) throw new Error(json?.message || `HTTP ${r.status}`);
+        return json;
+      })
       .then(d => setActivities(d.activities || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -135,7 +147,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     return () => { supabase.removeChannel(ch); };
   }, [referenceid, fetchActivities]);
 
-  // ─── Fetch agents — same endpoint as SITable ─────────────────────────────────
+  // ─── Fetch agents ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
     fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
@@ -144,7 +156,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       .catch(() => { });
   }, [userDetails.referenceid]);
 
-  // ─── Agent lookup map — same pattern as SITable ───────────────────────────────
+  // ─── Agent lookup map ─────────────────────────────────────────────────────────
   const agentMap = useMemo(() => {
     const m: Record<string, Agent & { name: string }> = {};
     agents.forEach(a => {
@@ -168,11 +180,12 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     [activities]
   );
 
-  // ─── TSM Summary — same matching pattern as SITable ──────────────────────────
+  // ─── TSM Summary ──────────────────────────────────────────────────────────────
   const tsmSummary = useMemo(() => {
     const summaryMap = new Map<string, {
       tsmId: string;
       tsmName: string;
+      ticketCount: number;
       quoteDoneCount: number;
       statusCounts: Record<string, number>;
       totalAmount: number;
@@ -183,6 +196,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       summaryMap.set(tsmId, {
         tsmId,
         tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
+        ticketCount: 0,
         quoteDoneCount: 0,
         statusCounts: Object.fromEntries(QUOTATION_STATUSES.map(s => [s, 0])),
         totalAmount: 0,
@@ -190,10 +204,14 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     });
 
     baseActivities.forEach(row => {
+      // endorsed-ticket.agent === row.referenceid — resolve TSM via agentMap
       const agent = agentMap[row.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? row.tsm ?? "").toLowerCase();
       if (!tsmId || !summaryMap.has(tsmId)) return;
       const entry = summaryMap.get(tsmId)!;
+
+      // Count every row with a ticket_reference_number (already filtered above)
+      entry.ticketCount += 1;
 
       if (row.status === "Quote-Done") entry.quoteDoneCount += 1;
 
@@ -206,7 +224,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     return Array.from(summaryMap.values()).sort((a, b) => b.quoteDoneCount - a.quoteDoneCount);
   }, [baseActivities, agentMap, tsmAgents]);
 
-  // ─── Expanded TSA details — same pattern as SITable ──────────────────────────
+  // ─── Expanded TSA details ─────────────────────────────────────────────────────
   const expandedTsaGroups = useMemo(() => {
     if (!expandedTsmId) return [];
 
@@ -246,19 +264,23 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       ) : error ? (
         <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
       ) : tsmSummary.length === 0 ? (
-        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No CSR quotation records found.</div>
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
+          No CSR quotation records found.
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500 whitespace-nowrap">TSM</TableHead>
+                <TableHead className="text-gray-500 text-right whitespace-nowrap">Tickets Endorsed</TableHead>
                 <TableHead className="text-gray-500 text-right whitespace-nowrap">Quote Done</TableHead>
                 {QUOTATION_STATUSES.map(s => (
                   <TableHead key={s} className="text-gray-500 text-right whitespace-nowrap">{s}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {tsmSummary.map(item => {
                 const isExpanded = expandedTsmId === item.tsmId;
@@ -268,25 +290,52 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
                     className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
                     onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
                   >
-                    <TableCell className="font-semibold text-gray-700 uppercase whitespace-nowrap">{item.tsmName}</TableCell>
-                    <TableCell className="text-right text-blue-600 font-semibold">
-                      {item.quoteDoneCount > 0 ? item.quoteDoneCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                    <TableCell className="font-semibold text-gray-700 uppercase whitespace-nowrap">
+                      {item.tsmName}
                     </TableCell>
+
+                    {/* Tickets Endorsed */}
+                    <TableCell className="text-right text-emerald-600 font-semibold">
+                      {item.ticketCount > 0
+                        ? item.ticketCount.toLocaleString()
+                        : <span className="text-gray-300">—</span>}
+                    </TableCell>
+
+                    {/* Quote Done */}
+                    <TableCell className="text-right text-blue-600 font-semibold">
+                      {item.quoteDoneCount > 0
+                        ? item.quoteDoneCount.toLocaleString()
+                        : <span className="text-gray-300">—</span>}
+                    </TableCell>
+
+                    {/* Per-status columns */}
                     {QUOTATION_STATUSES.map(s => (
                       <TableCell key={s} className="text-right text-gray-700">
-                        {item.statusCounts[s] > 0 ? item.statusCounts[s].toLocaleString() : <span className="text-gray-300">—</span>}
+                        {item.statusCounts[s] > 0
+                          ? item.statusCounts[s].toLocaleString()
+                          : <span className="text-gray-300">—</span>}
                       </TableCell>
                     ))}
                   </TableRow>
                 );
               })}
             </TableBody>
+
             <TableFooter>
               <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                 <TableCell className="text-gray-500">Total</TableCell>
+
+                {/* Tickets Endorsed total */}
+                <TableCell className="text-right text-emerald-600">
+                  {tsmSummary.reduce((s, i) => s + i.ticketCount, 0).toLocaleString()}
+                </TableCell>
+
+                {/* Quote Done total */}
                 <TableCell className="text-right text-blue-600">
                   {tsmSummary.reduce((s, i) => s + i.quoteDoneCount, 0).toLocaleString()}
                 </TableCell>
+
+                {/* Per-status totals */}
                 {QUOTATION_STATUSES.map(s => (
                   <TableCell key={s} className="text-right text-gray-700">
                     {tsmSummary.reduce((sum, i) => sum + i.statusCounts[s], 0).toLocaleString()}
@@ -327,6 +376,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
                     />
                   </div>
                 </div>
+
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -344,21 +394,35 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
                         <TableHead className="text-gray-500">Remarks</TableHead>
                       </TableRow>
                     </TableHeader>
+
                     <TableBody>
                       {group.rows
                         .filter(row => {
                           const s = searchTerm.toLowerCase();
-                          return !s || row.company_name?.toLowerCase().includes(s) || row.ticket_reference_number?.toLowerCase().includes(s) || row.remarks?.toLowerCase().includes(s);
+                          return (
+                            !s ||
+                            row.company_name?.toLowerCase().includes(s) ||
+                            row.ticket_reference_number?.toLowerCase().includes(s) ||
+                            row.remarks?.toLowerCase().includes(s)
+                          );
                         })
                         .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime())
                         .map(row => {
                           const duration = computeDuration(row.start_date, row.end_date);
                           return (
                             <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
-                              <TableCell className="text-gray-500 whitespace-nowrap">{new Date(row.date_created).toLocaleDateString()}</TableCell>
-                              <TableCell className="uppercase text-gray-700 whitespace-nowrap">{row.ticket_reference_number || "-"}</TableCell>
-                              <TableCell className="text-gray-700">{row.quotation_number || "-"}</TableCell>
-                              <TableCell className="text-right text-gray-700">{row.quotation_amount != null ? fmtPHP(row.quotation_amount) : "-"}</TableCell>
+                              <TableCell className="text-gray-500 whitespace-nowrap">
+                                {new Date(row.date_created).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="uppercase text-gray-700 whitespace-nowrap">
+                                {row.ticket_reference_number || "-"}
+                              </TableCell>
+                              <TableCell className="text-gray-700">
+                                {row.quotation_number || "-"}
+                              </TableCell>
+                              <TableCell className="text-right text-gray-700">
+                                {row.quotation_amount != null ? fmtPHP(row.quotation_amount) : "-"}
+                              </TableCell>
                               <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
                               <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
                               <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
@@ -375,6 +439,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
                           );
                         })}
                     </TableBody>
+
                     <TableFooter>
                       <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                         <TableCell colSpan={3} className="text-gray-500">Subtotal</TableCell>

@@ -83,6 +83,8 @@ interface Activity {
     so_number?: string;
     so_amount?: string;
     si_date?: string;
+    so_status?: string;
+    payment_status?: string;
 
     actual_sales?: string;
     dr_number?: string;
@@ -220,6 +222,8 @@ export function CreateActivityDialog({
 
     const [soNumber, setSoNumber] = useState("");
     const [soAmount, setSoAmount] = useState("");
+    const [soStatus, setSoStatus] = useState("");
+    const [paymentStatus, setPaymentStatus] = useState("");
     const [siDate, setSiDate] = useState("");
 
     const [drNumber, setDrNumber] = useState("");
@@ -493,6 +497,8 @@ export function CreateActivityDialog({
             so_number: soNumber || undefined,
             so_amount: soAmount || undefined,
             si_date: siDate || undefined,
+            so_status: soStatus || undefined,
+            payment_status: paymentStatus || undefined,
 
             dr_number: drNumber || undefined,
             actual_sales: siAmount || undefined,
@@ -1066,7 +1072,10 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
-
+                                    soStatus={soStatus}
+                                    setSoStatus={setSoStatus}
+                                    paymentStatus={paymentStatus}
+                                    setPaymentStatus={setPaymentStatus}
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
                                     handleBack={handleBack}
