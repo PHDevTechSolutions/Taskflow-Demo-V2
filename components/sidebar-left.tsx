@@ -112,6 +112,7 @@ const data = {
         { name: "Daily Activity Logs", url: "/roles/tsm/activity/ccg", icon: Compass },
 
         // Manager
+        { name: "Activity Planner", url: "/roles/manager/activity/planner", icon: Target },
         { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
