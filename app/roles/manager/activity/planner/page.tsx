@@ -222,10 +222,10 @@ function DashboardContent() {
                                 <CardHeader className="flex flex-col space-y-1">
                                     <div className="flex items-center gap-2">
                                         <AlertCircleIcon className="w-5 h-5 text-red-500" />
-                                        <CardTitle className="text-sm font-semibold">Pending Approval of Quotations</CardTitle>
+                                        <CardTitle className="text-sm font-semibold">Pending TSM Approval of Quotations</CardTitle>
                                     </div>
                                     <p className="text-xs text-gray-500">
-                                        These are the quotations that are awaiting manager or TSM approval.
+                                        These are the quotations that are awaiting for TSM approval.
                                     </p>
                                 </CardHeader>
                                 <CardContent>
@@ -246,7 +246,7 @@ function DashboardContent() {
                                 <CardHeader className="flex flex-col space-y-1">
                                     <div className="flex items-center gap-2">
                                         <AlertCircleIcon className="w-5 h-5 text-red-500" />
-                                        <CardTitle className="text-sm font-semibold">Pending Endorsed Quotation</CardTitle>
+                                        <CardTitle className="text-sm font-semibold">Pending Head Approval of Quotations</CardTitle>
                                     </div>
                                     <p className="text-xs text-gray-500">
                                         Quotations that are awaiting manager approval
