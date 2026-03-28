@@ -517,9 +517,9 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                             {/* Approver */}
                             <div>
                                 <p className="text-[9px] font-black uppercase text-gray-400 mb-8">Approved By:</p>
-                                {payload.signature ? (
+                                {payload.tsmSignature ? (
                                     <img
-                                        src={payload.signature}
+                                        src={payload.tsmSignature}
                                         alt="TSM Signature"
                                         className="h-14 object-contain mb-1"
                                     />
