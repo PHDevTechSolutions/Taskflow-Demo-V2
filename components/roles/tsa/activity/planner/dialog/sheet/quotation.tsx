@@ -1808,122 +1808,122 @@ Procurement
       {step === 6 && (
         <div>
           <FieldGroup>
-            <FieldSet>
-              {followUpDate ? (
-                <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
-                  <div>
-                    <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
-                    <AlertDescription>
-                      {followUpDate} — This is the scheduled date to reconnect with the client.
-                    </AlertDescription>
-                  </div>
+  <FieldSet>
+    {followUpDate ? (
+      <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
+        <div>
+          <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
+          <AlertDescription>
+            {followUpDate} — This is the scheduled date to reconnect with the client.
+          </AlertDescription>
+        </div>
 
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <Input
-                      type="checkbox"
-                      checked={useToday}
-                      onChange={(e) => setUseToday(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
-                  </label>
-                </Alert>
-              ) : (
-                <></>
-              )}
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <Input
+            type="checkbox"
+            checked={useToday}
+            onChange={(e) => setUseToday(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
+        </label>
+      </Alert>
+    ) : (
+      <></>
+    )}
 
-              <FieldLabel className="font-bold">Remarks</FieldLabel>
-              <Textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Enter any remarks here..."
-                rows={3}
-                className="capitalize rounded-none"
-              />
+    <FieldLabel className="font-bold">Remarks</FieldLabel>
+    <Textarea
+      value={remarks}
+      onChange={(e) => setRemarks(e.target.value)}
+      placeholder="Enter any remarks here..."
+      rows={3}
+      className="capitalize rounded-none"
+    />
 
-              <FieldLabel className="font-bold">Status </FieldLabel>
-              <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
-                <SelectTrigger className="w-full rounded-none">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-                    <SelectItem value="For Bidding">For Bidding</SelectItem>
-                    <SelectItem value="Nego">Nego</SelectItem>
-                    <SelectItem value="Order Completed">Order Completed</SelectItem>
-                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-                    <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
-                    <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
-                    <SelectItem value="Lost Bid">Lost Bid</SelectItem>
-                    <SelectItem value="Canvass Only">Canvass Only</SelectItem>
-                    <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
-                    <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+    <FieldLabel className="font-bold">Status </FieldLabel>
+    <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
+      <SelectTrigger className="w-full rounded-none">
+        <SelectValue placeholder="Select status" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
+          <SelectItem value="For Bidding">For Bidding</SelectItem>
+          <SelectItem value="Nego">Nego</SelectItem>
+          <SelectItem value="Order Completed">Order Completed</SelectItem>
+          <SelectItem value="Convert to SO">Convert to SO</SelectItem>
+          <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
+          <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
+          <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+          <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
+          <SelectItem value="Lost Bid">Lost Bid</SelectItem>
+          <SelectItem value="Canvass Only">Canvass Only</SelectItem>
+          <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
+          <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
 
-              <FieldLabel className="font-bold">Approval Process </FieldLabel>
-              <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
-                <SelectTrigger className="w-full rounded-none">
-                  <SelectValue placeholder="Select Approval Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Pending">Endorsed to TSM</SelectItem>
-                    <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+    <FieldLabel className="font-bold">Approval Process </FieldLabel>
+    <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
+      <SelectTrigger className="w-full rounded-none">
+        <SelectValue placeholder="Select Approval Status" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="Pending">Endorsed to TSM</SelectItem>
+          <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
 
-              {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
-              {quotationStatus && tsmApprovalStatus ? (
-                <>
-                  <FieldLabel className="mt-3">Action</FieldLabel>
-                  <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
-                    {[
-                      {
-                        value: "Quote-Done",
-                        title: "Quote-Done",
-                        desc: "The quotation process is complete and finalized.",
-                      },
-                    ].map((item) => (
-                      <FieldLabel key={item.value}>
-                        <Field orientation="horizontal" className="w-full items-start">
-                          {/* LEFT */}
-                          <FieldContent className="flex-1">
-                            <FieldTitle>{item.title}</FieldTitle>
-                            <FieldDescription>{item.desc}</FieldDescription>
+    {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
+    {quotationStatus && tsmApprovalStatus ? (
+      <>
+        <FieldLabel className="mt-3">Action</FieldLabel>
+        <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+          {[
+            {
+              value: "Quote-Done",
+              title: "Quote-Done",
+              desc: "The quotation process is complete and finalized.",
+            },
+          ].map((item) => (
+            <FieldLabel key={item.value}>
+              <Field orientation="horizontal" className="w-full items-start">
+                {/* LEFT */}
+                <FieldContent className="flex-1">
+                  <FieldTitle>{item.title}</FieldTitle>
+                  <FieldDescription>{item.desc}</FieldDescription>
 
-                            {/* Buttons only visible if selected */}
-                            {status === item.value && (
-                              <div className="mt-4 flex gap-2">
-                                <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
-                                  <ArrowLeft /> Back
-                                </Button>
-                                <Button className="rounded-none" onClick={handleSaveClick}>
-                                  Save <CheckCircle2Icon />
-                                </Button>
-                              </div>
-                            )}
-                          </FieldContent>
+                  {/* Buttons only visible if selected */}
+                  {status === item.value && (
+                    <div className="mt-4 flex gap-2">
+                      <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                        <ArrowLeft /> Back
+                      </Button>
+                      <Button className="rounded-none" onClick={handleSaveClick}>
+                        Save <CheckCircle2Icon />
+                      </Button>
+                    </div>
+                  )}
+                </FieldContent>
 
-                          {/* RIGHT */}
-                          <RadioGroupItem value={item.value} />
-                        </Field>
-                      </FieldLabel>
-                    ))}
-                  </RadioGroup>
-                </>
-              ) : (
-                <p className="mt-3 text-xs text-gray-400 italic">
-                  Complete the Status and Approval Process fields above to proceed.
-                </p>
-              )}
-            </FieldSet>
-          </FieldGroup>
+                {/* RIGHT */}
+                <RadioGroupItem value={item.value} />
+              </Field>
+            </FieldLabel>
+          ))}
+        </RadioGroup>
+      </>
+    ) : (
+      <p className="mt-3 text-xs text-gray-400 italic">
+        Complete the Status and Approval Process fields above to proceed.
+      </p>
+    )}
+  </FieldSet>
+</FieldGroup>
 
           {/* Confirmation alert modal/dialog */}
           {showConfirmFollowUp && (

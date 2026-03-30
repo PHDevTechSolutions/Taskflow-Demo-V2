@@ -95,12 +95,17 @@ const data = {
         { name: "Daily Admin Task", url: "/roles/tsa/activity/notes", icon: FileText },
         { name: "Daily Activity Logs", url: "/roles/tsa/activity/ccg", icon: Compass },
         { name: "Engr. Services", url: "/roles/tsa/activity/engineering", icon: Briefcase },
-
+        
+        // TSM
+        
         { name: "Activity Planner", url: "/roles/tsm/activity/planner", icon: Target },
+        { name: "Pending Quotations", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
         { name: "Daily Activity Logs", url: "/roles/tsm/activity/ccg", icon: Compass },
 
+        // Manager
+        { name: "Activity Planner", url: "/roles/manager/activity/planner", icon: Target },
         { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approval Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
