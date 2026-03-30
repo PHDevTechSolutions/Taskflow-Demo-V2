@@ -345,6 +345,7 @@ export default function TaskListEditDialog({
   const [isManualEntry, setIsManualEntry] = useState<boolean>(false);
 
   const [checkedRows, setCheckedRows] = useState<Record<number, boolean>>({});
+  const [hasDeleted, setHasDeleted] = useState(false);
   const [discount, setDiscount] = React.useState(0);
   const initialVatType: "vat_inc" | "vat_exe" | "zero_rated" =
     vatType === "vat_inc" || vatType === "vat_exe" || vatType === "zero_rated"
@@ -605,6 +606,7 @@ export default function TaskListEditDialog({
     setProducts((prev) => {
       const n = [...prev];
       n.splice(index, 1);
+      setHasDeleted(true);
       return n;
     });
     setPreviewStates((prev) => {
@@ -2335,12 +2337,21 @@ export default function TaskListEditDialog({
                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
+              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && !hasDeleted && (
                 <>
-                  <Button type="button" onClick={DownloadPDF} className="rounded-none h-12 px-6 bg-yellow-600 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={DownloadPDF}
+                    className="rounded-none h-12 px-6 bg-yellow-600 flex items-center gap-2"
+                  >
                     <FileText /> PDF
                   </Button>
-                  <Button type="button" onClick={DownloadExcel} className="rounded-none h-12 px-6 bg-green-600 flex items-center gap-2">
+
+                  <Button
+                    type="button"
+                    onClick={DownloadExcel}
+                    className="rounded-none h-12 px-6 bg-green-600 flex items-center gap-2"
+                  >
                     <FileSpreadsheet /> Excel
                   </Button>
                 </>
