@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
-import { AgentCard } from "@/components/roles/tsm/dashboard/card/agent-list";
+import { AgentCard } from "@/components/roles/manager/dashboard/card/agent-list";
 import { AgentActivityLogs } from "../dashboard/card/activity-logs";
 import { AgentMeetings } from "@/components/roles/tsm/dashboard/card/meetings";
 import { OutboundCard } from "@/components/roles/tsm/dashboard/card/outbound";

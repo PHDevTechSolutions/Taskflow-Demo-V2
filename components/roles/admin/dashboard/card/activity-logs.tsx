@@ -8,12 +8,13 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
-import { ChevronDown, ChevronRight, Users, Briefcase } from "lucide-react";
+import { ChevronDown, ChevronRight, Users, Briefcase, CalendarDays } from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import {
   collection, query, where, orderBy, onSnapshot,
 } from "firebase/firestore";
+import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,14 @@ interface Agent {
 interface Activity {
   latestLogin?: string | null;
   latestLogout?: string | null;
+}
+
+interface Meeting {
+  start_date: string | null;
+  end_date: string | null;
+  remarks: string | null;
+  type_activity: string | null;
+  date_created: string | null;
 }
 
 interface Props {
