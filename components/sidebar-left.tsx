@@ -110,8 +110,6 @@ const data = {
          
         { name: "Pending Approval", url: "/roles/admin/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approval Quotations", url: "/roles/admin/activity/quotation/approval-quotation", icon: CalendarDays },
-        { name: "Historical Data (TaskList)", url: "/roles/admin/activity/tasklist", icon: ClipboardList },
-        { name: "Revised Quotations", url: "/roles/admin/activity/revised-quotation", icon: Compass },
         { name: "Client Coverage Guide", url: "/roles/admin/activity/ccg", icon: Compass },
       ],
     },
