@@ -78,6 +78,17 @@ interface QuotationNotification {
   date_created: string;
 }
 
+interface SPFNotification {
+  id: number;
+  spf_number: string;
+  company_name: string;
+  activity_reference_number: string;
+  date_created: string;
+  date_updated?: string;
+  status: string;
+  referenceid: string;
+}
+
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
 
 // ─── Clear Cache Dialog ───────────────────────────────────────────────────────
@@ -154,7 +165,7 @@ function NotificationDropdown({
 }) {
   const router = useRouter();
 
-  const [notifications, setNotifications] = useState<QuotationNotification[]>([]);
+  const [notifications, setNotifications] = useState<(QuotationNotification | SPFNotification)[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
@@ -162,6 +173,7 @@ function NotificationDropdown({
   // ── Sound refs ──
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevIdsRef = useRef<Set<number>>(new Set());
+  const prevNotificationsCount = useRef<number>(0);
   const isFirstLoad = useRef(true);
 
   const READ_KEY = `notif_read_${referenceid}`;
@@ -181,42 +193,79 @@ function NotificationDropdown({
       if (!audioRef.current) {
         audioRef.current = new Audio("/alert-notification.mp3");
         audioRef.current.volume = 0.6;
+        // Preload the audio
+        audioRef.current.load();
       }
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => { });
-    } catch { }
+      audioRef.current.play().catch((error) => {
+        console.error("Failed to play notification sound:", error);
+      });
+    } catch (error) {
+      console.error("Error in playSound:", error);
+    }
   };
 
   const fetchNotifications = useCallback(async () => {
     if (!referenceid) return;
     setLoading(true);
     try {
-      const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
-      url.searchParams.append("referenceid", referenceid);
-      const res = await fetch(url.toString());
-      if (!res.ok) throw new Error("Failed");
-      const data = await res.json();
+      // Fetch quotation notifications
+      const quotationUrl = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
+      quotationUrl.searchParams.append("referenceid", referenceid);
+      const quotationRes = await fetch(quotationUrl.toString());
+      
+      if (!quotationRes.ok) throw new Error("Failed to fetch quotation notifications");
+      const quotationData = await quotationRes.json();
 
-      const filtered = (data.activities || []).filter(
+      const filteredQuotations = (quotationData.activities || []).filter(
         (a: QuotationNotification) =>
           a.tsm_approved_status === "Approved" || a.tsm_approved_status === "Decline"
       );
 
-      filtered.sort((a: QuotationNotification, b: QuotationNotification) => {
+      filteredQuotations.sort((a: QuotationNotification, b: QuotationNotification) => {
         const dateA = new Date(a.manager_approval_date ?? a.tsm_approval_date ?? a.date_updated ?? a.date_created).getTime();
         const dateB = new Date(b.manager_approval_date ?? b.tsm_approval_date ?? b.date_updated ?? b.date_created).getTime();
         return dateB - dateA;
       });
 
-      const newIds = new Set<number>(filtered.map((n: QuotationNotification) => n.id as number));
+      // Fetch SPF procurement notifications
+      const spfUrl = new URL("/api/activity/tsa/spf/notifications", window.location.origin);
+      spfUrl.searchParams.append("referenceid", referenceid);
+      const spfRes = await fetch(spfUrl.toString());
+      
+      let spfNotifications: SPFNotification[] = [];
+      if (spfRes.ok) {
+        const spfData = await spfRes.json();
+        spfNotifications = spfData.notifications || [];
+      }
+
+      // Combine both types of notifications
+      const allNotifications = [...filteredQuotations, ...spfNotifications];
+      
+      // Sort all notifications by date (newest first)
+      allNotifications.sort((a, b) => {
+        const dateA = new Date((a as any).date_updated || (a as any).date_created).getTime();
+        const dateB = new Date((b as any).date_updated || (b as any).date_created).getTime();
+        return dateB - dateA;
+      });
+
+      const newIds = new Set<number>(allNotifications.map((n) => n.id as number));
       if (!isFirstLoad.current) {
         const brandNewIds = [...newIds].filter((id) => !prevIdsRef.current.has(id));
-        if (brandNewIds.length > 0) playSound();
+        // Play sound if there are new notifications
+        if (brandNewIds.length > 0) {
+          console.log("Playing sound for new notifications:", brandNewIds);
+          playSound();
+        } else {
+          console.log("No new notifications found");
+        }
       }
+      // Always update the previous count
+      prevNotificationsCount.current = allNotifications.length;
       prevIdsRef.current = newIds;
       isFirstLoad.current = false;
 
-      setNotifications(filtered);
+      setNotifications(allNotifications);
     } catch { } finally {
       setLoading(false);
     }
@@ -288,7 +337,7 @@ function NotificationDropdown({
 
       <DropdownMenuContent align="end" className="w-[380px] max-h-[520px] overflow-y-auto rounded-none p-0">
         <div className="sticky top-0 bg-background z-10 px-4 py-3 border-b flex items-center justify-between">
-          <DropdownMenuLabel className="p-0 text-sm font-semibold">Quotation Notifications</DropdownMenuLabel>
+          <DropdownMenuLabel className="p-0 text-sm font-semibold">Notifications</DropdownMenuLabel>
           {notifications.length > 0 && (
             <Badge variant="secondary" className="text-xs rounded-sm">{notifications.length} total</Badge>
           )}
@@ -301,71 +350,117 @@ function NotificationDropdown({
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-6 text-muted-foreground text-xs gap-1">
             <Bell className="w-6 h-6 opacity-30" />
-            <span>No approved or declined quotations</span>
+            <span>No notifications</span>
           </div>
         ) : (
           <div className="divide-y">
             {notifications.map((notif) => {
-              const isApproved = notif.tsm_approved_status === "Approved";
-              const approvedByManager = !!notif.manager_approval_date;
+              const isQuotation = 'quotation_number' in notif;
+              const isSPF = 'spf_number' in notif;
               const isUnread = !readIds.has(notif.id);
 
-              return (
-                <div
-                  key={notif.id}
-                  className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors
-                    hover:bg-accent/60 active:bg-accent
-                    ${isUnread ? "bg-muted/40" : "bg-background"}`}
-                  onClick={() => handleNotifClick(notif)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-sm leading-tight flex-1">{notif.company_name}</span>
-                    <span className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold ${isApproved ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                      {isApproved ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                      {notif.tsm_approved_status}
-                    </span>
+              if (isQuotation) {
+                const quotationNotif = notif as QuotationNotification;
+                const isApproved = quotationNotif.tsm_approved_status === "Approved";
+                const approvedByManager = !!quotationNotif.manager_approval_date;
+
+                return (
+                  <div
+                    key={quotationNotif.id}
+                    className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors
+                      hover:bg-accent/60 active:bg-accent
+                      ${isUnread ? "bg-muted/40" : "bg-background"}`}
+                    onClick={() => handleNotifClick(quotationNotif)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-sm leading-tight flex-1">{quotationNotif.company_name}</span>
+                      <span className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold ${isApproved ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {isApproved ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                        {quotationNotif.tsm_approved_status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
+                      {quotationNotif.quotation_number && <span className="uppercase font-mono">{quotationNotif.quotation_number}</span>}
+                      {formatAmount(quotationNotif.quotation_amount) && <span className="font-semibold text-foreground">{formatAmount(quotationNotif.quotation_amount)}</span>}
+                    </div>
+
+                    {quotationNotif.tsm_approval_date && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <CheckCircle className="w-3 h-3 shrink-0 text-green-600" />
+                        <span><span className="font-medium text-foreground">TSM {isApproved ? "Approved" : "Declined"}:</span> {formatDate(quotationNotif.tsm_approval_date)}</span>
+                      </div>
+                    )}
+
+                    {approvedByManager && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
+                        <span><span className="font-medium text-foreground">{isApproved ? "Approved" : "Declined"} by Manager:</span> {formatDate(quotationNotif.manager_approval_date)}</span>
+                      </div>
+                    )}
+
+                    {quotationNotif.tsm_remarks && <p className="text-muted-foreground italic">TSM: &ldquo;{quotationNotif.tsm_remarks}&rdquo;</p>}
+                    {quotationNotif.manager_remarks && <p className="text-muted-foreground italic">Manager: &ldquo;{quotationNotif.manager_remarks}&rdquo;</p>}
+
+                    {isApproved && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleViewPdf(e, quotationNotif)}>
+                          <Eye className="w-3 h-3" /> View PDF
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleDownloadPdf(e, quotationNotif)}>
+                          <Download className="w-3 h-3" /> Download PDF
+                        </Button>
+                      </div>
+                    )}
+
+                    {isUnread && (
+                      <div className="flex justify-end mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      </div>
+                    )}
                   </div>
+                );
+              } else if (isSPF) {
+                const spfNotif = notif as SPFNotification;
+                
+                return (
+                  <div
+                    key={spfNotif.id}
+                    className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors
+                      hover:bg-accent/60 active:bg-accent
+                      ${isUnread ? "bg-muted/40" : "bg-background"}`}
+                    onClick={() => {}}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-sm leading-tight flex-1">{spfNotif.company_name}</span>
+                      <span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-xs text-[11px] font-semibold bg-blue-100 text-blue-700">
+                        <CheckCircle2 className="w-3 h-3" />
+                        SPF Approved
+                      </span>
+                    </div>
 
-                  <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
-                    {notif.quotation_number && <span className="uppercase font-mono">{notif.quotation_number}</span>}
-                    {formatAmount(notif.quotation_amount) && <span className="font-semibold text-foreground">{formatAmount(notif.quotation_amount)}</span>}
+                    <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
+                      {spfNotif.spf_number && <span className="uppercase font-mono">{spfNotif.spf_number}</span>}
+                      <span className="font-medium text-foreground">Ready For Quotation</span>
+                    </div>
+
+                    {spfNotif.date_updated && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
+                        <span><span className="font-medium text-foreground">Approved By Procurement:</span> {formatDate(spfNotif.date_updated)}</span>
+                      </div>
+                    )}
+
+                    {isUnread && (
+                      <div className="flex justify-end mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      </div>
+                    )}
                   </div>
+                );
+              }
 
-                  {notif.tsm_approval_date && (
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <CheckCircle className="w-3 h-3 shrink-0 text-green-600" />
-                      <span><span className="font-medium text-foreground">TSM {isApproved ? "Approved" : "Declined"}:</span> {formatDate(notif.tsm_approval_date)}</span>
-                    </div>
-                  )}
-
-                  {approvedByManager && (
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
-                      <span><span className="font-medium text-foreground">{isApproved ? "Approved" : "Declined"} by Manager:</span> {formatDate(notif.manager_approval_date)}</span>
-                    </div>
-                  )}
-
-                  {notif.tsm_remarks && <p className="text-muted-foreground italic">TSM: &ldquo;{notif.tsm_remarks}&rdquo;</p>}
-                  {notif.manager_remarks && <p className="text-muted-foreground italic">Manager: &ldquo;{notif.manager_remarks}&rdquo;</p>}
-
-                  {isApproved && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleViewPdf(e, notif)}>
-                        <Eye className="w-3 h-3" /> View PDF
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleDownloadPdf(e, notif)}>
-                        <Download className="w-3 h-3" /> Download PDF
-                      </Button>
-                    </div>
-                  )}
-
-                  {isUnread && (
-                    <div className="flex justify-end mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    </div>
-                  )}
-                </div>
-              );
+              return null;
             })}
           </div>
         )}

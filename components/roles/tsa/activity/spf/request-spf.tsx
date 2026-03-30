@@ -72,9 +72,11 @@ const StatusBadge = ({ status }: { status?: string }) => {
             "pending for procurement": "For Procurement Costing",
             "approved by procurement": "Ready for Quotation", 
             "for revision": "Revised by Sales",
+            "processed by pd": "Pending for Procurement",
+            // else
             "approved": "Approved",
             "pending": "Pending",
-            "declined": "Declined"
+            "declined": "Declined",
         };
         
         return statusMap[s] || status || "—";
@@ -83,7 +85,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
     const cls =
         s === "approved" || s === "approved by procurement" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
             : s === "pending" || s === "pending for procurement" ? "bg-amber-100 text-amber-700 border-amber-200"
-                : s === "declined" ? "bg-red-100 text-red-700 border-red-200"
+                : s === "processed by pd" ? "bg-red-100 text-red-700 border-red-200"
                     : s === "for revision" ? "bg-blue-100 text-blue-700 border-blue-200"
                         : "bg-gray-100 text-gray-500 border-gray-200";
 

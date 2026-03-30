@@ -506,9 +506,8 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
             {/* Edit Dialog */}
             {editItem && (
                 <TaskListEditDialog
-                    open={editDialogOpen}
-                    onOpenChange={setEditDialogOpen}
                     item={editItem}
+                    onClose={() => setEditDialogOpen(false)}
                     onSave={() => {
                         fetchActivities();
                         setEditItem(null);
