@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2 } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, Users, TrendingUp, Filter, CheckCircle, Clock, XCircle } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,18 @@ interface CompletedProps {
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
+interface TSMStat {
+    tsmName: string;
+    tsmId: string;
+    total: number;
+}
+
+interface AgentStat {
+    agentName: string;
+    agentId: string;
+    total: number;
+}
+
 export const DeclinedQuotation: React.FC<CompletedProps> = ({
     referenceid,
     target_quota,
@@ -104,13 +116,16 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [selectedTSM, setSelectedTSM] = useState<string>("all");
+    const [selectedAgent, setSelectedAgent] = useState<string>("all");
     const [agents, setAgents] = useState<any[]>([]);
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editOpen, setEditOpen] = useState(false);
+    const [showTSMStats, setShowTSMStats] = useState(false);
+    const [showAgentStats, setShowAgentStats] = useState(false);
 
     // -----------------------------
     // FETCH ACTIVITIES
-    // FIX: Converted to async/await, removed redundant client-side date filter
     // -----------------------------
     const fetchActivities = useCallback(async () => {
         if (!referenceid) {
@@ -148,7 +163,6 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
 
     // -----------------------------
     // FETCH AGENTS
-    // FIX: Removed redundant userDetails wrapper, use referenceid directly
     // -----------------------------
     useEffect(() => {
         if (!referenceid) return;
@@ -161,7 +175,6 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
                 setAgents(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error(err);
-                // Do not block quotation list rendering when agent metadata fails.
                 setAgents([]);
             }
         };
@@ -196,8 +209,6 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
 
     // -----------------------------
     // SORT & FILTER
-    // FIX: Removed hasMeaningfulData (hid valid records with empty optional fields)
-    // FIX: Removed duplicate client-side date range filter (API handles it)
     // -----------------------------
     const sortedActivities = useMemo(() => {
         return [...activities].sort(
@@ -207,19 +218,74 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
         );
     }, [activities]);
 
+    const baseFilteredActivities = useMemo(() => {
+        return sortedActivities
+            .filter((item) => item.tsm_approved_status === "Decline By Sales Head")
+            .filter((item) => item.type_activity === "Quotation Preparation");
+    }, [sortedActivities]);
+
+    // Statistics
+    const stats = useMemo(() => ({
+        total: baseFilteredActivities.length,
+    }), [baseFilteredActivities]);
+
+    // TSM Statistics
+    const tsmStats = useMemo(() => {
+        const statsMap = new Map<string, TSMStat>();
+
+        baseFilteredActivities.forEach((item) => {
+            const tsmId = item.tsm || "unknown";
+            const tsmName = item.tsm_name || "Unknown TSM";
+
+            if (!statsMap.has(tsmId)) {
+                statsMap.set(tsmId, { tsmId, tsmName, total: 0 });
+            }
+
+            const stat = statsMap.get(tsmId)!;
+            stat.total += 1;
+        });
+
+        return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
+    }, [baseFilteredActivities]);
+
+    // Agent Statistics
+    const agentStats = useMemo(() => {
+        const statsMap = new Map<string, AgentStat>();
+
+        baseFilteredActivities.forEach((item) => {
+            const agentId = item.referenceid || "unknown";
+            const agentName = item.agent_name || "Unknown Agent";
+
+            if (!statsMap.has(agentId)) {
+                statsMap.set(agentId, { agentId, agentName, total: 0 });
+            }
+
+            const stat = statsMap.get(agentId)!;
+            stat.total += 1;
+        });
+
+        return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
+    }, [baseFilteredActivities]);
+
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase().trim();
 
-        return sortedActivities
-            .filter((item) => item.tsm_approved_status === "Decline By Sales Head")
-            .filter((item) => item.type_activity === "Quotation Preparation")
+        return baseFilteredActivities
+            .filter((item) => {
+                if (selectedTSM === "all") return true;
+                return item.tsm === selectedTSM;
+            })
+            .filter((item) => {
+                if (selectedAgent === "all") return true;
+                return item.referenceid === selectedAgent;
+            })
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
                     (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
                 );
             });
-    }, [sortedActivities, searchTerm]);
+    }, [baseFilteredActivities, searchTerm, selectedTSM, selectedAgent]);
 
     // -----------------------------
     // AGENT MAP
@@ -276,15 +342,179 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
 
     return (
         <>
-            {/* Search */}
-            <div className="mb-4 flex items-center gap-4">
-                <Input
-                    type="text"
-                    placeholder="Search..."
-                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            {/* Statistics Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-sm p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold truncate">
+                                Total Declined Quotations
+                            </p>
+                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                        </div>
+                        <div className="bg-red-100 p-3 rounded-full flex-shrink-0 ml-2">
+                            <XCircle className="w-6 h-6 text-red-600" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Breakdown Toggles */}
+            <div className="mb-4 flex flex-wrap gap-2">
+                <Button
+                    onClick={() => {
+                        setShowTSMStats(!showTSMStats);
+                        setShowAgentStats(false);
+                    }}
+                    className={`rounded-none text-xs px-4 py-2 ${showTSMStats ? "bg-purple-700" : "bg-purple-600"} hover:bg-purple-700 text-white w-full sm:w-auto`}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    {showTSMStats ? "Hide" : "Show"} TSM Breakdown ({tsmStats.length} TSMs)
+                </Button>
+                <Button
+                    onClick={() => {
+                        setShowAgentStats(!showAgentStats);
+                        setShowTSMStats(false);
+                    }}
+                    className={`rounded-none text-xs px-4 py-2 ${showAgentStats ? "bg-blue-700" : "bg-blue-600"} hover:bg-blue-700 text-white w-full sm:w-auto`}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    {showAgentStats ? "Hide" : "Show"} Agent Breakdown ({agentStats.length} Agents)
+                </Button>
+            </div>
+
+            {/* TSM Statistics Grid */}
+            {showTSMStats && (
+                <div className="mb-6 bg-purple-50 border border-purple-200 rounded-sm p-4">
+                    <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center">
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        TSM Performance Overview
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {tsmStats.map((tsm) => (
+                            <div
+                                key={tsm.tsmId}
+                                className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                    selectedTSM === tsm.tsmId ? "border-purple-600 ring-2 ring-purple-200" : "border-gray-200"
+                                }`}
+                                onClick={() => setSelectedTSM(selectedTSM === tsm.tsmId ? "all" : tsm.tsmId)}
+                            >
+                                <div className="flex items-start justify-between mb-2">
+                                    <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
+                                        {tsm.tsmName}
+                                    </p>
+                                    {selectedTSM === tsm.tsmId && (
+                                        <CheckCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-gray-500">Declined:</span>
+                                    <span className="font-bold text-gray-900">{tsm.total}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {selectedTSM !== "all" && (
+                        <div className="mt-3 text-center">
+                            <Button
+                                onClick={() => setSelectedTSM("all")}
+                                variant="outline"
+                                className="rounded-none text-xs px-4 py-2"
+                            >
+                                Clear TSM Filter
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Agent Statistics Grid */}
+            {showAgentStats && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-sm p-4">
+                    <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        Agent Performance Overview
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {agentStats.map((agent) => (
+                            <div
+                                key={agent.agentId}
+                                className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                    selectedAgent === agent.agentId ? "border-blue-600 ring-2 ring-blue-200" : "border-gray-200"
+                                }`}
+                                onClick={() => setSelectedAgent(selectedAgent === agent.agentId ? "all" : agent.agentId)}
+                            >
+                                <div className="flex items-start justify-between mb-2">
+                                    <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
+                                        {agent.agentName}
+                                    </p>
+                                    {selectedAgent === agent.agentId && (
+                                        <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-gray-500">Declined:</span>
+                                    <span className="font-bold text-gray-900">{agent.total}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {selectedAgent !== "all" && (
+                        <div className="mt-3 text-center">
+                            <Button
+                                onClick={() => setSelectedAgent("all")}
+                                variant="outline"
+                                className="rounded-none text-xs px-4 py-2"
+                            >
+                                Clear Agent Filter
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Search and Active Filters */}
+            <div className="mb-4 space-y-3">
+                <div className="flex items-center gap-4">
+                    <Input
+                        type="text"
+                        placeholder="Search declined quotations..."
+                        className="input input-bordered input-sm flex-grow max-w-md rounded-none"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+
+                {/* Active Filters Indicator */}
+                {(selectedTSM !== "all" || selectedAgent !== "all") && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-gray-500 font-semibold">Active Filters:</span>
+                        {selectedTSM !== "all" && (
+                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                                TSM: {tsmStats.find(t => t.tsmId === selectedTSM)?.tsmName}
+                                <Button
+                                    variant="ghost"
+                                    className="h-auto p-0 ml-1 text-purple-800 hover:text-purple-900"
+                                    onClick={() => setSelectedTSM("all")}
+                                >
+                                    <FileX className="w-3 h-3" />
+                                </Button>
+                            </span>
+                        )}
+                        {selectedAgent !== "all" && (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                                Agent: {agentStats.find(a => a.agentId === selectedAgent)?.agentName}
+                                <Button
+                                    variant="ghost"
+                                    className="h-auto p-0 ml-1 text-blue-800 hover:text-blue-900"
+                                    onClick={() => setSelectedAgent("all")}
+                                >
+                                    <FileX className="w-3 h-3" />
+                                </Button>
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Error */}

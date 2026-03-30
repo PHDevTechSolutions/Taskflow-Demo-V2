@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { sileo } from "sileo";
 import { UserProvider } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
@@ -179,6 +179,10 @@ export default function ProfileClient() {
   >("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [activeCredentialTab, setActiveCredentialTab] = useState<"password" | "pin">("password");
+  const [pin, setPin] = useState("");
+  const [showPinDialog, setShowPinDialog] = useState(false);
+  const [tempPin, setTempPin] = useState("");
 
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
     useState<DateRange | undefined>(undefined);
@@ -197,6 +201,20 @@ export default function ProfileClient() {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error("Failed to fetch user");
         const data = await res.json();
+
+        // Load PIN from localStorage if exists
+        const storedPinData = localStorage.getItem("userPin");
+        let userPin = "";
+        if (storedPinData) {
+          try {
+            const pinData = JSON.parse(storedPinData);
+            if (pinData.email === data.Email) {
+              userPin = pinData.pin || "";
+            }
+          } catch (e) {
+            console.error("Error parsing stored PIN data:", e);
+          }
+        }
 
         setUserDetails({
           id: data._id || "",
@@ -217,6 +235,9 @@ export default function ProfileClient() {
           Birthday: data.Birthday || "",
           Gender: data.Gender || "",
         });
+        
+        // Set the PIN from localStorage
+        setPin(userPin);
       } catch (e) {
         console.error(e);
         setError("Error loading user data");
@@ -245,6 +266,96 @@ export default function ProfileClient() {
     setPasswordStrength(calcPasswordStrength(pw));
   };
 
+  const handlePinChange = (value: string) => {
+    const numericValue = value.replace(/[^0-9]/g, '');
+    if (numericValue.length <= 4) {
+      setPin(numericValue);
+    }
+  };
+
+  const handleKeypadInput = (input: string) => {
+    if (input === 'c') {
+      setTempPin('');
+    } else if (input === 'exit') {
+      setShowPinDialog(false);
+      setTempPin('');
+    } else if (tempPin.length < 4) {
+      setTempPin(tempPin + input);
+    }
+  };
+
+  const handleSavePin = async () => {
+    if (tempPin.length === 4 && userDetails) {
+      setPin(tempPin);
+      
+      // Save PIN to localStorage
+      const pinData = {
+        email: userDetails.Email,
+        pin: tempPin,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem("userPin", JSON.stringify(pinData));
+      
+      // Also save to JSON file via API
+      try {
+        const response = await fetch('/api/save-pin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: userDetails.Email,
+            pin: tempPin,
+            action: 'save'
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to save PIN to server');
+        }
+      } catch (error) {
+        console.error('Error saving PIN to server:', error);
+        // Continue with local storage even if server save fails
+      }
+      
+      setShowPinDialog(false);
+      setTempPin('');
+      
+      sileo.success({ title: "Success", description: "PIN saved successfully", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+    }
+  };
+
+  const handleRemovePin = async () => {
+    setPin('');
+    // Remove PIN from localStorage
+    localStorage.removeItem("userPin");
+    
+    // Also remove from JSON file via API
+    if (userDetails) {
+      try {
+        const response = await fetch('/api/save-pin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: userDetails.Email,
+            action: 'remove'
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to remove PIN from server');
+        }
+      } catch (error) {
+        console.error('Error removing PIN from server:', error);
+        // Continue even if server removal fails
+      }
+    }
+    
+    sileo.success({ title: "Success", description: "PIN removed successfully", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+  };
+
   // Upload to Cloudinary — accepts File or data URL string
   const handleImageUpload = useCallback(
     async (file: File | string, isSignature = false) => {
@@ -269,7 +380,7 @@ export default function ProfileClient() {
                 }
               : prev
           );
-          toast.success(`${isSignature ? "Signature" : "Photo"} uploaded`);
+          sileo.success({ title: "Success", description: `${isSignature ? "Signature" : "Photo"} uploaded`, duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
           if (isSignature) {
             setSigFilePreview(null);
             setSelectedSigFile(null);
@@ -279,7 +390,7 @@ export default function ProfileClient() {
         }
       } catch (err) {
         console.error(err);
-        toast.error("Upload failed — please try again");
+        sileo.error({ title: "Failed", description: "Upload failed — please try again", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       } finally {
         if (isSignature) setUploadingSignature(false);
         else setUploading(false);
@@ -308,7 +419,7 @@ export default function ProfileClient() {
 
   const saveSignatureFromPad = () => {
     if (sigCanvas.current?.isEmpty()) {
-      toast.error("Please draw your signature first");
+      sileo.error({ title: "Failed", description: "Please draw your signature first", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
     const dataUrl = sigCanvas.current?.getTrimmedCanvas().toDataURL("image/png");
@@ -321,12 +432,19 @@ export default function ProfileClient() {
     e.preventDefault();
     if (!userDetails) return;
 
+    // Password validation
     if (userDetails.Password && userDetails.Password.length > 10) {
-      toast.error("Password must be at most 10 characters");
+      sileo.error({ title: "Failed", description: "Password must be at most 10 characters", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
-    if (userDetails.Password !== userDetails.ContactPassword) {
-      toast.error("Passwords do not match");
+    if (userDetails.Password && userDetails.Password !== userDetails.ContactPassword) {
+      sileo.error({ title: "Failed", description: "Passwords do not match", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      return;
+    }
+
+    // PIN validation
+    if (activeCredentialTab === "pin" && pin && pin.length !== 4) {
+      sileo.error({ title: "Failed", description: "PIN must be exactly 4 digits", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
 
@@ -338,6 +456,7 @@ export default function ProfileClient() {
         ...rest,
         id,
         ...(Password ? { Password } : {}),
+        ...(activeCredentialTab === "pin" && pin ? { pin } : {}),
         profilePicture: userDetails.profilePicture,
         signatureImage: userDetails.signatureImage,
       };
@@ -350,14 +469,14 @@ export default function ProfileClient() {
 
       if (!res.ok) throw new Error("Failed to update profile");
 
-      toast.success("Profile saved successfully");
+      sileo.success({ title: "Success", description: "Profile saved successfully", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       setUserDetails((prev) =>
         prev ? { ...prev, Password: "", ContactPassword: "" } : prev
       );
       setPasswordStrength("");
     } catch (err) {
       console.error(err);
-      toast.error("Error saving profile");
+      sileo.error({ title: "Failed", description: "Error saving profile", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     } finally {
       setSaving(false);
     }
@@ -725,84 +844,157 @@ export default function ProfileClient() {
                       </div>
                     </Section>
 
-                    {/* Password */}
-                    <Section icon={KeyRound} title="Password Credentials">
-                      <div className="space-y-4">
-                        {/* New password */}
-                        <Field label="New Password">
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
+                    {/* Credentials */}
+                    <Section icon={KeyRound} title="Credentials">
+                      {/* Tab Navigation */}
+                      <div className="flex border-b border-gray-200 mb-4">
+                        <button
+                          type="button"
+                          onClick={() => setActiveCredentialTab("password")}
+                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                            activeCredentialTab === "password"
+                              ? "border-b-2 border-gray-900 text-gray-900"
+                              : "text-gray-400 hover:text-gray-600"
+                          }`}
+                        >
+                          Password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveCredentialTab("pin")}
+                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                            activeCredentialTab === "pin"
+                              ? "border-b-2 border-gray-900 text-gray-900"
+                              : "text-gray-400 hover:text-gray-600"
+                          }`}
+                        >
+                          PIN
+                        </button>
+                      </div>
+
+                      {/* Password Tab */}
+                      {activeCredentialTab === "password" && (
+                        <div className="space-y-4">
+                          {/* New password */}
+                          <Field label="New Password">
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  name="Password"
+                                  value={userDetails.Password || ""}
+                                  onChange={handleChange}
+                                  maxLength={10}
+                                  autoComplete="new-password"
+                                  className="rounded-none h-8 text-xs pr-8"
+                                  placeholder="Leave blank to keep current"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                  onClick={() => setShowPassword((v) => !v)}
+                                >
+                                  {showPassword
+                                    ? <EyeOff className="w-3.5 h-3.5" />
+                                    : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 shrink-0"
+                                onClick={handleGeneratePassword}
+                              >
+                                <WandSparkles className="w-3 h-3" />
+                                Generate
+                              </Button>
+                            </div>
+                            <StrengthBar strength={passwordStrength} />
+                          </Field>
+
+                          {/* Confirm password */}
+                          <Field label="Confirm Password">
+                            <div className="relative">
                               <Input
-                                type={showPassword ? "text" : "password"}
-                                name="Password"
-                                value={userDetails.Password || ""}
+                                type={showConfirmPassword ? "text" : "password"}
+                                name="ContactPassword"
+                                value={userDetails.ContactPassword || ""}
                                 onChange={handleChange}
                                 maxLength={10}
                                 autoComplete="new-password"
                                 className="rounded-none h-8 text-xs pr-8"
-                                placeholder="Leave blank to keep current"
+                                placeholder="Re-enter new password"
                               />
                               <button
                                 type="button"
                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                onClick={() => setShowPassword((v) => !v)}
+                                onClick={() => setShowConfirmPassword((v) => !v)}
                               >
-                                {showPassword
+                                {showConfirmPassword
                                   ? <EyeOff className="w-3.5 h-3.5" />
                                   : <Eye className="w-3.5 h-3.5" />}
                               </button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 shrink-0"
-                              onClick={handleGeneratePassword}
-                            >
-                              <WandSparkles className="w-3 h-3" />
-                              Generate
-                            </Button>
-                          </div>
-                          <StrengthBar strength={passwordStrength} />
-                        </Field>
+                            {/* Match indicator */}
+                            {userDetails.Password && userDetails.ContactPassword && (
+                              <p className={`text-[10px] font-bold mt-1 ${
+                                userDetails.Password === userDetails.ContactPassword
+                                  ? "text-emerald-600"
+                                  : "text-red-500"
+                              }`}>
+                                {userDetails.Password === userDetails.ContactPassword
+                                  ? "✓ Passwords match"
+                                  : "✗ Passwords do not match"}
+                              </p>
+                            )}
+                          </Field>
+                        </div>
+                      )}
 
-                        {/* Confirm password */}
-                        <Field label="Confirm Password">
-                          <div className="relative">
-                            <Input
-                              type={showConfirmPassword ? "text" : "password"}
-                              name="ContactPassword"
-                              value={userDetails.ContactPassword || ""}
-                              onChange={handleChange}
-                              maxLength={10}
-                              autoComplete="new-password"
-                              className="rounded-none h-8 text-xs pr-8"
-                              placeholder="Re-enter new password"
-                            />
-                            <button
-                              type="button"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              onClick={() => setShowConfirmPassword((v) => !v)}
-                            >
-                              {showConfirmPassword
-                                ? <EyeOff className="w-3.5 h-3.5" />
-                                : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                          {/* Match indicator */}
-                          {userDetails.Password && userDetails.ContactPassword && (
-                            <p className={`text-[10px] font-bold mt-1 ${
-                              userDetails.Password === userDetails.ContactPassword
-                                ? "text-emerald-600"
-                                : "text-red-500"
-                            }`}>
-                              {userDetails.Password === userDetails.ContactPassword
-                                ? "✓ Passwords match"
-                                : "✗ Passwords do not match"}
-                            </p>
-                          )}
-                        </Field>
-                      </div>
+                      {/* PIN Tab */}
+                       {activeCredentialTab === "pin" && (
+                         <div className="space-y-4">
+                           {/* Current PIN Display */}
+                           <Field label="Current PIN">
+                             <div className="flex items-center gap-2">
+                               <Input
+                                 type="password"
+                                 value={pin ? "••••" : ""}
+                                 readOnly
+                                 className="rounded-none h-8 text-xs text-center text-xl font-mono flex-1"
+                                 placeholder="No PIN set"
+                               />
+                             </div>
+                           </Field>
+
+                           {/* Action Buttons */}
+                           <div className="flex gap-2">
+                             <Button
+                               type="button"
+                               size="sm"
+                               className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8"
+                               onClick={() => setShowPinDialog(true)}
+                             >
+                               <KeyRound className="w-3 h-3" />
+                               {pin ? "Change PIN" : "Set PIN"}
+                             </Button>
+                             
+                             {pin && (
+                               <Button
+                                 type="button"
+                                 variant="outline"
+                                 size="sm"
+                                 className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                 onClick={handleRemovePin}
+                               >
+                                 <X className="w-3 h-3" />
+                                 Remove PIN
+                               </Button>
+                             )}
+                           </div>
+                         </div>
+                       )}
                     </Section>
 
                     {/* Submit */}
@@ -830,6 +1022,75 @@ export default function ProfileClient() {
               setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
             />
           </SidebarProvider>
+
+          {/* Numeric Keypad Dialog */}
+          {showPinDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white rounded-lg p-4 w-80">
+                <div className="text-center mb-4">
+                  <h3 className="text-sm font-bold text-gray-800">Enter 4-digit PIN</h3>
+                  <div className="flex justify-center items-center mt-2">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className={`w-4 h-4 rounded-full mx-1 ${
+                          i <= tempPin.length ? 'bg-indigo-600' : 'bg-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {tempPin.length}/4 digits entered
+                  </p>
+                </div>
+
+                {/* Numeric Keypad */}
+                <div className="grid grid-cols-3 gap-2">
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'c', 'exit'].map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleKeypadInput(key)}
+                      className={`h-10 rounded-md text-sm font-medium transition-colors ${
+                        key === 'c'
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                          : key === 'exit'
+                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          : 'bg-gray-50 text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      {key === 'c' ? 'C' : key === 'exit' ? '✕' : key}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={() => {
+                      setShowPinDialog(false);
+                      setTempPin('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={handleSavePin}
+                    disabled={tempPin.length !== 4}
+                  >
+                    Save PIN
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </FormatProvider>
       </UserProvider>
     </ProtectedPageWrapper>

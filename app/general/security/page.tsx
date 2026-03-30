@@ -57,6 +57,95 @@ function getDeviceLabel(userAgent?: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+function getDeviceModel(userAgent?: string, deviceId?: string): string {
+  if (!userAgent) return deviceId ? `Device: ${deviceId}` : "Unknown Device";
+  const parser = new UAParser(userAgent);
+  const device = parser.getDevice();
+  
+  // Try to get device model and name from various sources
+  const model = device.model || "";
+  const vendor = device.vendor || "";
+  
+  // Common device name mappings for better readability
+  const deviceNameMap: Record<string, string> = {
+    // iPhone models
+    "iPhone15,2": "iPhone 14 Pro",
+    "iPhone15,3": "iPhone 14 Pro Max",
+    "iPhone14,7": "iPhone 14",
+    "iPhone14,8": "iPhone 14 Plus",
+    "iPhone13,1": "iPhone 12 mini",
+    "iPhone13,2": "iPhone 12",
+    "iPhone13,3": "iPhone 12 Pro",
+    "iPhone13,4": "iPhone 12 Pro Max",
+    "iPhone12,1": "iPhone 11",
+    "iPhone12,3": "iPhone 11 Pro",
+    "iPhone12,5": "iPhone 11 Pro Max",
+    
+    // Samsung models
+    "SM-G991B": "Samsung Galaxy S21",
+    "SM-G996B": "Samsung Galaxy S21+",
+    "SM-G998B": "Samsung Galaxy S21 Ultra",
+    "SM-S901B": "Samsung Galaxy S22",
+    "SM-S906B": "Samsung Galaxy S22+",
+    "SM-S908B": "Samsung Galaxy S22 Ultra",
+    "SM-S911B": "Samsung Galaxy S23",
+    "SM-S916B": "Samsung Galaxy S23+",
+    "SM-S918B": "Samsung Galaxy S23 Ultra",
+    "SM-F711B": "Samsung Galaxy Z Flip 3",
+    "SM-F721B": "Samsung Galaxy Z Flip 4",
+    "SM-F926B": "Samsung Galaxy Z Fold 3",
+    "SM-F936B": "Samsung Galaxy Z Fold 4",
+    
+    // iPad models
+    "iPad13,1": "iPad Air (5th gen)",
+    "iPad13,2": "iPad Air (5th gen)",
+    "iPad14,1": "iPad mini (6th gen)",
+    "iPad14,2": "iPad mini (6th gen)",
+    "iPad13,4": "iPad Pro 11-inch (3rd gen)",
+    "iPad13,5": "iPad Pro 11-inch (3rd gen)",
+    "iPad13,6": "iPad Pro 11-inch (3rd gen)",
+    "iPad13,7": "iPad Pro 11-inch (3rd gen)",
+    "iPad13,8": "iPad Pro 12.9-inch (5th gen)",
+    "iPad13,9": "iPad Pro 12.9-inch (5th gen)",
+    "iPad13,10": "iPad Pro 12.9-inch (5th gen)",
+    "iPad13,11": "iPad Pro 12.9-inch (5th gen)",
+  };
+  
+  // Check if we have a mapped device name
+  const mappedName = deviceNameMap[model];
+  if (mappedName) {
+    return mappedName;
+  }
+  
+  // Return vendor + model if available
+  if (model && vendor) {
+    return `${vendor} ${model}`;
+  } else if (model) {
+    return model;
+  } else if (vendor) {
+    return vendor;
+  }
+  
+  // Fallback to browser and OS info if device info is not available
+  const browser = parser.getBrowser();
+  const os = parser.getOS();
+  
+  if (browser.name && os.name) {
+    return `${browser.name} on ${os.name}`;
+  } else if (browser.name) {
+    return browser.name;
+  } else if (os.name) {
+    return os.name;
+  }
+  
+  // Final fallback: use device ID if available
+  if (deviceId) {
+    return `Device: ${deviceId}`;
+  }
+  
+  return "Unknown Device";
+}
+
 // ─── Section card ─────────────────────────────────────────────────────────────
 
 const SectionCard = ({
@@ -93,6 +182,7 @@ const SectionCard = ({
 const AlertRow = ({ alert, index }: { alert: SecurityAlert; index: number }) => {
   const DeviceIcon = getDeviceIcon(alert.userAgent);
   const deviceLabel = getDeviceLabel(alert.userAgent);
+  const deviceModel = getDeviceModel(alert.userAgent, alert.deviceId);
 
   return (
     <tr className={`border-b border-gray-100 last:border-b-0 text-xs ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
@@ -118,7 +208,10 @@ const AlertRow = ({ alert, index }: { alert: SecurityAlert; index: number }) => 
           <DeviceIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
           <div>
             <p className="text-[11px] font-bold text-gray-700 uppercase">{deviceLabel}</p>
-            <p className="text-[10px] text-gray-400 font-mono truncate max-w-[120px]">
+            <p className="text-[10px] text-gray-600 font-semibold truncate max-w-[120px]">
+              {deviceModel}
+            </p>
+            <p className="text-[9px] text-gray-400 font-mono truncate max-w-[120px]">
               {alert.deviceId || "—"}
             </p>
           </div>
@@ -396,7 +489,7 @@ function SettingsContent() {
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-gray-900 text-white">
-                        {["Email", "IP Address", "Device", "Message", "Timestamp"].map(
+                        {["Email", "IP Address", "Device Info", "Message", "Timestamp"].map(
                           (h) => (
                             <th
                               key={h}

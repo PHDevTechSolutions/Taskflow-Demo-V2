@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Globe, Calendar, MapPin, MapPinOff,
-  Lock, Loader2, CheckCircle2, Send,
+  Lock, Loader2, CheckCircle2, Send, Grid3X3
 } from "lucide-react";
 import Link from "next/link";
 
@@ -99,8 +99,10 @@ function LoadingOverlay() {
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const [Email,    setEmail]    = useState("");
   const [Password, setPassword] = useState("");
+  const [pin,      setPin]      = useState("");
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [activeTab, setActiveTab] = useState<"password" | "pin">("password");
 
   const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [pendingLoginData,   setPendingLoginData]   = useState<any | null>(null);
@@ -191,8 +193,64 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     }
   };
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-  const handleLoginSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+  // ── PIN Login ──────────────────────────────────────────────────────────────
+  const handlePinLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (pin.length !== 4) {
+      sileo.warning({ title: "Invalid PIN", description: "Please enter a 4-digit PIN.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      return;
+    }
+    
+    // Check if PIN exists in localStorage
+    const storedPinData = localStorage.getItem("userPin");
+    if (!storedPinData) {
+      sileo.error({ title: "PIN Not Set", description: "No PIN found. Please use password login.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      return;
+    }
+    
+    const pinData = JSON.parse(storedPinData);
+    if (pinData.pin !== pin) {
+      sileo.error({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const deviceId = getDeviceId();
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          pin: pin, 
+          email: pinData.email, 
+          deviceId,
+          isPinLogin: true 
+        }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        if (result.locked) {
+          setTicketDone(false);
+          setShowTicketDialog(true);
+        } else {
+          sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+        }
+        setLoading(false);
+        return;
+      }
+
+      setPendingLoginData({ Email: pinData.email, deviceId, result });
+      setShowLocationDialog(true);
+    } catch {
+      sileo.error({ title: "Error", description: "An unexpected error occurred.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+    } finally {
+      setLoading(false);
+    }
+  }, [pin]);
+
+  // ── Password Login ──────────────────────────────────────────────────────────
+  const handlePasswordLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!Email || !Password) {
       sileo.warning({ title: "Required", description: "All fields are required.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
@@ -221,6 +279,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       setPendingLoginData({ Email, deviceId, result });
       setShowLocationDialog(true);
+      
+      // Store PIN data for future PIN logins
+      localStorage.setItem("userPin", JSON.stringify({
+        email: Email,
+        password: Password,
+        pin: "1234" // Default PIN, user can change this later
+      }));
     } catch {
       sileo.error({ title: "Error", description: "An unexpected error occurred.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     } finally {
@@ -281,54 +346,108 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-2xl bg-white grid md:grid-cols-2">
 
           {/* ── Left: form ── */}
-          <form onSubmit={handleLoginSubmit} className="flex flex-col justify-between p-8 gap-6">
+          <form 
+            onSubmit={activeTab === "password" ? handlePasswordLogin : handlePinLogin} 
+            className="flex flex-col justify-between p-8 gap-6"
+          >
+            {/* Tab Navigation */}
+            <div className="flex border-b border-slate-200 -mx-8 -mt-8 mb-6 px-8 pt-8">
+              <button
+                type="button"
+                onClick={() => setActiveTab("password")}
+                className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center ${
+                  activeTab === "password"
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
+              >
+               <Lock className="mr-1" /> Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("pin")}
+                className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center ${
+                  activeTab === "pin"
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
+              >
+               <Grid3X3 className="mr-1" /> PIN
+              </button>
+            </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-black text-slate-800 tracking-tight">Welcome back</h1>
               <p className="text-xs text-slate-400">Sign in to your Taskflow account to continue.</p>
             </div>
 
             <div className="space-y-4">
-              {/* Email */}
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@taskflow.com"
-                  required
-                  value={Email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 transition-all"
-                />
-              </div>
-
-              {/* Password */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs font-semibold text-slate-700">Password</Label>
-                  <a href="/auth/forgot-password" className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline transition-colors">
-                    Forgot password?
-                  </a>
-                </div>
-                <div className="relative">
+              {/* Email - Only show for password login */}
+              {activeTab === "password" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email</Label>
                   <Input
-                    id="password"
-                    type={showPass ? "text" : "password"}
-                    placeholder="••••••••"
+                    id="email"
+                    type="email"
+                    placeholder="you@taskflow.com"
                     required
-                    value={Password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 pr-10 transition-all"
+                    value={Email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-[10px] font-semibold transition-colors select-none"
-                  >
-                    {showPass ? "Hide" : "Show"}
-                  </button>
                 </div>
-              </div>
+              )}
+
+              {/* Password - Only show for password login */}
+              {activeTab === "password" && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-xs font-semibold text-slate-700">Password</Label>
+                    <a href="/auth/forgot-password" className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline transition-colors">
+                      Forgot password?
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPass ? "text" : "password"}
+                      placeholder="••••••••"
+                      required
+                      value={Password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 pr-10 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-[10px] font-semibold transition-colors select-none"
+                    >
+                      {showPass ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* PIN Input - Only show for PIN login */}
+              {activeTab === "pin" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pin" className="text-xs font-semibold text-slate-700">Enter 4-digit PIN</Label>
+                  <Input
+                    id="pin"
+                    type="password"
+                    placeholder="••••"
+                    maxLength={4}
+                    value={pin}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setPin(value);
+                    }}
+                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 text-center text-xl font-mono transition-all"
+                  />
+                  <p className="text-[10px] text-slate-400 text-center">
+                    Enter your 4-digit terminal PIN
+                  </p>
+                </div>
+              )}
 
               {/* Submit */}
               <Button
@@ -338,7 +457,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               >
                 {loading ? (
                   <><Loader2 size={14} className="animate-spin" /> Signing in...</>
-                ) : "Sign In"}
+                ) : activeTab === "password" ? "Sign In" : "Login with PIN"}
               </Button>
             </div>
 
