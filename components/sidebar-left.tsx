@@ -309,6 +309,11 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     const role = userDetails.Role;
 
     return data.favorites.filter((fav) => {
+      // Special case: National Call Ranking should be available for all roles except Staff
+      if (fav.name === "National Call Ranking") {
+        return role !== "Staff";
+      }
+      
       if (role === "Staff") return fav.url?.includes("/csr");
       if (role === "Territory Sales Associate") return fav.url?.includes("/tsa");
       if (role === "Territory Sales Manager") return fav.url?.includes("/tsm");
