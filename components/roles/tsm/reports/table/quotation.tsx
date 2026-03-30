@@ -26,6 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -39,6 +41,7 @@ interface Quotation {
   account_reference_number?: string;
   company_name?: string;
   contact_number?: string;
+  contact_person?: string;
   type_activity: string;
   status: string;
   referenceid: string;
@@ -290,6 +293,87 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return filteredActivities.slice(start, start + PAGE_SIZE);
   }, [filteredActivities, page]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredActivities.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Quotations");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Date", key: "date", width: 15 },
+        { header: "Quotation Number", key: "quotationNumber", width: 20 },
+        { header: "Amount", key: "amount", width: 15 },
+        { header: "Status", key: "status", width: 20 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Priority", key: "priority", width: 15 },
+        { header: "Remarks", key: "remarks", width: 30 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredActivities.forEach((item) => {
+        const agentInfo = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = agentInfo?.name ?? "-";
+        const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""] || "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          date: item.date_created ? new Date(item.date_created).toLocaleDateString() : "-",
+          quotationNumber: item.quotation_number || "-",
+          amount: item.quotation_amount ?? 0,
+          status: item.quotation_status || "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          priority: priority,
+          remarks: item.remarks || "-"
+        });
+      });
+
+      // Format amount column
+      worksheet.getColumn('amount').numFmt = '#,##0.00" ₱"';
+
+      // Generate filename with date range
+      let filename = "Quotations";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   /* ---- Statuses filtered by selected priority ---- */
   const availableStatuses = useMemo(() => {
     if (filterPriority === "all") return ALL_STATUSES;
@@ -396,6 +480,16 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Export button */}
+        <button
+          onClick={exportToExcel}
+          disabled={filteredActivities.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* ── Summary bar ── */}

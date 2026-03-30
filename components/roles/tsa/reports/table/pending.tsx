@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
 const PAGE_SIZE = 10;
@@ -197,6 +198,90 @@ export const PendingTable: React.FC<{ referenceid: string; target_quota?: string
   const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
   useEffect(() => { setPage(1); }, [searchTerm, dateCreatedFilterRange]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Pending SO Report");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Date Created", key: "dateCreated", width: 15 },
+        { header: "Days Pending", key: "daysPending", width: 15 },
+        { header: "Quotation No.", key: "quotationNo", width: 20 },
+        { header: "Amount", key: "amount", width: 18 },
+        { header: "Company", key: "company", width: 30 },
+        { header: "Contact No.", key: "contactNo", width: 20 },
+        { header: "Remarks", key: "remarks", width: 40 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filtered.forEach((item) => {
+        const daysPending = Math.floor((now.getTime() - new Date(item.date_created).getTime()) / (1000 * 60 * 60 * 24));
+        worksheet.addRow({
+          dateCreated: fmtDate(item.date_created),
+          daysPending: `${daysPending}d`,
+          quotationNo: item.quotation_number || "—",
+          amount: item.quotation_amount ?? 0,
+          company: item.company_name || "—",
+          contactNo: item.contact_number || "—",
+          remarks: item.remarks || "—"
+        });
+      });
+
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        dateCreated: "TOTAL",
+        amount: total
+      });
+      totalsRow.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('amount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "Pending_SO_Report";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Info banner */}
@@ -204,12 +289,22 @@ export const PendingTable: React.FC<{ referenceid: string; target_quota?: string
         <span>⏳</span> Showing quotations with status <strong>Convert to SO</strong> pending for 15+ days.
       </div>
 
-      <SearchFilterBar
-        searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Search company, quotation number, remarks..."
-        showFilters={showFilters} setShowFilters={setShowFilters}
-        count={filtered.length} total={total}
-        hasActiveFilter={!!searchTerm} onClear={() => setSearchTerm("")}
-      />
+      <div className="flex items-center justify-between gap-2">
+        <SearchFilterBar
+          searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Search company, quotation number, remarks..."
+          showFilters={showFilters} setShowFilters={setShowFilters}
+          count={filtered.length} total={total}
+          hasActiveFilter={!!searchTerm} onClear={() => setSearchTerm("")}
+        />
+        
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
+      </div>
 
       <TableShell loading={loading} error={error} empty={filtered.length === 0} emptyIcon="✅" emptyText="No pending SO records (15+ days)">
         <Table>

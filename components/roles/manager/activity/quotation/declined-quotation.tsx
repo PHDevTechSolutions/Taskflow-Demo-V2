@@ -566,7 +566,9 @@ export const DeclinedQuotation: React.FC<CompletedProps> = ({
 
             {/* Total Records */}
             {!loading && filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
+                <div className="mb-2 text-xs font-bold">
+                    Showing {filteredActivities.length} of {stats.total} quotation{filteredActivities.length !== 1 ? "s" : ""}
+                </div>
             )}
 
             {/* Table */}

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -270,6 +272,89 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
 
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange, expandedTsmId]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (tsmSummary.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("CSR Summary");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "TSM", key: "tsm", width: 25 },
+        { header: "Tickets Endorsed", key: "ticketCount", width: 18 },
+        { header: "Quote Done", key: "quoteDoneCount", width: 15 },
+        ...QUOTATION_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      tsmSummary.forEach((item) => {
+        const rowData: any = {
+          tsm: item.tsmName,
+          ticketCount: item.ticketCount,
+          quoteDoneCount: item.quoteDoneCount
+        };
+        
+        QUOTATION_STATUSES.forEach(status => {
+          rowData[status] = item.statusCounts[status] ?? 0;
+        });
+        
+        worksheet.addRow(rowData);
+      });
+
+      // Add totals row
+      const totalsRow: any = {
+        tsm: "TOTAL",
+        ticketCount: tsmSummary.reduce((sum, t) => sum + t.ticketCount, 0),
+        quoteDoneCount: tsmSummary.reduce((sum, t) => sum + t.quoteDoneCount, 0)
+      };
+      
+      QUOTATION_STATUSES.forEach(status => {
+        totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+      });
+      
+      const totalsRowIndex = worksheet.addRow(totalsRow);
+      totalsRowIndex.font = { bold: true };
+
+      // Generate filename with date range
+      let filename = "Admin_CSR_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   const total = useMemo(() =>
     expandedTsaGroups.flatMap(g => g.rows).reduce((s, i) => s + (i.quotation_amount ?? 0), 0),
     [expandedTsaGroups]
@@ -313,8 +398,18 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
           No CSR quotation records found.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
-          <Table>
+        <>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+            <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500 whitespace-nowrap">TSM</TableHead>
@@ -390,7 +485,8 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* ── Ticket Drill-down Modal ── */}

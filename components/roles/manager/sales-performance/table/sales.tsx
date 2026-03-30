@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, ArrowLeft, Settings2, RotateCcw } from "lucide-react";
+import { AlertCircleIcon, ArrowLeft, Settings2, RotateCcw, Download } from "lucide-react";
 import { supabase } from "@/utils/supabase";
+import ExcelJS from "exceljs";
 import {
   Table, TableBody, TableCell, TableFooter,
   TableHead, TableHeader, TableRow,
@@ -573,6 +574,124 @@ export const SalesTable: React.FC<SalesProps> = ({
     return days;
   }, [fromDate, toDate, activities, salesDataPerTSM, salesDataPerAgent, agentsUnderSelectedTSM, totalWorkingDays, selectedAgent, selectedTSMId, agents, countSundays, getSalesValue]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    const dataToExport = selectedTSMId ? filteredAgentDrillDown : salesDataPerTSM;
+    if (dataToExport.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Performance");
+
+      if (!selectedTSMId) {
+        // TSM Summary Export
+        worksheet.columns = [
+          { header: "TSM", key: "tsmName", width: 25 },
+          { header: "Target Quota", key: "totalProratedQuota", width: 18 },
+          { header: "Total Sales", key: "totalActualSales", width: 18 },
+          { header: "Variance", key: "totalVariance", width: 18 },
+          { header: "Par (%)", key: "parPercentage", width: 12 },
+          { header: "% To Plan", key: "percentToPlan", width: 12 }
+        ];
+
+        salesDataPerTSM.forEach(item => {
+          worksheet.addRow({
+            tsmName: item.tsmName,
+            totalProratedQuota: item.totalProratedQuota,
+            totalActualSales: item.totalActualSales,
+            totalVariance: item.totalVariance,
+            parPercentage: item.parPercentage.toFixed(2),
+            percentToPlan: item.percentToPlan
+          });
+        });
+
+        const totalsRow = worksheet.addRow({
+          tsmName: "TOTAL",
+          totalProratedQuota: tsmColumnTotals.totalProratedQuota,
+          totalActualSales: tsmColumnTotals.totalActualSales,
+          totalVariance: tsmColumnTotals.totalVariance
+        });
+        totalsRow.font = { bold: true };
+
+      } else {
+        // Agent Drill-down Export
+        worksheet.columns = [
+          { header: "Agent", key: "agentName", width: 25 },
+          { header: "Target Quota", key: "proratedQuota", width: 18 },
+          { header: "Total Sales", key: "totalActualSales", width: 18 },
+          { header: "Variance", key: "variance", width: 18 },
+          { header: "Par (%)", key: "parPercentage", width: 12 },
+          { header: "% To Plan", key: "percentToPlan", width: 12 }
+        ];
+
+        filteredAgentDrillDown.forEach(item => {
+          const agent = agents.find((a) => a.ReferenceID.toLowerCase() === item.agentId.toLowerCase());
+          worksheet.addRow({
+            agentName: agent ? `${agent.Firstname} ${agent.Lastname}` : item.agentId,
+            proratedQuota: item.proratedQuota,
+            totalActualSales: item.totalActualSales,
+            variance: item.variance,
+            parPercentage: item.parPercentage.toFixed(2),
+            percentToPlan: item.percentToPlan
+          });
+        });
+
+        const totalsRow = worksheet.addRow({
+          agentName: "TOTAL",
+          proratedQuota: agentDrillDownTotals.proratedQuota,
+          totalActualSales: agentDrillDownTotals.totalActualSales,
+          variance: agentDrillDownTotals.variance
+        });
+        totalsRow.font = { bold: true };
+      }
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Format currency columns
+      const currencyCols = selectedTSMId 
+        ? ['proratedQuota', 'totalActualSales', 'variance']
+        : ['totalProratedQuota', 'totalActualSales', 'totalVariance'];
+
+      currencyCols.forEach(key => {
+        const col = worksheet.getColumn(key);
+        if (col && col.number > 0) col.numFmt = '#,##0.00" ₱"';
+      });
+
+      // Generate filename
+      let filename = selectedTSMId ? `Sales_Performance_${selectedTSMName.replace(/\s+/g, '_')}` : "Sales_Performance_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   if (loadingActivities) return <div className="flex justify-center items-center h-40"><Spinner className="size-8" /></div>;
   if (errorActivities) return (
     <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
@@ -604,9 +723,25 @@ export const SalesTable: React.FC<SalesProps> = ({
           </span>
         </div>
 
-        <Button variant="outline" size="sm" className="text-xs rounded-none flex items-center gap-1.5 border-dashed" onClick={() => setEditOpen(true)}>
-          <Settings2 className="h-3.5 w-3.5" /> Edit Computation
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-none flex items-center gap-1.5 border-dashed"
+            onClick={exportToExcel}
+          >
+            <Download className="h-3.5 w-3.5" /> Export Excel
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-none flex items-center gap-1.5 border-dashed"
+            onClick={() => setEditOpen(true)}
+          >
+            <Settings2 className="h-3.5 w-3.5" /> Edit Computation
+          </Button>
+        </div>
       </div>
 
       {/* TSM Table */}

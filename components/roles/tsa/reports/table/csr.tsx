@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Search } from "lucide-react";
+import { Search, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -309,27 +310,122 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     setDialogOpen(true);
   };
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (grouped.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("CSR Report");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Date Created", key: "dateCreated", width: 15 },
+        { header: "Ticket No.", key: "ticketNo", width: 20 },
+        { header: "Total Amount", key: "amount", width: 18 },
+        { header: "Entries", key: "entries", width: 12 },
+        { header: "Company", key: "company", width: 30 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact No.", key: "contactNo", width: 20 },
+        { header: "Remarks", key: "remarks", width: 40 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      grouped.forEach((group) => {
+        worksheet.addRow({
+          dateCreated: fmtDate(group.latest.date_created),
+          ticketNo: group.ticket || "—",
+          amount: group.total,
+          entries: group.count,
+          company: group.latest.company_name || "—",
+          contactPerson: group.latest.contact_person || "—",
+          contactNo: group.latest.contact_number || "—",
+          remarks: group.latest.remarks || "—"
+        });
+      });
+
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        dateCreated: "TOTAL",
+        amount: grandTotal
+      });
+      totalsRow.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('amount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "CSR_Report";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
 
       {/* Search */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search company, ticket number, remarks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
-          />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search company, ticket number, remarks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
+            />
+          </div>
+          {grouped.length > 0 && (
+            <span className="text-[11px] text-slate-500 font-mono ml-auto">
+              {grouped.length} tickets · Total:{" "}
+              <strong className="text-slate-700">{fmt(grandTotal)}</strong>
+            </span>
+          )}
         </div>
-        {grouped.length > 0 && (
-          <span className="text-[11px] text-slate-500 font-mono ml-auto">
-            {grouped.length} tickets · Total:{" "}
-            <strong className="text-slate-700">{fmt(grandTotal)}</strong>
-          </span>
-        )}
+
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* Hint */}

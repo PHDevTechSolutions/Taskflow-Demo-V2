@@ -10,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -299,6 +301,95 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
   }, [expandedTsmId, sortedActivities, agentMap]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (tsmSummary.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Quotation Summary");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "TSM", key: "tsm", width: 25 },
+        { header: "Quote Count", key: "quoteCount", width: 12 },
+        { header: "Quotation Amount", key: "quotationAmount", width: 18 },
+        ...ALL_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      tsmSummary.forEach((item) => {
+        const rowData: any = {
+          tsm: item.tsmName,
+          quoteCount: item.quoteCount,
+          quotationAmount: item.quotationAmount
+        };
+        
+        ALL_STATUSES.forEach(status => {
+          rowData[status] = item.statusCounts[status] ?? 0;
+        });
+        
+        worksheet.addRow(rowData);
+      });
+
+      // Add totals row
+      const totalsRow: any = {
+        tsm: "TOTAL",
+        quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
+        quotationAmount: tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
+      };
+      
+      ALL_STATUSES.forEach(status => {
+        totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+      });
+      
+      const totalsRowIndex = worksheet.addRow(totalsRow);
+      totalsRowIndex.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('quotationAmount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "Quotation_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   /* ================= RENDER ================= */
 
   return (
@@ -313,9 +404,20 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           No quotation records found.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border p-4 border-gray-100 bg-white">
-          <Table>
-            <TableHeader>
+        <>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
+          </div>
+          
+          <div className="overflow-x-auto rounded-xl border p-4 border-gray-100 bg-white">
+            <Table>
+              <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500">TSM</TableHead>
                 <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
@@ -392,6 +494,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             </tfoot>
           </Table>
         </div>
+      </>
       )}
 
       {/* ── Expanded TSA Details ── */}

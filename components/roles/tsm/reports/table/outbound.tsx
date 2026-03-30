@@ -25,7 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle2, XCircle, PhoneCall } from "lucide-react";
+import { CheckCircle2, XCircle, PhoneCall, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -296,6 +297,85 @@ export const OutboundTable: React.FC<OutboundTableProps> = ({
     return filteredActivities.slice(start, start + PAGE_SIZE);
   }, [filteredActivities, page]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredActivities.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Outbound Calls");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Date", key: "date", width: 15 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact Number", key: "contactNumber", width: 15 },
+        { header: "Source", key: "source", width: 15 },
+        { header: "Call Type", key: "callType", width: 15 },
+        { header: "Call Status", key: "callStatus", width: 15 },
+        { header: "Status", key: "status", width: 15 },
+        { header: "Remarks", key: "remarks", width: 30 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredActivities.forEach((item) => {
+        const agentInfo = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = agentInfo?.name ?? "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          date: item.date_created ? new Date(item.date_created).toLocaleDateString() : "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          contactNumber: item.contact_number || "-",
+          source: item.source || "-",
+          callType: item.call_type || "-",
+          callStatus: item.call_status || "-",
+          status: item.status || "-",
+          remarks: item.remarks || "-"
+        });
+      });
+
+      // Generate filename with date range
+      let filename = "Outbound_Calls";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   /* ================= RENDER ================= */
 
   return (
@@ -401,6 +481,16 @@ export const OutboundTable: React.FC<OutboundTableProps> = ({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Export button */}
+        <button
+          onClick={exportToExcel}
+          disabled={filteredActivities.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* ── Summary bar ── */}

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 interface SI {
@@ -260,6 +262,88 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
   }, [activities, searchTerm, selectedAgent, dateCreatedFilterRange]);
 
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
+
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (tsmSummary.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Invoice Summary");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "TSM", key: "tsm", width: 25 },
+        { header: "Total SO", key: "soCount", width: 15 },
+        { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
+        { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      tsmSummary.forEach((item) => {
+        worksheet.addRow({
+          tsm: item.tsmName,
+          soCount: item.soCount,
+          deliveredCount: item.deliveredCount,
+          totalSIAmount: item.totalSIAmount
+        });
+      });
+
+      // Add totals row
+      const totalsRow = {
+        tsm: "TOTAL",
+        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
+        deliveredCount: tsmSummary.reduce((sum, t) => sum + t.deliveredCount, 0),
+        totalSIAmount: tsmSummary.reduce((sum, t) => sum + t.totalSIAmount, 0)
+      };
+      
+      const totalsRowIndex = worksheet.addRow(totalsRow);
+      totalsRowIndex.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('totalSIAmount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "Admin_Sales_Invoice_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   /* ================= RENDER ================= */
   return (
     <div className="space-y-4">
@@ -272,8 +356,18 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       ) : tsmSummary.length === 0 ? (
         <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SI records found.</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
-          <Table>
+        <>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+            <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 text-[11px]">
                 <TableHead className="text-gray-500">TSM</TableHead>
@@ -318,7 +412,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* ── Expanded TSA Details ── */}

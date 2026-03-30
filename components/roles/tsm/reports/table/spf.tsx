@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 interface SPF { id: number; so_amount?: number; so_number?: string; remarks?: string; date_created: string; date_updated?: string; company_name?: string; contact_number?: string; contact_person: string; call_type: string; status: string; referenceid: string; }
 interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
@@ -112,6 +114,85 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("SPF Records");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Date", key: "date", width: 15 },
+        { header: "SO Amount", key: "soAmount", width: 15 },
+        { header: "SO Number", key: "soNumber", width: 20 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact Number", key: "contactNumber", width: 15 },
+        { header: "Type", key: "type", width: 15 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filtered.forEach((item) => {
+        const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = info?.name ?? "-";
+        const spfType = SPF_LABEL[item.call_type?.toLowerCase()] ?? item.call_type ?? "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          date: item.date_created ? new Date(item.date_created).toLocaleDateString() : "-",
+          soAmount: item.so_amount ?? 0,
+          soNumber: item.so_number || "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          contactNumber: item.contact_number || "-",
+          type: spfType
+        });
+      });
+
+      // Format amount column
+      worksheet.getColumn('soAmount').numFmt = '#,##0.00" ₱"';
+
+      // Generate filename with date range
+      let filename = "SPF_Records";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -128,6 +209,16 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
           <SelectTrigger className="w-[200px] text-xs"><SelectValue placeholder="Filter by Agent" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All Agents</SelectItem>{agents.map(a => <SelectItem className="capitalize" key={a.ReferenceID} value={a.ReferenceID}>{a.Firstname} {a.Lastname}</SelectItem>)}</SelectContent>
         </Select>
+
+        {/* Export button */}
+        <button
+          onClick={exportToExcel}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
       {filtered.length > 0 && (
         <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">

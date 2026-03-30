@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Download } from "lucide-react";
 import { supabase } from "@/utils/supabase";
+import ExcelJS from "exceljs";
 import {
   Table,
   TableBody,
@@ -412,6 +413,95 @@ export const SalesTable: React.FC<SalesProps> = ({
     return days;
   }, [fromDate, toDate, activities, salesDataPerAgent, filteredSalesData, totalWorkingDays, selectedAgent, agents]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredSalesData.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Performance");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 25 },
+        { header: "Target Quota", key: "targetQuota", width: 15 },
+        { header: "Total Sales", key: "totalSales", width: 15 },
+        { header: "Variance", key: "variance", width: 15 },
+        { header: "Par", key: "par", width: 10 },
+        { header: "% To Plan", key: "percentToPlan", width: 12 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredSalesData.forEach((item) => {
+        const agent = agents.find(a => a.ReferenceID.toLowerCase() === item.agentId.toLowerCase());
+        const agentName = agent ? `${agent.Firstname} ${agent.Lastname}` : item.agentId;
+        
+        worksheet.addRow({
+          agent: agentName,
+          targetQuota: item.proratedQuota,
+          totalSales: item.totalActualSales,
+          variance: item.variance,
+          par: parPercentage,
+          percentToPlan: item.percentToPlan
+        });
+      });
+
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        agent: "TOTAL",
+        targetQuota: columnTotals.proratedQuota,
+        totalSales: columnTotals.totalActualSales,
+        variance: columnTotals.variance,
+        par: "",
+        percentToPlan: ""
+      });
+      totalsRow.font = { bold: true };
+
+      // Format currency columns
+      worksheet.getColumn('targetQuota').numFmt = '#,##0.00" ₱"';
+      worksheet.getColumn('totalSales').numFmt = '#,##0.00" ₱"';
+      worksheet.getColumn('variance').numFmt = '#,##0.00" ₱"';
+      worksheet.getColumn('par').numFmt = '0.00"%"';
+      worksheet.getColumn('percentToPlan').numFmt = '0"%"';
+
+      // Generate filename with date range
+      let filename = "Sales_Performance";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   if (loadingActivities) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -474,6 +564,14 @@ export const SalesTable: React.FC<SalesProps> = ({
           Days elapsed: <strong>{workingDaysSoFar}</strong> / {totalWorkingDays} &nbsp;|&nbsp;
           Par: <strong>{parPercentage.toFixed(1)}%</strong>
         </span>
+
+        <button
+          onClick={exportToExcel}
+          className="ml-auto flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* Sales Metrics Table */}

@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Download } from "lucide-react";
 import { supabase } from "@/utils/supabase";
+import ExcelJS from "exceljs";
 import {
     Table,
     TableBody,
@@ -301,6 +302,107 @@ export const SalesTable: React.FC<SalesProps> = ({
         return days;
     }, [fromDate, toDate, activities, fullMonthQuota, totalWorkingDays]);
 
+    /* ---- Excel Export ---- */
+    const exportToExcel = async () => {
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet("Sales Performance");
+
+            // Add Metrics Table
+            worksheet.addRow(["Sales Metrics Report"]).font = { bold: true, size: 14 };
+            worksheet.addRow([`Period: ${fromDate.toLocaleDateString()} - ${toDate.toLocaleDateString()}`]);
+            worksheet.addRow([]);
+
+            worksheet.columns = [
+                { header: "Metric", key: "metric", width: 35 },
+                { header: "Value", key: "value", width: 20 }
+            ];
+
+            // Style headers
+            worksheet.getRow(4).font = { bold: true };
+            worksheet.getRow(4).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFE0E0E0' }
+            };
+
+            const metrics = [
+                { metric: `Target Quota ${hasDateRange ? "(Pro-rated)" : ""}`, value: proratedQuota },
+                { metric: "Total Actual Sales", value: totalActualSales },
+                { metric: "Variance", value: variance },
+                { metric: "Par (%)", value: parPercentage / 100 },
+                { metric: "% To Plan", value: percentToPlan / 100 }
+            ];
+
+            metrics.forEach(m => worksheet.addRow(itemToRow(m)));
+
+            // Format values
+            worksheet.getColumn('value').eachCell((cell, rowNumber) => {
+                if (rowNumber > 4) {
+                    if (rowNumber <= 7) {
+                        cell.numFmt = '#,##0.00" ₱"';
+                    } else {
+                        cell.numFmt = '0.00%';
+                    }
+                }
+            });
+
+            // Add Daily Trend Data
+            worksheet.addRow([]);
+            worksheet.addRow(["Daily Sales Trend"]).font = { bold: true, size: 12 };
+            const trendHeaderRow = worksheet.addRow(["Date", "Actual Sales", "Daily Quota", "Status"]);
+            trendHeaderRow.font = { bold: true };
+            trendHeaderRow.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFE0E0E0' }
+            };
+
+            dailyChartData.forEach(day => {
+                worksheet.addRow([
+                    day.date,
+                    day.actualSales,
+                    day.dailyQuota,
+                    day.actualSales >= day.dailyQuota ? "Hit" : "Missed"
+                ]);
+            });
+
+            // Format daily trend sales
+            const lastRow = worksheet.lastRow?.number || 0;
+            const startTrendRow = lastRow - dailyChartData.length + 1;
+            for (let i = startTrendRow; i <= lastRow; i++) {
+                worksheet.getCell(`B${i}`).numFmt = '#,##0.00" ₱"';
+                worksheet.getCell(`C${i}`).numFmt = '#,##0.00" ₱"';
+            }
+
+            // Filename
+            let filename = "TSA_Sales_Performance";
+            if (hasDateRange) {
+                const fromStr = fromDate.toLocaleDateString().replace(/\//g, '-');
+                const toStr = toDate.toLocaleDateString().replace(/\//g, '-');
+                filename += `_${fromStr}_to_${toStr}`;
+            }
+            filename += ".xlsx";
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Error exporting to Excel:", error);
+            alert("Failed to export data to Excel");
+        }
+    };
+
+    const itemToRow = (item: any) => [item.metric, item.value];
+
     if (loadingActivities) {
         return (
             <div className="flex justify-center items-center py-10">
@@ -325,25 +427,35 @@ export const SalesTable: React.FC<SalesProps> = ({
         <div className="space-y-6 text-black">
 
             {/* Working Days Selector + Info */}
-            <div className="flex flex-wrap gap-3 items-center">
-                <Select
-                    value={String(totalWorkingDays)}
-                    onValueChange={(val) => setTotalWorkingDays(Number(val) as 26 | 22)}
-                >
-                    <SelectTrigger className="w-[200px] text-xs">
-                        <SelectValue placeholder="Working Days" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="26">26 Working Days (Mon–Sat)</SelectItem>
-                        <SelectItem value="22">22 Working Days (Mon–Fri)</SelectItem>
-                    </SelectContent>
-                </Select>
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+                <div className="flex flex-wrap gap-3 items-center">
+                    <Select
+                        value={String(totalWorkingDays)}
+                        onValueChange={(val) => setTotalWorkingDays(Number(val) as 26 | 22)}
+                    >
+                        <SelectTrigger className="w-[200px] text-xs">
+                            <SelectValue placeholder="Working Days" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="26">26 Working Days (Mon–Sat)</SelectItem>
+                            <SelectItem value="22">22 Working Days (Mon–Fri)</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                <span className="text-xs text-gray-500">
-                    Days elapsed: <strong>{workingDaysSoFar}</strong> / {totalWorkingDays}
-                    &nbsp;|&nbsp;
-                    Par: <strong>{parPercentage.toFixed(1)}%</strong>
-                </span>
+                    <span className="text-xs text-gray-500">
+                        Days elapsed: <strong>{workingDaysSoFar}</strong> / {totalWorkingDays}
+                        &nbsp;|&nbsp;
+                        Par: <strong>{parPercentage.toFixed(1)}%</strong>
+                    </span>
+                </div>
+
+                <button
+                    onClick={exportToExcel}
+                    className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                    <Download size={14} />
+                    Export Excel
+                </button>
             </div>
 
             {/* Sales Metrics Table */}

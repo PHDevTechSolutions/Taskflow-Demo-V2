@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -139,6 +140,95 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
 
   useEffect(() => { setPage(1); }, [searchTerm, filterStatus, dateCreatedFilterRange]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredActivities.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Invoice Report");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Delivery Date", key: "deliveryDate", width: 15 },
+        { header: "SI Date", key: "siDate", width: 15 },
+        { header: "SI Amount", key: "amount", width: 18 },
+        { header: "SO Number", key: "soNumber", width: 20 },
+        { header: "DR Number", key: "drNumber", width: 20 },
+        { header: "Company", key: "company", width: 30 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact No.", key: "contactNo", width: 20 },
+        { header: "Remarks", key: "remarks", width: 40 },
+        { header: "Payment Terms", key: "paymentTerms", width: 20 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredActivities.forEach((item) => {
+        worksheet.addRow({
+          deliveryDate: fmtDate(item.delivery_date),
+          siDate: fmtDate(item.si_date),
+          amount: item.actual_sales ?? 0,
+          soNumber: item.so_number || "—",
+          drNumber: item.dr_number || "—",
+          company: item.company_name || "—",
+          contactPerson: item.contact_person || "—",
+          contactNo: item.contact_number || "—",
+          remarks: item.remarks || "—",
+          paymentTerms: item.payment_terms || "—"
+        });
+      });
+
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        deliveryDate: "TOTAL",
+        amount: totalSales
+      });
+      totalsRow.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('amount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "Sales_Invoice_Report";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   const hasActiveFilter = filterStatus !== "all" || !!searchTerm;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -146,28 +236,38 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     <div className="space-y-4">
 
       {/* Search + filter toggle */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search company, DR number, remarks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
-          />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search company, DR number, remarks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors
+              ${showFilters ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+          >
+            <SlidersHorizontal size={12} /> Filters
+          </button>
+          {filteredActivities.length > 0 && (
+            <span className="text-[11px] text-slate-500 font-mono ml-auto">
+              {filteredActivities.length} records · Total: <strong className="text-slate-700">{fmt(totalSales)}</strong>
+            </span>
+          )}
         </div>
+
         <button
-          onClick={() => setShowFilters((v) => !v)}
-          className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors
-            ${showFilters ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
         >
-          <SlidersHorizontal size={12} /> Filters
+          <Download size={14} />
+          Export Excel
         </button>
-        {filteredActivities.length > 0 && (
-          <span className="text-[11px] text-slate-500 font-mono ml-auto">
-            {filteredActivities.length} records · Total: <strong className="text-slate-700">{fmt(totalSales)}</strong>
-          </span>
-        )}
       </div>
 
       {/* Expandable filters */}

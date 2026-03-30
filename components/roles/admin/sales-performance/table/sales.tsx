@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, ArrowLeft, Settings2, RotateCcw, ChevronRight } from "lucide-react";
+import { AlertCircleIcon, ArrowLeft, Settings2, RotateCcw, ChevronRight, Download } from "lucide-react";
 import { supabase } from "@/utils/supabase";
+import ExcelJS from "exceljs";
 import {
   Table, TableBody, TableCell, TableFooter,
   TableHead, TableHeader, TableRow,
@@ -753,6 +754,150 @@ export const SalesTable: React.FC<SalesProps> = ({
     selectedAgent, agents, getSalesValue,
   ]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    let dataToExport: any[] = [];
+    let title = "";
+    let columns: any[] = [];
+    let totals: any = {};
+
+    if (drillLevel === "manager") {
+      dataToExport = salesDataPerManager.map(m => ({
+        name: m.managerName,
+        tsms: m.tsmCount,
+        quota: m.totalProratedQuota,
+        sales: m.totalActualSales,
+        variance: m.totalVariance,
+        par: `${parPercentage.toFixed(2)}%`,
+        plan: `${m.percentToPlan}%`
+      }));
+      title = "Manager Sales Metrics";
+      columns = [
+        { header: "Manager", key: "name", width: 25 },
+        { header: "TSMs", key: "tsms", width: 10 },
+        { header: "Target Quota", key: "quota", width: 20 },
+        { header: "Total Sales", key: "sales", width: 20 },
+        { header: "Variance", key: "variance", width: 20 },
+        { header: "Par", key: "par", width: 12 },
+        { header: "% To Plan", key: "plan", width: 12 }
+      ];
+      totals = {
+        name: "TOTAL",
+        quota: managerColumnTotals.totalProratedQuota,
+        sales: managerColumnTotals.totalActualSales,
+        variance: managerColumnTotals.totalVariance
+      };
+    } else if (drillLevel === "tsm") {
+      dataToExport = tsmsUnderSelectedManager.map(t => ({
+        name: t.tsmName,
+        quota: t.totalProratedQuota,
+        sales: t.totalActualSales,
+        variance: t.totalVariance,
+        par: `${parPercentage.toFixed(2)}%`,
+        plan: `${t.percentToPlan}%`
+      }));
+      title = `${selectedManagerName} - TSM Sales Metrics`;
+      columns = [
+        { header: "TSM", key: "name", width: 25 },
+        { header: "Target Quota", key: "quota", width: 20 },
+        { header: "Total Sales", key: "sales", width: 20 },
+        { header: "Variance", key: "variance", width: 20 },
+        { header: "Par", key: "par", width: 12 },
+        { header: "% To Plan", key: "plan", width: 12 }
+      ];
+      totals = {
+        name: "TOTAL",
+        quota: tsmColumnTotals.totalProratedQuota,
+        sales: tsmColumnTotals.totalActualSales,
+        variance: tsmColumnTotals.totalVariance
+      };
+    } else {
+      dataToExport = filteredAgentDrillDown.map(d => {
+        const agent = agents.find((a) => a.ReferenceID && a.ReferenceID.toLowerCase() === d.agentId.toLowerCase());
+        return {
+          name: agent ? `${agent.Firstname} ${agent.Lastname}` : d.agentId,
+          quota: d.proratedQuota,
+          sales: d.totalActualSales,
+          variance: d.variance,
+          par: `${parPercentage.toFixed(2)}%`,
+          plan: `${d.percentToPlan}%`
+        };
+      });
+      title = `${selectedTSMName} - Agent Sales Metrics`;
+      columns = [
+        { header: "Agent", key: "name", width: 25 },
+        { header: "Target Quota", key: "quota", width: 20 },
+        { header: "Total Sales", key: "sales", width: 20 },
+        { header: "Variance", key: "variance", width: 20 },
+        { header: "Par", key: "par", width: 12 },
+        { header: "% To Plan", key: "plan", width: 12 }
+      ];
+      totals = {
+        name: "TOTAL",
+        quota: agentDrillDownTotals.proratedQuota,
+        sales: agentDrillDownTotals.totalActualSales,
+        variance: agentDrillDownTotals.variance
+      };
+    }
+
+    if (dataToExport.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Performance");
+
+      worksheet.columns = columns;
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data
+      dataToExport.forEach(item => worksheet.addRow(item));
+
+      // Add totals
+      const totalsRow = worksheet.addRow(totals);
+      totalsRow.font = { bold: true };
+
+      // Format currency columns
+      ['quota', 'sales', 'variance'].forEach(key => {
+        const col = worksheet.getColumn(key);
+        if (col && col.number > 0) col.numFmt = '#,##0.00" ₱"';
+      });
+
+      // Filename
+      let filename = `Admin_Sales_Performance_${title.replace(/\s+/g, '_')}`;
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   if (loadingActivities) return <div className="flex justify-center items-center h-40"><Spinner className="size-8" /></div>;
   if (errorActivities) return (
     <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
@@ -801,9 +946,20 @@ export const SalesTable: React.FC<SalesProps> = ({
           </span>
         </div>
 
-        <Button variant="outline" size="sm" className="text-xs rounded-none flex items-center gap-1.5 border-dashed" onClick={() => setEditOpen(true)}>
-          <Settings2 className="h-3.5 w-3.5" /> Edit Computation
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-none flex items-center gap-1.5 border-dashed"
+            onClick={exportToExcel}
+          >
+            <Download className="h-3.5 w-3.5" /> Export Excel
+          </Button>
+
+          <Button variant="outline" size="sm" className="text-xs rounded-none flex items-center gap-1.5 border-dashed" onClick={() => setEditOpen(true)}>
+            <Settings2 className="h-3.5 w-3.5" /> Edit Computation
+          </Button>
+        </div>
       </div>
 
       {/* ── Level 1: Manager Table ── */}

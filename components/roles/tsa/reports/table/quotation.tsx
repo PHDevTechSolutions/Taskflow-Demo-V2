@@ -12,6 +12,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
 /* ================= TYPES ================= */
@@ -260,6 +262,94 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return filteredActivities.slice(start, start + PAGE_SIZE);
   }, [filteredActivities, page]);
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredActivities.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Quotation Report");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Date Created", key: "dateCreated", width: 15 },
+        { header: "Status", key: "status", width: 25 },
+        { header: "Quotation No.", key: "quotationNo", width: 20 },
+        { header: "Amount", key: "amount", width: 18 },
+        { header: "Company", key: "company", width: 30 },
+        { header: "Contact", key: "contact", width: 20 },
+        { header: "Priority", key: "priority", width: 12 },
+        { header: "Remarks", key: "remarks", width: 40 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredActivities.forEach((item) => {
+        const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
+        const priority = PRIORITY_MAP[quotationStatus] || "-";
+
+        worksheet.addRow({
+          dateCreated: new Date(item.date_created).toLocaleDateString(),
+          status: item.quotation_status || "-",
+          quotationNo: item.quotation_number || "-",
+          amount: item.quotation_amount ?? 0,
+          company: item.company_name || "-",
+          contact: item.contact_number || "-",
+          priority: priority,
+          remarks: item.remarks || "-"
+        });
+      });
+
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        dateCreated: "TOTAL",
+        amount: totalQuotationAmount
+      });
+      totalsRow.font = { bold: true };
+
+      // Format currency column
+      const amountCol = worksheet.getColumn('amount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
+
+      // Generate filename with date range
+      let filename = "Quotation_Report";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   /* ================= RENDER ================= */
 
   if (!loading && !error && baseActivities.length === 0) {
@@ -308,36 +398,46 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       </div>
 
       {/* ── Filters row ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          type="text"
-          placeholder="Search company, quotation no., remarks..."
-          className="max-w-xs text-xs"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Search quotations"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="text"
+            placeholder="Search company, quotation no., remarks..."
+            className="max-w-xs text-xs"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search quotations"
+          />
 
-        <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
-          <SelectTrigger className="w-[240px] text-xs">
-            <SelectValue placeholder="Filter by Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {availableStatuses.map((s) => {
-              const priority = PRIORITY_MAP[s];
-              const style = PRIORITY_STYLES[priority];
-              return (
-                <SelectItem key={s} value={s} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style?.dot}`} />
-                    {s}
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
+            <SelectTrigger className="w-[240px] text-xs">
+              <SelectValue placeholder="Filter by Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {availableStatuses.map((s) => {
+                const priority = PRIORITY_MAP[s];
+                const style = PRIORITY_STYLES[priority];
+                return (
+                  <SelectItem key={s} value={s} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style?.dot}`} />
+                      {s}
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* ── Summary bar ── */}
