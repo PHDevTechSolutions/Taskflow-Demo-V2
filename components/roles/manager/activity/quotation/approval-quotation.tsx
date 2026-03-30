@@ -109,7 +109,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
 
         try {
             const { data, error: supabaseError } = await supabase
-                .from('completed')
+                .from('history')
                 .select('*')
                 .order('date_created', { ascending: false });
 
