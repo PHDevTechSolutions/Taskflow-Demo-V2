@@ -27,8 +27,8 @@ import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
 import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
 import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
-//import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
-//import { Done } from "@/components/roles/tsa/activity/planner/done/done";
+import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
+import { Done } from "@/components/roles/tsa/activity/planner/done/done";
 import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue";
 
 import { type DateRange } from "react-day-picker";
@@ -705,13 +705,13 @@ function DashboardContent() {
                 </CardContent>
               </Card>
 
-              {(["inProgress", "scheduled", "completed", "overdue"] as const).map((key) => {
+              {(["inProgress", "scheduled", "delivered", "done", "completed", "overdue"] as const).map((key) => {
                 const meta = {
                   inProgress: { label: "In Progress", icon: <Loader2 className="w-4 h-4" />, count: progressCount },
                   scheduled: { label: "Scheduled", icon: <Calendar className="w-4 h-4" />, count: scheduledCount },
-                  //delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
+                  delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
                   completed: { label: "Completed", icon: <CheckCircle className="w-4 h-4" />, count: completedCount },
-                  //done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
+                  done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
                   overdue: { label: "Overdue", icon: <AlertCircle className="w-4 h-4" />, count: overdueCount },
                 }[key];
 
@@ -764,12 +764,12 @@ function DashboardContent() {
                         tsmDetails={userDetails.tsmDetails ?? null} 
                         signature={userDetails.signature} />
                       )}
-                      {/*{key === "delivered" && (
+                      {key === "delivered" && (
                         <Delivered referenceid={userDetails.referenceid} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDeliveredCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "done" && (
                         <Done referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDoneCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
-                      )}*/}
+                      )}
                       {key === "completed" && (
                         <Completed 
                         referenceid={userDetails.referenceid} 
@@ -795,7 +795,6 @@ function DashboardContent() {
                         email={userDetails.email} 
                         contact={userDetails.contact} 
                         tsmname={userDetails.tsmname} 
-                        tsm={userDetails.tsm} 
                         managername={userDetails.managername} 
                         target_quota={userDetails.target_quota} 
                         dateCreatedFilterRange={dateCreatedFilterRange} 
