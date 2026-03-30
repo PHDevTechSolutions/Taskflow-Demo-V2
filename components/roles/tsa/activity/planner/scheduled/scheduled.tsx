@@ -224,6 +224,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       "Cancelled",
       "On-Progress",
       "Transfer",
+      "Pending"
     ].includes(status);
   }
 
