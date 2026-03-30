@@ -7,7 +7,8 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info, Settings2, RotateCcw } from "lucide-react";
+import { Info, Settings2, RotateCcw, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -495,6 +496,111 @@ export function QuotationTableCard({
     };
   }, [statsByAgent, quoteToSOMode, quotationToSIMode]);
 
+  /* ── Excel Export ── */
+  const exportToExcel = async () => {
+    if (statsByAgent.length === 0) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Quotation Performance");
+
+      // Headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 25 },
+        { header: `Total Quotations (${quotationStatus})`, key: "totalQuotes", width: 20 },
+        { header: `Quotation Amount (${quotationAmountField})`, key: "quoteAmount", width: 25 },
+        { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
+        { header: "Quote → SO (Detail)", key: "quoteToSODetail", width: 20 },
+        { header: "Quotation → SI (%)", key: "quoteToSI", width: 15 },
+        { header: "Quotation → SI (Detail)", key: "quoteToSIDetail", width: 20 },
+      ];
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add Data
+      statsByAgent.forEach((stat) => {
+        const info = agentMap.get(stat.agentID);
+        const quoteToSOVal = getQuoteToSOVal(stat);
+        const quotationToSIVal = getQuotationToSIVal(stat);
+
+        worksheet.addRow({
+          agent: info?.name ?? stat.agentID,
+          totalQuotes: stat.totalQuoteDoneCount,
+          quoteAmount: stat.totalQuotationAmount,
+          quoteToSO: quoteToSOVal / 100,
+          quoteToSODetail: quoteToSOMode === "count" ? stat.totalSOCount : stat.totalSOAmount,
+          quoteToSI: quotationToSIVal / 100,
+          quoteToSIDetail: quotationToSIMode === "count" ? stat.totalDeliveredCount : stat.totalSIAmount,
+        });
+      });
+
+      // Add Totals Row
+      const totalRow = worksheet.addRow({
+        agent: "TOTAL",
+        totalQuotes: totals.totalQuoteDoneCount,
+        quoteAmount: totals.totalQuotationAmount,
+        quoteToSO: totals.quoteToSOVal / 100,
+        quoteToSODetail: quoteToSOMode === "count" ? totals.totalSOCount : totals.totalSOAmount,
+        quoteToSI: totals.quotationToSIVal / 100,
+        quoteToSIDetail: quotationToSIMode === "count" ? totals.totalDeliveredCount : totals.totalSIAmount,
+      });
+      totalRow.font = { bold: true };
+
+      // Formatting
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+          if (rowNumber > 1) {
+            // Percentages
+            if (colNumber === 4 || colNumber === 6) {
+              cell.numFmt = '0.00%';
+            }
+            // Currency (Quotation Amount and Detail if amount-based)
+            if (colNumber === 3) {
+              cell.numFmt = '#,##0.00" ₱"';
+            }
+            if (colNumber === 5 && quoteToSOMode === "amount") {
+              cell.numFmt = '#,##0.00" ₱"';
+            }
+            if (colNumber === 7 && quotationToSIMode === "amount") {
+              cell.numFmt = '#,##0.00" ₱"';
+            }
+          }
+        });
+      });
+
+      // Filename
+      let filename = "TSM_Quotation_Performance";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split('T')[0];
+        const toStr = new Date(dateCreatedFilterRange.to).toISOString().split('T')[0];
+        filename += `_${fromStr}_to_${toStr}`;
+      }
+      filename += ".xlsx";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
   return (
     <Card className="rounded-xl border shadow-sm">
       <EditComputationDialog
@@ -518,6 +624,16 @@ export function QuotationTableCard({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={statsByAgent.length === 0}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}
               className="flex items-center gap-1.5 text-xs border-dashed">
               <Settings2 className="w-3.5 h-3.5" />

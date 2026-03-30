@@ -7,7 +7,8 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info } from "lucide-react";
+import { Info, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -213,6 +214,106 @@ export function OutboundCallsTableCard({
     };
   }, [statsByAgent, obTarget]);
 
+  /* ── Excel Export ── */
+  const exportToExcel = async () => {
+    if (statsByAgent.length === 0) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Outbound Performance");
+
+      // Headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 25 },
+        { header: "OB Target", key: "target", width: 12 },
+        { header: "Successful Calls", key: "calls", width: 15 },
+        { header: "Achievement (%)", key: "achievement", width: 15 },
+        { header: "Quotes (Based on OB)", key: "quotes", width: 20 },
+        { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
+        { header: "SO (Based on OB)", key: "so", width: 20 },
+        { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
+        { header: "SI (Based on OB)", key: "si", width: 20 },
+        { header: "SO → SI (%)", key: "soToSI", width: 15 },
+      ];
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add Data
+      statsByAgent.forEach((stat) => {
+        const agentName = agentMap.get(stat.agentId)?.name ?? stat.agentId;
+        worksheet.addRow({
+          agent: agentName,
+          target: obTarget,
+          calls: stat.totalCalls,
+          achievement: (stat.achievement / 100),
+          quotes: stat.numQuotes,
+          callsToQuote: parseFloat(stat.callsToQuote) / 100,
+          so: stat.numSO,
+          quoteToSO: parseFloat(stat.quoteToSO) / 100,
+          si: stat.numSI,
+          soToSI: parseFloat(stat.soToSI) / 100,
+        });
+      });
+
+      // Add Totals Row
+      const totalRow = worksheet.addRow({
+        agent: "TOTAL",
+        target: obTarget * statsByAgent.length,
+        calls: totals.totalCalls,
+        achievement: parseFloat(totals.achievement) / 100,
+        quotes: totals.numQuotes,
+        callsToQuote: parseFloat(totals.callsToQuote) / 100,
+        so: totals.numSO,
+        quoteToSO: parseFloat(totals.quoteToSO) / 100,
+        si: totals.numSI,
+        soToSI: parseFloat(totals.soToSI) / 100,
+      });
+      totalRow.font = { bold: true };
+
+      // Formatting
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+          if (rowNumber > 1) {
+            if ([4, 6, 8, 10].includes(colNumber)) {
+              cell.numFmt = '0.00%';
+            }
+          }
+        });
+      });
+
+      // Filename
+      let filename = "Manager_Outbound_Performance";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split('T')[0];
+        const toStr = new Date(dateCreatedFilterRange.to).toISOString().split('T')[0];
+        filename += `_${fromStr}_to_${toStr}`;
+      }
+      filename += ".xlsx";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
   return (
     <Card className="rounded-xl border shadow-sm">
       {/* Header */}
@@ -224,15 +325,27 @@ export function OutboundCallsTableCard({
               Based on <span className="font-medium text-gray-500">Outbound – Touchbase · Successful</span> calls only
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowComputation(!showComputation)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
-          >
-            <Info className="w-3.5 h-3.5" />
-            {showComputation ? "Hide" : "Details"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={statsByAgent.length === 0}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowComputation(!showComputation)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+            >
+              <Info className="w-3.5 h-3.5" />
+              {showComputation ? "Hide" : "Details"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
 

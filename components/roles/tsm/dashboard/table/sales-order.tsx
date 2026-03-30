@@ -7,7 +7,8 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info, Settings2, RotateCcw } from "lucide-react";
+import { Info, Settings2, RotateCcw, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -435,6 +436,101 @@ export function SalesOrderTableCard({
     return { totalSODoneCount, totalSOAmount, totalDeliveredCount, totalSalesInvoice, soToSIVal };
   }, [statsByAgent, soToSIMode]);
 
+  /* ── Excel Export ── */
+  const exportToExcel = async () => {
+    if (statsByAgent.length === 0) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Order Performance");
+
+      // Headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 25 },
+        { header: `Total SO Done (${soStatus})`, key: "soCount", width: 20 },
+        { header: `Total SO Amount (${soAmountField})`, key: "soAmount", width: 25 },
+        { header: `Total Sales Invoice (${deliveredAmountField})`, key: "siAmount", width: 25 },
+        { header: "SO → SI (%)", key: "soToSI", width: 15 },
+        { header: `Total Delivered (${deliveredTypeActivity})`, key: "deliveredCount", width: 25 },
+      ];
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add Data
+      statsByAgent.forEach((stat) => {
+        const info = agentMap.get(stat.agentID);
+        const soToSIVal = getSoToSIVal(stat);
+
+        worksheet.addRow({
+          agent: info?.name ?? stat.agentID,
+          soCount: stat.totalSODoneCount,
+          soAmount: stat.totalSOAmount,
+          siAmount: stat.totalSalesInvoice,
+          soToSI: soToSIVal / 100,
+          deliveredCount: stat.totalDeliveredCount,
+        });
+      });
+
+      // Add Totals Row
+      const totalRow = worksheet.addRow({
+        agent: "TOTAL",
+        soCount: totals.totalSODoneCount,
+        soAmount: totals.totalSOAmount,
+        siAmount: totals.totalSalesInvoice,
+        soToSI: totals.soToSIVal / 100,
+        deliveredCount: totals.totalDeliveredCount,
+      });
+      totalRow.font = { bold: true };
+
+      // Formatting
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+          if (rowNumber > 1) {
+            // Percentages
+            if (colNumber === 5) {
+              cell.numFmt = '0.00%';
+            }
+            // Currency
+            if (colNumber === 3 || colNumber === 4) {
+              cell.numFmt = '#,##0.00" ₱"';
+            }
+          }
+        });
+      });
+
+      // Filename
+      let filename = "TSM_Sales_Order_Performance";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split('T')[0];
+        const toStr = new Date(dateCreatedFilterRange.to).toISOString().split('T')[0];
+        filename += `_${fromStr}_to_${toStr}`;
+      }
+      filename += ".xlsx";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
   return (
     <Card className="rounded-xl border shadow-sm">
       <EditComputationDialog
@@ -456,6 +552,16 @@ export function SalesOrderTableCard({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={statsByAgent.length === 0}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
             <Button
               variant="outline"
               size="sm"

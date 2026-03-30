@@ -4,8 +4,9 @@ import React, { useMemo, useState } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
-import { Info, ChevronDown, ChevronRight } from "lucide-react";
+import { Info, ChevronDown, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
@@ -126,6 +127,91 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
   const grandTotalActivities = agentList.reduce((s, a) => s + a.totalActivities, 0);
   const grandTotalDuration = agentList.reduce((s, a) => s + a.totalDurationMs, 0);
 
+  /* ── Excel Export ── */
+  const exportToExcel = async () => {
+    if (agentList.length === 0) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      
+      // Sheet 1: Summary per Agent
+      const summarySheet = workbook.addWorksheet("Agent Summary");
+      summarySheet.columns = [
+        { header: "Agent Name", key: "agentName", width: 25 },
+        { header: "Total Activities", key: "totalCount", width: 15 },
+        { header: "Total Duration", key: "totalDuration", width: 20 },
+      ];
+      
+      const header1 = summarySheet.getRow(1);
+      header1.font = { bold: true };
+      header1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+      agentList.forEach(agent => {
+        summarySheet.addRow({
+          agentName: agent.agentName,
+          totalCount: agent.totalActivities,
+          totalDuration: formatDurationMs(agent.totalDurationMs),
+        });
+      });
+
+      // Sheet 2: All Detailed Activities
+      const detailSheet = workbook.addWorksheet("Activity Details");
+      detailSheet.columns = [
+        { header: "Agent Name", key: "agent", width: 20 },
+        { header: "Activity Type", key: "activity", width: 20 },
+        { header: "Company Name", key: "company", width: 25 },
+        { header: "Source", key: "source", width: 15 },
+        { header: "Status", key: "status", width: 15 },
+        { header: "Start Date", key: "start", width: 20 },
+        { header: "End Date", key: "end", width: 20 },
+        { header: "Duration", key: "duration", width: 15 },
+        { header: "Remarks", key: "remarks", width: 40 },
+      ];
+
+      const header2 = detailSheet.getRow(1);
+      header2.font = { bold: true };
+      header2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+      agentList.forEach(agent => {
+        agent.activities.forEach(act => {
+          act.records.forEach(r => {
+            const start = parseDateMs(r.start_date);
+            const end = parseDateMs(r.end_date);
+            const durationMs = (start && end && end > start) ? end - start : 0;
+
+            detailSheet.addRow({
+              agent: agent.agentName,
+              activity: act.name,
+              company: r.company_name || "-",
+              source: r.source || "-",
+              status: r.call_status || "-",
+              start: r.start_date ? new Date(r.start_date.replace(" ", "T")).toLocaleString() : "-",
+              end: r.end_date ? new Date(r.end_date.replace(" ", "T")).toLocaleString() : "-",
+              duration: formatDurationMs(durationMs),
+              remarks: r.remarks || "-",
+            });
+          });
+        });
+      });
+
+      const filename = `TSM_Other_Activities_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
   return (
     <Card className="rounded-xl border shadow-sm">
       {/* Header */}
@@ -137,15 +223,27 @@ export function InboundRepliesCard({ history, agents }: InboundRepliesCardProps)
               Summary of all activities <span className="font-medium text-gray-500">grouped per agent</span>
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowComputation(!showComputation)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
-          >
-            <Info className="w-3.5 h-3.5" />
-            {showComputation ? "Hide" : "Details"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={agentList.length === 0}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowComputation(!showComputation)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+            >
+              <Info className="w-3.5 h-3.5" />
+              {showComputation ? "Hide" : "Details"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
