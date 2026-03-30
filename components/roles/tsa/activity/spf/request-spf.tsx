@@ -65,15 +65,31 @@ interface SPFProps {
 
 const StatusBadge = ({ status }: { status?: string }) => {
     const s = (status || "").toLowerCase();
+    
+    // Map status values to display text
+    const getDisplayText = (status: string) => {
+        const statusMap: Record<string, string> = {
+            "pending for procurement": "For Procurement Costing",
+            "approved by procurement": "Ready for Quotation", 
+            "for revision": "Revised by Sales",
+            "approved": "Approved",
+            "pending": "Pending",
+            "declined": "Declined"
+        };
+        
+        return statusMap[s] || status || "—";
+    };
+    
     const cls =
-        s === "approved" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-            : s === "pending" ? "bg-amber-100 text-amber-700 border-amber-200"
+        s === "approved" || s === "approved by procurement" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+            : s === "pending" || s === "pending for procurement" ? "bg-amber-100 text-amber-700 border-amber-200"
                 : s === "declined" ? "bg-red-100 text-red-700 border-red-200"
-                    : "bg-gray-100 text-gray-500 border-gray-200";
+                    : s === "for revision" ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "bg-gray-100 text-gray-500 border-gray-200";
 
     return (
         <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 border ${cls} rounded-sm`}>
-            {status || "—"}
+            {getDisplayText(status || "")}
         </span>
     );
 };
@@ -283,6 +299,10 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             .channel(`spf-${referenceid}`)
             .on("postgres_changes",
                 { event: "*", schema: "public", table: "spf", filter: `referenceid=eq.${referenceid}` },
+                fetchActivities
+            )
+            .on("postgres_changes",
+                { event: "*", schema: "public", table: "spf_creation" },
                 fetchActivities
             )
             .subscribe();
