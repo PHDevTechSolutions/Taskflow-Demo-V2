@@ -9,6 +9,7 @@ const HARD_LIMIT = 500_000;
 const COLUMNS = `
   id,
   referenceid,
+  manager,
   account_reference_number,
   company_name,
   type_activity,
@@ -37,7 +38,7 @@ const COLUMNS = `
   si_date
 `.trim();
 
-// ─── Date helper ───────────────────────────────────────────────────────────────
+// ─── Date helpers ──────────────────────────────────────────────────────────────
 function toDateString(value: string): string {
   return value.split("T")[0];
 }
@@ -53,18 +54,16 @@ function currentMonthRange(): { fromDate: string; toDate: string } {
   };
 }
 
-// ─── Single batch fetcher (with manager filter) ──────────────────────────────
+// ─── Single batch fetcher (no manager filter — super admin sees all) ───────────
 async function fetchBatch(
-  referenceid: string,
   fromDate: string,
   toDate: string,
   typeActivity: string | null,
-  offset: number,
+  offset: number
 ) {
   let query = supabase
     .from("history")
     .select(COLUMNS, { count: "estimated" })
-    .eq("manager", referenceid)
     .gte("date_created", fromDate)
     .lte("date_created", toDate)
     .order("date_created", { ascending: false })
@@ -79,9 +78,6 @@ async function fetchBatch(
 }
 
 // ─── Endorsed-ticket map fetcher ───────────────────────────────────────────────
-// Fetches ALL endorsed-ticket rows for the given ticket_reference_numbers in
-// batches of 500 (PostgREST .in() limit) and returns a lookup map:
-//   ticket_reference_number → { tsm, agent }
 async function fetchEndorsedTicketMap(
   ticketRefs: string[]
 ): Promise<Record<string, { tsm: string | null; agent: string | null }>> {
@@ -124,9 +120,6 @@ async function fetchEndorsedTicketMap(
 }
 
 // ─── Endorsed-ticket rows + count per TSM ─────────────────────────────────────
-// Fetches endorsed-ticket rows filtered by date_created, returns:
-//   - rows: the raw rows (for drill-down display)
-//   - countsByTsm: unique ticket_reference_number count per lowercased tsm id
 async function fetchEndorsedTicketData(
   fromDate: string,
   toDate: string
@@ -155,7 +148,6 @@ async function fetchEndorsedTicketData(
 
   const rows = data ?? [];
 
-  // Count unique ticket_reference_numbers per tsm
   const sets = new Map<string, Set<string>>();
   for (const row of rows) {
     const tsmId = (row.tsm ?? "").toLowerCase();
@@ -180,13 +172,9 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { referenceid, from, to, type_activity } = req.query;
+  const { from, to, type_activity } = req.query;
 
-  if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
-  }
-
-  // ── Resolve date range ────────────────────────────────────────────────────
+  // ── Resolve date range ──────────────────────────────────────────────────────
   let fromDate: string;
   let toDate: string;
 
@@ -203,11 +191,10 @@ export default async function handler(
       : null;
 
   try {
-    // ── Step 1: Get total count (with manager filter) ────────────────────────
+    // ── Step 1: Get total count (no manager filter) ─────────────────────────
     let countQuery = supabase
       .from("history")
       .select("id", { count: "exact", head: true })
-      .eq("manager", referenceid)
       .gte("date_created", fromDate)
       .lte("date_created", toDate);
 
@@ -218,20 +205,19 @@ export default async function handler(
     const { count: totalDbCount, error: countError } = await countQuery;
 
     if (countError) {
-      console.error("[manager/fetch] count error:", countError.message);
+      console.error("[superadmin/fetch] count error:", countError.message);
       return res.status(500).json({ message: countError.message });
     }
 
     const totalRows = Math.min(totalDbCount ?? 0, HARD_LIMIT);
 
     console.log(
-      `[manager/fetch] referenceid=${referenceid} | ` +
+      `[superadmin/fetch] SUPER ADMIN | ` +
       `type_activity=${activityFilter ?? "all"} | ` +
       `DB count=${totalDbCount} | range=${fromDate} → ${toDate}`
     );
 
-    // ── Step 2: Fetch endorsed-ticket data per TSM (parallel with history) ───
-    // Run this alongside the history batches — no dependency on history data.
+    // ── Step 2: Fetch endorsed-ticket data (parallel) ───────────────────────
     const endorsedTicketDataPromise = fetchEndorsedTicketData(fromDate, toDate);
 
     if (totalRows === 0) {
@@ -248,7 +234,7 @@ export default async function handler(
       });
     }
 
-    // ── Step 3: Fetch all history batches in parallel ─────────────────────
+    // ── Step 3: Fetch all batches in parallel ───────────────────────────────
     const offsets: number[] = [];
     for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
       offsets.push(offset);
@@ -258,13 +244,13 @@ export default async function handler(
       await Promise.all([
         Promise.all(
           offsets.map((offset) =>
-            fetchBatch(referenceid, fromDate, toDate, activityFilter, offset)
+            fetchBatch(fromDate, toDate, activityFilter, offset)
           )
         ),
         endorsedTicketDataPromise,
       ]);
 
-    // ── Step 4: Collect history rows ──────────────────────────────────────
+    // ── Step 4: Collect rows ────────────────────────────────────────────────
     const allActivities: any[] = [];
 
     for (let i = 0; i < batchResults.length; i++) {
@@ -273,13 +259,12 @@ export default async function handler(
       if (error) {
         if ((error as any).code === "PGRST103") {
           console.warn(
-            `[manager/fetch] range not satisfiable at offset=${offsets[i]} — skipping`
+            `[superadmin/fetch] range not satisfiable at offset=${offsets[i]} — skipping`
           );
           continue;
         }
-
         console.error(
-          `[manager/fetch] batch error at offset=${offsets[i]}:`,
+          `[superadmin/fetch] batch error at offset=${offsets[i]}:`,
           error.message,
           error.code
         );
@@ -289,7 +274,7 @@ export default async function handler(
       allActivities.push(...(data ?? []));
     }
 
-    // ── Step 5: Merge endorsed-ticket tsm/agent data into history rows ────
+    // ── Step 5: Merge endorsed-ticket data ──────────────────────────────────
     const ticketRefs = allActivities
       .map((a) => a.ticket_reference_number)
       .filter(Boolean) as string[];
@@ -307,7 +292,7 @@ export default async function handler(
     });
 
     console.log(
-      `[manager/fetch] fetched ${allActivities.length} rows ` +
+      `[superadmin/fetch] fetched ${allActivities.length} rows ` +
       `in ${offsets.length} parallel batch(es). ` +
       `Merged endorsed-ticket for ${Object.keys(endorsedMap).length} unique refs. ` +
       `TSM ticket counts: ${Object.keys(endorsedTicketCountsByTsm).length} TSMs.`
@@ -319,11 +304,11 @@ export default async function handler(
       count:                    totalDbCount,
       cached:                   false,
       range:                    { from: fromDate, to: toDate },
-      endorsedTicketCountsByTsm,   // counts keyed by lowercased tsm id
-      endorsedTicketRows,          // raw rows for drill-down: company_name, ticket_reference_number, contact_person, contact_number
+      endorsedTicketCountsByTsm,
+      endorsedTicketRows,
     });
   } catch (err) {
-    console.error("[manager/fetch] server error:", err);
+    console.error("[superadmin/fetch] server error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
