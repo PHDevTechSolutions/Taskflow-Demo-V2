@@ -427,6 +427,10 @@ export default function TaskListEditDialog({
   // Tracks whether the autoAction has already been fired for this dialog instance
   const autoActionFiredRef = useRef(false);
 
+  const hasSPF = products.some((p: ProductItem) =>
+    p.product_sku?.toUpperCase().includes("SPF")
+  );
+
   useEffect(() => {
     const now = new Date();
     setStartDate(now.toISOString());
@@ -2360,9 +2364,11 @@ export default function TaskListEditDialog({
               <Button variant="outline" className="rounded-none h-12 px-6 border-2" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={onClickSave} className="rounded-none h-12 px-6">
-                Save
-              </Button>
+              {!hasSPF && (
+                <Button onClick={onClickSave} className="rounded-none h-12 px-6">
+                  Save
+                </Button>
+              )}
             </div>
           </DialogFooter>
         </DialogContent>
