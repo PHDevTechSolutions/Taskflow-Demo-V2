@@ -41,10 +41,6 @@ import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  checkCompanyBlocked,
-  BLOCK_PROGRESS,
-} from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -422,16 +418,6 @@ export const Progress: React.FC<NewTaskProps> = ({
               badgeClass = "bg-red-600 text-white";
             }
 
-            // Block only if the company already has another in-progress activity within 30 days.
-            const blockCheck = checkCompanyBlocked(
-              item.account_reference_number,
-              activities,
-              history,
-              BLOCK_PROGRESS.statuses,
-              BLOCK_PROGRESS.checkScheduled,
-              item.id, // exclude the current activity
-            );
-
             return (
               <AccordionItem
                 key={item.id}
@@ -446,40 +432,7 @@ export const Progress: React.FC<NewTaskProps> = ({
 
                     <div className="flex gap-2 ml-4">
                       {/* ─── Block Guard ─────────────────────────── */}
-                      {blockCheck.blocked ? (
-                        <HoverCard>
-                          <HoverCardTrigger asChild>
-                            <Button
-                              disabled
-                              variant="outline"
-                              className="rounded-none cursor-not-allowed opacity-60 text-xs"
-                            >
-                              <Lock size={13} className="mr-1" />
-                              Locked
-                            </Button>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            side="top"
-                            align="end"
-                            className="text-xs max-w-xs leading-relaxed"
-                          >
-                            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-                              <Lock size={12} /> Activity Locked
-                            </p>
-                            <p>{blockCheck.reason}</p>
-                            {blockCheck.daysRemaining !== undefined && (
-                              <p className="mt-1 text-muted-foreground">
-                                Unlocks in{" "}
-                                <strong>
-                                  {blockCheck.daysRemaining} day
-                                  {blockCheck.daysRemaining !== 1 ? "s" : ""}
-                                </strong>{" "}
-                                or when marked as Delivered.
-                              </p>
-                            )}
-                          </HoverCardContent>
-                        </HoverCard>
-                      ) : (
+                      
                         <CreateActivityDialog
                           firstname={firstname}
                           lastname={lastname}
@@ -510,8 +463,7 @@ export const Progress: React.FC<NewTaskProps> = ({
                           tsmDetails={tsmDetails ?? null}
                           signature={signature}
                         />
-                      )}
-
+                      
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button

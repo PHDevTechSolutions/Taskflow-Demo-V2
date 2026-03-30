@@ -27,8 +27,8 @@ import { NewTask } from "@/components/roles/tsa/activity/planner/new-task/new";
 import { Progress } from "@/components/roles/tsa/activity/planner/progress/progress";
 import { Scheduled } from "@/components/roles/tsa/activity/planner/scheduled/scheduled";
 import { Completed } from "@/components/roles/tsa/activity/planner/completed/completed";
-//import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
-//import { Done } from "@/components/roles/tsa/activity/planner/done/done";
+import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
+import { Done } from "@/components/roles/tsa/activity/planner/done/done";
 import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue";
 
 import { type DateRange } from "react-day-picker";
@@ -173,6 +173,7 @@ function NotificationDropdown({
   // ── Sound refs ──
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevIdsRef = useRef<Set<number>>(new Set());
+  const prevNotificationsCount = useRef<number>(0);
   const isFirstLoad = useRef(true);
 
   const READ_KEY = `notif_read_${referenceid}`;
@@ -192,10 +193,16 @@ function NotificationDropdown({
       if (!audioRef.current) {
         audioRef.current = new Audio("/alert-notification.mp3");
         audioRef.current.volume = 0.6;
+        // Preload the audio
+        audioRef.current.load();
       }
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => { });
-    } catch { }
+      audioRef.current.play().catch((error) => {
+        console.error("Failed to play notification sound:", error);
+      });
+    } catch (error) {
+      console.error("Error in playSound:", error);
+    }
   };
 
   const fetchNotifications = useCallback(async () => {
@@ -245,8 +252,16 @@ function NotificationDropdown({
       const newIds = new Set<number>(allNotifications.map((n) => n.id as number));
       if (!isFirstLoad.current) {
         const brandNewIds = [...newIds].filter((id) => !prevIdsRef.current.has(id));
-        if (brandNewIds.length > 0) playSound();
+        // Play sound if there are new notifications
+        if (brandNewIds.length > 0) {
+          console.log("Playing sound for new notifications:", brandNewIds);
+          playSound();
+        } else {
+          console.log("No new notifications found");
+        }
       }
+      // Always update the previous count
+      prevNotificationsCount.current = allNotifications.length;
       prevIdsRef.current = newIds;
       isFirstLoad.current = false;
 
@@ -426,13 +441,13 @@ function NotificationDropdown({
 
                     <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
                       {spfNotif.spf_number && <span className="uppercase font-mono">{spfNotif.spf_number}</span>}
-                      <span className="font-medium text-foreground">Approved by Procurement</span>
+                      <span className="font-medium text-foreground">Ready For Quotation</span>
                     </div>
 
                     {spfNotif.date_updated && (
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <CheckCircle className="w-3 h-3 shrink-0 text-blue-600" />
-                        <span><span className="font-medium text-foreground">Approved:</span> {formatDate(spfNotif.date_updated)}</span>
+                        <span><span className="font-medium text-foreground">Approved By Procurement:</span> {formatDate(spfNotif.date_updated)}</span>
                       </div>
                     )}
 
@@ -690,13 +705,13 @@ function DashboardContent() {
                 </CardContent>
               </Card>
 
-              {(["inProgress", "scheduled", "completed", "overdue"] as const).map((key) => {
+              {(["inProgress", "scheduled", "delivered", "done", "completed", "overdue"] as const).map((key) => {
                 const meta = {
                   inProgress: { label: "In Progress", icon: <Loader2 className="w-4 h-4" />, count: progressCount },
                   scheduled: { label: "Scheduled", icon: <Calendar className="w-4 h-4" />, count: scheduledCount },
-                  //delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
+                  delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
                   completed: { label: "Completed", icon: <CheckCircle className="w-4 h-4" />, count: completedCount },
-                  //done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
+                  done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
                   overdue: { label: "Overdue", icon: <AlertCircle className="w-4 h-4" />, count: overdueCount },
                 }[key];
 
@@ -749,12 +764,12 @@ function DashboardContent() {
                         tsmDetails={userDetails.tsmDetails ?? null} 
                         signature={userDetails.signature} />
                       )}
-                      {/*{key === "delivered" && (
+                      {key === "delivered" && (
                         <Delivered referenceid={userDetails.referenceid} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDeliveredCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
                       )}
                       {key === "done" && (
                         <Done referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDoneCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
-                      )}*/}
+                      )}
                       {key === "completed" && (
                         <Completed 
                         referenceid={userDetails.referenceid} 
@@ -780,7 +795,7 @@ function DashboardContent() {
                         email={userDetails.email} 
                         contact={userDetails.contact} 
                         tsmname={userDetails.tsmname} 
-                        tsm={userDetails.tsm} 
+                        
                         managername={userDetails.managername} 
                         target_quota={userDetails.target_quota} 
                         dateCreatedFilterRange={dateCreatedFilterRange} 
