@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
@@ -27,6 +28,9 @@ const SPF_LABEL: Record<string, string> = {
 };
 
 export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
+  const searchParams = useSearchParams();
+  const highlight = searchParams?.get("highlight");
+
   const [activities, setActivities] = useState<SPF[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +39,13 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
   const [page, setPage] = useState(1);
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("all");
+
+  // Set search term if highlight is present
+  useEffect(() => {
+    if (highlight) {
+      setSearchTerm(highlight);
+    }
+  }, [highlight]);
 
   const fetchActivities = useCallback(() => {
     if (!referenceid) {
@@ -250,8 +261,9 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
                   <TableBody>
                     {paginated.map(item => {
                       const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+                      const isHighlighted = highlight === (item as any).spf_number || highlight === item.so_number;
                       return (
-                        <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                        <TableRow key={item.id} className={`text-xs hover:bg-gray-50/50 font-mono ${isHighlighted ? "bg-yellow-100/50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : ""}`}>
                           <TableCell><div className="flex items-center gap-2">{info?.picture ? <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" /> : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{info?.name?.[0] ?? "?"}</div>}<span className="capitalize text-gray-700">{info?.name ?? "-"}</span></div></TableCell>
                           <TableCell className="text-gray-500 whitespace-nowrap">{new Date(item.date_created).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right text-gray-700">{item.so_amount != null ? fmtPHP(item.so_amount) : "-"}</TableCell>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
@@ -118,6 +119,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   userDetails,
   setDateCreatedFilterRangeAction,
 }) => {
+  const searchParams = useSearchParams();
+  const highlight = searchParams?.get("highlight");
+
   const [activities, setActivities] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +130,13 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   const [filterPriority, setFilterPriority] = useState<Priority>("all");
   const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
+
+  // Set search term if highlight is present
+  useEffect(() => {
+    if (highlight) {
+      setSearchTerm(highlight);
+    }
+  }, [highlight]);
 
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
@@ -544,9 +555,10 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
                 const priority = PRIORITY_MAP[quotationStatus];
                 const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+                const isHighlighted = highlight === item.quotation_number;
 
                 return (
-                  <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                  <TableRow key={item.id} className={`text-xs hover:bg-gray-50/50 font-mono ${isHighlighted ? "bg-yellow-100/50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : ""}`}>
                     {/* Agent */}
                     <TableCell>
                       <div className="flex items-center gap-2">

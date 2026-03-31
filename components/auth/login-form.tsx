@@ -315,6 +315,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       return;
     }
 
+    if (result.Department === "Procurement") {
+      router.push(`/roles/admin/dashboard?id=${result.userId}`);
+      return;
+    }
+
     switch (result.Role) {
       case "Territory Sales Manager":
         router.push(`/roles/tsm/agent?id=${result.userId}`); break;

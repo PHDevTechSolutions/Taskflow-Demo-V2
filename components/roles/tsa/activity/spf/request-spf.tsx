@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -235,12 +236,22 @@ const Pagination: React.FC<PaginationProps> = ({ total, current, perPage, onPage
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => {
+    const searchParams = useSearchParams();
+    const highlight = searchParams?.get("highlight");
+
     const [allActivities, setAllActivities] = useState<SPFRecord[]>([]);
     const [allAccounts, setAllAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [accountsLoading, setAccountsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+
+    // Set search term if highlight is present
+    useEffect(() => {
+        if (highlight) {
+            setSearchTerm(highlight);
+        }
+    }, [highlight]);
 
     // Pagination
     const [accountsPage, setAccountsPage] = useState(1);
@@ -624,45 +635,48 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {paginatedActivities.map((item, idx) => (
-                                        <TableRow key={item.id}
-                                            className={`text-xs ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-blue-50/60 transition-colors`}>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">
-                                                <div className="flex items-center gap-1">
-                                                    <button
-                                                        title="Edit"
-                                                        onClick={() => openEditDialog(item)}
-                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
-                                                    >
-                                                        <PenIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button
-                                                        title="Delete"
-                                                        onClick={() => { setDeleteTarget(item); setDeleteDialogOpen(true); }}
-                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
-                                                    >
-                                                        <Trash2Icon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">
-                                                <StatusBadge status={item.status} />
-                                            </TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-700 font-semibold">{item.spf_number}</TableCell>
-                                            <TableCell className="px-3 py-2 font-semibold whitespace-nowrap text-gray-900">{item.customer_name}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-700 capitalize">{item.contact_person}</TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-600">{item.contact_number}</TableCell>
-                                            <TableCell className="px-3 py-2 max-w-[140px] truncate text-gray-600">{item.registered_address}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.delivery_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.billing_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.collection_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.payment_terms || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-600">{item.warranty || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px] text-gray-600">{item.delivery_date || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.prepared_by || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.approved_by || "—"}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {paginatedActivities.map((item, idx) => {
+                                        const isHighlighted = highlight === item.spf_number;
+                                        return (
+                                            <TableRow key={item.id}
+                                                className={`text-xs ${isHighlighted ? "bg-yellow-100/50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : (idx % 2 === 0 ? "bg-white" : "bg-gray-50/50")} hover:bg-blue-50/60 transition-colors`}>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap">
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            title="Edit"
+                                                            onClick={() => openEditDialog(item)}
+                                                            className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
+                                                        >
+                                                            <PenIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            title="Delete"
+                                                            onClick={() => { setDeleteTarget(item); setDeleteDialogOpen(true); }}
+                                                            className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
+                                                        >
+                                                            <Trash2Icon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap">
+                                                    <StatusBadge status={item.status} />
+                                                </TableCell>
+                                                <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-700 font-semibold">{item.spf_number}</TableCell>
+                                                <TableCell className="px-3 py-2 font-semibold whitespace-nowrap text-gray-900">{item.customer_name}</TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap text-gray-700 capitalize">{item.contact_person}</TableCell>
+                                                <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-600">{item.contact_number}</TableCell>
+                                                <TableCell className="px-3 py-2 max-w-[140px] truncate text-gray-600">{item.registered_address}</TableCell>
+                                                <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.delivery_address || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.billing_address || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 text-gray-400 text-[12px]">{item.collection_address || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.payment_terms || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 text-gray-600">{item.warranty || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px] text-gray-600">{item.delivery_date || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.prepared_by || "—"}</TableCell>
+                                                <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.approved_by || "—"}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         )}

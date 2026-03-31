@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to, role } = req.query;
+  const { referenceid, from, to, role, department } = req.query;
 
   // Validate from and to as strings (optional)
   const fromDate = typeof from === "string" ? from : undefined;
@@ -12,8 +12,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Build query
     let query = supabase.from("history").select("*");
 
-    // If the user is not a Super Admin, filter by referenceid
-    if (role !== "Super Admin") {
+    // If the user is not a Super Admin or Procurement department, filter by referenceid
+    const isSuperAdmin = role === "Super Admin";
+    const isProcurement = department === "Procurement";
+
+    if (!isSuperAdmin && !isProcurement) {
       if (!referenceid || typeof referenceid !== "string") {
         res.status(400).json({ message: "Missing or invalid referenceid" });
         return;

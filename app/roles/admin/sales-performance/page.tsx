@@ -25,6 +25,7 @@ interface UserDetails {
     firstname: string;
     lastname: string;
     role: string;
+    department: string;
 }
 
 function DashboardContent() {
@@ -38,6 +39,7 @@ function DashboardContent() {
         firstname: "", 
         lastname: "", 
         role: "", 
+        department: "",
     });
 
     const [loadingUser, setLoadingUser] = useState(true);
@@ -78,6 +80,7 @@ function DashboardContent() {
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
                     role: data.Role || "",
+                    department: data.Department || "",
                 });
 
                 toast.success("User data loaded successfully!");

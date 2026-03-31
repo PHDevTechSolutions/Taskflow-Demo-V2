@@ -79,6 +79,7 @@ interface Sales {
 interface UserDetails {
   referenceid: string; tsm: string; manager: string;
   firstname: string; lastname: string; role: string;
+  department?: string;
 }
 
 interface Agent {
@@ -400,7 +401,14 @@ export const SalesTable: React.FC<SalesProps> = ({
     if (userDetails.role) {
       url.searchParams.append("role", userDetails.role);
     }
-    if (userDetails.role !== 'Super Admin' && userDetails.referenceid) {
+    const isProcurement = userDetails.department === "Procurement";
+    const isSuperAdmin = userDetails.role === 'Super Admin';
+    
+    if (isProcurement) {
+      url.searchParams.append("department", "Procurement");
+    }
+
+    if (!isSuperAdmin && !isProcurement && userDetails.referenceid) {
       url.searchParams.append("referenceid", userDetails.referenceid);
     }
     fetch(url.toString())
@@ -427,12 +435,18 @@ export const SalesTable: React.FC<SalesProps> = ({
   }, [fetchActivities]);
 
   useEffect(() => {
-    if (!userDetails.referenceid && userDetails.role !== 'Super Admin') return;
+    const isProcurement = userDetails.department === "Procurement";
+    const isSuperAdmin = userDetails.role === 'Super Admin';
+    
+    if (!userDetails.referenceid && !isSuperAdmin && !isProcurement) return;
     const url = new URL("/api/fetch-admin-all-user", window.location.origin);
     if (userDetails.role) {
       url.searchParams.append("role", userDetails.role);
     }
-    if (userDetails.role !== 'Super Admin' && userDetails.referenceid) {
+    if (isProcurement) {
+      url.searchParams.append("department", "Procurement");
+    }
+    if (!isSuperAdmin && !isProcurement && userDetails.referenceid) {
       url.searchParams.append("id", userDetails.referenceid);
     }
     fetch(url.toString())
@@ -449,7 +463,7 @@ export const SalesTable: React.FC<SalesProps> = ({
         setErrorActivities(e.message);
         setAgents([]); // Also set to empty array on fetch error
       });
-  }, [userDetails.referenceid, userDetails.role]);
+  }, [userDetails.referenceid, userDetails.role, userDetails.department]);
 
   // ─── Date / working days ──────────────────────────────────────────────────
   const { fromDate, toDate } = useMemo(() => {
