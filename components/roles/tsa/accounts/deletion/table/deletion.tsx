@@ -4,10 +4,11 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, ColumnDef, flexRender, } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction, } from "@/components/ui/alert-dialog";
-import { Undo, LoaderPinwheel } from "lucide-react";
+import { Undo, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type DateRange } from "react-day-picker";
+import { sileo } from "sileo";
 
 import { AccountsActiveSearch } from "../../active/search";
 import { AccountsActiveFilter } from "../../active/filter";
@@ -83,12 +84,8 @@ export function AccountsTable({
 
       const res = await fetch("/api/revert", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ids: [selectedAccount.id],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [selectedAccount.id] }),
       });
 
       const result = await res.json();
@@ -97,15 +94,28 @@ export function AccountsTable({
         throw new Error(result.error || "Failed to revert account");
       }
 
-      // Remove from list since Active na
-      setLocalPosts((prev) =>
-        prev.filter((item) => item.id !== selectedAccount.id)
-      );
+      sileo.success({
+        title: "Reverted",
+        description: `${selectedAccount.company_name} is now active.`,
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
 
+      setLocalPosts((prev) => prev.filter((item) => item.id !== selectedAccount.id));
       setSelectedAccount(null);
-    } catch (error) {
+      if (onRefreshAccountsAction) await onRefreshAccountsAction();
+    } catch (error: any) {
       console.error("Revert failed:", error);
-      alert("Failed to revert account. Please try again.");
+      sileo.error({
+        title: "Revert Failed",
+        description: error.message || "Something went wrong.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
     } finally {
       setIsReverting(false);
     }
@@ -176,11 +186,11 @@ export function AccountsTable({
   ========================== */
   const columns = useMemo<ColumnDef<Account>[]>(
     () => [
-      { accessorKey: "company_name", header: "Company Name" },
+      { accessorKey: "company_name", header: "Company Name", cell: ({ row }) => <span className="font-semibold text-zinc-900">{row.original.company_name}</span> },
       { accessorKey: "contact_person", header: "Contact Person" },
-      { accessorKey: "email_address", header: "Email Address" },
-      { accessorKey: "address", header: "Address" },
-      { accessorKey: "type_client", header: "Type of Client" },
+      { accessorKey: "email_address", header: "Email Address", cell: ({ row }) => <span className="text-zinc-500 font-mono text-[11px]">{row.original.email_address}</span> },
+      { accessorKey: "address", header: "Address", cell: ({ row }) => <div className="max-w-[200px] truncate text-zinc-500" title={row.original.address}>{row.original.address}</div> },
+      { accessorKey: "type_client", header: "Client Type", cell: ({ row }) => <Badge variant="secondary" className="rounded-none font-normal text-[10px] uppercase tracking-wider">{row.original.type_client}</Badge> },
       { accessorKey: "industry", header: "Industry" },
       {
         accessorKey: "status",
@@ -189,20 +199,19 @@ export function AccountsTable({
           const status = getValue() as string;
           return (
             <Badge
-              className={status === "Removed" ? "bg-orange-600 text-white rounded-xs shadow-sm" : ""}
-              variant={status === "Removed" ? undefined : "default"}
+              className="bg-orange-50 text-orange-700 border-orange-200 rounded-none shadow-none flex items-center gap-1.5 px-2 py-1"
+              variant="outline"
             >
-              <LoaderPinwheel className="animate-spin inline-block" /> {status === "Removed" ? "Waiting for approval" : status}
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-[10px] font-bold uppercase tracking-tighter">Waiting Approval</span>
             </Badge>
           );
         },
       },
-
       {
         accessorKey: "date_created",
-        header: "Date Created",
-        cell: ({ getValue }) =>
-          new Date(getValue() as string).toLocaleDateString(),
+        header: "Created On",
+        cell: ({ getValue }) => <span className="text-zinc-400 font-mono text-[11px]">{new Date(getValue() as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>,
       },
       {
         id: "actions",
@@ -210,18 +219,18 @@ export function AccountsTable({
         cell: ({ row }) => (
           <Button
             variant="outline"
-            className="flex items-center gap-1 text-green-700 border-green-300 hover:bg-green-50 cursor-pointer rounded-none"
+            size="sm"
+            className="flex items-center gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 transition-all rounded-none h-8"
             onClick={() => {
               setSelectedAccount(row.original);
               setOpenDialog(true);
             }}
           >
-            <Undo className="w-4 h-4" />
-            Revert
+            <Undo className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-bold uppercase tracking-tight">Revert</span>
           </Button>
         ),
       },
-
     ],
     []
   );
@@ -262,47 +271,57 @@ export function AccountsTable({
       </div>
 
       {/* TABLE */}
-      <div className="rounded-md border p-4">
-        <Badge variant="outline" className="mb-2 rounded-none">
-          Total: {filteredData.length}
-        </Badge>
+      <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Removed Accounts</span>
+            <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+              {filteredData.length}
+            </Badge>
+          </div>
+        </div>
 
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id}>
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-
-          <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-4">
-                  No removed accounts.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-zinc-50/50">
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id} className="hover:bg-transparent">
+                  {hg.headers.map((h) => (
+                    <TableHead key={h.id} className="text-[11px] font-bold uppercase tracking-wider h-10 text-zinc-500">
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+
+            <TableBody>
+              {table.getRowModel().rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-32 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 opacity-50">
+                      <AlertCircle className="h-8 w-8 text-zinc-300" />
+                      <p className="text-xs font-medium text-zinc-500">No removed accounts found.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="group hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-3 text-[12px]">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <AlertDialog open={openDialog} onOpenChange={setOpenDialog}>
@@ -325,26 +344,31 @@ export function AccountsTable({
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <AlertDialogFooter>
+          <AlertDialogFooter className="border-t border-zinc-100 p-4 bg-zinc-50/30">
             <AlertDialogCancel
               onClick={() => {
                 setSelectedAccount(null);
                 setOpenDialog(false);
               }}
-              className="rounded-none p-6"
+              className="rounded-none h-10 px-6 text-[12px] font-bold uppercase tracking-wider"
             >
               Cancel
             </AlertDialogCancel>
 
             <AlertDialogAction
-              onClick={async () => {
+              onClick={async (e) => {
+                e.preventDefault();
                 await handleRevertAccount();
                 setOpenDialog(false);
               }}
               disabled={isReverting}
-              className="bg-green-600 hover:bg-green-700 rounded-none p-6"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-none h-10 px-6 text-[12px] font-bold uppercase tracking-wider"
             >
-              {isReverting ? "Reverting..." : "Confirm"}
+              {isReverting ? (
+                <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Reverting...</>
+              ) : (
+                "Confirm Revert"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

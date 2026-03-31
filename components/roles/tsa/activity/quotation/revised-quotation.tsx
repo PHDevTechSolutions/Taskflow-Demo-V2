@@ -17,14 +17,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   AlertCircleIcon,
-  CheckCircle2Icon,
   PenIcon,
   MoreVertical,
+  Loader2,
+  Trash2,
+  Filter,
+  Search,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -33,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { sileo } from "sileo";
 
 import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
@@ -113,6 +118,32 @@ interface CompletedProps {
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const displayValue = (v: any) =>
+  v === null || v === undefined || String(v).trim() === "" ? "" : String(v);
+
+function formatDuration(start?: string, end?: string) {
+  if (!start || !end) return "-";
+  const s = new Date(start),
+    e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return "-";
+  let diff = Math.max(0, Math.floor((e.getTime() - s.getTime()) / 1000));
+  const h = Math.floor(diff / 3600);
+  diff %= 3600;
+  const m = Math.floor(diff / 60);
+  const sec = diff % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  if (sec > 0 || parts.length === 0) parts.push(`${sec}s`);
+  return parts.join(" ");
+}
+
+const MASTER_PASSWORD = "PHDEVTECH";
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export const RevisedQuotation: React.FC<CompletedProps> = ({
   referenceid,
   target_quota,
@@ -183,8 +214,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [pwInput, setPwInput] = useState("");
   const [pwError, setPwError] = useState(false);
 
-  const MASTER_PASSWORD = "PHDEVTECH";
-
   useEffect(() => {
     if (tsmDetailsProp !== undefined) setTsmDetails(tsmDetailsProp);
   }, [tsmDetailsProp]);
@@ -193,27 +222,27 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     if (managerDetailsProp !== undefined) setManagerDetails(managerDetailsProp);
   }, [managerDetailsProp]);
 
+  const fetchHierarchy = useCallback(async () => {
+    if (!referenceid) return;
+    try {
+      const response = await fetch(`/api/user?id=${encodeURIComponent(referenceid)}`);
+      if (!response.ok) throw new Error("Failed");
+      const data = await response.json();
+      setTsmDetails(data.tsmDetails ?? null);
+      setManagerDetails(data.managerDetails ?? null);
+    } catch (e) {
+      console.error("Hierarchy fetch error:", e);
+    }
+  }, [referenceid]);
+
   useEffect(() => {
     if (!referenceid) return;
-    if (managerDetailsProp !== undefined && tsmDetailsProp !== undefined)
-      return;
-    const fetchHierarchy = async () => {
-      try {
-        const response = await fetch(
-          `/api/user?id=${encodeURIComponent(referenceid)}`,
-        );
-        if (!response.ok) throw new Error("Failed");
-        const data = await response.json();
-        setTsmDetails(data.tsmDetails ?? null);
-        setManagerDetails(data.managerDetails ?? null);
-      } catch (e) {
-        console.error("Hierarchy fetch error:", e);
-      }
-    };
-    fetchHierarchy();
-  }, [referenceid, managerDetailsProp, tsmDetailsProp]);
+    if (managerDetailsProp === undefined || tsmDetailsProp === undefined) {
+      fetchHierarchy();
+    }
+  }, [referenceid, managerDetailsProp, tsmDetailsProp, fetchHierarchy]);
 
-  const fetchActivities = useCallback(() => {
+  const fetchActivities = useCallback(async () => {
     if (!referenceid) {
       setActivities([]);
       return;
@@ -228,24 +257,23 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
       : null;
 
-    const url = new URL(
-      "/api/activity/tsa/quotation/fetch",
-      window.location.origin,
-    );
-    url.searchParams.append("referenceid", referenceid);
-    if (from && to) {
-      url.searchParams.append("from", from);
-      url.searchParams.append("to", to);
-    }
+    try {
+      const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
+      url.searchParams.append("referenceid", referenceid);
+      if (from && to) {
+        url.searchParams.append("from", from);
+        url.searchParams.append("to", to);
+      }
 
-    fetch(url.toString())
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed");
-        return res.json();
-      })
-      .then((data) => setActivities(data.activities || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to fetch activities");
+      const data = await res.json();
+      setActivities(data.activities || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
@@ -350,55 +378,43 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     [activities],
   );
 
-  const hasMeaningfulData = (item: Completed) =>
-    [
-      "activity_reference_number",
-      "referenceid",
-      "quotation_number",
-      "quotation_amount",
-    ].some((col) => {
-      const val = (item as any)[col];
-      if (val === null || val === undefined) return false;
-      if (typeof val === "string") return val.trim() !== "";
-      if (typeof val === "number") return !isNaN(val);
-      return Boolean(val);
-    });
-
   const filteredActivities = useMemo(() => {
     const search = searchTerm.toLowerCase();
-    return sortedActivities
-      .filter((item) => {
-        if (!search) return true;
-        return Object.values(item).some(
-          (v) =>
-            v !== null &&
-            v !== undefined &&
-            String(v).toLowerCase().includes(search),
-        );
-      })
-      .filter((item) => {
-        if (filterStatus !== "all" && item.status !== filterStatus)
-          return false;
-        return item.type_activity === "Quotation Preparation";
-      })
-      .filter((item) => {
-        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to)
-          return true;
+    return sortedActivities.filter((item) => {
+      // 1. Meaningful data check
+      const hasData = [
+        "activity_reference_number",
+        "referenceid",
+        "quotation_number",
+        "quotation_amount",
+      ].some((col) => {
+        const val = (item as any)[col];
+        return val !== null && val !== undefined && String(val).trim() !== "";
+      });
+      if (!hasData) return false;
+
+      // 2. Search filter
+      const matchesSearch = !search || Object.values(item).some(
+        (v) => v !== null && v !== undefined && String(v).toLowerCase().includes(search)
+      );
+      if (!matchesSearch) return false;
+
+      // 3. Status filter
+      if (filterStatus !== "all" && item.status !== filterStatus) return false;
+
+      // 4. Type Activity filter (Fixed to Quotation Preparation)
+      if (item.type_activity !== "Quotation Preparation") return false;
+
+      // 5. Date Range filter
+      if (dateCreatedFilterRange?.from || dateCreatedFilterRange?.to) {
         const updated = new Date(item.date_updated ?? item.date_created);
         if (isNaN(updated.getTime())) return false;
-        if (
-          dateCreatedFilterRange.from &&
-          updated < new Date(dateCreatedFilterRange.from)
-        )
-          return false;
-        if (
-          dateCreatedFilterRange.to &&
-          updated > new Date(dateCreatedFilterRange.to)
-        )
-          return false;
-        return true;
-      })
-      .filter(hasMeaningfulData);
+        if (dateCreatedFilterRange.from && updated < new Date(dateCreatedFilterRange.from)) return false;
+        if (dateCreatedFilterRange.to && updated > new Date(dateCreatedFilterRange.to)) return false;
+      }
+
+      return true;
+    });
   }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
   const statusOptions = useMemo(() => {
@@ -450,36 +466,33 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           remarks: removeRemarks,
         }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error("Failed to delete");
+
+      sileo.success({
+        title: "Deleted",
+        description: `${selectedIds.size} records removed.`,
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+
       setDeleteDialogOpen(false);
       setSelectedIds(new Set());
       setRemoveRemarks("");
       fetchActivities();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      sileo.error({
+        title: "Delete Failed",
+        description: e.message || "Failed to remove records.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
     }
   };
-
-  const displayValue = (v: any) =>
-    v === null || v === undefined || String(v).trim() === "" ? "" : String(v);
-
-  function formatDuration(start?: string, end?: string) {
-    if (!start || !end) return "-";
-    const s = new Date(start),
-      e = new Date(end);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return "-";
-    let diff = Math.max(0, Math.floor((e.getTime() - s.getTime()) / 1000));
-    const h = Math.floor(diff / 3600);
-    diff %= 3600;
-    const m = Math.floor(diff / 60);
-    const sec = diff % 60;
-    const parts: string[] = [];
-    if (h > 0) parts.push(`${h} hr${h !== 1 ? "s" : ""}`);
-    if (m > 0) parts.push(`${m} min${m !== 1 ? "s" : ""}`);
-    if (sec > 0 || parts.length === 0)
-      parts.push(`${sec} sec${sec !== 1 ? "s" : ""}`);
-    return parts.join(" ");
-  }
 
   return (
     <>
@@ -497,297 +510,265 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         .status-edit-mode-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          background: rgb(239 246 255);
-          border: 1px solid rgb(147 197 253);
-          color: rgb(29 78 216);
-          font-size: 0.7rem;
-          font-weight: 600;
+          gap: 6px;
+          background: #eff6ff;
+          border: 1px solid #93c5fd;
+          color: #1d4ed8;
+          font-size: 10px;
+          font-weight: 700;
           padding: 2px 8px;
-          border-radius: 4px;
+          border-radius: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
       `}</style>
 
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <Input
-          type="text"
-          placeholder="Search company, reference ID, status, or activity..."
-          className="input input-bordered input-sm grow max-w-md rounded-none"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <div className="flex items-center space-x-2">
-          {/* Edit-mode indicator badge */}
+      <div className="mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="relative max-w-md w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <Input
+            type="text"
+            placeholder="Search company, reference ID, or quotation #..."
+            className="pl-9 h-10 rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
           {editStatusMode && (
-            <span className="status-edit-mode-badge">
+            <span className="status-edit-mode-badge shadow-sm">
               <PenIcon className="w-3 h-3" />
-              Status Edit ON
+              Status Edit Mode
             </span>
           )}
 
-          <TaskListDialog
-            filterStatus={filterStatus}
-            filterTypeActivity={filterTypeActivity}
-            setFilterStatus={setFilterStatus}
-            setFilterTypeActivity={setFilterTypeActivity}
-            statusOptions={statusOptions}
-            typeActivityOptions={typeActivityOptions}
-          />
-          {selectedIds.size > 0 && (
-            <Button
-              variant="destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-              className="flex items-center space-x-1 cursor-pointer rounded-none"
-            >
-              <span>Delete Selected ({selectedIds.size})</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5 border border-zinc-200 p-1 bg-white">
+            <TaskListDialog
+              filterStatus={filterStatus}
+              filterTypeActivity={filterTypeActivity}
+              setFilterStatus={setFilterStatus}
+              setFilterTypeActivity={setFilterTypeActivity}
+              statusOptions={statusOptions}
+              typeActivityOptions={typeActivityOptions}
+            />
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="h-8 flex items-center gap-1.5 px-3 rounded-none bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-bold uppercase tracking-wider">Delete ({selectedIds.size})</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {error && (
-        <Alert
-          variant="destructive"
-          className="flex flex-col space-y-4 p-4 text-xs"
-        >
-          <div className="flex items-center space-x-3">
-            <AlertCircleIcon className="h-6 w-6 text-red-600" />
-            <div>
-              <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-              <AlertDescription className="text-xs">
-                Please check your internet connection or try again later.
-              </AlertDescription>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-            <div>
-              <AlertTitle className="text-black">Create New Data</AlertTitle>
-              <AlertDescription className="text-xs">
-                You can start by adding new entries to populate your database.
+        <Alert variant="destructive" className="rounded-none border-red-200 bg-red-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircleIcon className="h-5 w-5 text-red-600 mt-0.5" />
+            <div className="space-y-1">
+              <AlertTitle className="text-sm font-bold text-red-900">Sync Error</AlertTitle>
+              <AlertDescription className="text-xs text-red-700 leading-relaxed">
+                We couldn't retrieve the latest activity data. Please check your network connection or try refreshing the page.
               </AlertDescription>
             </div>
           </div>
         </Alert>
       )}
 
-      {filteredActivities.length > 0 && (
-        <div className="mb-2 text-xs font-bold">
-          Total Records: {filteredActivities.length}
+      {loading && activities.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-60">
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+          <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">Retrieving Quotations...</p>
+        </div>
+      )}
+
+      {!loading && filteredActivities.length === 0 && !error && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 bg-zinc-50/50 border border-dashed border-zinc-200">
+          <AlertCircleIcon className="h-8 w-8 text-zinc-300" />
+          <div className="text-center">
+            <p className="text-sm font-bold text-zinc-500">No records found</p>
+            <p className="text-[11px] text-zinc-400">Try adjusting your filters or search terms.</p>
+          </div>
         </div>
       )}
 
       {filteredActivities.length > 0 && (
-        <div className="overflow-auto space-y-8 custom-scrollbar">
-          <Table className="text-xs">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10" />
-                <TableHead className="w-[60px] text-center">Tools</TableHead>
-                <TableHead>Quotation #</TableHead>
-                <TableHead className="text-left">Remarks</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Date Approved/Decline</TableHead>
-                <TableHead>Contact #</TableHead>
-                <TableHead>Quotation Amount</TableHead>
-                <TableHead>Date Created</TableHead>
-              </TableRow>
-            </TableHeader>
+        <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Quotation History</span>
+              <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+                {filteredActivities.length}
+              </Badge>
+            </div>
+          </div>
 
-            <TableBody>
-              {filteredActivities.map((item) => {
-                const isSelected = selectedIds.has(item.id);
-                const isHighlighted =
-                  highlightedArn === item.activity_reference_number ||
-                  highlightedArn === item.quotation_number;
+          <div className="overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader className="bg-zinc-50/50">
+                <TableRow className="hover:bg-transparent border-b border-zinc-200">
+                  <TableHead className="w-10 h-11 text-center">
+                    <Checkbox
+                      checked={selectedIds.size === filteredActivities.length && filteredActivities.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedIds(new Set(filteredActivities.map(a => a.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      className="rounded-none h-4 w-4"
+                    />
+                  </TableHead>
+                  <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Tools</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation #</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Remarks</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Status</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Duration</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Company</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Timeline</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-right">Amount</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Created</TableHead>
+                </TableRow>
+              </TableHeader>
 
-                return (
-                  <TableRow
-                    key={item.id}
-                    ref={(el) => {
-                      if (el) {
-                        rowRefs.current.set(item.activity_reference_number, el);
-                        if (item.quotation_number)
-                          rowRefs.current.set(item.quotation_number, el);
-                      } else {
-                        rowRefs.current.delete(item.activity_reference_number);
-                        if (item.quotation_number)
-                          rowRefs.current.delete(item.quotation_number);
-                      }
-                    }}
-                    className={isHighlighted ? "rq-highlight-row" : undefined}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        className="w-6 h-6 hover:bg-gray-100 rounded cursor-pointer"
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelect(item.id)}
-                      />
-                    </TableCell>
+              <TableBody>
+                {filteredActivities.map((item) => {
+                  const isSelected = selectedIds.has(item.id);
+                  const isHighlighted =
+                    highlightedArn === item.activity_reference_number ||
+                    highlightedArn === item.quotation_number;
 
-                    <TableCell className="text-center">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
-                            Actions <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="rounded-none text-xs"
-                        >
-                          <DropdownMenuItem
-                            onClick={() => openEditDialog(item)}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <PenIcon className="w-4 h-4" /> Edit
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-
-                    <TableCell className="uppercase">
-                      {displayValue(item.quotation_number)}
-                    </TableCell>
-
-                    <TableCell className="text-left">
-                      {item.quotation_status}
-                    </TableCell>
-
-                    {/* ── Status cell: inline-edit when mode is ON ── */}
-                    <TableCell className="p-2 font-semibold">
-                      {editStatusMode ? (
-                        <input
-                          className="border border-blue-300 rounded px-2 py-1 text-xs w-28 capitalize font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
-                          value={
-                            pendingStatuses[item.id] !== undefined
-                              ? pendingStatuses[item.id]
-                              : item.tsm_approved_status
-                          }
-                          onChange={(e) => {
-                            const value = e.target.value
-                              .toLowerCase()
-                              .replace(/\b\w/g, (c) => c.toUpperCase()); // capitalize each word
-
-                            setPendingStatuses((prev) => ({
-                              ...prev,
-                              [item.id]: value,
-                            }));
-                          }}
-                          onBlur={() => saveStatus(item)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") {
-                              setPendingStatuses((prev) => {
-                                const next = { ...prev };
-                                delete next[item.id];
-                                return next;
-                              });
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
+                  return (
+                    <TableRow
+                      key={item.id}
+                      ref={(el) => {
+                        if (el) {
+                          rowRefs.current.set(item.activity_reference_number, el);
+                          if (item.quotation_number) rowRefs.current.set(item.quotation_number, el);
+                        } else {
+                          rowRefs.current.delete(item.activity_reference_number);
+                          if (item.quotation_number) rowRefs.current.delete(item.quotation_number);
+                        }
+                      }}
+                      className={`group border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50 transition-colors ${isHighlighted ? "rq-highlight-row" : ""}`}
+                    >
+                      <TableCell className="text-center">
+                        <Checkbox
+                          className="rounded-none h-4 w-4"
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(item.id)}
                         />
-                      ) : (
-                        <span
-                          className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold 
-                            ${item.tsm_approved_status === "Approved" ||
-                              item.tsm_approved_status === "Approved By Sales Head"
-                              ? "bg-green-100 text-green-700"
-                              : item.tsm_approved_status === "Pending"
-                                ? "bg-orange-100 text-orange-700"
-                                : item.tsm_approved_status === "Decline"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-gray-100 text-gray-600"
-                            }`}
-                        >
-                          {item.tsm_approved_status}
-                        </span>
-                      )}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell className="whitespace-nowrap font-mono">
-                      {formatDuration(item.start_date, item.end_date)}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {item.company_name}
-                    </TableCell>
-                    <TableCell>
-                      {item.tsm_approval_date && (
-                        <>
-                          Approved:{" "}
-                          {new Date(item.tsm_approval_date).toLocaleString(
-                            "en-PH",
-                            {
-                              timeZone: "Asia/Manila",
-                              year: "numeric",
-                              month: "short",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            },
-                          )}
-                        </>
-                      )}
-                      {item.manager_approval_date && (
-                        <>
-                          <br />
-                          Sales Head Approved:{" "}
-                          {new Date(item.manager_approval_date).toLocaleString(
-                            "en-PH",
-                            {
-                              timeZone: "Asia/Manila",
-                              year: "numeric",
-                              month: "short",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            },
-                          )}
-                        </>
-                      )}
-                      {item.tsm_remarks && displayValue(item.tsm_remarks) && (
-                        <>
-                          <br />
-                          TSM: {displayValue(item.tsm_remarks)}
-                        </>
-                      )}
-                      {item.manager_remarks &&
-                        displayValue(item.manager_remarks) && (
-                          <>
-                            <br />
-                            Sales Head: {displayValue(item.manager_remarks)}
-                          </>
+                      <TableCell className="text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-none hover:bg-zinc-100 transition-colors">
+                              <MoreVertical className="w-4 h-4 text-zinc-500" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="rounded-none text-xs border-zinc-200">
+                            <DropdownMenuItem onClick={() => openEditDialog(item)} className="flex items-center gap-2 cursor-pointer py-2">
+                              <PenIcon className="w-3.5 h-3.5" /> <span>Open Editor</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+
+                      <TableCell className="font-mono text-[11px] font-bold text-zinc-700 uppercase">
+                        {displayValue(item.quotation_number)}
+                      </TableCell>
+
+                      <TableCell className="max-w-[150px] truncate text-zinc-600" title={item.quotation_status}>
+                        {item.quotation_status}
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        {editStatusMode ? (
+                          <Input
+                            className="h-7 text-[10px] w-28 uppercase font-bold border-blue-200 bg-blue-50/50 focus:ring-0 focus:border-blue-400 rounded-none mx-auto text-center"
+                            value={pendingStatuses[item.id] ?? item.tsm_approved_status}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setPendingStatuses((prev) => ({ ...prev, [item.id]: value }));
+                            }}
+                            onBlur={() => saveStatus(item)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              if (e.key === "Escape") {
+                                setPendingStatuses((prev) => {
+                                  const next = { ...prev };
+                                  delete next[item.id];
+                                  return next;
+                                });
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                          />
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className={`rounded-none text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent
+                              ${item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : item.tsm_approved_status === "Pending"
+                                  ? "bg-orange-50 text-orange-700 border-orange-100"
+                                  : item.tsm_approved_status === "Decline"
+                                    ? "bg-red-50 text-red-700 border-red-100"
+                                    : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                              }`}
+                          >
+                            {item.tsm_approved_status}
+                          </Badge>
                         )}
-                    </TableCell>
-                    <TableCell>{displayValue(item.contact_number)}</TableCell>
-                    <TableCell>
-                      ₱
-                      {displayValue(item.quotation_amount) !== ""
-                        ? parseFloat(
-                          displayValue(item.quotation_amount),
-                        ).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(
-                        item.date_updated ?? item.date_created,
-                      ).toLocaleDateString("en-PH", {
-                        timeZone: "Asia/Manila",
-                      })}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+
+                      <TableCell className="font-mono text-[10px] text-zinc-500">
+                        {formatDuration(item.start_date, item.end_date)}
+                      </TableCell>
+
+                      <TableCell className="font-bold text-zinc-800">
+                        {item.company_name}
+                      </TableCell>
+
+                      <TableCell className="text-[10px] text-zinc-500 leading-tight py-2">
+                        {item.tsm_approval_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-400 uppercase font-bold tracking-tighter">TSM:</span>
+                            <span>{new Date(item.tsm_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                        )}
+                        {item.manager_approval_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-400 uppercase font-bold tracking-tighter">MGR:</span>
+                            <span>{new Date(item.manager_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                        )}
+                        {!item.tsm_approval_date && !item.manager_approval_date && <span className="text-zinc-300 italic">No activity logs</span>}
+                      </TableCell>
+
+                      <TableCell className="text-right font-mono font-bold text-zinc-700">
+                        {item.quotation_amount ? (
+                          `₱${parseFloat(String(item.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        ) : "—"}
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono text-[11px] text-zinc-400">
+                        {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
