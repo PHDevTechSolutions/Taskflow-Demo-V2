@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 special_instructions: data.special_instructions ?? null,
                 prepared_by: data.prepared_by ?? null,
                 approved_by: data.approved_by ?? null,
-                status: "Pending",
+                status: "Approval For TSM",
                 tin_no: data.tin_no ?? null,
                 sales_person: data.sales_person ?? null,
                 referenceid: data.referenceid,

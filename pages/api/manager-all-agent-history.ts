@@ -1,66 +1,86 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-import redis from "@/lib/redis";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+const BATCH_SIZE = 5000;
+
+// Async generator to fetch any table in batches
+async function* fetchTableBatches(
+  table: string,
+  manager: string,
+  from?: string,
+  to?: string
 ) {
-  const { referenceid } = req.query;
+  let lastId: number | null = null;
 
-  // ✅ validate agent reference (stored in manager)
+  while (true) {
+    let query = supabase
+      .from(table)
+      .select("*")
+      .eq("manager", manager)
+      .order("id", { ascending: true })
+      .limit(BATCH_SIZE);
+
+    if (lastId) query = query.gt("id", lastId);
+    if (from) query = query.gte("date_created", from);
+    if (to) query = query.lte("date_created", to);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    yield data;
+    lastId = data[data.length - 1].id;
+  }
+}
+
+// Normalize each table to a common structure
+function normalizeRecord(item: any, source: string) {
+  switch (source) {
+    case "history":
+      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source: item.source };
+    case "documentation":
+      return { ...item, type_activity: item.doc_type || "Documentation", start_date: item.start_date || null, end_date: item.end_date || null, source };
+    case "revised_quotations":
+      return { ...item, type_activity: "Revised Quotation", start_date: item.start_date || null, end_date: item.end_date || item.date_created || null, source };
+    case "meetings":
+      return { ...item, type_activity: "Client Meeting", start_date: item.start_date || null, end_date: item.end_date || item.meeting_start || null, source };
+    default:
+      return { ...item, type_activity: "Unknown", start_date: null, end_date: null, source };
+  }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { referenceid, from, to } = req.query;
+
   if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({
-      message: "referenceid (agent manager) is required",
-    });
+    return res.status(400).json({ message: "referenceid (agent manager) is required" });
   }
 
-  /**
-   * IMPORTANT:
-   * - referenceid (query) = agent reference
-   * - history.manager          = agent reference
-   */
-  const cacheKey = `history:manager:${referenceid}`;
+  const fromDate = typeof from === "string" ? from : undefined;
+  const toDate = typeof to === "string" ? to : undefined;
 
   try {
-    // ✅ Redis cache (per agent)
-    const cached = await redis.get(cacheKey);
+    // Tables to fetch
+    const tables = ["history", "documentation", "revised_quotations", "meetings"];
+    const allActivities: any[] = [];
 
-    if (cached && typeof cached === "string") {
-      return res.status(200).json({
-        activities: JSON.parse(cached),
-        cached: true,
-      });
+    for (const table of tables) {
+      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate)) {
+        const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
+        allActivities.push(...normalizedBatch);
+      }
     }
 
-    // ✅ Fetch ALL history for this agent (match via manager)
-    const { data, error } = await supabase
-      .from("history")
-      .select("*")
-      .eq("manager", referenceid)
-      .order("date_created", { ascending: false });
+    // Sort by date_created / start_date descending
+    allActivities.sort(
+      (a, b) =>
+        new Date(b.date_created || b.start_date).getTime() -
+        new Date(a.date_created || a.start_date).getTime()
+    );
 
-    if (error) {
-      return res.status(500).json({
-        message: error.message,
-      });
-    }
-
-    // ✅ Cache results
-    if (data) {
-      await redis.set(cacheKey, JSON.stringify(data), {
-        ex: 300, // 5 minutes
-      });
-    }
-
-    return res.status(200).json({
-      activities: data ?? [],
-      cached: false,
-    });
-  } catch (err) {
+    return res.status(200).json({ activities: allActivities });
+  } catch (err: any) {
     console.error("Server error:", err);
-    return res.status(500).json({
-      message: "Server error",
-    });
+    return res.status(500).json({ message: err.message || "Server error" });
   }
 }

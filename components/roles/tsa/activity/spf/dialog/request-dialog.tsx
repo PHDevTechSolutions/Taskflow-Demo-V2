@@ -314,7 +314,7 @@ export function RequestDialog({
           />
         </Field>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Field label="Sales Person">
             <Input
               className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
@@ -329,13 +329,6 @@ export function RequestDialog({
               placeholder="Name"
               value={currentSPF?.prepared_by || ""}
               onChange={(e) => setField("prepared_by", e.target.value)}
-            />
-          </Field>
-          <Field label="Approved By">
-            <Input
-              className="rounded-sm h-9 text-sm bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed"
-              disabled
-              value={currentSPF?.approved_by || ""}
             />
           </Field>
         </div>

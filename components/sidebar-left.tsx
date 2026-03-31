@@ -102,6 +102,7 @@ const data = {
         { name: "Pending Quotations", url: "/roles/tsm/activity/quotation/pending", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/tsm/activity/quotation/approved", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/tsm/activity/quotation/declined", icon: XCircle },
+        { name: "SPF Request", url: "/roles/tsm/activity/spf", icon: Mail },
         { name: "Daily Activity Logs", url: "/roles/tsm/activity/ccg", icon: Compass },
 
         // Manager
@@ -109,6 +110,7 @@ const data = {
         { name: "Pending Approval", url: "/roles/manager/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/manager/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Decline Quotations", url: "/roles/manager/activity/quotation/declined-quotation", icon: XCircle },
+        { name: "SPF Request", url: "/roles/manager/activity/spf", icon: Mail },
         { name: "Daily Activity Logs", url: "/roles/manager/activity/ccg", icon: Compass },
 
         { name: "Quotation List", url: "/roles/csr/activity/quotation/quotation-list", icon: Compass },
