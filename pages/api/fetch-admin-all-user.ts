@@ -11,10 +11,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const db = await connectToDatabase();
     const referenceId = req.query.id as string; // This is the TSM ReferenceID passed as query param
     const role = req.query.role as string;
+    const department = req.query.department as string;
 
     let query = {};
 
-    if (role !== "Super Admin") {
+    const isSuperAdmin = role === "Super Admin";
+    const isProcurement = department === "Procurement";
+
+    if (!isSuperAdmin && !isProcurement) {
       if (!referenceId) {
         return res.status(400).json({ error: "ReferenceID (TSM) is required" });
       }

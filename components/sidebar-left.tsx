@@ -114,7 +114,8 @@ const data = {
         { name: "Quotation List", url: "/roles/csr/activity/quotation/quotation-list", icon: Compass },
          
         { name: "Pending Approval", url: "/roles/admin/activity/quotation/pending-quotation", icon: CalendarDays },
-        { name: "Approval Quotations", url: "/roles/admin/activity/quotation/approval-quotation", icon: CalendarDays },
+        { name: "Approved Quotations", url: "/roles/admin/activity/quotation/approval-quotation", icon: CalendarDays },
+        { name: "Declined Quotation", url: "/roles/admin/activity/quotation/declined-quotation", icon: XCircle },
         { name: "Client Coverage Guide", url: "/roles/admin/activity/ccg", icon: Compass },
       ],
     },
@@ -249,6 +250,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [userDetails, setUserDetails] = React.useState({
     Role: null as string | null,
+    Department: null as string | null,
   });
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
   const [isLoadingUser, setIsLoadingUser] = React.useState(true);
@@ -275,7 +277,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     setIsLoadingUser(true);
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
       .then((res) => res.json())
-      .then((data) => setUserDetails({ Role: data.Role }))
+      .then((data) => setUserDetails({ Role: data.Role, Department: data.Department }))
       .finally(() => setIsLoadingUser(false));
   }, [userId]);
 
@@ -291,7 +293,12 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   // Filter workspaces by role
   const filteredWorkspaces = React.useMemo(() => {
     if (!userDetails.Role) return [];
-    const role = userDetails.Role;
+    let role = userDetails.Role;
+
+    // Grant Super Admin access to Procurement department
+    if (userDetails.Department === "Procurement") {
+      role = "Super Admin";
+    }
 
     return data.workspaces
       .map((workspace) => ({
@@ -306,12 +313,17 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         }),
       }))
       .filter((w) => w.pages.length > 0);
-  }, [userDetails.Role]);
+  }, [userDetails.Role, userDetails.Department]);
 
   // Filter favorites by role
   const filteredFavorites = React.useMemo(() => {
     if (!userDetails.Role) return [];
-    const role = userDetails.Role;
+    let role = userDetails.Role;
+
+    // Grant Super Admin access to Procurement department
+    if (userDetails.Department === "Procurement") {
+      role = "Super Admin";
+    }
 
     return data.favorites.filter((fav) => {
       // Special case: National Call Ranking should be available for all roles except Staff
@@ -326,7 +338,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
       if (role === "Super Admin") return fav.url?.includes("/admin");
       return false;
     });
-  }, [userDetails.Role]);
+  }, [userDetails.Role, userDetails.Department]);
 
   if (isLoadingUser || !userDetails.Role) {
     return <SidebarSkeleton />;
