@@ -626,7 +626,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       className="rounded-none h-4 w-4"
                     />
                   </TableHead>
-                  <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Tools</TableHead>
+                  <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation #</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Remarks</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Status</TableHead>
@@ -668,18 +668,15 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-none hover:bg-zinc-100 transition-colors">
-                              <MoreVertical className="w-4 h-4 text-zinc-500" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="rounded-none text-xs border-zinc-200">
-                            <DropdownMenuItem onClick={() => openEditDialog(item)} className="flex items-center gap-2 cursor-pointer py-2">
-                              <PenIcon className="w-3.5 h-3.5" /> <span>Open Editor</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(item)}
+                          className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 transition-all group"
+                          title="Edit Quotation"
+                        >
+                          <PenIcon className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-600" />
+                        </Button>
                       </TableCell>
 
                       <TableCell className="font-mono text-[11px] font-bold text-zinc-700 uppercase">
