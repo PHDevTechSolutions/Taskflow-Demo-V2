@@ -56,7 +56,22 @@ function VerificationContent() {
                         .eq('quotation_number', ref)
                         .maybeSingle();
 
-                    // 2. If not found, check 'revised_quotations' (for drafts/history)
+                    // 2. If not found, check 'history' (this is where Taskflow stores activity history)
+                    if (!data) {
+                        const { data: historyData, error: historyError } = await supabase
+                            .from('history')
+                            .select('*')
+                            .eq('quotation_number', ref)
+                            .order('id', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        if (historyData) {
+                            data = historyData;
+                        }
+                    }
+
+                    // 3. If still not found, check 'revised_quotations' (for drafts)
                     if (!data) {
                         const { data: revisedData, error: revisedError } = await supabase
                             .from('revised_quotations')
@@ -71,30 +86,16 @@ function VerificationContent() {
                         }
                     }
 
-                    // 3. If still not found, check 'activity_update_history' (for historical records)
-                    if (!data) {
-                        const { data: historyData, error: historyError } = await supabase
-                            .from('activity_update_history')
-                            .select('*')
-                            .eq('quotation_number', ref)
-                            .order('id', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        
-                        if (historyData) {
-                            data = historyData;
-                        }
-                    }
-
                     if (!data) {
                         setSecurityAlert("Document record not found in Taskflow database.");
                         setIsValid(false);
                     } else {
-                        // Extract fields (some tables might have different naming)
+                        // Extract fields with priority based on Taskflow conventions
                         const dbTotalAmount = data.quotation_amount || data.total_amount || 0;
-                        const dbCompanyName = data.company_name || "Official Client";
+                        const dbCompanyName = data.company_name || data.client_name || "Official Client";
                         const dbDate = data.date_created || data.start_date || new Date().toISOString();
                         const dbQuotationType = data.quotation_type || (data.is_ecoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc.");
+                        const dbStatus = data.tsm_approved_status || data.status || "Active";
 
                         const dbTotal = parseFloat(dbTotalAmount).toFixed(2);
                         const paramTotal = parseFloat(total).toFixed(2);
@@ -117,7 +118,7 @@ function VerificationContent() {
                                 date: new Date(dbDate).toLocaleDateString(),
                                 totalAmount: parseFloat(dbTotalAmount),
                                 companyName: dbQuotationType,
-                                status: data.status,
+                                status: dbStatus,
                             });
                             setIsValid(true);
                         }
@@ -138,10 +139,21 @@ function VerificationContent() {
     }, [searchParams]);
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center p-4 font-sans">
-            <div className="max-w-xl w-full bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4 font-sans">
+            <div className="max-w-xl w-full bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden relative">
+                {/* Dynamic Brand Header */}
+                {!isLoading && isValid && details && (
+                    <div className="w-full h-24 bg-white flex items-center justify-center border-b border-gray-50 px-8">
+                        <img 
+                            src={details.companyName.toLowerCase().includes('ecoshift') ? "/ecoshift-banner.png" : "/disruptive-banner.png"} 
+                            alt="Company Logo" 
+                            className="h-16 w-full object-contain"
+                        />
+                    </div>
+                )}
+
                 {/* Security Header Strip */}
-                <div className={`h-2 w-full ${isLoading ? 'bg-gray-300' : isValid ? 'bg-green-500' : 'bg-red-600'}`} />
+                <div className={`h-1.5 w-full ${isLoading ? 'bg-gray-300' : isValid ? 'bg-green-500' : 'bg-red-600'}`} />
                 
                 <div className="p-8 md:p-12">
                     <div className="flex items-center justify-center mb-8">
@@ -150,8 +162,14 @@ function VerificationContent() {
                                 <Loader className="animate-spin text-gray-400 w-12 h-12" />
                             </div>
                         ) : isValid ? (
-                            <div className="p-4 bg-green-50 rounded-full border-4 border-green-100">
+                            <div className="p-4 bg-green-50 rounded-full border-4 border-green-100 relative">
                                 <CheckCircle className="text-green-600 w-16 h-16" />
+                                {/* Status Badge Overlay */}
+                                {details?.status && (
+                                    <div className="absolute -bottom-2 -right-2 bg-green-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg uppercase tracking-widest border-2 border-white">
+                                        {details.status}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="p-4 bg-red-50 rounded-full border-4 border-red-100">
@@ -184,17 +202,20 @@ function VerificationContent() {
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date Issued</span>
                                     <span className="text-sm font-bold text-gray-700">{details.date}</span>
                                 </div>
+                                <div className="flex justify-between items-center pb-3 border-b border-gray-200/50">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Official Status</span>
+                                    <span className={`text-[11px] font-black px-3 py-1 rounded uppercase tracking-widest ${
+                                        details.status?.toLowerCase().includes('approved') ? 'bg-green-100 text-green-700' : 
+                                        details.status?.toLowerCase().includes('pending') ? 'bg-orange-100 text-orange-700' : 
+                                        'bg-gray-100 text-gray-700'
+                                    }`}>
+                                        {details.status || 'Active'}
+                                    </span>
+                                </div>
                                 <div className="flex justify-between items-center pt-2">
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Official Amount</span>
                                     <span className="text-2xl font-black text-blue-600 tabular-nums">₱{details.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                 </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
-                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                <p className="text-[10px] font-bold text-blue-700 uppercase tracking-tight">
-                                    Verified Source: {details.companyName}
-                                </p>
                             </div>
                         </div>
                     )}
@@ -210,15 +231,22 @@ function VerificationContent() {
                         </div>
                     )}
 
+                    {/* Dynamic Footer */}
                     <div className="mt-12 text-center border-t border-gray-100 pt-8">
                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-4">Official Verification Protocol</p>
-                        <div className="flex justify-center items-center gap-4 grayscale opacity-30 scale-75">
-                            <img src="/ecoshift-banner.png" alt="Ecoshift" className="h-6 object-contain" />
-                            <div className="w-px h-4 bg-gray-300" />
-                            <img src="/disruptive-banner.png" alt="Disruptive" className="h-6 object-contain" />
+                        <div className="flex justify-center items-center gap-4">
+                            {(!isValid || isLoading || (details && details.companyName.toLowerCase().includes('ecoshift'))) && (
+                                <img src="/ecoshift-banner.png" alt="Ecoshift" className={`h-6 object-contain ${isValid && !details?.companyName.toLowerCase().includes('ecoshift') ? 'hidden' : ''}`} />
+                            )}
+                            {isValid && details && details.companyName.toLowerCase().includes('ecoshift') && details.companyName.toLowerCase().includes('disruptive') && (
+                                <div className="w-px h-4 bg-gray-300" />
+                            )}
+                            {(!isValid || isLoading || (details && details.companyName.toLowerCase().includes('disruptive'))) && (
+                                <img src="/disruptive-banner.png" alt="Disruptive" className={`h-6 object-contain ${isValid && !details?.companyName.toLowerCase().includes('disruptive') ? 'hidden' : ''}`} />
+                            )}
                         </div>
                         <p className="mt-6 text-[9px] font-bold text-gray-400">
-                            {new Date().getFullYear()} © DISRUPTIVE SOLUTIONS INC. | ECOSHIFT CORPORATION
+                            {new Date().getFullYear()} © {isValid && details ? details.companyName.toUpperCase() : 'DISRUPTIVE SOLUTIONS INC. | ECOSHIFT CORPORATION'}
                         </p>
                     </div>
                 </div>
