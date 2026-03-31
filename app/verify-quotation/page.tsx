@@ -141,8 +141,8 @@ function VerificationContent() {
     return (
         <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4 font-sans">
             <div className="max-w-xl w-full bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden relative">
-                {/* Dynamic Brand Header */}
-                {!isLoading && isValid && details && (
+                {/* Dynamic Brand Header - Only shown on success */}
+                {isValid && details && (
                     <div className="w-full h-24 bg-white flex items-center justify-center border-b border-gray-50 px-8">
                         <img 
                             src={details.companyName.toLowerCase().includes('ecoshift') ? "/ecoshift-banner.png" : "/disruptive-banner.png"} 
@@ -164,7 +164,6 @@ function VerificationContent() {
                         ) : isValid ? (
                             <div className="p-4 bg-green-50 rounded-full border-4 border-green-100 relative">
                                 <CheckCircle className="text-green-600 w-16 h-16" />
-                                {/* Status Badge Overlay */}
                                 {details?.status && (
                                     <div className="absolute -bottom-2 -right-2 bg-green-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg uppercase tracking-widest border-2 border-white">
                                         {details.status}
@@ -233,21 +232,21 @@ function VerificationContent() {
 
                     {/* Dynamic Footer */}
                     <div className="mt-12 text-center border-t border-gray-100 pt-8">
-                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-4">Official Verification Protocol</p>
-                        <div className="flex justify-center items-center gap-4">
-                            {(!isValid || isLoading || (details && details.companyName.toLowerCase().includes('ecoshift'))) && (
-                                <img src="/ecoshift-banner.png" alt="Ecoshift" className={`h-6 object-contain ${isValid && !details?.companyName.toLowerCase().includes('ecoshift') ? 'hidden' : ''}`} />
-                            )}
-                            {isValid && details && details.companyName.toLowerCase().includes('ecoshift') && details.companyName.toLowerCase().includes('disruptive') && (
-                                <div className="w-px h-4 bg-gray-300" />
-                            )}
-                            {(!isValid || isLoading || (details && details.companyName.toLowerCase().includes('disruptive'))) && (
-                                <img src="/disruptive-banner.png" alt="Disruptive" className={`h-6 object-contain ${isValid && !details?.companyName.toLowerCase().includes('disruptive') ? 'hidden' : ''}`} />
-                            )}
-                        </div>
-                        <p className="mt-6 text-[9px] font-bold text-gray-400">
-                            {new Date().getFullYear()} © {isValid && details ? details.companyName.toUpperCase() : 'DISRUPTIVE SOLUTIONS INC. | ECOSHIFT CORPORATION'}
-                        </p>
+                        {isValid && details ? (
+                            <>
+                                <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-4">Official Verification Protocol</p>
+                                <div className="flex justify-center items-center gap-4">
+                                    <img src={details.companyName.toLowerCase().includes('ecoshift') ? "/ecoshift-banner.png" : "/disruptive-banner.png"} alt="Company Logo" className="h-6 object-contain" />
+                                </div>
+                                <p className="mt-6 text-[9px] font-bold text-gray-400">
+                                    {new Date().getFullYear()} © {details.companyName.toUpperCase()}
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-[9px] font-bold text-gray-400">
+                                Verification System
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
