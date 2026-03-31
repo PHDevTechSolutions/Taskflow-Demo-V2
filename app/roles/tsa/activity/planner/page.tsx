@@ -90,6 +90,7 @@ interface SPFNotification {
 }
 
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
+const COLLAPSE_KEY = "activity_planner_collapsible_state";
 
 // ─── Clear Cache Dialog ───────────────────────────────────────────────────────
 
@@ -209,64 +210,46 @@ function NotificationDropdown({
     if (!referenceid) return;
     setLoading(true);
     try {
-      // Fetch quotation notifications
-      const quotationUrl = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
-      quotationUrl.searchParams.append("referenceid", referenceid);
-      const quotationRes = await fetch(quotationUrl.toString());
+      const [quotationRes, spfRes] = await Promise.all([
+        fetch(`/api/activity/tsa/quotation/fetch?referenceid=${referenceid}`),
+        fetch(`/api/activity/tsa/spf/notifications?referenceid=${referenceid}`)
+      ]);
       
-      if (!quotationRes.ok) throw new Error("Failed to fetch quotation notifications");
-      const quotationData = await quotationRes.json();
+      let filteredQuotations: QuotationNotification[] = [];
+      if (quotationRes.ok) {
+        const quotationData = await quotationRes.json();
+        filteredQuotations = (quotationData.activities || []).filter(
+          (a: QuotationNotification) =>
+            a.tsm_approved_status === "Approved" || a.tsm_approved_status === "Decline"
+        );
+      }
 
-      const filteredQuotations = (quotationData.activities || []).filter(
-        (a: QuotationNotification) =>
-          a.tsm_approved_status === "Approved" || a.tsm_approved_status === "Decline"
-      );
-
-      filteredQuotations.sort((a: QuotationNotification, b: QuotationNotification) => {
-        const dateA = new Date(a.manager_approval_date ?? a.tsm_approval_date ?? a.date_updated ?? a.date_created).getTime();
-        const dateB = new Date(b.manager_approval_date ?? b.tsm_approval_date ?? b.date_updated ?? b.date_created).getTime();
-        return dateB - dateA;
-      });
-
-      // Fetch SPF procurement notifications
-      const spfUrl = new URL("/api/activity/tsa/spf/notifications", window.location.origin);
-      spfUrl.searchParams.append("referenceid", referenceid);
-      const spfRes = await fetch(spfUrl.toString());
-      
       let spfNotifications: SPFNotification[] = [];
       if (spfRes.ok) {
         const spfData = await spfRes.json();
         spfNotifications = spfData.notifications || [];
       }
 
-      // Combine both types of notifications
       const allNotifications = [...filteredQuotations, ...spfNotifications];
       
-      // Sort all notifications by date (newest first)
       allNotifications.sort((a, b) => {
-        const dateA = new Date((a as any).date_updated || (a as any).date_created).getTime();
-        const dateB = new Date((b as any).date_updated || (b as any).date_created).getTime();
+        const dateA = new Date((a as any).manager_approval_date ?? (a as any).tsm_approval_date ?? (a as any).date_updated ?? (a as any).date_created).getTime();
+        const dateB = new Date((b as any).manager_approval_date ?? (b as any).tsm_approval_date ?? (b as any).date_updated ?? (b as any).date_created).getTime();
         return dateB - dateA;
       });
 
-      const newIds = new Set<number>(allNotifications.map((n) => n.id as number));
+      const newIds = new Set<number>(allNotifications.map((n) => n.id));
       if (!isFirstLoad.current) {
-        const brandNewIds = [...newIds].filter((id) => !prevIdsRef.current.has(id));
-        // Play sound if there are new notifications
-        if (brandNewIds.length > 0) {
-          console.log("Playing sound for new notifications:", brandNewIds);
-          playSound();
-        } else {
-          console.log("No new notifications found");
-        }
+        const hasNew = [...newIds].some(id => !prevIdsRef.current.has(id));
+        if (hasNew) playSound();
       }
-      // Always update the previous count
-      prevNotificationsCount.current = allNotifications.length;
+      
       prevIdsRef.current = newIds;
       isFirstLoad.current = false;
-
       setNotifications(allNotifications);
-    } catch { } finally {
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    } finally {
       setLoading(false);
     }
   }, [referenceid]);
@@ -302,7 +285,7 @@ function NotificationDropdown({
   const buildUrl = (notif: QuotationNotification, action?: "preview" | "download") => {
     const params: Record<string, string> = {
       id: userId,
-      highlight: notif.activity_reference_number,
+      highlight: notif.quotation_number || notif.activity_reference_number,
       openEdit: notif.activity_reference_number,
     };
     if (action) params.action = action;
@@ -311,7 +294,12 @@ function NotificationDropdown({
 
   const handleNotifClick = (notif: QuotationNotification) => {
     setOpen(false);
-    router.push(`${REVISED_QUOTATION_ROUTE}?${new URLSearchParams({ id: userId, highlight: notif.activity_reference_number }).toString()}`);
+    router.push(`${REVISED_QUOTATION_ROUTE}?${new URLSearchParams({ id: userId, highlight: notif.quotation_number || notif.activity_reference_number }).toString()}`);
+  };
+
+  const handleSPFNotifClick = (notif: SPFNotification) => {
+    setOpen(false);
+    router.push(`/roles/tsa/activity/spf?${new URLSearchParams({ id: userId, highlight: notif.spf_number }).toString()}`);
   };
 
   const handleViewPdf = (e: React.MouseEvent, notif: QuotationNotification) => {
@@ -429,7 +417,7 @@ function NotificationDropdown({
                     className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors
                       hover:bg-accent/60 active:bg-accent
                       ${isUnread ? "bg-muted/40" : "bg-background"}`}
-                    onClick={() => {}}
+                    onClick={() => handleSPFNotifClick(spfNotif)}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-semibold text-sm leading-tight flex-1">{spfNotif.company_name}</span>
@@ -575,44 +563,68 @@ function DashboardContent() {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
-  useEffect(() => {
+  const fetchUserData = useCallback(async () => {
     if (!userId) { setLoadingUser(false); return; }
-    const fetchUserData = async () => {
-      setError(null); setLoadingUser(true);
-      try {
-        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!response.ok) throw new Error("Failed to fetch user data");
-        const data = await response.json();
-        setUserDetails({
-          referenceid: data.ReferenceID || "",
-          tsm: data.TSM || "",
-          manager: data.Manager || "",
-          target_quota: data.TargetQuota || "",
-          firstname: data.Firstname || "",
-          lastname: data.Lastname || "",
-          email: data.Email || "",
-          contact: data.ContactNumber || "",
-          tsmname: data.TSMName || "",
-          managername: data.ManagerName || "",
-          signature: data.signatureImage || "",
-          managerDetails: data.managerDetails || null,
-          tsmDetails: data.tsmDetails || null,
-        });
-      } catch {
-        sileo.error({
-          title: "Failed",
-          description: "Failed to connect to server. Please try again later or refresh your network connection",
-          duration: 4000, position: "top-center", fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-    fetchUserData();
+    setError(null); setLoadingUser(true);
+    try {
+      const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+      if (!response.ok) throw new Error("Failed to fetch user data");
+      const data = await response.json();
+      setUserDetails({
+        referenceid: data.ReferenceID || "",
+        tsm: data.TSM || "",
+        manager: data.Manager || "",
+        target_quota: data.TargetQuota || "",
+        firstname: data.Firstname || "",
+        lastname: data.Lastname || "",
+        email: data.Email || "",
+        contact: data.ContactNumber || "",
+        tsmname: data.TSMName || "",
+        managername: data.ManagerName || "",
+        signature: data.signatureImage || "",
+        managerDetails: data.managerDetails || null,
+        tsmDetails: data.tsmDetails || null,
+      });
+    } catch (err) {
+      console.error("User fetch error:", err);
+      sileo.error({
+        title: "Connection Error",
+        description: "Unable to retrieve user details. Please check your connection.",
+        duration: 4000,
+        position: "top-center",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setLoadingUser(false);
+    }
   }, [userId]);
 
-  async function handleSaveAccount(data: Account & UserDetails) {
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  const refreshAccounts = useCallback(async () => {
+    if (!userDetails.referenceid) return;
+    try {
+      const response = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`);
+      if (!response.ok) throw new Error("Failed to fetch accounts");
+      const data = await response.json();
+      setPosts(data.data || []);
+    } catch (err) {
+      console.error("Refresh accounts error:", err);
+      sileo.error({ 
+        title: "Sync Error", 
+        description: "Failed to refresh account data.", 
+        duration: 4000, 
+        position: "top-right", 
+        fill: "black", 
+        styles: { title: "text-white!", description: "text-white" } 
+      });
+    }
+  }, [userDetails.referenceid]);
+
+  const handleSaveAccount = useCallback(async (data: Account & UserDetails) => {
     const payload = {
       ...data,
       contactperson: Array.isArray(data.contact_person) ? data.contact_person : typeof data.contact_person === "string" ? data.contact_person.split(",").map((v) => v.trim()) : [],
@@ -627,32 +639,46 @@ function DashboardContent() {
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error("Failed to save account");
-      sileo.success({ title: "Success", description: `Account ${isEdit ? "updated" : "created"} successfully!`, duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      sileo.success({ 
+        title: "Success", 
+        description: `Account ${isEdit ? "updated" : "created"} successfully!`, 
+        duration: 4000, 
+        position: "top-right", 
+        fill: "black", 
+        styles: { title: "text-white!", description: "text-white" } 
+      });
       await refreshAccounts();
-    } catch {
-      sileo.error({ title: "Failed", description: "Failed to save account.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+    } catch (err) {
+      console.error("Save account error:", err);
+      sileo.error({ 
+        title: "Failed", 
+        description: "Failed to save account.", 
+        duration: 4000, 
+        position: "top-right", 
+        fill: "black", 
+        styles: { title: "text-white!", description: "text-white" } 
+      });
     }
-  }
+  }, [refreshAccounts]);
 
-  async function refreshAccounts() {
-    try {
-      const response = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`);
-      if (!response.ok) throw new Error("Failed to fetch accounts");
-      const data = await response.json();
-      setPosts(data.data || []);
-    } catch {
-      sileo.error({ title: "Failed", description: "Failed to connect to server.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-    }
-  }
+  const toggleCollapse = useCallback((key: keyof typeof collapseState) => {
+    setCollapseState((prev) => {
+      const newState = { ...prev, [key]: !prev[key] };
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(newState));
+      return newState;
+    });
+  }, []);
 
-  const COLLAPSE_KEY = "activity_planner_collapsible_state";
   useEffect(() => {
     const saved = localStorage.getItem(COLLAPSE_KEY);
-    if (saved) { try { setCollapseState(JSON.parse(saved)); } catch { localStorage.removeItem(COLLAPSE_KEY); } }
+    if (saved) {
+      try {
+        setCollapseState((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {
+        localStorage.removeItem(COLLAPSE_KEY);
+      }
+    }
   }, []);
-  useEffect(() => { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState)); }, [collapseState]);
-  const toggleCollapse = (key: keyof typeof collapseState) =>
-    setCollapseState((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <>
@@ -685,131 +711,138 @@ function DashboardContent() {
           </header>
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            <div className="w-full columns-1 sm:columns-2 lg:columns-2 gap-4 *:break-inside-avoid">
-              <Card className="rounded-none h-auto transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <PlusCircle className="w-5 h-5" /><span>New Task</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Manage your latest Endorsed Tickets and Outbound Calls efficiently. Stay updated with pending tasks and streamline your workflow.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <NewTask
-                    referenceid={userDetails.referenceid}
-                    userDetails={userDetails}
-                    onSaveAccountAction={handleSaveAccount}
-                    onRefreshAccountsAction={refreshAccounts}
-                  />
-                </CardContent>
-              </Card>
+            {loadingUser ? (
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
+                  <p className="text-xs text-zinc-500 animate-pulse font-mono uppercase tracking-widest">
+                    Synchronizing Data...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full columns-1 sm:columns-2 lg:columns-2 gap-4 *:break-inside-avoid">
+                <Card className="rounded-none h-auto transition-all duration-300">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <PlusCircle className="w-5 h-5" /><span>New Task</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Manage your latest Endorsed Tickets and Outbound Calls efficiently. Stay updated with pending tasks and streamline your workflow.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <NewTask
+                      referenceid={userDetails.referenceid}
+                      userDetails={userDetails}
+                      onSaveAccountAction={handleSaveAccount}
+                      onRefreshAccountsAction={refreshAccounts}
+                    />
+                  </CardContent>
+                </Card>
 
-              {(["inProgress", "scheduled", "completed", "overdue"] as const).map((key) => {
-                const meta = {
-                  inProgress: { label: "In Progress", icon: <Loader2 className="w-4 h-4" />, count: progressCount },
-                  scheduled: { label: "Scheduled", icon: <Calendar className="w-4 h-4" />, count: scheduledCount },
-                  //delivered: { label: "Delivered", icon: <CheckCircle className="w-4 h-4" />, count: deliveredCount },
-                  completed: { label: "Completed", icon: <CheckCircle className="w-4 h-4" />, count: completedCount },
-                  //done: { label: "Pending Task", icon: <ClipboardCheck className="w-4 h-4" />, count: doneCount },
-                  overdue: { label: "Overdue", icon: <AlertCircle className="w-4 h-4" />, count: overdueCount },
-                }[key];
+                {(["inProgress", "scheduled", "completed", "overdue"] as const).map((key) => {
+                  const meta = {
+                    inProgress: { label: "In Progress", icon: <Loader2 className="w-4 h-4" />, count: progressCount },
+                    scheduled: { label: "Scheduled", icon: <Calendar className="w-4 h-4" />, count: scheduledCount },
+                    completed: { label: "Completed", icon: <CheckCircle className="w-4 h-4" />, count: completedCount },
+                    overdue: { label: "Overdue", icon: <AlertCircle className="w-4 h-4" />, count: overdueCount },
+                  }[key];
 
-                return (
-                  <Card key={key} className={`rounded-none h-auto transition-all duration-300 ${key === "overdue" ? "border-3 border-red-400 shadow-lg" : ""}`}>
-                    <CardHeader className="cursor-pointer" onClick={() => toggleCollapse(key)}>
-                      <CardTitle className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          {meta.icon}<span>{meta.label}</span>
-                          <span className="text-xs text-red-600 font-bold">({meta.count})</span>
-                        </div>
-                        <span className="text-xs rounded-sm border p-1">
-                          {collapseState[key] ? <ChevronRight /> : <ChevronDown />}
-                        </span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className={`transition-all duration-300 overflow-hidden ${collapseState[key] ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}>
-                      {key === "inProgress" && (
-                        <Progress 
-                        referenceid={userDetails.referenceid} 
-                        firstname={userDetails.firstname} 
-                        lastname={userDetails.lastname} 
-                        email={userDetails.email} 
-                        contact={userDetails.contact} 
-                        tsmname={userDetails.tsmname} 
-                        managername={userDetails.managername} 
-                        target_quota={userDetails.target_quota} 
-                        dateCreatedFilterRange={dateCreatedFilterRange} 
-                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
-                        onCountChange={setProgressCount} 
-                        managerDetails={userDetails.managerDetails ?? null} 
-                        tsmDetails={userDetails.tsmDetails ?? null} 
-                        signature={userDetails.signature} />
-                      )}
-                      {key === "scheduled" && (
-                        <Scheduled 
-                        referenceid={userDetails.referenceid} 
-                        firstname={userDetails.firstname} 
-                        lastname={userDetails.lastname} 
-                        email={userDetails.email} 
-                        contact={userDetails.contact} 
-                        tsmname={userDetails.tsmname} 
-                        tsm={userDetails.tsm} 
-                        managername={userDetails.managername} 
-                        target_quota={userDetails.target_quota} 
-                        dateCreatedFilterRange={dateCreatedFilterRange} 
-                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
-                        onCountChange={setScheduledCount} 
-                        managerDetails={userDetails.managerDetails ?? null} 
-                        tsmDetails={userDetails.tsmDetails ?? null} 
-                        signature={userDetails.signature} />
-                      )}
-                      {/*{key === "delivered" && (
-                        <Delivered referenceid={userDetails.referenceid} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDeliveredCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
-                      )}
-                      {key === "done" && (
-                        <Done referenceid={userDetails.referenceid} firstname={userDetails.firstname} lastname={userDetails.lastname} email={userDetails.email} contact={userDetails.contact} tsmname={userDetails.tsmname} managername={userDetails.managername} target_quota={userDetails.target_quota} dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} onCountChange={setDoneCount} managerDetails={userDetails.managerDetails ?? null} tsmDetails={userDetails.tsmDetails ?? null} signature={userDetails.signature} />
-                      )}*/}
-                      {key === "completed" && (
-                        <Completed 
-                        referenceid={userDetails.referenceid} 
-                        firstname={userDetails.firstname} 
-                        lastname={userDetails.lastname} 
-                        email={userDetails.email} 
-                        contact={userDetails.contact} 
-                        tsmname={userDetails.tsmname} 
-                        managername={userDetails.managername} 
-                        target_quota={userDetails.target_quota} 
-                        dateCreatedFilterRange={dateCreatedFilterRange} 
-                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
-                        onCountChange={setCompletedCount} 
-                        managerDetails={userDetails.managerDetails ?? null} 
-                        tsmDetails={userDetails.tsmDetails ?? null} 
-                        signature={userDetails.signature} />
-                      )}
-                      {key === "overdue" && (
-                        <Overdue 
-                        referenceid={userDetails.referenceid} 
-                        firstname={userDetails.firstname} 
-                        lastname={userDetails.lastname} 
-                        email={userDetails.email} 
-                        contact={userDetails.contact} 
-                        tsmname={userDetails.tsmname} 
-                        tsm={userDetails.tsm} 
-                        managername={userDetails.managername} 
-                        target_quota={userDetails.target_quota} 
-                        dateCreatedFilterRange={dateCreatedFilterRange} 
-                        setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
-                        onCountChange={setOverdueCount} 
-                        managerDetails={userDetails.managerDetails ?? null} 
-                        tsmDetails={userDetails.tsmDetails ?? null} 
-                        signature={userDetails.signature} />
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                  return (
+                    <Card key={key} className={`rounded-none h-auto transition-all duration-300 ${key === "overdue" ? "border-3 border-red-400 shadow-lg" : ""}`}>
+                      <CardHeader className="cursor-pointer" onClick={() => toggleCollapse(key)}>
+                        <CardTitle className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            {meta.icon}<span>{meta.label}</span>
+                            <span className="text-xs text-red-600 font-bold">({meta.count})</span>
+                          </div>
+                          <span className="text-xs rounded-sm border p-1">
+                            {collapseState[key] ? <ChevronRight /> : <ChevronDown />}
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className={`transition-all duration-300 overflow-hidden ${collapseState[key] ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}>
+                        {key === "inProgress" && (
+                          <Progress 
+                            referenceid={userDetails.referenceid} 
+                            firstname={userDetails.firstname} 
+                            lastname={userDetails.lastname} 
+                            email={userDetails.email} 
+                            contact={userDetails.contact} 
+                            tsmname={userDetails.tsmname} 
+                            managername={userDetails.managername} 
+                            target_quota={userDetails.target_quota} 
+                            dateCreatedFilterRange={dateCreatedFilterRange} 
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
+                            onCountChange={setProgressCount} 
+                            managerDetails={userDetails.managerDetails ?? null} 
+                            tsmDetails={userDetails.tsmDetails ?? null} 
+                            signature={userDetails.signature} 
+                          />
+                        )}
+                        {key === "scheduled" && (
+                          <Scheduled 
+                            referenceid={userDetails.referenceid} 
+                            firstname={userDetails.firstname} 
+                            lastname={userDetails.lastname} 
+                            email={userDetails.email} 
+                            contact={userDetails.contact} 
+                            tsmname={userDetails.tsmname} 
+                            tsm={userDetails.tsm} 
+                            managername={userDetails.managername} 
+                            target_quota={userDetails.target_quota} 
+                            dateCreatedFilterRange={dateCreatedFilterRange} 
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
+                            onCountChange={setScheduledCount} 
+                            managerDetails={userDetails.managerDetails ?? null} 
+                            tsmDetails={userDetails.tsmDetails ?? null} 
+                            signature={userDetails.signature} 
+                          />
+                        )}
+                        {key === "completed" && (
+                          <Completed 
+                            referenceid={userDetails.referenceid} 
+                            firstname={userDetails.firstname} 
+                            lastname={userDetails.lastname} 
+                            email={userDetails.email} 
+                            contact={userDetails.contact} 
+                            tsmname={userDetails.tsmname} 
+                            managername={userDetails.managername} 
+                            target_quota={userDetails.target_quota} 
+                            dateCreatedFilterRange={dateCreatedFilterRange} 
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
+                            onCountChange={setCompletedCount} 
+                            managerDetails={userDetails.managerDetails ?? null} 
+                            tsmDetails={userDetails.tsmDetails ?? null} 
+                            signature={userDetails.signature} 
+                          />
+                        )}
+                        {key === "overdue" && (
+                          <Overdue 
+                            referenceid={userDetails.referenceid} 
+                            firstname={userDetails.firstname} 
+                            lastname={userDetails.lastname} 
+                            email={userDetails.email} 
+                            contact={userDetails.contact} 
+                            tsmname={userDetails.tsmname} 
+                            tsm={userDetails.tsm} 
+                            managername={userDetails.managername} 
+                            target_quota={userDetails.target_quota} 
+                            dateCreatedFilterRange={dateCreatedFilterRange} 
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} 
+                            onCountChange={setOverdueCount} 
+                            managerDetails={userDetails.managerDetails ?? null} 
+                            tsmDetails={userDetails.tsmDetails ?? null} 
+                            signature={userDetails.signature} 
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </main>
         </SidebarInset>
 

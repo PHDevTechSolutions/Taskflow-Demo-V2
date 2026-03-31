@@ -142,6 +142,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Set search term if highlight is present
+  useEffect(() => {
+    if (highlightRef) {
+      setSearchTerm(highlightRef);
+    }
+  }, [highlightRef]);
+
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
 
@@ -266,9 +274,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     if (!highlightRef) return;
     setHighlightedArn(highlightRef);
     const t1 = setTimeout(() => {
-      rowRefs.current
-        .get(highlightRef)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Find row by either activity_reference_number OR quotation_number
+      const targetRow = rowRefs.current.get(highlightRef);
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }, 200);
     const t2 = setTimeout(() => setHighlightedArn(null), 4000);
     return () => {
@@ -590,16 +600,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               {filteredActivities.map((item) => {
                 const isSelected = selectedIds.has(item.id);
                 const isHighlighted =
-                  highlightedArn === item.activity_reference_number;
+                  highlightedArn === item.activity_reference_number ||
+                  highlightedArn === item.quotation_number;
 
                 return (
                   <TableRow
                     key={item.id}
                     ref={(el) => {
-                      if (el)
+                      if (el) {
                         rowRefs.current.set(item.activity_reference_number, el);
-                      else
+                        if (item.quotation_number)
+                          rowRefs.current.set(item.quotation_number, el);
+                      } else {
                         rowRefs.current.delete(item.activity_reference_number);
+                        if (item.quotation_number)
+                          rowRefs.current.delete(item.quotation_number);
+                      }
                     }}
                     className={isHighlighted ? "rq-highlight-row" : undefined}
                   >
