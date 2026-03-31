@@ -1153,6 +1153,29 @@ Procurement
             }
             
             .sig-sub-label { font-size: 9px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+            /* WATERMARK */
+            .watermark-container {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              pointer-events: none;
+              z-index: 1000;
+              overflow: hidden;
+            }
+            .watermark-text {
+              position: absolute;
+              font-size: 9px;
+              font-weight: bold;
+              color: rgba(18, 18, 18, 0.06);
+              text-transform: uppercase;
+              transform: rotate(-25deg);
+              white-space: nowrap;
+              width: 800px;
+              letter-spacing: 1px;
+            }
             </style>
           </head>
         <body></body>
@@ -1160,9 +1183,25 @@ Procurement
       `);
       iframeDoc.close();
 
+      const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
+      const watermarkText = `${companyLabel} · OFFICIAL QUOTATION · ${payload.referenceNo}`;
+
       // 2. HELPER: ATOMIC SECTION CAPTURE
-      const renderBlock = async (html: string) => {
-        iframeDoc.body.innerHTML = html;
+      const renderBlock = async (html: string, showWatermark = false) => {
+        let finalHtml = html;
+        if (showWatermark) {
+          let watermarks = "";
+          let rowIdx = 0;
+          for (let y = -400; y < 1400; y += 75) {
+            const offset = (rowIdx % 2 === 0) ? 0 : 400;
+            for (let x = -800 + offset; x < 1200; x += 800) {
+              watermarks += `<div class="watermark-text" style="top:${y}px; left:${x}px;">${watermarkText}</div>`;
+            }
+            rowIdx++;
+          }
+          finalHtml = `<div class="watermark-container">${watermarks}</div>${html}`;
+        }
+        iframeDoc.body.innerHTML = finalHtml;
         // Allow time for images to resolve
         const images = iframeDoc.querySelectorAll('img');
         await Promise.all(Array.from(images).map(img => {
@@ -1193,7 +1232,7 @@ Procurement
       };
 
       const initiateNewPage = async () => {
-        const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`);
+        const banner = await renderBlock(`<img src="${headerImagePath}" class="header-img" />`, true);
         pdf.addImage(banner.img, 'JPEG', 0, 0, pdfWidth, banner.h);
 
         // Draw number for the CURRENT page
@@ -1236,13 +1275,18 @@ Procurement
         </div>
         
         <div class="grid-row border-b">
+        <div class="label">EMAIL ADDRESS:</div>
+        <div class="value">${payload.email}</div>
+        </div>
+        
+        <div class="grid-row border-b">
         <div class="label">SUBJECT:</div>
         <div class="value">${payload.subject}</div>
         </div>
         </div>
         <p class="intro-text">We are pleased to offer you the following products for consideration:</p>
         </div>
-        `);
+        `, true);
       pdf.addImage(clientBlock.img, 'JPEG', 0, currentY, pdfWidth, clientBlock.h);
       currentY += clientBlock.h;
 
@@ -1264,7 +1308,7 @@ Procurement
         </table>
         </div>
         </div>
-        `);
+        `, true);
       pdf.addImage(headerBlock.img, 'JPEG', 0, currentY, pdfWidth, headerBlock.h);
       currentY += 28; // Header height minus stitch to first row
 
@@ -1287,7 +1331,7 @@ Procurement
           </tr>
           </table>
           </div>
-          `);
+          `, true);
 
         // Handle Page Breaks (Same logic)
         if (currentY + rowBlock.h > (pdfHeight - 50)) {
@@ -1328,7 +1372,7 @@ Procurement
         </table>
         </div>
         </div>
-        `);
+        `, true);
       if (currentY + footerBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
         pageCount++;
@@ -1408,7 +1452,7 @@ Procurement
         </div>
         </div>
         </div>
-        `);
+        `, true);
 
       if (currentY + logisticsBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();
@@ -1466,7 +1510,10 @@ Procurement
         <div class="sig-side-internal">
         <div>
         <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-                                                                    <img src="${payload.signature || ''}" class="sig-rep-box" />
+        <div style="position: relative; display: inline-block;">
+          <img src="${payload.signature || ''}" class="sig-rep-box" />
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); font-size: 8px; font-weight: 900; color: rgba(18, 18, 18, 0.03); text-transform: uppercase; letter-spacing: 0.5em; pointer-events: none; white-space: nowrap;">Official Verified</div>
+        </div>
         <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
         <div class="sig-line"></div>
         <p class="sig-sub-label">Sales Representative</p>
@@ -1507,7 +1554,11 @@ Procurement
         </div>
         </div>
         </div>
-        `);
+        <div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8px; color: #9ca3af; font-weight: 500;">
+          <div>Document ID: <b>${payload.referenceNo}</b> · Issued: ${new Date().toISOString()} · ${isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</div>
+          <div style="font-style: italic;">Valid only when downloaded from Taskflow.</div>
+        </div>
+        `, true);
 
       if (currentY + termsAndSigBlock.h > (pdfHeight - BOTTOM_MARGIN)) {
         pdf.addPage([612, 936]); pageCount++; currentY = await initiateNewPage();

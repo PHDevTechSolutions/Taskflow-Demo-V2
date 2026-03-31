@@ -76,8 +76,70 @@ export const Preview: React.FC<PreviewProps> = ({
         ? "/ecoshift-banner.png"
         : "/disruptive-banner.png";
 
+    // ── Security helpers ──────────────────────────────────────────────────────
+    const securityTimestamp = new Date().toISOString();
+    const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
+    const watermarkText = `${companyLabel} · OFFICIAL QUOTATION · ${payload.referenceNo}`;
+
     return (
-        <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
+        <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]" style={{ position: "relative" }}>
+
+            {/* ── DIAGONAL WATERMARK OVERLAY ─────────────────────────────────────── */}
+            <div
+                aria-hidden="true"
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    overflow: "hidden",
+                }}
+            >
+                <svg
+                    width="100%"
+                    height="100%"
+                    style={{ position: "absolute", inset: 0 }}
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <defs>
+                        <pattern
+                            id="wm-pattern"
+                            x="0"
+                            y="0"
+                            width="800"
+                            height="150"
+                            patternUnits="userSpaceOnUse"
+                            patternTransform="rotate(-25)"
+                        >
+                            <text
+                                x="0"
+                                y="40"
+                                fontFamily="Arial, sans-serif"
+                                fontSize="9"
+                                fontWeight="bold"
+                                fill="#121212"
+                                fillOpacity="0.06"
+                                letterSpacing="1"
+                            >
+                                {watermarkText}
+                            </text>
+                            <text
+                                x="400"
+                                y="115"
+                                fontFamily="Arial, sans-serif"
+                                fontSize="9"
+                                fontWeight="bold"
+                                fill="#121212"
+                                fillOpacity="0.06"
+                                letterSpacing="1"
+                            >
+                                {watermarkText}
+                            </text>
+                        </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#wm-pattern)" />
+                </svg>
+            </div>
 
             {/* CORPORATE BRANDING HEADER */}
             <div className="w-full flex justify-center py-5 border-b border-gray-100 bg-white">
@@ -443,11 +505,18 @@ export const Preview: React.FC<PreviewProps> = ({
                             <div>
                                 <p className="italic text-[10px] font-black mb-10">{isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
                                 {payload.agentSignature ? (
-                                    <img
-                                        src={payload.agentSignature}
-                                        alt="Agent Signature"
-                                        className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
-                                    />
+                                    <div className="relative inline-block">
+                                        <img
+                                            src={payload.agentSignature}
+                                            alt="Agent Signature"
+                                            className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span className="text-[10px] font-black text-[#121212] opacity-[0.03] rotate-[-15deg] uppercase tracking-[0.5em]">
+                                                Official Verified
+                                            </span>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
                                 )}
@@ -461,17 +530,24 @@ export const Preview: React.FC<PreviewProps> = ({
                             <div>
                                 <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Approved By:</p>
                                 {payload.TsmSignature ? (
-                                    <img
-                                        src={payload.TsmSignature}
-                                        alt="Agent Signature"
-                                        className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
-                                    />
+                                    <div className="relative inline-block">
+                                        <img
+                                            src={payload.TsmSignature}
+                                            alt="Agent Signature"
+                                            className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span className="text-[10px] font-black text-[#121212] opacity-[0.03] rotate-[-15deg] uppercase tracking-[0.5em]">
+                                                Official Verified
+                                            </span>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
                                 )}
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname}</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.salestsmname || "—"}</p>
                                 <div className="border-b border-black w-64"></div>
-                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">SALES MANAGER</p>
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Territory Sales Manager</p>
                                 <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.TsmContactNumber || "N/A"}</p>
                                 <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.TsmEmailAddress || "N/A"}</p>
                             </div>
@@ -479,15 +555,22 @@ export const Preview: React.FC<PreviewProps> = ({
                             <div>
                                 <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Noted By:</p>
                                 {payload.ManagerSignature ? (
-                                    <img
-                                        src={payload.ManagerSignature}
-                                        alt="Agent Signature"
-                                        className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
-                                    />
+                                    <div className="relative inline-block">
+                                        <img
+                                            src={payload.ManagerSignature}
+                                            alt="Agent Signature"
+                                            className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span className="text-[10px] font-black text-[#121212] opacity-[0.03] rotate-[-15deg] uppercase tracking-[0.5em]">
+                                                Official Verified
+                                            </span>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
                                 )}
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.salesmanagername}</p>
+                                <p className="text-[11px] font-black uppercase mt-1">{payload.salesmanagername || "—"}</p>
                                 <div className="border-b border-black w-64"></div>
                                 <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales-B2B</p>
                                 <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.ManagerContactNumber || "N/A"}</p>
@@ -498,25 +581,48 @@ export const Preview: React.FC<PreviewProps> = ({
 
                         {/* Right Side: Client Side */}
                         <div className="space-y-10 flex flex-col items-end">
-                            <div className="w-64">
-
-                                <div className="border-b border-black w-64 mt-19"></div>
-                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Company Authorized Representative</p>
-                                <p className="text-[9px] text-center font-bold text-gray-500 uppercase tracking-widest">(PLEASE SIGN OVER PRINTED NAME)</p>
+                            {/* Company Authorized Representative */}
+                            <div className="w-64 text-center">
+                                <p className="text-[10px] font-black uppercase mb-1">{payload.attention || "—"}</p>
+                                <div className="border-b border-black w-64" />
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest leading-none">
+                                    Company Authorized Representative
+                                </p>
+                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest leading-none">
+                                    (PLEASE SIGN OVER PRINTED NAME)
+                                </p>
                             </div>
 
-                            <div className="w-64">
-                                <div className="border-b border-black w-64 mt-20"></div>
-                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Payment Release Date</p>
+                            {/* Payment Release Date */}
+                            <div className="w-64 text-center">
+                                <div className="border-b border-black w-64 mt-12" />
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">
+                                    Payment Release Date
+                                </p>
                             </div>
 
-                            <div className="w-64">
-                                <div className="border-b border-black w-64 mt-25"></div>
-                                <p className="text-[9px] text-center font-bold text-gray-500 mt-1 uppercase tracking-widest">Position in the Company</p>
+                            {/* Position in the Company */}
+                            <div className="w-64 text-center">
+                                <div className="border-b border-black w-64 mt-12" />
+                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">
+                                    Position in the Company
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* ── DOCUMENT SECURITY MICRO-FOOTER ───────────────────────────────────── */}
+            <div className="mx-12 mb-8 border-t border-dashed border-gray-300 pt-3 flex items-center justify-between gap-4">
+                <p className="text-[8px] text-gray-400 font-medium leading-relaxed">
+                    Document ID: <span className="font-black text-gray-500">{payload.referenceNo}</span>
+                    &nbsp;·&nbsp; Issued: {securityTimestamp}
+                    &nbsp;·&nbsp; {companyLabel}
+                </p>
+                <p className="text-[8px] text-gray-400 italic shrink-0">
+                    Valid only when downloaded from Taskflow.
+                </p>
             </div>
 
             {/* ACTION BUTTONS BAR */}

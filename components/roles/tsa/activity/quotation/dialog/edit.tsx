@@ -788,10 +788,10 @@ export default function TaskListEditDialog({
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
-      salestsmname: tsmname ?? "",
+      salestsmname: tsmname || "—",
       salestsmemail: tsmemail ?? "",
       salestsmcontact: tsmcontact ?? "",
-      salesmanagername: managername ?? "",
+      salesmanagername: managername || "—",
       vatType: vatTypeState ?? null,
       deliveryFee: deliveryFeeState ?? "",
       restockingFee: parseFloat(restockingFeeState) || 0,
@@ -1044,6 +1044,107 @@ export default function TaskListEditDialog({
     ? "/ecoshift-banner.png"
     : "/disruptive-banner.png";
 
+  // ── PDF Security helpers ───────────────────────────────────────────────────
+
+  /** Simple non-crypto hash for anti-tamper fingerprint (visible in QR) */
+  const buildSecurityToken = (referenceNo: string, date: string, total: number): string => {
+    const raw = `${referenceNo}|${date}|${total.toFixed(2)}`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const chr = raw.charCodeAt(i);
+      hash = (hash << 5) - hash + chr;
+      hash |= 0;
+    }
+    const hex = (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+    return `${raw}|VER:${hex}`;
+  };
+
+  /** Generate a QR code as a base64 PNG data URL using the qrcode library */
+  const generateQrDataUrl = async (text: string): Promise<string | null> => {
+    try {
+      const QRCode = await import("qrcode");
+      return await QRCode.toDataURL(text, {
+        width: 96,
+        margin: 1,
+        color: { dark: "#121212", light: "#ffffff" },
+        errorCorrectionLevel: "M",
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  /** Stamp diagonal watermark text across the current jsPDF page */
+  const stampPdfWatermark = (
+    pdf: any,
+    companyLabel: string,
+    referenceNo: string,
+    pdfWidth: number,
+    pdfHeight: number,
+  ) => {
+    pdf.saveGraphicsState();
+    // Use 0.06 to match preview precisely
+    const gState = new (pdf as any).GState({ opacity: 0.06 });
+    pdf.setGState(gState);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(18, 18, 18);
+    const line = `${companyLabel}  ·  OFFICIAL QUOTATION  ·  ${referenceNo}`;
+    
+    // stepX matches pattern width 800
+    // stepY is 75 to match 2 rows per 150 height pattern
+    const stepX = 800; 
+    const stepY = 75;
+    const angle = 25;
+
+    let rowIdx = 0;
+    for (let y = -400; y < pdfHeight + 400; y += stepY) {
+      // Stagger by 400 (half of stepX) every other row
+      const offset = (rowIdx % 2 === 0) ? 0 : 400;
+      for (let x = -1000 + offset; x < pdfWidth + 1000; x += stepX) {
+        pdf.text(line, x, y, { angle: angle });
+      }
+      rowIdx++;
+    }
+    pdf.restoreGraphicsState();
+  };
+
+  /** Stamp the QR code + security footer at the bottom of each PDF page */
+  const stampPdfSecurityFooter = (
+    pdf: any,
+    qrDataUrl: string | null,
+    referenceNo: string,
+    issuedAt: string,
+    pageNum: number,
+    totalPages: number,
+    pdfWidth: number,
+    pdfHeight: number,
+  ) => {
+    const footerY = pdfHeight - 32;
+    // Thin rule
+    pdf.setDrawColor(200, 200, 200);
+    pdf.setLineWidth(0.5);
+    pdf.line(20, footerY - 4, pdfWidth - 20, footerY - 4);
+
+    // QR code (bottom-right)
+    if (qrDataUrl) {
+      pdf.addImage(qrDataUrl, "PNG", pdfWidth - 60, footerY - 22, 40, 40);
+    }
+
+    // Footer text (bottom-left / centre)
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(130, 130, 130);
+    pdf.text(`REF: ${referenceNo}`, 20, footerY + 4);
+    pdf.text(`ISSUED: ${issuedAt}`, 20, footerY + 12);
+    pdf.text(`This document is only valid when downloaded from Taskflow.`, 20, footerY + 20);
+    // Page counter (centre-bottom)
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth / 2, footerY + 14, { align: "center" });
+  };
+
   const DownloadPDF = async () => {
     if (typeof window === "undefined") return;
     const PRIMARY_CHARCOAL = "#121212";
@@ -1054,6 +1155,12 @@ export default function TaskListEditDialog({
       const payload = getQuotationPayload();
       const isEcoshift = quotation_type === "Ecoshift Corporation";
 
+      // ── Build security artefacts BEFORE rendering ────────────────────────
+      const issuedAt = new Date().toISOString();
+      const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
+      const companyUrl = isEcoshift ? "https://www.ecoshiftcorp.com/" : "https://disruptivesolutionsinc.com/";
+      const qrDataUrl = await generateQrDataUrl(companyUrl);
+
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "pt",
@@ -1061,7 +1168,8 @@ export default function TaskListEditDialog({
       });
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const BOTTOM_MARGIN = 0;
+      // Reserve 50pt at the bottom for the security footer strip
+      const BOTTOM_MARGIN = 50;
 
       const iframe = document.createElement("iframe");
       Object.assign(iframe.style, {
@@ -1187,19 +1295,25 @@ export default function TaskListEditDialog({
           imageTimeout: 15000,
         });
         return {
-          img: canvas.toDataURL("image/jpeg", 0.97),
+          img: canvas.toDataURL("image/jpeg", 0.90),
           h: (canvas.height * pdfWidth) / canvas.width,
         };
       };
 
       let currentY = 0;
       let pageCount = 1;
+      // totalPages will be updated retroactively after all pages are known;
+      // we stamp footers at the very end in a second pass, so we track page
+      // positions and stamp once complete. For simplicity, we stamp each page
+      // immediately using a placeholder total that we resolve at save-time.
+      // Because jsPDF can't go back to previous pages easily at arbitrary Y,
+      // we use a known total-pages approach: stamp immediately and accept
+      // "Page N" without a "of X" if we don't know total yet — OR we make two
+      // passes. The cleanest approach for this codebase: stamp each page with
+      // watermark + footer right before moving to the next page.
 
-      const drawPageNumber = (n: number) => {
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text(`Page ${n}`, pdfWidth - 60, pdfHeight - 20);
+      const finalizeCurrentPage = () => {
+        stampPdfWatermark(pdf, companyLabel, payload.referenceNo, pdfWidth, pdfHeight);
       };
 
       const initiateNewPage = async () => {
@@ -1207,7 +1321,6 @@ export default function TaskListEditDialog({
           `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo}<br/>DATE: ${payload.date}</div></div>`,
         );
         pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
-        drawPageNumber(pageCount);
         return banner.h;
       };
 
@@ -1244,6 +1357,7 @@ export default function TaskListEditDialog({
           `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
+          finalizeCurrentPage();
           pdf.addPage([612, 936]);
           pageCount++;
           currentY = await initiateNewPage();
@@ -1276,6 +1390,7 @@ export default function TaskListEditDialog({
         `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container" style="border-bottom:2px solid black;"><div class="summary-wrap"><div class="summary-left"><div class="summary-tax-title">Tax Type:</div><div class="tax-options"><span class="${payload.vatTypeLabel === "VAT Inc" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc</span><span class="${payload.vatTypeLabel === "VAT Exe" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe</span><span class="${payload.vatTypeLabel === "Zero-Rated" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated</span></div>${_whtBadge}</div><div class="summary-right"><table class="sum-tbl"><tr><td class="sum-lbl">Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}</td><td class="sum-val">₱${_netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-lbl">Delivery Charge</td><td class="sum-val">₱${_deliveryNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr class="sum-divider"><td class="sum-lbl">Restocking Fee</td><td class="sum-val">₱${_restockingNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-total-lbl">Total Invoice Amount</td><td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${_vatBreak}<tr class="sum-final-row"><td class="sum-final-lbl">${_finalLbl}</td><td class="sum-final-val">₱${_finalAmt}</td></tr></table></div></div></div></div>`,
       );
       if (currentY + footerBlock.h > pdfHeight - BOTTOM_MARGIN) {
+        finalizeCurrentPage();
         pdf.addPage([612, 936]);
         pageCount++;
         currentY = await initiateNewPage();
@@ -1363,6 +1478,7 @@ export default function TaskListEditDialog({
         </div>`,
       );
       if (currentY + logisticsBlock.h > pdfHeight - BOTTOM_MARGIN) {
+        finalizeCurrentPage();
         pdf.addPage([612, 936]);
         pageCount++;
         currentY = await initiateNewPage();
@@ -1381,6 +1497,7 @@ export default function TaskListEditDialog({
         `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p><img src="${payload.agentSignature || ""}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p><img src="${payload.TsmSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p><img src="${payload.ManagerSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
       );
       if (currentY + termsAndSigBlock.h > pdfHeight - BOTTOM_MARGIN) {
+        finalizeCurrentPage();
         pdf.addPage([612, 936]);
         pageCount++;
         currentY = await initiateNewPage();
@@ -1393,6 +1510,19 @@ export default function TaskListEditDialog({
         pdfWidth,
         termsAndSigBlock.h,
       );
+
+      // ── Stamp watermark + security footer on ALL pages ─────────────────────
+      const totalPages = pageCount;
+      const totalPagesNum = pdf.internal.pages.length - 1; // jsPDF internal
+      for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
+        // Watermark already stamped on pages that triggered a page break;
+        // stamp the last/only page here (all others were stamped on addPage).
+        if (p === totalPages) {
+          stampPdfWatermark(pdf, companyLabel, payload.referenceNo, pdfWidth, pdfHeight);
+        }
+        stampPdfSecurityFooter(pdf, qrDataUrl, payload.referenceNo, issuedAt, p, totalPages, pdfWidth, pdfHeight);
+      }
 
       pdf.save(`QUOTATION_${payload.referenceNo}.pdf`);
       document.body.removeChild(iframe);
