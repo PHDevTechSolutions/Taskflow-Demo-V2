@@ -49,26 +49,58 @@ function VerificationContent() {
             const fetchQuotation = async () => {
                 setIsLoading(true);
                 try {
-                    // 1. Fetch record directly from Supabase by reference number
-                    const { data, error } = await supabase
+                    // 1. First, check the main 'quotations' table
+                    let { data, error } = await supabase
                         .from('quotations') 
                         .select('*')
                         .eq('quotation_number', ref)
-                        .single();
+                        .maybeSingle();
 
-                    if (error || !data) {
+                    // 2. If not found, check 'revised_quotations' (for drafts/history)
+                    if (!data) {
+                        const { data: revisedData, error: revisedError } = await supabase
+                            .from('revised_quotations')
+                            .select('*')
+                            .eq('quotation_number', ref)
+                            .order('id', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        if (revisedData) {
+                            data = revisedData;
+                        }
+                    }
+
+                    // 3. If still not found, check 'activity_update_history' (for historical records)
+                    if (!data) {
+                        const { data: historyData, error: historyError } = await supabase
+                            .from('activity_update_history')
+                            .select('*')
+                            .eq('quotation_number', ref)
+                            .order('id', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        if (historyData) {
+                            data = historyData;
+                        }
+                    }
+
+                    if (!data) {
                         setSecurityAlert("Document record not found in Taskflow database.");
                         setIsValid(false);
                     } else {
-                        const dbTotal = parseFloat(data.quotation_amount).toFixed(2);
+                        // Extract fields (some tables might have different naming)
+                        const dbTotalAmount = data.quotation_amount || data.total_amount || 0;
+                        const dbCompanyName = data.company_name || "Official Client";
+                        const dbDate = data.date_created || data.start_date || new Date().toISOString();
+                        const dbQuotationType = data.quotation_type || (data.is_ecoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc.");
+
+                        const dbTotal = parseFloat(dbTotalAmount).toFixed(2);
                         const paramTotal = parseFloat(total).toFixed(2);
                         
-                        // 2. Perform Strict Integrity Checks
-                        
-                        // Check A: Database amount must match URL amount
+                        // Perform Strict Integrity Checks
                         const amountMismatch = dbTotal !== paramTotal;
-                        
-                        // Check B: Verify the security token (if provided)
                         const expectedToken = generateSecurityToken(ref, paramTotal);
                         const tokenMismatch = token && token !== expectedToken;
 
@@ -79,13 +111,12 @@ function VerificationContent() {
                             setSecurityAlert("SECURITY ALERT: This verification link appears to have been tampered with.");
                             setIsValid(false);
                         } else {
-                            // Document is verified
                             setDetails({
                                 referenceNo: data.quotation_number,
-                                clientName: data.company_name,
-                                date: new Date(data.date_created).toLocaleDateString(),
-                                totalAmount: data.quotation_amount,
-                                companyName: data.quotation_type,
+                                clientName: dbCompanyName,
+                                date: new Date(dbDate).toLocaleDateString(),
+                                totalAmount: parseFloat(dbTotalAmount),
+                                companyName: dbQuotationType,
                                 status: data.status,
                             });
                             setIsValid(true);
