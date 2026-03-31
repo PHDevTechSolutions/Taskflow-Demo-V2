@@ -1158,8 +1158,25 @@ export default function TaskListEditDialog({
       // ── Build security artefacts BEFORE rendering ────────────────────────
       const issuedAt = new Date().toISOString();
       const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
-      const companyUrl = isEcoshift ? "https://www.ecoshiftcorp.com/" : "https://disruptivesolutionsinc.com/";
-      const qrDataUrl = await generateQrDataUrl(companyUrl);
+      
+      // Security Token Generation (must match verify page logic)
+      const SECURITY_SALT = "TF-SECURE-2024-DS-EC";
+      const generateToken = (ref: string, total: string) => {
+          const raw = `${ref}|${total}|${SECURITY_SALT}`;
+          let hash = 0;
+          for (let i = 0; i < raw.length; i++) {
+              const chr = raw.charCodeAt(i);
+              hash = (hash << 5) - hash + chr;
+              hash |= 0;
+          }
+          return Math.abs(hash).toString(36).toUpperCase();
+      };
+
+      const totalStr = payload.totalPrice.toFixed(2);
+      const token = generateToken(payload.referenceNo, totalStr);
+      const verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
+      
+      const qrDataUrl = await generateQrDataUrl(verificationUrl);
 
       const pdf = new jsPDF({
         orientation: "portrait",

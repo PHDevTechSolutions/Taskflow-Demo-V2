@@ -76,6 +76,46 @@ export const Preview: React.FC<PreviewProps> = ({
         ? "/ecoshift-banner.png"
         : "/disruptive-banner.png";
 
+    // ── QR Code Security ──────────────────────────────────────────────────────
+    const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        const generateQr = async () => {
+            try {
+                const QRCode = await import("qrcode");
+                
+                // Security Token Generation (must match verify page logic)
+                const SECURITY_SALT = "TF-SECURE-2024-DS-EC";
+                const generateToken = (ref: string, total: string) => {
+                    const raw = `${ref}|${total}|${SECURITY_SALT}`;
+                    let hash = 0;
+                    for (let i = 0; i < raw.length; i++) {
+                        const chr = raw.charCodeAt(i);
+                        hash = (hash << 5) - hash + chr;
+                        hash |= 0;
+                    }
+                    return Math.abs(hash).toString(36).toUpperCase();
+                };
+
+                const totalStr = payload.totalPrice.toFixed(2);
+                const token = generateToken(payload.referenceNo, totalStr);
+                
+                const verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
+                
+                const dataUrl = await QRCode.toDataURL(verificationUrl, {
+                    width: 128,
+                    margin: 1,
+                    color: { dark: "#121212", light: "#ffffff" },
+                    errorCorrectionLevel: "H", // High error correction for better reliability
+                });
+                setQrDataUrl(dataUrl);
+            } catch (err) {
+                console.error("QR Generation failed", err);
+            }
+        };
+        generateQr();
+    }, [payload, isEcoshift]);
+
     // ── Security helpers ──────────────────────────────────────────────────────
     const securityTimestamp = new Date().toISOString();
     const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
@@ -615,14 +655,23 @@ export const Preview: React.FC<PreviewProps> = ({
 
             {/* ── DOCUMENT SECURITY MICRO-FOOTER ───────────────────────────────────── */}
             <div className="mx-12 mb-8 border-t border-dashed border-gray-300 pt-3 flex items-center justify-between gap-4">
-                <p className="text-[8px] text-gray-400 font-medium leading-relaxed">
-                    Document ID: <span className="font-black text-gray-500">{payload.referenceNo}</span>
-                    &nbsp;·&nbsp; Issued: {securityTimestamp}
-                    &nbsp;·&nbsp; {companyLabel}
-                </p>
-                <p className="text-[8px] text-gray-400 italic shrink-0">
-                    Valid only when downloaded from Taskflow.
-                </p>
+                <div className="flex flex-col">
+                    <p className="text-[8px] text-gray-400 font-medium leading-relaxed">
+                        Document ID: <span className="font-black text-gray-500">{payload.referenceNo}</span>
+                        &nbsp;·&nbsp; Issued: {securityTimestamp}
+                        &nbsp;·&nbsp; {companyLabel}
+                    </p>
+                    <p className="text-[8px] text-gray-400 italic shrink-0 mt-1">
+                        This document is only valid when downloaded from Taskflow.
+                    </p>
+                </div>
+                
+                {qrDataUrl && (
+                    <div className="flex flex-col items-center">
+                        <img src={qrDataUrl} alt="Verification QR" className="w-20 h-20 opacity-80 mix-blend-multiply" />
+                        <span className="text-[6px] font-black text-gray-300 uppercase tracking-widest mt-1">Verify Authenticity</span>
+                    </div>
+                )}
             </div>
 
             {/* ACTION BUTTONS BAR */}
