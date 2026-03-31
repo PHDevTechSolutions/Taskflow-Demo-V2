@@ -31,11 +31,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { sileo } from "sileo";
 import { TaskListDialog } from "./dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { AccountsActiveDeleteDialog } from "../../activity/planner/dialog/delete";
@@ -157,6 +166,22 @@ function toDatetimeLocal(dateStr?: string | null): string {
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 const EDIT_TIME_PASSWORD = "PHDEVTECH";
+
+const QUOTATION_STATUS_OPTIONS = [
+  "Pending Client Approval",
+  "For Bidding",
+  "Nego",
+  "Order Complete",
+  "Convert to SO",
+  "Loss Price is Too High",
+  "Lead Time Issue",
+  "Out of Stock",
+  "Insufficient Stock",
+  "Lost Bid",
+  "Canvass Only",
+  "Did Not Meet the Specs",
+  "Declined / Disapproved",
+];
 
 // ─── Password Gate Dialog ─────────────────────────────────────────────────────
 
@@ -504,6 +529,39 @@ export const TaskList: React.FC<CompletedProps> = ({
       setEditTimeOpen(true);
     }
     setPendingTimeItem(null);
+  };
+
+  // ── Inline Update ──────────────────────────────────────────────────────────
+
+  const handleInlineUpdate = async (id: number, field: string, value: string) => {
+    try {
+      const res = await fetch(`/api/activity/tsa/historical/update?id=${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+
+      sileo.success({
+        title: "Updated",
+        description: `${field.replace(/_/g, " ")} updated successfully.`,
+        duration: 2000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      fetchActivities();
+    } catch (error) {
+      console.error("Inline update failed:", error);
+      sileo.error({
+        title: "Update Failed",
+        description: "Could not update the record.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    }
   };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
@@ -911,7 +969,29 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="px-3">{displayValue(item.quotation_status)}</TableCell>
+                    <TableCell className="px-3">
+                      {item.status === "Quote-Done" ? (
+                        <Select
+                          value={item.quotation_status || ""}
+                          onValueChange={(val) => handleInlineUpdate(item.id, "quotation_status", val)}
+                        >
+                          <SelectTrigger className="h-7 text-[10px] w-[140px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50 transition-colors">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {QUOTATION_STATUS_OPTIONS.map((opt) => (
+                                <SelectItem key={opt} value={opt} className="text-[10px]">
+                                  {opt}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        displayValue(item.quotation_status)
+                      )}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap px-3">{displayValue(item.contact_number)}</TableCell>
                     <TableCell className="whitespace-nowrap px-3">{displayValue(item.type_client)}</TableCell>
                     <TableCell className="px-3">{displayValue(item.project_name)}</TableCell>
@@ -924,7 +1004,26 @@ export const TaskList: React.FC<CompletedProps> = ({
                         ? `${new Date(item.callback).toLocaleDateString()} ${formatTimeWithAmPm(item.callback.substring(11, 16))}`
                         : "-"}
                     </TableCell>
-                    <TableCell className="px-3">{displayValue(item.call_status)}</TableCell>
+                    <TableCell className="px-3">
+                      {item.type_activity === "Outbound Calls" ? (
+                        <Select
+                          value={item.call_status || ""}
+                          onValueChange={(val) => handleInlineUpdate(item.id, "call_status", val)}
+                        >
+                          <SelectTrigger className="h-7 text-[10px] w-[110px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50 transition-colors">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value="Successful" className="text-[10px]">Successful</SelectItem>
+                              <SelectItem value="Unsuccessful" className="text-[10px]">Unsuccessful</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        displayValue(item.call_status)
+                      )}
+                    </TableCell>
                     <TableCell className="px-3">{displayValue(item.call_type)}</TableCell>
                     <TableCell className="uppercase px-3 font-mono">{displayValue(item.quotation_number)}</TableCell>
                     <TableCell className="px-3 tabular-nums">
