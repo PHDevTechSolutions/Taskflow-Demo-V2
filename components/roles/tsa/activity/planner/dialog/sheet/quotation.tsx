@@ -3697,7 +3697,8 @@ ${spec.value}
 
                       <div className="col-span-2 font-black uppercase">Warranty:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                        <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                        <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
                         <p>The warranty will be VOID under the following circumstances:</p>
                         <p>*If the unit is being tampered with.</p>
                         <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
