@@ -55,8 +55,8 @@ interface Props {
   setQuotationAmount: (v: string) => void;
   quotationType: string;
   setQuotationType: (v: string) => void;
-  quotationStatus: string;
-  setQuotationStatus: (v: string) => void;
+  //quotationStatus: string;
+  //setQuotationStatus: (v: string) => void;
   callType: string;
   setCallType: (v: string) => void;
   followUpDate: string;
@@ -216,7 +216,7 @@ export function QuotationSheet(props: Props) {
     quotationNumber, setQuotationNumber,
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
-    quotationStatus, setQuotationStatus,
+    //quotationStatus, setQuotationStatus,
     tsmApprovalStatus, setTsmApprovalStatus,
 
     // --- TAX & FINANCIALS ---
@@ -1896,7 +1896,7 @@ Procurement
     />
 
     <FieldLabel className="font-bold">Status </FieldLabel>
-    <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
+    {/*<Select value={quotationStatus} onValueChange={setQuotationStatus} required>
       <SelectTrigger className="w-full rounded-none">
         <SelectValue placeholder="Select status" />
       </SelectTrigger>
@@ -1917,7 +1917,7 @@ Procurement
           <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
         </SelectGroup>
       </SelectContent>
-    </Select>
+    </Select>*/}
 
     <FieldLabel className="font-bold">Approval Process </FieldLabel>
     <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
@@ -1933,7 +1933,7 @@ Procurement
     </Select>
 
     {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
-    {quotationStatus && tsmApprovalStatus ? (
+    { tsmApprovalStatus ? (
       <>
         <FieldLabel className="mt-3">Action</FieldLabel>
         <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">

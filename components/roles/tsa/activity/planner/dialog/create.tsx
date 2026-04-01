@@ -492,7 +492,7 @@ export function CreateActivityDialog({
             quotation_number: quotationNumber || undefined,
             quotation_amount: quotationAmount || undefined,
             quotation_type: quotationType || undefined,
-            quotation_status: quotationStatus || undefined,
+            //quotation_status: quotationStatus || undefined,
 
             so_number: soNumber || undefined,
             so_amount: soAmount || undefined,
@@ -1005,8 +1005,8 @@ export function CreateActivityDialog({
                                     setQuotationAmount={setQuotationAmount}
                                     quotationType={quotationType}
                                     setQuotationType={setQuotationType}
-                                    quotationStatus={quotationStatus}
-                                    setQuotationStatus={setQuotationStatus}
+                                    //quotationStatus={quotationStatus}
+                                    //setQuotationStatus={setQuotationStatus}
                                     tsmApprovalStatus={tsmApprovalStatus}
                                     setTsmApprovalStatus={setTsmApprovalStatus}
                                     callType={callType}
