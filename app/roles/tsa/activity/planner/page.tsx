@@ -259,7 +259,7 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors focus:outline-none">
-          <Bell className="w-4 h-4" />
+          <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
               {unreadCount > 99 ? "99+" : unreadCount}

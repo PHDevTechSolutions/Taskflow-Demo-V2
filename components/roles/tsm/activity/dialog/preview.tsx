@@ -363,8 +363,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 content: (
                                     <div className="bg-yellow-50 p-2">
                                         <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                                        <p>*Indent orders: 45-60 days upon receipt of approved PO & down payment.</p>
-                                        <p>*In conflict of estimates, the latter will prevail.</p>
+                                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+                                        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
                                     </div>
                                 ),
                             },

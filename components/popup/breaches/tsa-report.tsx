@@ -666,14 +666,14 @@ export default function TSAReports() {
             </p>
             <div className="grid grid-cols-3 gap-1 text-center">
               {[
-                { label: "Daily",   value: outboundDaily,   denom: denominators.daily },
-                { label: "Weekly",  value: outboundWeekly,  denom: denominators.weekly },
-                { label: "Monthly", value: outboundMonthly, denom: denominators.monthly },
-              ].map(({ label, value, denom }, i) => (
+                { label: "Daily",   value: outboundDaily },
+                { label: "Weekly",  value: outboundWeekly },
+                { label: "Monthly", value: outboundMonthly },
+              ].map(({ label, value }, i) => (
                 <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
                   <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
                   <p className="font-black text-[12px] text-gray-800">
-                    {value}<span className="text-[9px] font-medium text-gray-400"> /{denom}</span>
+                    {value}
                   </p>
                 </div>
               ))}
