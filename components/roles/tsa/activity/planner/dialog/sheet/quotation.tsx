@@ -2608,8 +2608,8 @@ ${spec.value}
                   <>
                     <div className="text-xs text-green-600 mb-2 flex items-center gap-2">
                       <span>Note: you can choose the same products.</span>
-                      <span className="text-[10px] text-blue-500 font-semibold bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
-                        ✦ Drag cards to add
+                      <span className="text-[10px] text-blue-500 font-semibold bg-green-100 border border-blue-100 px-3 py-0.5 rounded-full">
+                        ℹ️ Drag cards to add
                       </span>
                     </div>
 
