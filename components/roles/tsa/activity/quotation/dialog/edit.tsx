@@ -1396,7 +1396,7 @@ export default function TaskListEditDialog({
       const _restockingNum = payload.restockingFee || 0;
       const _netSales = payload.totalPrice - _deliveryNum - _restockingNum;
       const _vatBreak = payload.vatTypeLabel === "VAT Inc"
-        ? `<tr><td class="sum-gray-lbl">Less: VAT (12/112)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
+        ? `<tr><td class="sum-gray-lbl">Less: VAT (12)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
         : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}</td></tr>`;
       const _whtBadge = payload.whtType && payload.whtType !== "none"
         ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>` : "";
@@ -1464,7 +1464,8 @@ export default function TaskListEditDialog({
         </div>
         <div class="terms-label">Warranty:</div>
         <div class="terms-val terms-highlight">
-        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
                 <p>The warranty will be VOID under the following circumstances:</p>
                 <p>*If the unit is being tampered with.</p>
                 <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
