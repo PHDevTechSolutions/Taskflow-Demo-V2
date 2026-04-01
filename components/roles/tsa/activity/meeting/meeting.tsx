@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/utils/supabase";
 import { sileo } from "sileo";
@@ -248,7 +249,7 @@ function EditMeetingDialog({
           {/* Start Date */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700">Start Date & Time</Label>
-            <input
+            <Input
               type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -259,7 +260,7 @@ function EditMeetingDialog({
           {/* End Date */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700">End Date & Time</Label>
-            <input
+            <Input
               type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
