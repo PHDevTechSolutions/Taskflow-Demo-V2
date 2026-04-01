@@ -684,7 +684,7 @@ function DashboardContent() {
                   <Completed {...sharedProps} onCountChange={setCompletedCount} />
                 </PlannerCard>
 
-                {/* ── Delivered ── */}
+                {/* ── Delivered ── 
                 <PlannerCard
                   title="Delivered"
                   icon={<PackageCheck className="w-4 h-4" />}
@@ -693,9 +693,10 @@ function DashboardContent() {
                   onToggle={() => toggleCollapse("delivered")}
                 >
                   <Delivered {...sharedProps} onCountChange={setDeliveredCount} />
-                </PlannerCard>
+                </PlannerCard>*/}
+                
 
-                {/* ── Pending Task ── */}
+                {/* ── Pending Task ── 
                 <PlannerCard
                   title="Pending Task"
                   icon={<Clock className="w-4 h-4" />}
@@ -704,7 +705,8 @@ function DashboardContent() {
                   onToggle={() => toggleCollapse("done")}
                 >
                   <Done {...sharedProps} onCountChange={setDoneCount} />
-                </PlannerCard>
+                </PlannerCard>*/}
+                
 
                 {/* ── Overdue (full width, red border) ── */}
                 <PlannerCard
@@ -716,7 +718,7 @@ function DashboardContent() {
                   className="border-3 border-red-400 shadow-lg"
                   countColor="text-red-600"
                 >
-                  <Overdue {...sharedProps} onCountChange={setOverdueCount} />
+                  <Overdue {...sharedProps} tsm={userDetails.tsm} onCountChange={setOverdueCount} />
                 </PlannerCard>
 
               </div>

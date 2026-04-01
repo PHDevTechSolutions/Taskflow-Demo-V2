@@ -131,10 +131,10 @@ function StatusBadge({ value }: { value: string }) {
   const cls = STATUS_STYLES[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cls}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-none text-[11px] font-semibold border ${cls}`}
     >
       <span
-        className="w-1.5 h-1.5 rounded-full"
+        className="w-1.5 h-1.5 rounded-none"
         style={{
           background:
             key === "active"
@@ -167,12 +167,12 @@ function StatCard({
 }) {
   return (
     <div
-      className="relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+      className="relative overflow-hidden rounded-none border bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
     >
       {/* Faint background circle */}
       <div
-        className="absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10"
+        className="absolute -right-4 -top-4 h-20 w-20 rounded-none opacity-10"
         style={{ background: accent }}
       />
       <div className="flex items-start justify-between">
@@ -192,7 +192,7 @@ function StatCard({
           )}
         </div>
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-lg"
+          className="flex h-9 w-9 items-center justify-center rounded-none"
           style={{ background: accent + "1a" }}
         >
           <Icon className="h-5 w-5" style={{ color: accent }} />
@@ -436,7 +436,7 @@ export function AccountsTable({
           const style = getClusterStyle(row.original.type_client);
           return (
             <span
-              className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide border"
+              className="inline-flex items-center px-2.5 py-1 rounded-none text-[11px] font-bold uppercase tracking-wide border"
               style={{
                 background: style.bg,
                 color: style.textColor,
@@ -470,7 +470,7 @@ export function AccountsTable({
           const isPast = date < today;
           return (
             <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-none ${
                 isToday
                   ? "bg-purple-100 text-purple-700"
                   : isPast
@@ -709,7 +709,7 @@ export function AccountsTable({
       </div>
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-none border border-slate-200 bg-white shadow-sm overflow-hidden">
 
         {/* Table header bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
@@ -719,7 +719,7 @@ export function AccountsTable({
               Account Records
             </span>
           </div>
-          <Badge variant="outline" className="text-[11px] font-mono tabular-nums rounded-full">
+          <Badge variant="outline" className="text-[11px] font-mono tabular-nums rounded-none">
             {filteredData.length.toLocaleString()} results
           </Badge>
         </div>
@@ -728,7 +728,7 @@ export function AccountsTable({
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="bg-slate-50 hover:bg-slate-50 border-b border-slate-100">
+                <TableRow key={hg.id} className="hover:bg-slate-50 border-b border-slate-100">
                   {hg.headers.map((header) => (
                     <TableHead
                       key={header.id}
@@ -776,8 +776,8 @@ export function AccountsTable({
 
         {/* Pending warning */}
         {filteredData.some((a) => a.status === "Pending") && (
-          <div className="mx-4 mb-4 mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500 mt-1.5" />
+          <div className="mx-4 mb-4 mt-2 flex items-start gap-2 rounded-none border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-amber-500 mt-1.5" />
             <span>
               Accounts with <strong>Pending</strong> status require TSM approval before they can be used in activity creation.
             </span>

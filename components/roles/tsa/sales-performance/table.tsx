@@ -68,7 +68,7 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
     const hit = data.actualSales >= data.dailyQuota;
 
     return (
-        <div className="bg-white border border-gray-200 rounded shadow-md p-3 text-xs min-w-[200px]">
+        <div className="bg-white border border-gray-200 rounded-none shadow-md p-3 text-xs min-w-[200px]">
             <p className="font-bold text-gray-700 mb-2">{label}</p>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                 <span className="text-gray-500">Daily Quota</span>
@@ -433,7 +433,7 @@ export const SalesTable: React.FC<SalesProps> = ({
                         value={String(totalWorkingDays)}
                         onValueChange={(val) => setTotalWorkingDays(Number(val) as 26 | 22)}
                     >
-                        <SelectTrigger className="w-[200px] text-xs">
+                        <SelectTrigger className="w-[200px] text-xs rounded-none">
                             <SelectValue placeholder="Working Days" />
                         </SelectTrigger>
                         <SelectContent>
@@ -451,7 +451,7 @@ export const SalesTable: React.FC<SalesProps> = ({
 
                 <button
                     onClick={exportToExcel}
-                    className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-none hover:bg-blue-700 transition-colors"
                 >
                     <Download size={14} />
                     Export Excel
@@ -459,7 +459,7 @@ export const SalesTable: React.FC<SalesProps> = ({
             </div>
 
             {/* Sales Metrics Table */}
-            <div className="rounded-md border p-4 bg-white shadow-sm">
+            <div className="rounded-none border p-4 bg-white shadow-sm">
                 <h2 className="font-semibold text-sm mb-4">Sales Metrics</h2>
                 <Table>
                     <TableHeader>
@@ -509,13 +509,13 @@ export const SalesTable: React.FC<SalesProps> = ({
             </div>
 
             {/* Daily Sales Trend Chart */}
-            <div className="rounded-md border p-4 bg-white shadow-sm">
+            <div className="rounded-none border p-4 bg-white shadow-sm">
                 <h2 className="font-semibold text-sm mb-1">Daily Sales Trend</h2>
                 <p className="text-xs text-gray-400 mb-4">
                     Bar shows actual sales per working day vs. daily quota target (dashed line).
                     <span className="ml-2 inline-flex items-center gap-1">
-                        <span className="inline-block w-3 h-3 rounded-sm bg-green-500"></span> Hit
-                        <span className="inline-block w-3 h-3 rounded-sm bg-red-400 ml-2"></span> Missed
+                        <span className="inline-block w-3 h-3 rounded-none bg-green-500"></span> Hit
+                        <span className="inline-block w-3 h-3 rounded-none bg-red-400 ml-2"></span> Missed
                     </span>
                 </p>
                 {dailyChartData.length === 0 ? (
@@ -568,7 +568,7 @@ export const SalesTable: React.FC<SalesProps> = ({
             </div>
 
             {/* Computation Explanation */}
-            <div className="rounded-md border p-4 bg-white shadow-sm">
+            <div className="rounded-none border p-4 bg-white shadow-sm">
                 <h2 className="font-semibold text-sm mb-4">Computation Explanation</h2>
                 <div className="text-xs space-y-3 text-gray-700">
                     <p>

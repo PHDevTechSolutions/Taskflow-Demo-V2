@@ -210,7 +210,7 @@ export function AccountsTable({
           </button>
         ),
         cell: (info) => (
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 text-sm font-semibold">
+          <span className="inline-flex items-center justify-center w-8 h-8 rounded-none bg-slate-100 text-slate-700 text-sm font-semibold">
             {info.getValue() as number}
           </span>
         ),
@@ -233,7 +233,7 @@ export function AccountsTable({
               {regions.slice(0, 3).map((r) => (
                 <span
                   key={r}
-                  className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded"
+                  className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-none"
                 >
                   {r}
                 </span>
@@ -257,7 +257,7 @@ export function AccountsTable({
           <Button
             variant="outline"
             size="sm"
-            className="cursor-pointer rounded-md text-xs h-8 gap-1.5 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+            className="cursor-pointer rounded-none text-xs h-8 gap-1.5 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
             onClick={() => openGroupDialog(info.row.original)}
           >
             <Eye className="h-3.5 w-3.5" />
@@ -312,7 +312,7 @@ export function AccountsTable({
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder="Search industries, companies..."
-            className="pl-8 h-9 text-sm rounded-md border-slate-200"
+            className="pl-8 h-9 text-sm rounded-none border-slate-200"
           />
           {isFiltering && (
             <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-slate-400" />
@@ -334,7 +334,7 @@ export function AccountsTable({
           { label: "Total Industries", value: filteredGroupedPosts.length, color: "bg-slate-50 border-slate-200 text-slate-700" },
           { label: "Total Companies", value: totalAccounts, color: "bg-blue-50 border-blue-200 text-blue-700" },
         ].map((card) => (
-          <div key={card.label} className={`rounded-lg border p-3 ${card.color}`}>
+          <div key={card.label} className={`rounded-none border p-3 ${card.color}`}>
             <p className="text-xs font-medium opacity-70">{card.label}</p>
             <p className="text-2xl font-bold mt-0.5">{card.value}</p>
           </div>
@@ -342,7 +342,7 @@ export function AccountsTable({
       </div>
 
       {/* ── Table ── */}
-      <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="rounded-none border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
             Industries
@@ -410,7 +410,7 @@ export function AccountsTable({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7 rounded border-slate-200"
+              className="h-7 w-7 rounded-none border-slate-200"
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
@@ -419,7 +419,7 @@ export function AccountsTable({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7 rounded border-slate-200"
+              className="h-7 w-7 rounded-none border-slate-200"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
@@ -428,7 +428,7 @@ export function AccountsTable({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7 rounded border-slate-200"
+              className="h-7 w-7 rounded-none border-slate-200"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
@@ -437,7 +437,7 @@ export function AccountsTable({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7 rounded border-slate-200"
+              className="h-7 w-7 rounded-none border-slate-200"
               onClick={() => table.setPageIndex(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >
@@ -449,7 +449,7 @@ export function AccountsTable({
 
       {/* ── Drill-down Dialog ── */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl rounded-lg max-h-[90vh] flex flex-col p-0">
+        <DialogContent className="max-w-4xl rounded-none max-h-[90vh] flex flex-col p-0">
           {/* Dialog Header */}
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-100 flex-shrink-0">
             <div className="flex items-start justify-between">
@@ -462,15 +462,6 @@ export function AccountsTable({
                   {selectedGroup?.accounts.length} companies in this industry
                 </p>
               </div>
-              <DialogClose asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-md text-slate-400 hover:text-slate-600"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </DialogClose>
             </div>
           </DialogHeader>
 
@@ -482,7 +473,7 @@ export function AccountsTable({
                 value={dialogSearch}
                 onChange={(e) => setDialogSearch(e.target.value)}
                 placeholder="Search company, contact, region..."
-                className="pl-8 h-8 text-xs rounded border-slate-200"
+                className="pl-8 h-8 text-xs rounded-none border-slate-200"
               />
             </div>
           </div>
@@ -499,7 +490,7 @@ export function AccountsTable({
                 {dialogAccounts.map((acc) => (
                   <div
                     key={acc.id}
-                    className="rounded-lg border border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 transition-colors p-4"
+                    className="rounded-none border border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 transition-colors p-4"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
@@ -509,7 +500,7 @@ export function AccountsTable({
                             {acc.company_name}
                           </span>
                           {acc.type_client && (
-                            <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded">
+                            <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-none">
                               {acc.type_client}
                             </span>
                           )}
@@ -578,7 +569,7 @@ export function AccountsTable({
           </div>
 
           {/* Dialog Footer */}
-          <div className="px-6 py-3 border-t border-slate-100 flex-shrink-0 flex items-center justify-between bg-slate-50 rounded-b-lg">
+          <div className="px-6 py-3 border-t border-slate-100 flex-shrink-0 flex items-center justify-between bg-slate-50 rounded-none">
             <p className="text-xs text-slate-500">
               Showing{" "}
               <span className="font-medium text-slate-700">{dialogAccounts.length}</span>{" "}
@@ -591,7 +582,7 @@ export function AccountsTable({
             <Button
               size="sm"
               variant="outline"
-              className="text-xs h-8 rounded border-slate-200"
+              className="text-xs h-8 -none border-slate-200"
               onClick={() => setIsDialogOpen(false)}
             >
               Close

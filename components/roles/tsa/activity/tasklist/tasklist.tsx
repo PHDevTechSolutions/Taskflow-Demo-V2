@@ -790,7 +790,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             </span>
           )}
 
-          <div className="flex items-center gap-1.5 border border-zinc-200 p-1 bg-white">
+          <div className="flex items-center gap-1.5 rounded-none p-1 bg-white">
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}
@@ -817,7 +817,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             <select
               value={itemsPerPage}
               onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border-none bg-transparent text-[11px] font-bold focus:ring-0 cursor-pointer pr-8"
+              className="border-none bg-transparent text-[11px] font-bold focus:ring-0 cursor-pointer h-6 rounded-none"
             >
               {ITEMS_PER_PAGE_OPTIONS.map((n) => (
                 <option key={n} value={n}>{n}</option>
