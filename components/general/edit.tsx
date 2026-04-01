@@ -188,13 +188,15 @@ export default function ProfileClient() {
   // ─── Fetch user ───────────────────────────────────────────────────────────
 
   useEffect(() => {
+    // If userId is not available, don't immediately show an error.
+    // It could be that the user is logging out or the context is still initializing.
     if (!userId) {
-      setError("User ID is not available");
-      setLoading(false);
       return;
     }
 
     const fetchUser = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error("Failed to fetch user");
