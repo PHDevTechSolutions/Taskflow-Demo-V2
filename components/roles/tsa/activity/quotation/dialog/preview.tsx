@@ -83,7 +83,7 @@ export const Preview: React.FC<PreviewProps> = ({
         const generateQr = async () => {
             try {
                 const QRCode = await import("qrcode");
-                
+
                 // Security Token Generation (must match verify page logic)
                 const SECURITY_SALT = "TF-SECURE-2024-DS-EC";
                 const generateToken = (ref: string, total: string) => {
@@ -99,9 +99,9 @@ export const Preview: React.FC<PreviewProps> = ({
 
                 const totalStr = payload.totalPrice.toFixed(2);
                 const token = generateToken(payload.referenceNo, totalStr);
-                
+
                 const verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
-                
+
                 const dataUrl = await QRCode.toDataURL(verificationUrl, {
                     width: 128,
                     margin: 1,
@@ -329,84 +329,118 @@ export const Preview: React.FC<PreviewProps> = ({
                                     </div>
                                 </td>
 
-                                {/* Right: Fee Breakdown */}
                                 <td colSpan={2} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
+
                                             {/* Net Sales */}
                                             <tr className="border-b border-gray-100">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
                                                     Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{((Number(payload.totalPrice) - (Number(payload.deliveryFee) || 0) - (Number(payload.restockingFee) || 0)))
+                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
+
                                             {/* Delivery Fee */}
                                             <tr className="border-b border-gray-100">
-                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Delivery Charge</td>
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                    Delivery Charge
+                                                </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(payload.deliveryFee) || 0)
+                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
+
                                             {/* Restocking Fee */}
                                             <tr className="border-b-2 border-black">
-                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Restocking Fee</td>
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                    Restocking Fee
+                                                </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(payload.restockingFee) || 0)
+                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
+
                                             {/* Total Invoice */}
                                             <tr className="bg-gray-50 border-b border-black">
-                                                <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">Total Invoice Amount</td>
+                                                <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
+                                                    Total Invoice Amount
+                                                </td>
                                                 <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900 tabular-nums">
-                                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{Number(payload.totalPrice)
+                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
-                                            {/* VAT breakdown if vat_inc */}
+
+                                            {/* VAT Breakdown */}
                                             {payload.vatType === "vat_inc" && (
                                                 <>
                                                     <tr className="border-b border-gray-100">
-                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12)</td>
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                                            Less: VAT (12%)
+                                                        </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(Number(payload.totalPrice) * (12 / 112))
+                                                                .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
-                                                    <tr className={payload.whtType && payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
-                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Net of VAT (Tax Base)</td>
+
+                                                    <tr className={payload.whtType && payload.whtType !== "none"
+                                                        ? "border-b border-gray-100"
+                                                        : "border-b-2 border-black"}>
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                                            Net of VAT (Tax Base)
+                                                        </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(Number(payload.totalPrice) / 1.12)
+                                                                .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
+
                                                     {payload.whtType && payload.whtType !== "none" && (
                                                         <tr className="border-b-2 border-black bg-blue-50">
                                                             <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
                                                                 Less: {payload.whtLabel}
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-black text-blue-700 tabular-nums">
-                                                                − ₱{(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                − ₱{(Number(payload.whtAmount) || 0)
+                                                                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </td>
                                                         </tr>
                                                     )}
                                                 </>
                                             )}
+
+                                            {/* Non-VAT */}
                                             {payload.vatType !== "vat_inc" && (
                                                 <tr className="border-b-2 border-black">
-                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Tax Status</td>
+                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                                        Tax Status
+                                                    </td>
                                                     <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
                                                         {payload.vatType === "vat_exe" ? "VAT Exempt" : "Zero-Rated"}
                                                     </td>
                                                 </tr>
                                             )}
-                                            {/* Net Amount to Collect */}
+
+                                            {/* Final Total */}
                                             <tr className="bg-gray-900 text-white">
                                                 <td className="px-3 py-3 text-right font-black uppercase border-r border-gray-700 text-[10px] tracking-tight">
-                                                    {payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
+                                                    {payload.whtType && payload.whtType !== "none"
+                                                        ? "Net Amount to Collect"
+                                                        : "Total Amount Due"}
                                                 </td>
                                                 <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
-                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(payload.netAmountToCollect ?? payload.totalPrice))
+                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
+
                                         </tbody>
                                     </table>
                                 </td>
@@ -666,7 +700,7 @@ export const Preview: React.FC<PreviewProps> = ({
                         This document is only valid when downloaded from Taskflow.
                     </p>
                 </div>
-                
+
                 {qrDataUrl && (
                     <div className="flex flex-col items-center">
                         <img src={qrDataUrl} alt="Verification QR" className="w-20 h-20 opacity-80 mix-blend-multiply" />
