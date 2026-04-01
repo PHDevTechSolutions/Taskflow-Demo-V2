@@ -762,29 +762,33 @@ export default function TaskListEditDialog({
               <div class="terms-label">Availability:</div>
               <div class="terms-val terms-highlight">
                 <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO &amp; down payment.</p>
-                <p>*In the event of a conflict or inconsistency in estimated days, the latter will prevail.</p>
+                                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+                                        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
               </div>
               <div class="terms-label">Warranty:</div>
               <div class="terms-val terms-highlight">
-                <p>One (2) year from the time of delivery for all busted lights except the damaged fixture.</p>
-                <p>*If the unit is being tampered with.</p>
-                <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
-                <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
-                <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
-                <p>*Shipping costs for warranty claims are for customers' account.</p>
+                <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                        <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
+                                        <p>The warranty will be VOID under the following circumstances:</p>
+                                        <p>*If the unit is being tampered with.</p>
+                                        <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
+                                        <p>*If it has been subjected to misuse, mishandling, neglect, or accident.</p>
+                                        <p>*If damaged due to spillage of liquids, tear corrosion, rusting, or stains.</p>
+                                        <p>*This warranty does not cover loss of product accessories such as remote control, adaptor, battery, screws, etc.</p>
+                                        <p>*Shipping costs for warranty claims are for customers' account.</p>
+                                        <p>*If the product purchased is already phased out when the warranty is claimed, the latest model or closest product SKU will be given as a replacement.</p>
               </div>
               <div class="terms-label">SO Validity:</div>
               <div class="terms-val">
-                <p>Sales order has <b style="color:red;">validity period of 14 working days.</b> Any sales order not confirmed within this period will be automatically cancelled.</p>
+                <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <span className="text-red-600 font-black">14-day period will be automatically cancelled</span>.</p>
               </div>
               <div class="terms-label">Storage:</div>
               <div class="terms-val terms-highlight">
-                <p>Storage fee of 10% of the value of the orders per month <b style="color:red;">(0.33% per day).</b></p>
+                <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <span className="text-red-600 font-black"> (10% / 30 days =  0.33% per day)</span>.</p>
               </div>
               <div class="terms-label">Return:</div>
               <div class="terms-val terms-highlight">
-                <p><b style="color:red;"><u>7 days return policy</u></b> — for defective, damaged, or incomplete products.</p>
+                <p><span className="text-red-600 font-black"><u>7 days return policy - </u></span>if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
               </div>
             </div>
           </div>

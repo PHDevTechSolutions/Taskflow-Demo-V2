@@ -60,12 +60,20 @@ function toDate(v: any): Date {
   return new Date(v);
 }
 
-const todayKey = () => new Date().toISOString().split("T")[0];
+const todayKey = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = (d.getMonth() + 1).toString().padStart(2, "0");
+  const day = d.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 function readLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
-    return JSON.parse(localStorage.getItem(key) || "") ?? fallback;
+    const val = localStorage.getItem(key);
+    if (!val) return fallback;
+    return JSON.parse(val) ?? fallback;
   } catch {
     return fallback;
   }
@@ -195,7 +203,7 @@ export function Reminders() {
     setCurrentMeeting(meeting ?? null);
     setShowMeeting(!!meeting);
 
-    // ── Logout Reminder (4:30 PM → before 5:00 PM, once per day only) ──
+    // ── Logout Reminder (4:30 PM → bago ang 5:00 PM, isang beses lang sa bawat araw) ──
     const hours = now.getHours();
     const minutes = now.getMinutes();
 
@@ -205,10 +213,14 @@ export function Reminders() {
     const isBefore5 =
       hours < 17;
 
-    if (isAfter430 && isBefore5 && !dismissedLogout) {
+    // Double-check sa localStorage para siguradong dismissed na ito (para sa multi-tab)
+    const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
+    const isActuallyDismissed = !!logoutLS[todayKey()];
+
+    if (isAfter430 && isBefore5 && !dismissedLogout && !isActuallyDismissed && !showLogout) {
       setShowLogout(true);
     }
-  }, [now, meetings, dismissedMeetings, dismissedLogout]);
+  }, [now, meetings, dismissedMeetings, dismissedLogout, showLogout]);
 
   // ── Play audio on new meeting ────────────────────────────────────────────────
   useEffect(() => {
@@ -310,7 +322,7 @@ export function Reminders() {
       </Dialog>
 
       {/* ── Logout Reminder Dialog ───────────────────────────────────────── */}
-      <Dialog open={showLogout} onOpenChange={setShowLogout}>
+      <Dialog open={showLogout} onOpenChange={(o) => { if (!o) dismissLogout(); setShowLogout(o); }}>
         <DialogContent className="rounded-none p-0 overflow-hidden max-w-sm gap-0">
 
           {/* Header */}

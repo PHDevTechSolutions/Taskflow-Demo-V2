@@ -55,8 +55,8 @@ interface Props {
   setQuotationAmount: (v: string) => void;
   quotationType: string;
   setQuotationType: (v: string) => void;
-  quotationStatus: string;
-  setQuotationStatus: (v: string) => void;
+  //quotationStatus: string;
+  //setQuotationStatus: (v: string) => void;
   callType: string;
   setCallType: (v: string) => void;
   followUpDate: string;
@@ -216,7 +216,7 @@ export function QuotationSheet(props: Props) {
     quotationNumber, setQuotationNumber,
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
-    quotationStatus, setQuotationStatus,
+    //quotationStatus, setQuotationStatus,
     tsmApprovalStatus, setTsmApprovalStatus,
 
     // --- TAX & FINANCIALS ---
@@ -1895,29 +1895,29 @@ Procurement
                 className="capitalize rounded-none"
               />
 
-              <FieldLabel className="font-bold">Status </FieldLabel>
-              <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
-                <SelectTrigger className="w-full rounded-none">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-                    <SelectItem value="For Bidding">For Bidding</SelectItem>
-                    <SelectItem value="Nego">Nego</SelectItem>
-                    <SelectItem value="Order Completed">Order Completed</SelectItem>
-                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-                    <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
-                    <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
-                    <SelectItem value="Lost Bid">Lost Bid</SelectItem>
-                    <SelectItem value="Canvass Only">Canvass Only</SelectItem>
-                    <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
-                    <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+    <FieldLabel className="font-bold">Status </FieldLabel>
+    {/*<Select value={quotationStatus} onValueChange={setQuotationStatus} required>
+      <SelectTrigger className="w-full rounded-none">
+        <SelectValue placeholder="Select status" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
+          <SelectItem value="For Bidding">For Bidding</SelectItem>
+          <SelectItem value="Nego">Nego</SelectItem>
+          <SelectItem value="Order Completed">Order Completed</SelectItem>
+          <SelectItem value="Convert to SO">Convert to SO</SelectItem>
+          <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
+          <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
+          <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+          <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
+          <SelectItem value="Lost Bid">Lost Bid</SelectItem>
+          <SelectItem value="Canvass Only">Canvass Only</SelectItem>
+          <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
+          <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>*/}
 
               <FieldLabel className="font-bold">Approval Process </FieldLabel>
               <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
@@ -1932,24 +1932,24 @@ Procurement
                 </SelectContent>
               </Select>
 
-              {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
-              {quotationStatus && tsmApprovalStatus ? (
-                <>
-                  <FieldLabel className="mt-3">Action</FieldLabel>
-                  <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
-                    {[
-                      {
-                        value: "Quote-Done",
-                        title: "Quote-Done",
-                        desc: "The quotation process is complete and finalized.",
-                      },
-                    ].map((item) => (
-                      <FieldLabel key={item.value}>
-                        <Field orientation="horizontal" className="w-full items-start">
-                          {/* LEFT */}
-                          <FieldContent className="flex-1">
-                            <FieldTitle>{item.title}</FieldTitle>
-                            <FieldDescription>{item.desc}</FieldDescription>
+    {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
+    { tsmApprovalStatus ? (
+      <>
+        <FieldLabel className="mt-3">Action</FieldLabel>
+        <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+          {[
+            {
+              value: "Quote-Done",
+              title: "Quote-Done",
+              desc: "The quotation process is complete and finalized.",
+            },
+          ].map((item) => (
+            <FieldLabel key={item.value}>
+              <Field orientation="horizontal" className="w-full items-start">
+                {/* LEFT */}
+                <FieldContent className="flex-1">
+                  <FieldTitle>{item.title}</FieldTitle>
+                  <FieldDescription>{item.desc}</FieldDescription>
 
                             {/* Buttons only visible if selected */}
                             {status === item.value && (
