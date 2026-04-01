@@ -1090,10 +1090,10 @@ export default function TaskListEditDialog({
     pdf.setFontSize(9);
     pdf.setTextColor(18, 18, 18);
     const line = `${companyLabel}  ·  OFFICIAL QUOTATION  ·  ${referenceNo}`;
-    
+
     // stepX matches pattern width 800
     // stepY is 75 to match 2 rows per 150 height pattern
-    const stepX = 800; 
+    const stepX = 800;
     const stepY = 75;
     const angle = 25;
 
@@ -1158,24 +1158,24 @@ export default function TaskListEditDialog({
       // ── Build security artefacts BEFORE rendering ────────────────────────
       const issuedAt = new Date().toISOString();
       const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
-      
+
       // Security Token Generation (must match verify page logic)
       const SECURITY_SALT = "TF-SECURE-2024-DS-EC";
       const generateToken = (ref: string, total: string) => {
-          const raw = `${ref}|${total}|${SECURITY_SALT}`;
-          let hash = 0;
-          for (let i = 0; i < raw.length; i++) {
-              const chr = raw.charCodeAt(i);
-              hash = (hash << 5) - hash + chr;
-              hash |= 0;
-          }
-          return Math.abs(hash).toString(36).toUpperCase();
+        const raw = `${ref}|${total}|${SECURITY_SALT}`;
+        let hash = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const chr = raw.charCodeAt(i);
+          hash = (hash << 5) - hash + chr;
+          hash |= 0;
+        }
+        return Math.abs(hash).toString(36).toUpperCase();
       };
 
       const totalStr = payload.totalPrice.toFixed(2);
       const token = generateToken(payload.referenceNo, totalStr);
       const verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
-      
+
       const qrDataUrl = await generateQrDataUrl(verificationUrl);
 
       const pdf = new jsPDF({
@@ -1392,20 +1392,136 @@ export default function TaskListEditDialog({
         currentY += rowBlock.h;
       }
 
-      const _deliveryNum = parseFloat(String(payload.deliveryFee)) || 0;
-      const _restockingNum = payload.restockingFee || 0;
-      const _netSales = payload.totalPrice - _deliveryNum - _restockingNum;
-      const _vatBreak = payload.vatTypeLabel === "VAT Inc"
-        ? `<tr><td class="sum-gray-lbl">Less: VAT (12)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
-        : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}</td></tr>`;
-      const _whtBadge = payload.whtType && payload.whtType !== "none"
-        ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>` : "";
-      const _finalLbl = payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due";
-      const _finalAmt = (payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // ✅ Helper (put above this block if possible)
+      const peso = (val: any) =>
+        Number(val ?? 0).toLocaleString("en-PH", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
 
-      const footerBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;padding-bottom:0;"><div class="table-container" style="border-bottom:2px solid black;"><div class="summary-wrap"><div class="summary-left"><div class="summary-tax-title">Tax Type:</div><div class="tax-options"><span class="${payload.vatTypeLabel === "VAT Inc" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc</span><span class="${payload.vatTypeLabel === "VAT Exe" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe</span><span class="${payload.vatTypeLabel === "Zero-Rated" ? "tax-active" : "tax-inactive"}">${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated</span></div>${_whtBadge}</div><div class="summary-right"><table class="sum-tbl"><tr><td class="sum-lbl">Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}</td><td class="sum-val">₱${_netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-lbl">Delivery Charge</td><td class="sum-val">₱${_deliveryNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr class="sum-divider"><td class="sum-lbl">Restocking Fee</td><td class="sum-val">₱${_restockingNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr><td class="sum-total-lbl">Total Invoice Amount</td><td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${_vatBreak}<tr class="sum-final-row"><td class="sum-final-lbl">${_finalLbl}</td><td class="sum-final-val">₱${_finalAmt}</td></tr></table></div></div></div></div>`,
-      );
+      const round2 = (n: any) =>
+        Math.round((Number(n ?? 0)) * 100) / 100;
+
+
+      // ✅ Safe numeric values
+      const _deliveryNum = Number(payload.deliveryFee) || 0;
+      const _restockingNum = Number(payload.restockingFee) || 0;
+      const _total = Number(payload.totalPrice) || 0;
+
+      // ✅ Calculations (rounded properly)
+      const _netSales = round2(_total - _deliveryNum - _restockingNum);
+      const _vatAmount = round2(_total * (12 / 112));
+      const _netOfVat = round2(_total / 1.12);
+      const _whtAmount = round2(payload.whtAmount || 0);
+
+      // ✅ VAT / WHT block
+      const _vatBreak =
+        payload.vatTypeLabel === "VAT Inc"
+          ? `
+<tr>
+  <td class="sum-gray-lbl">Less: VAT (12%)</td>
+  <td class="sum-gray-val">₱${peso(_vatAmount)}</td>
+</tr>
+<tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}>
+  <td class="sum-gray-lbl">Net of VAT (Tax Base)</td>
+  <td class="sum-gray-val">₱${peso(_netOfVat)}</td>
+</tr>
+${payload.whtType && payload.whtType !== "none"
+            ? `
+<tr class="sum-divider">
+  <td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td>
+  <td class="sum-ewt-val">− ₱${peso(_whtAmount)}</td>
+</tr>`
+            : ""
+          }
+`
+          : `
+<tr class="sum-divider">
+  <td class="sum-gray-lbl">Tax Status</td>
+  <td class="sum-gray-val" style="font-style:italic;">
+    ${payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}
+  </td>
+</tr>
+`;
+
+      // ✅ WHT badge
+      const _whtBadge =
+        payload.whtType && payload.whtType !== "none"
+          ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>`
+          : "";
+
+      // ✅ Final label + amount
+      const _finalLbl =
+        payload.whtType && payload.whtType !== "none"
+          ? "Net Amount to Collect"
+          : "Total Amount Due";
+
+      const _finalAmt = peso(round2(payload.netAmountToCollect ?? _total));
+
+
+      // ✅ FINAL RENDER BLOCK
+      const footerBlock = await renderBlock(`
+<div class="content-area" style="padding-top:0;padding-bottom:0;">
+  <div class="table-container" style="border-bottom:2px solid black;">
+    <div class="summary-wrap">
+
+      <div class="summary-left">
+        <div class="summary-tax-title">Tax Type:</div>
+
+        <div class="tax-options">
+          <span class="${payload.vatTypeLabel === "VAT Inc" ? "tax-active" : "tax-inactive"}">
+            ${payload.vatTypeLabel === "VAT Inc" ? "●" : "○"} VAT Inc
+          </span>
+          <span class="${payload.vatTypeLabel === "VAT Exe" ? "tax-active" : "tax-inactive"}">
+            ${payload.vatTypeLabel === "VAT Exe" ? "●" : "○"} VAT Exe
+          </span>
+          <span class="${payload.vatTypeLabel === "Zero-Rated" ? "tax-active" : "tax-inactive"}">
+            ${payload.vatTypeLabel === "Zero-Rated" ? "●" : "○"} Zero-Rated
+          </span>
+        </div>
+
+        ${_whtBadge}
+      </div>
+
+      <div class="summary-right">
+        <table class="sum-tbl">
+
+          <tr>
+            <td class="sum-lbl">
+              Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}
+            </td>
+            <td class="sum-val">₱${peso(_netSales)}</td>
+          </tr>
+
+          <tr>
+            <td class="sum-lbl">Delivery Charge</td>
+            <td class="sum-val">₱${peso(_deliveryNum)}</td>
+          </tr>
+
+          <tr class="sum-divider">
+            <td class="sum-lbl">Restocking Fee</td>
+            <td class="sum-val">₱${peso(_restockingNum)}</td>
+          </tr>
+
+          <tr>
+            <td class="sum-total-lbl">Total Invoice Amount</td>
+            <td class="sum-total-val">₱${peso(_total)}</td>
+          </tr>
+
+          ${_vatBreak}
+
+          <tr class="sum-final-row">
+            <td class="sum-final-lbl">${_finalLbl}</td>
+            <td class="sum-final-val">₱${_finalAmt}</td>
+          </tr>
+
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+`);
       if (currentY + footerBlock.h > pdfHeight - BOTTOM_MARGIN) {
         finalizeCurrentPage();
         pdf.addPage([612, 936]);
