@@ -289,6 +289,9 @@ export function QuotationSheet(props: Props) {
   const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragRowUid, setDragRowUid] = useState<string | null>(null);
+  const [dragOverRowUid, setDragOverRowUid] = useState<string | null>(null);
   const [isSpfMode, setIsSpfMode] = useState(false);
   const [isSpf1Mode, setIsSpf1Mode] = useState(false);
   const [spf1Loading, setSpf1Loading] = useState(false);
@@ -2067,7 +2070,7 @@ Procurement
         <DialogContent
           className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col"
           style={{
-            maxWidth: selectedProducts.length === 0 ? "900px" : "2300px",
+            maxWidth: "2300px",
             width: "100vw",
           }}
         >
@@ -2092,9 +2095,8 @@ Procurement
                 </div>
               )}
             </div>
-            {/* Mobile Tab Switcher */}
-            {selectedProducts.length > 0 && (
-              <div className="flex lg:hidden border-t border-gray-100 text-[11px] font-bold">
+            {/* Mobile Tab Switcher — always shown on mobile */}
+            <div className="flex lg:hidden border-t border-gray-100 text-[11px] font-bold">
                 <button
                   type="button"
                   onClick={() => setMobilePanelTab("search")}
@@ -2110,20 +2112,16 @@ Procurement
                   🛒 Products ({selectedProducts.length})
                 </button>
               </div>
-            )}
           </div>
 
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
             <div
-              className={`h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto ${selectedProducts.length === 0
-                ? "grid-cols-1"
-                : "grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
-                }`}
+              className="h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
             >
 
               {/* Left side: Search + checkbox selected */}
-              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${selectedProducts.length > 0 && mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
+              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" && selectedProducts.length > 0 ? "hidden lg:flex" : "flex"}`}>
                 <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
 
                   {/* Source Switcher */}
@@ -2146,6 +2144,15 @@ Procurement
 
                     <button
                       type="button"
+                      onClick={() => { setIsSpf1Mode(false); setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-green-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                    >
+                      <span className="text-sm mb-0.5">🛠️</span>
+                      <span>Services</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
                       className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
@@ -2158,13 +2165,13 @@ Procurement
                   {isSpfMode ? (
                     <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
-                        <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SRF</span>
+                        <span className="text-[9px] text-red-400 italic">— Service Request Form</span>
                       </div>
 
                       {/* Cloudinary Image Upload */}
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-gray-500">Product Image (optional)</label>
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Service Image (optional)</label>
                         <div className="flex items-center gap-2">
                           <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
                             <ImagePlus className="w-4 h-4 text-red-400" />
@@ -2232,10 +2239,10 @@ Procurement
 
                       {/* Product Name */}
                       <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Service Name *</label>
                         <Input
                           type="text"
-                          placeholder="Enter product name..."
+                          placeholder="Enter service name..."
                           value={spfManualProduct.title}
                           onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))}
                           className="rounded-none text-xs uppercase"
@@ -2243,7 +2250,7 @@ Procurement
                       </div>
 
                       {/* SKU */}
-                      <div className="flex flex-col gap-0.5">
+                      {/* <div className="flex flex-col gap-0.5">
                         <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
                         <Input
                           type="text"
@@ -2252,11 +2259,11 @@ Procurement
                           onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))}
                           className="rounded-none text-xs uppercase"
                         />
-                      </div>
+                      </div> */}
 
                       {/* Quantity & Price */}
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <div className="flex flex-col gap-1">
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {/* <div className="flex flex-col gap-1">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
                           <Input
                             type="number"
@@ -2266,9 +2273,9 @@ Procurement
                             onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
                             className="rounded-none text-xs"
                           />
-                        </div>
+                        </div> */}
                         <div className="flex flex-col gap-1">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Service Price</label>
                           <Input
                             type="number"
                             min={0}
@@ -2283,9 +2290,9 @@ Procurement
 
                       {/* Description */}
                       <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description / Specs</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Description</label>
                         <Textarea
-                          placeholder="Enter product description or specifications..."
+                          placeholder="Enter service details"
                           value={spfManualProduct.description}
                           onChange={(e) => setSpfManualProduct(prev => ({ ...prev, description: e.target.value }))}
                           rows={3}
@@ -2320,14 +2327,14 @@ Procurement
                         className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 h-9 mt-1"
                       >
                         <Plus className="w-4 h-4" />
-                        Add SPF Product
+                        Add Service
                       </Button>
                     </div>
                   ) : isSpf1Mode ? (
                     <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF 1</span>
+                          <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
                           <span className="text-[9px] text-red-400 italic">— approved SPF list</span>
                         </div>
                         {spf1Loading && (
@@ -2599,13 +2606,24 @@ ${spec.value}
                 {/* Search Results — only shown when not in SPF mode */}
                 {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
                   <>
-                    <div className="text-xs text-green-600 mb-2">
-                      Note: you can choose the same products.
+                    <div className="text-xs text-green-600 mb-2 flex items-center gap-2">
+                      <span>Note: you can choose the same products.</span>
+                      <span className="text-[10px] text-blue-500 font-semibold bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                        ✦ Drag cards to add
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-4">
                       {searchResults.map((item) => (
-                        <Card key={item.id} className="cursor-pointer hover:bg-gray-50 rounded-xs">
+                        <Card
+                          key={item.id}
+                          className="cursor-grab active:cursor-grabbing hover:bg-gray-50 rounded-xs select-none border-2 border-transparent hover:border-blue-200 transition-all"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "copy";
+                            e.dataTransfer.setData("application/json", JSON.stringify(item));
+                          }}
+                        >
                           <CardHeader className="flex items-center justify-between gap-3">
                             <label className="flex items-center gap-2 cursor-pointer flex-1">
                               <Button
@@ -2695,7 +2713,55 @@ ${spec.value}
               </div>
 
               {/* Right side: Selected Products as Table with Image & Editable Description */}
-              <div className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"}`}>
+              <div
+                className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"} ${isDragOver ? "ring-2 ring-blue-400 ring-inset rounded-lg bg-blue-50/30" : ""} transition-all`}
+                onDragOver={(e) => {
+                  // Only show drop highlight for product cards from left panel, not row reorders
+                  if (!e.dataTransfer.types.includes("application/json")) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  setIsDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setIsDragOver(false);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                  try {
+                    const raw = e.dataTransfer.getData("application/json");
+                    if (!raw) return;
+                    const item = JSON.parse(raw) as Product;
+                    setSelectedProducts((prev) => [
+                      ...prev,
+                      {
+                        ...item,
+                        uid: crypto.randomUUID(),
+                        quantity: 1,
+                        price: 0,
+                        discount: 0,
+                        description: item.description || "",
+                      },
+                    ]);
+                    setMobilePanelTab("products");
+                  } catch (err) {
+                    console.error("Drop failed:", err);
+                  }
+                }}
+              >
+                {selectedProducts.length === 0 && (
+                  <div className={`flex flex-col items-center justify-center h-full min-h-[300px] border-2 border-dashed rounded-lg transition-all ${isDragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-gray-200 text-gray-300"}`}>
+                    <div className="text-5xl mb-3">{isDragOver ? "📥" : "📋"}</div>
+                    <p className="font-black text-sm uppercase tracking-widest">
+                      {isDragOver ? "Drop to add product" : "No products selected"}
+                    </p>
+                    <p className="text-xs mt-1 opacity-70">
+                      {isDragOver ? "" : "Search and drag items here, or click ＋"}
+                    </p>
+                  </div>
+                )}
                 {selectedProducts.length > 0 && (
                   <>
                     {/* Controls bar - desktop horizontal, mobile compact */}
@@ -2750,10 +2816,18 @@ ${spec.value}
                       </div>
                     </div>
 
+                    <div className="relative">
+                      {isDragOver && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none rounded border-2 border-dashed border-blue-400 bg-blue-50/70">
+                          <p className="font-black text-blue-500 text-base uppercase tracking-widest">📥 Drop to add product</p>
+                        </div>
+                      )}
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                         <thead>
                           <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                            <th className="border border-gray-700 p-2 text-center w-7 text-gray-400 select-none" title="Drag to reorder">⠿</th>
+                            <th className="border border-gray-700 p-2 text-center w-8 font-bold">#</th>
                             <th className="border border-gray-700 p-2 text-center w-10">
                               <label className="flex items-center justify-center gap-1 cursor-pointer">
                                 <input
@@ -2799,9 +2873,54 @@ ${spec.value}
                             return (
                               <React.Fragment key={p.uid}>
                                 <tr
-                                  className={`even:bg-gray-50 cursor-pointer ${isExpanded ? "" : ""}`}
-
+                                  className={`even:bg-gray-50 cursor-pointer transition-all ${
+                                    dragOverRowUid === p.uid && dragRowUid !== p.uid
+                                      ? "border-t-2 border-t-blue-400"
+                                      : ""
+                                  } ${dragRowUid === p.uid ? "opacity-40" : ""}`}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = "move";
+                                    e.dataTransfer.setData("text/x-row-uid", p.uid);
+                                    setDragRowUid(p.uid);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDragRowUid(null);
+                                    setDragOverRowUid(null);
+                                  }}
+                                  onDragOver={(e) => {
+                                    // Only process row reorder, not product-from-left drops
+                                    if (!e.dataTransfer.types.includes("text/x-row-uid")) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (dragOverRowUid !== p.uid) setDragOverRowUid(p.uid);
+                                  }}
+                                  onDrop={(e) => {
+                                    const fromUid = e.dataTransfer.getData("text/x-row-uid");
+                                    if (!fromUid || fromUid === p.uid) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSelectedProducts((prev) => {
+                                      const arr = [...prev];
+                                      const fromIdx = arr.findIndex((x) => x.uid === fromUid);
+                                      const toIdx = arr.findIndex((x) => x.uid === p.uid);
+                                      if (fromIdx === -1 || toIdx === -1) return prev;
+                                      const [moved] = arr.splice(fromIdx, 1);
+                                      arr.splice(toIdx, 0, moved);
+                                      return arr;
+                                    });
+                                    setDragRowUid(null);
+                                    setDragOverRowUid(null);
+                                  }}
                                 >
+                                  {/* Drag handle */}
+                                  <td className="border border-gray-300 p-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none text-base">
+                                    ⠿
+                                  </td>
+                                  {/* Row order number */}
+                                  <td className="border border-gray-300 p-2 text-center text-gray-400 font-mono font-bold text-[11px]">
+                                    {idx + 1}
+                                  </td>
                                   <td className="border border-gray-300 p-4">
                                     <div className="flex items-center justify-start gap-2">
                                       {/* Styled Checkbox */}
@@ -3061,7 +3180,9 @@ ${spec.value}
                         <tfoot className="bg-gray-100 font-bold text-xs">
                           <tr>
                             <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
+                            <td className="border border-gray-300 p-2 text-center"></td>
+                            <td className="border border-gray-300 p-2 text-center"></td>
+                            <td className="border border-gray-300 p-2 text-center"></td>
                             <td className="border border-gray-300 p-2"></td>
                             <td className="border border-gray-300 p-2 text-center font-black">
                               {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
@@ -3088,7 +3209,7 @@ ${spec.value}
 
                           {/* Delivery & Restocking Fee Row — desktop only inside table */}
                           <tr className="hidden sm:table-row">
-                            <td colSpan={4} className="border border-gray-300 p-2"></td>
+                            <td colSpan={6} className="border border-gray-300 p-2"></td>
                             <td colSpan={4} className="border border-gray-300 p-2">
                               <div className="flex flex-col gap-2">
                                 <div className="flex items-center justify-between gap-2">
@@ -3118,6 +3239,7 @@ ${spec.value}
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
                     </div>
 
                     {/* Delivery & Restocking Fee — mobile only, below table */}
@@ -3575,7 +3697,8 @@ ${spec.value}
 
                       <div className="col-span-2 font-black uppercase">Warranty:</div>
                       <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                        <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                        <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
                         <p>The warranty will be VOID under the following circumstances:</p>
                         <p>*If the unit is being tampered with.</p>
                         <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
