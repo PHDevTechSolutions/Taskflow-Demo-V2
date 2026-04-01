@@ -14,6 +14,7 @@ import { TeamSwitcher } from "@/components/nav/team-switcher";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/contexts/UserContext";
 
 // ─── Role config: display label + pill color per role ─────────────────────────
 
@@ -249,7 +250,14 @@ function RoleBadge({ role }: { role: string }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
-  const [userId, setUserId] = React.useState<string | null>(null);
+  const { userId } = useUser();
+  
+  // Remove userId from props if it exists to avoid React warning on DOM elements
+  const sidebarProps = React.useMemo(() => {
+    const { userId: _, ...rest } = props as any;
+    return rest;
+  }, [props]);
+
   const [userDetails, setUserDetails] = React.useState({
     Role: null as string | null,
     Department: null as string | null,
@@ -267,15 +275,12 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     localStorage.setItem("sidebarOpenSections", JSON.stringify(openSections));
   }, [openSections]);
 
-  // Get user ID from URL
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setUserId(params.get("id"));
-  }, []);
-
   // Fetch user role
   React.useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setIsLoadingUser(false);
+      return;
+    }
     setIsLoadingUser(true);
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
       .then((res) => res.json())
@@ -283,14 +288,8 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
       .finally(() => setIsLoadingUser(false));
   }, [userId]);
 
-  // Append ?id= to all nav URLs
-  const withUserId = React.useCallback(
-    (url: string) => {
-      if (!userId || !url || url === "#") return url;
-      return url.includes("?") ? `${url}&id=${userId}` : `${url}?id=${userId}`;
-    },
-    [userId]
-  );
+  // Main navigation URLs no longer need explicit ?id= append
+  // since UserContext handles persistence via localStorage
 
   // Filter workspaces by role
   const filteredWorkspaces = React.useMemo(() => {
@@ -347,7 +346,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar {...props}>
+    <Sidebar {...sidebarProps}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
@@ -357,14 +356,11 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         <RoleBadge role={userDetails.Role} />
 
         <NavFavorites
-          favorites={filteredFavorites.map((f) => ({ ...f, url: withUserId(f.url) }))}
+          favorites={filteredFavorites}
         />
 
         <NavWorkspaces
-          workspaces={filteredWorkspaces.map((w) => ({
-            ...w,
-            pages: w.pages.map((p) => ({ ...p, url: withUserId(p.url) })),
-          }))}
+          workspaces={filteredWorkspaces}
           openSections={openSections}
           onToggleSection={(section) =>
             setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }))
@@ -372,7 +368,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         />
 
         <NavSecondary
-          items={data.navSecondary.map((i) => ({ ...i, url: withUserId(i.url) }))}
+          items={data.navSecondary}
           className="mt-auto"
         />
       </SidebarContent>

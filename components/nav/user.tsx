@@ -188,7 +188,7 @@ export function NavUser({ user, userId }: NavUserProps) {
               {/* Account link */}
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild className="rounded-lg cursor-pointer mx-1 px-3 py-2.5 focus:bg-indigo-50 focus:text-indigo-700 transition-colors">
-                  <Link href={`/auth/profile?id=${encodeURIComponent(userId)}`}>
+                  <Link href="/auth/profile">
                     <BadgeCheck size={15} className="mr-2 text-indigo-400" />
                     <span className="text-xs font-medium">Account</span>
                   </Link>

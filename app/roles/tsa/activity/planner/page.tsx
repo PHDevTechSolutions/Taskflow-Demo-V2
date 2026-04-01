@@ -252,7 +252,7 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
     router.push(`/roles/tsa/activity/spf?${new URLSearchParams({ id: userId, highlight: notif.spf_number }).toString()}`);
   };
 
-  const handleViewPdf     = (e: React.MouseEvent, notif: QuotationNotification) => { e.stopPropagation(); setOpen(false); router.push(buildUrl(notif, "preview")); };
+  const handleViewPdf = (e: React.MouseEvent, notif: QuotationNotification) => { e.stopPropagation(); setOpen(false); router.push(buildUrl(notif, "preview")); };
   const handleDownloadPdf = (e: React.MouseEvent, notif: QuotationNotification) => { e.stopPropagation(); setOpen(false); router.push(buildUrl(notif, "download")); };
 
   return (
@@ -286,12 +286,12 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
           <div className="divide-y">
             {notifications.map((notif) => {
               const isQuotation = "quotation_number" in notif;
-              const isSPF       = "spf_number" in notif;
-              const isUnread    = !readIds.has(notif.id);
+              const isSPF = "spf_number" in notif;
+              const isUnread = !readIds.has(notif.id);
 
               if (isQuotation) {
                 const q = notif as QuotationNotification;
-                const isApproved       = q.tsm_approved_status === "Approved";
+                const isApproved = q.tsm_approved_status === "Approved";
                 const approvedByManager = !!q.manager_approval_date;
                 return (
                   <div key={q.id} className={`px-4 py-3 text-xs flex flex-col gap-1.5 cursor-pointer transition-colors hover:bg-accent/60 active:bg-accent ${isUnread ? "bg-muted/40" : "bg-background"}`} onClick={() => handleNotifClick(q)}>
@@ -318,7 +318,7 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
                         <span><span className="font-medium text-foreground">{isApproved ? "Approved" : "Declined"} by Manager:</span> {formatDate(q.manager_approval_date)}</span>
                       </div>
                     )}
-                    {q.tsm_remarks     && <p className="text-muted-foreground italic">TSM: &ldquo;{q.tsm_remarks}&rdquo;</p>}
+                    {q.tsm_remarks && <p className="text-muted-foreground italic">TSM: &ldquo;{q.tsm_remarks}&rdquo;</p>}
                     {q.manager_remarks && <p className="text-muted-foreground italic">Manager: &ldquo;{q.manager_remarks}&rdquo;</p>}
                     {isApproved && (
                       <div className="flex items-center gap-2 pt-1">
@@ -402,9 +402,8 @@ function PlannerCard({
         </CardTitle>
       </CardHeader>
       <CardContent
-        className={`transition-all duration-300 overflow-hidden ${
-          isOpen ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 p-0"
-        }`}
+        className={`transition-all duration-300 overflow-hidden ${isOpen ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 p-0"
+          }`}
       >
         {children}
       </CardContent>
@@ -436,12 +435,12 @@ function DashboardContent() {
     completed: true, done: true, overdue: true,
   });
 
-  const [progressCount,  setProgressCount]  = useState(0);
+  const [progressCount, setProgressCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
   const [deliveredCount, setDeliveredCount] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
-  const [doneCount,      setDoneCount]      = useState(0);
-  const [overdueCount,   setOverdueCount]   = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
 
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
 
@@ -476,7 +475,7 @@ function DashboardContent() {
             (name) => new Promise<void>((resolve) => {
               const req = indexedDB.deleteDatabase(name);
               req.onsuccess = () => resolve();
-              req.onerror   = () => resolve();
+              req.onerror = () => resolve();
               req.onblocked = () => resolve();
             })
           )
@@ -501,19 +500,19 @@ function DashboardContent() {
       if (!response.ok) throw new Error("Failed to fetch user data");
       const data = await response.json();
       setUserDetails({
-        referenceid:    data.ReferenceID    || "",
-        tsm:            data.TSM            || "",
-        manager:        data.Manager        || "",
-        target_quota:   data.TargetQuota    || "",
-        firstname:      data.Firstname      || "",
-        lastname:       data.Lastname       || "",
-        email:          data.Email          || "",
-        contact:        data.ContactNumber  || "",
-        tsmname:        data.TSMName        || "",
-        managername:    data.ManagerName    || "",
-        signature:      data.signatureImage || "",
+        referenceid: data.ReferenceID || "",
+        tsm: data.TSM || "",
+        manager: data.Manager || "",
+        target_quota: data.TargetQuota || "",
+        firstname: data.Firstname || "",
+        lastname: data.Lastname || "",
+        email: data.Email || "",
+        contact: data.ContactNumber || "",
+        tsmname: data.TSMName || "",
+        managername: data.ManagerName || "",
+        signature: data.signatureImage || "",
         managerDetails: data.managerDetails || null,
-        tsmDetails:     data.tsmDetails     || null,
+        tsmDetails: data.tsmDetails || null,
       });
     } catch (err) {
       console.error("User fetch error:", err);
@@ -543,7 +542,7 @@ function DashboardContent() {
       ...data,
       contactperson: Array.isArray(data.contact_person) ? data.contact_person : typeof data.contact_person === "string" ? data.contact_person.split(",").map((v) => v.trim()) : [],
       contactnumber: Array.isArray(data.contact_number) ? data.contact_number : typeof data.contact_number === "string" ? data.contact_number.split(",").map((v) => v.trim()) : [],
-      emailaddress:  Array.isArray(data.email_address)  ? data.email_address  : typeof data.email_address  === "string" ? data.email_address.split(",").map((v) => v.trim())  : [],
+      emailaddress: Array.isArray(data.email_address) ? data.email_address : typeof data.email_address === "string" ? data.email_address.split(",").map((v) => v.trim()) : [],
     };
     try {
       const isEdit = Boolean(payload.id);
@@ -579,19 +578,19 @@ function DashboardContent() {
 
   // ── Shared props builder ──────────────────────────────────────────────────
   const sharedProps = {
-    referenceid:                  userDetails.referenceid,
-    firstname:                    userDetails.firstname,
-    lastname:                     userDetails.lastname,
-    email:                        userDetails.email,
-    contact:                      userDetails.contact,
-    tsmname:                      userDetails.tsmname,
-    managername:                  userDetails.managername,
-    target_quota:                 userDetails.target_quota,
+    referenceid: userDetails.referenceid,
+    firstname: userDetails.firstname,
+    lastname: userDetails.lastname,
+    email: userDetails.email,
+    contact: userDetails.contact,
+    tsmname: userDetails.tsmname,
+    managername: userDetails.managername,
+    target_quota: userDetails.target_quota,
     dateCreatedFilterRange,
     setDateCreatedFilterRangeAction,
-    managerDetails:               userDetails.managerDetails ?? null,
-    tsmDetails:                   userDetails.tsmDetails ?? null,
-    signature:                    userDetails.signature,
+    managerDetails: userDetails.managerDetails ?? null,
+    tsmDetails: userDetails.tsmDetails ?? null,
+    signature: userDetails.signature,
   };
 
   return (
@@ -607,7 +606,11 @@ function DashboardContent() {
               <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
               <Breadcrumb>
                 <BreadcrumbList>
-                  <BreadcrumbItem><BreadcrumbPage className="line-clamp-1">Activity Planners</BreadcrumbPage></BreadcrumbItem>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
+                      Activity Planners
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
@@ -694,7 +697,7 @@ function DashboardContent() {
                 >
                   <Delivered {...sharedProps} onCountChange={setDeliveredCount} />
                 </PlannerCard>*/}
-                
+
 
                 {/* ── Pending Task ── 
                 <PlannerCard
@@ -706,7 +709,7 @@ function DashboardContent() {
                 >
                   <Done {...sharedProps} onCountChange={setDoneCount} />
                 </PlannerCard>*/}
-                
+
 
                 {/* ── Overdue (full width, red border) ── */}
                 <PlannerCard
@@ -727,7 +730,6 @@ function DashboardContent() {
         </SidebarInset>
 
         <SidebarRight
-          userId={userId ?? undefined}
           dateCreatedFilterRange={dateCreatedFilterRange}
           setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
         />

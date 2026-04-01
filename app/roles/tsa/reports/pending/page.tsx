@@ -168,7 +168,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Reports - Pending Sales Order Summary</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">Reports - Pending Sales Order Summary</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>

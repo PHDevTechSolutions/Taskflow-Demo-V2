@@ -135,8 +135,7 @@ function SettingsContent() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-base font-semibold flex items-center gap-1.5">
-                    <Settings2 size={16} className="text-slate-400" />
+                  <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
                     Settings
                   </BreadcrumbPage>
                 </BreadcrumbItem>
@@ -175,13 +174,7 @@ function SettingsContent() {
                     <SelectItem value="light">Light</SelectItem>
                     <SelectItem value="dark">Dark</SelectItem>
                     <SelectItem value="system">System</SelectItem>
-                    <SelectItem value="ecoshift">Ecoshift Corporation</SelectItem>
-                    <SelectItem value="prms">Progressive Material Solutions</SelectItem>
-                    <SelectItem value="vah">Value Acquisition Holdings</SelectItem>
-                    <SelectItem value="buildchem">Buildchem Solutions</SelectItem>
-                    <SelectItem value="disruptive">Disruptive Solutions</SelectItem>
-                    <SelectItem value="outlook">Outlook</SelectItem>
-                    <SelectItem value="viber">Viber</SelectItem>
+
                   </SelectContent>
                 </Select>
               </SettingRow>
@@ -232,7 +225,7 @@ function SettingsContent() {
       </SidebarInset>
 
       <SidebarRight
-        userId={userId ?? undefined}
+        
         dateCreatedFilterRange={dateCreatedFilterRange}
         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
       />

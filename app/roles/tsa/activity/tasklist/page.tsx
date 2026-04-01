@@ -168,7 +168,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Historical Data / Task List</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">Historical Data / Task List</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>

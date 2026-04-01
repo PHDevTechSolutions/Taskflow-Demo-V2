@@ -429,8 +429,8 @@ function SettingsContent() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-xs font-black uppercase tracking-widest">
-                    Settings
+                  <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
+                    Security
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

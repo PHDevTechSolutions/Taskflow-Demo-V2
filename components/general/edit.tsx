@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 import { sileo } from "sileo";
-import { UserProvider } from "@/contexts/UserContext";
+import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
@@ -159,8 +158,7 @@ const StrengthBar = ({ strength }: { strength: "weak" | "medium" | "strong" | ""
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfileClient() {
-  const searchParams = useSearchParams();
-  const userId = searchParams?.get("id") ?? "";
+  const { userId } = useUser();
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
@@ -191,7 +189,7 @@ export default function ProfileClient() {
 
   useEffect(() => {
     if (!userId) {
-      setError("User ID missing in URL");
+      setError("User ID is not available");
       setLoading(false);
       return;
     }
@@ -1017,7 +1015,7 @@ export default function ProfileClient() {
             </SidebarInset>
 
             <SidebarRight
-              userId={userId || undefined}
+              
               dateCreatedFilterRange={dateCreatedFilterRange}
               setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
             />

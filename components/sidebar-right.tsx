@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useUser } from "@/contexts/UserContext";
 import { DatePicker } from "@/components/rightbar/date-picker";
 import { NavUser } from "@/components/nav/user";
 import {
@@ -24,7 +25,6 @@ import { TimeLogComponent } from "@/components/roles/tsa/activity/timelog/logs";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SidebarRightProps = React.ComponentProps<typeof Sidebar> & {
-  userId?: string;
   dateCreatedFilterRange: DateRange | undefined;
   setDateCreatedFilterRangeAction: React.Dispatch<
     React.SetStateAction<DateRange | undefined>
@@ -210,11 +210,18 @@ function SidebarInner({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SidebarRight({
-  userId,
   dateCreatedFilterRange,
   setDateCreatedFilterRangeAction,
   ...props
 }: SidebarRightProps) {
+  const { userId } = useUser();
+  
+  // Remove userId from props if it exists to avoid React warning on DOM elements
+  const sidebarProps = React.useMemo(() => {
+    const { userId: _, ...rest } = props as any;
+    return rest;
+  }, [props]);
+
   const { timeFormat, dateFormat } = useFormat();
   const { time, date } = useFormattedClock(timeFormat, dateFormat);
 
@@ -323,7 +330,7 @@ export function SidebarRight({
       <Sidebar
         collapsible="none"
         className="sticky top-0 hidden h-svh border-l lg:flex"
-        {...props}
+        {...sidebarProps}
       >
         <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
           <NavUser user={navUser} userId={userId ?? ""} />

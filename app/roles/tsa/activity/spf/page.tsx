@@ -173,7 +173,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Request / Pending SPF</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">Request / Pending SPF</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>

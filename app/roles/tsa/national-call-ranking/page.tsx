@@ -134,7 +134,9 @@ function DashboardContent() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="line-clamp-1">National Call Ranking (Outbound - Touchbase)</BreadcrumbPage>
+                    <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
+                      National Call Ranking (Outbound - Touchbase)
+                    </BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
