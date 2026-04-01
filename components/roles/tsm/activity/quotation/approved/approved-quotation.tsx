@@ -59,6 +59,7 @@ interface Completed {
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
+    manager_name: string;
 }
 
 interface CompletedProps {
@@ -364,14 +365,13 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[60px] text-center">Tools</TableHead>
                                 <TableHead>Agent</TableHead>
                                 <TableHead>Quotation #</TableHead>
-                                <TableHead>Date Created</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
-                                <TableHead className="text-center">Status</TableHead>
                                 <TableHead>Date Approved/Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
                                 <TableHead>Quotation Amount</TableHead>
-                                <TableHead className="text-center">Source</TableHead>
+                                <TableHead>Date Created</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -426,17 +426,6 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
 
                                         <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
 
-                                        <TableCell>
-                                            {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
-                                                timeZone: "Asia/Manila",
-                                            })}
-                                        </TableCell>
-
-                                        <TableCell className="whitespace-nowrap font-mono">
-                                            {formatDuration(item.start_date, item.end_date)}
-                                        </TableCell>
-
-                                        <TableCell className="font-semibold">{item.company_name}<br /><span className="text-[10px] italic">{item.activity_reference_number}</span></TableCell>
                                         <TableCell className="p-2 font-semibold text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold
@@ -452,6 +441,12 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                                 {item.tsm_approved_status}
                                             </span>
                                         </TableCell>
+
+                                        <TableCell className="whitespace-nowrap font-mono">
+                                            {formatDuration(item.start_date, item.end_date)}
+                                        </TableCell>
+
+                                        <TableCell className="font-semibold">{item.company_name}<br /><span className="text-[10px] italic">{item.activity_reference_number}</span></TableCell>
 
                                         <TableCell>
                                             {item.tsm_approval_date && (
@@ -499,18 +494,11 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                                 })
                                                 : "-"}
                                         </TableCell>
-                                        <TableCell className="text-center">
-                                            <span
-                                                className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
-                                                ${item.quotation_type === "Ecoshift Corporation"
-                                                        ? "bg-green-100 text-green-700"
-                                                        : item.quotation_type === "Disruptive Solutions Inc"
-                                                            ? "bg-rose-100 text-rose-800"
-                                                            : "bg-gray-100 text-gray-600"
-                                                    }`}
-                                            >
-                                                {displayValue(item.quotation_type)}
-                                            </span>
+
+                                        <TableCell>
+                                            {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
+                                                timeZone: "Asia/Manila",
+                                            })}
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -546,6 +534,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
                     tsmName={editItem.tsm_name}
+                    managerName={editItem.manager_name}
                     vatType={editItem.vat_type}
                 />
             )}

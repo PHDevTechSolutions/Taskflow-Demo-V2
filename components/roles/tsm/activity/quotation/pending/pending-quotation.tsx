@@ -60,6 +60,8 @@ interface Completed {
     tsm_approval_date: string;
     tsm_remarks: string;
 
+    manager_name: string;
+
     vat_type: string;
 }
 
@@ -380,7 +382,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     email={email}
                     contact={contact}
                     tsmname={tsmname}
-                    managername={managername}
                     signature={signature}
                     company={{
                         company_name: editItem.company_name,
@@ -398,6 +399,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
                     tsmName={editItem.tsm_name}
+                    managerName={editItem.manager_name}
                     vatType={editItem.vat_type}
                 />
             )}

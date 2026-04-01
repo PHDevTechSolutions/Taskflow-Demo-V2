@@ -120,12 +120,15 @@ export default async function handler(
       const sig = h.quotation_number ? signaturesMap.get(h.quotation_number) : null;
       return {
         ...h,
+        agent_name:        sig?.agent_name        ?? null,
         agent_signature:        sig?.agent_signature        ?? null,
         agent_contact_number:   sig?.agent_contact_number   ?? null,
         agent_email_address:    sig?.agent_email_address    ?? null,
+        tsm_name:          sig?.tsm_name          ?? null,
         tsm_signature:          sig?.tsm_signature          ?? null,
         tsm_contact_number:     sig?.tsm_contact_number     ?? null,
         tsm_email_address:      sig?.tsm_email_address      ?? null,
+        manager_name:           sig?.manager_name           ?? null,
         manager_signature:      sig?.manager_signature      ?? null,
         manager_contact_number: sig?.manager_contact_number ?? null,
         manager_email_address:  sig?.manager_email_address  ?? null,
