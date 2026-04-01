@@ -930,7 +930,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 transition-all group/edit"
+                            className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
                             onClick={() => { setEditItem(item); setEditOpen(true); }}
                             title="Edit Record"
                           >
@@ -941,7 +941,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 rounded-none hover:bg-amber-50 hover:text-amber-600 transition-all group/reso"
+                              className="h-8 w-8 p-0 rounded-none hover:bg-amber-50 hover:text-amber-600 border border-zinc-200 transition-all group/reso"
                               onClick={() => {
                                 setReSoItem(item);
                                 setEditSoNumber(item.so_number || "");

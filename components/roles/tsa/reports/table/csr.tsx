@@ -100,55 +100,55 @@ function EntriesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl w-full">
+      <DialogContent className="max-w-2xl w-full rounded-none border border-zinc-200 shadow-lg">
         <DialogHeader>
-          <DialogTitle className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+          <DialogTitle className="text-xs font-bold text-zinc-800 uppercase tracking-widest">
             🎫 {group.ticket}
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
+          <DialogDescription className="text-[10px] text-zinc-500 uppercase font-mono">
             {group.count} {group.count === 1 ? "entry" : "entries"} ·{" "}
             {group.latest.company_name || "—"} · Total:{" "}
-            <span className="font-semibold text-slate-700">{fmt(group.total)}</span>
+            <span className="font-bold text-zinc-900">{fmt(group.total)}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-2 rounded-xl border border-slate-200 overflow-hidden">
+        <div className="mt-2 rounded-none border border-zinc-200 overflow-hidden shadow-sm">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50">
+              <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
                 {["#", "Date Created", "Amount", "Status", "Contact Person", "Remarks"].map((h) => (
-                  <TableHead key={h} className="text-[11px] text-slate-500 font-semibold">{h}</TableHead>
+                  <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">{h}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {sorted.map((item, idx) => (
-                <TableRow key={item.id} className="text-xs hover:bg-slate-50/60 font-mono">
-                  <TableCell className="text-slate-400 w-8">{idx + 1}</TableCell>
-                  <TableCell className="text-slate-500 whitespace-nowrap">
+                <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                  <TableCell className="text-zinc-400 w-8 px-3 font-mono">{idx + 1}</TableCell>
+                  <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">
                     {fmtDateTime(item.date_created)}
                   </TableCell>
-                  <TableCell className="text-slate-700 font-semibold">
+                  <TableCell className="text-zinc-700 font-bold px-3">
                     {item.quotation_amount != null ? fmt(item.quotation_amount) : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-3">
                     {item.status ? (
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                      <span className="inline-block px-2 py-0.5 rounded-none text-[10px] font-bold uppercase tracking-tighter bg-zinc-100 text-zinc-600 border border-zinc-200">
                         {item.status}
                       </span>
                     ) : "—"}
                   </TableCell>
-                  <TableCell className="text-slate-600">{item.contact_person || "—"}</TableCell>
-                  <TableCell className="capitalize text-slate-500">{item.remarks || "—"}</TableCell>
+                  <TableCell className="text-zinc-600 px-3 capitalize">{item.contact_person || "—"}</TableCell>
+                  <TableCell className="capitalize text-zinc-500 px-3">{item.remarks || "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <tfoot>
-              <TableRow className="bg-slate-50 font-semibold text-xs border-t border-slate-200">
-                <TableCell colSpan={2} className="text-slate-500">
+              <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+                <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">
                   Total ({group.count} {group.count === 1 ? "entry" : "entries"})
                 </TableCell>
-                <TableCell className="text-slate-800">{fmt(group.total)}</TableCell>
+                <TableCell className="text-zinc-900 px-3">{fmt(group.total)}</TableCell>
                 <TableCell colSpan={3} />
               </TableRow>
             </tfoot>
@@ -168,18 +168,20 @@ function TableShell({ children, loading, error, empty }: {
   empty: boolean;
 }) {
   if (loading) return (
-    <div className="flex justify-center items-center h-40 text-xs text-slate-400">Loading...</div>
-  );
-  if (error) return (
-    <div className="flex justify-center items-center h-40 text-xs text-red-500">{error}</div>
-  );
-  if (empty) return (
-    <div className="flex flex-col items-center justify-center h-40 gap-2 text-slate-300">
-      <span className="text-3xl">🎫</span>
-      <p className="text-sm font-medium">No CSR records found</p>
+    <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-mono">
+      <Search className="w-4 h-4 animate-spin mr-2" /> Loading records...
     </div>
   );
-  return <div className="rounded-xl border border-slate-200 overflow-hidden">{children}</div>;
+  if (error) return (
+    <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">{error}</div>
+  );
+  if (empty) return (
+    <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-300">
+      <span className="text-3xl grayscale opacity-30">🎫</span>
+      <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">No CSR records found</p>
+    </div>
+  );
+  return <div className="rounded-none border border-zinc-200 bg-white overflow-hidden shadow-sm">{children}</div>;
 }
 
 function PaginationBar({ page, pageCount, setPage }: {
@@ -187,21 +189,33 @@ function PaginationBar({ page, pageCount, setPage }: {
 }) {
   if (pageCount <= 1) return null;
   return (
-    <Pagination>
-      <PaginationContent className="flex items-center gap-4 justify-center text-xs">
-        <PaginationItem>
-          <PaginationPrevious href="#"
-            onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
-            aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-40" : ""} />
-        </PaginationItem>
-        <span className="text-slate-500 font-medium select-none">{page} / {pageCount}</span>
-        <PaginationItem>
-          <PaginationNext href="#"
-            onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
-            aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-40" : ""} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
+    <div className="flex items-center justify-center py-4 border-t border-zinc-100 bg-zinc-50/30">
+      <Pagination>
+        <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+          <PaginationItem>
+            <PaginationPrevious href="#"
+              onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+              aria-disabled={page === 1} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === 1 ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+          <span className="text-zinc-500 font-mono text-[11px] font-bold select-none bg-white px-3 py-1 border border-zinc-200 shadow-sm">
+            {page} / {pageCount}
+          </span>
+          <PaginationItem>
+            <PaginationNext href="#"
+              onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+              aria-disabled={page === pageCount} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === pageCount ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
 
@@ -403,45 +417,54 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             <Input
               placeholder="Search company, ticket number, remarks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
+              className="pl-9 h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
             />
           </div>
           {grouped.length > 0 && (
-            <span className="text-[11px] text-slate-500 font-mono ml-auto">
-              {grouped.length} tickets · Total:{" "}
-              <strong className="text-slate-700">{fmt(grandTotal)}</strong>
-            </span>
+            <div className="bg-white px-3 py-1.5 border border-zinc-200 shadow-sm flex items-center gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-r border-zinc-100 pr-3">
+                {grouped.length} tickets
+              </span>
+              <span className="text-[11px] font-mono font-bold text-zinc-700">
+                Total: {fmt(grandTotal)}
+              </span>
+            </div>
           )}
         </div>
-
-        <button
+       
+       {/*
+       <button
           onClick={exportToExcel}
-          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
+          className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white rounded-none hover:bg-zinc-800 transition-all shrink-0 shadow-sm active:scale-95"
         >
           <Download size={14} />
           Export Excel
-        </button>
+        </button>*/}
+        
       </div>
 
       {/* Hint */}
       {grouped.length > 0 && (
-        <p className="text-[11px] text-slate-400 italic">
-          💡 Click the <span className="font-semibold text-indigo-500">entries</span> badge to view all records under a ticket.
-        </p>
+        <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 border border-indigo-100/50">
+          <span className="text-xs">💡</span>
+          <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">
+            Click the <span className="underline underline-offset-2">entries</span> badge to view all records under a ticket.
+          </p>
+        </div>
       )}
 
       {/* Table */}
       <TableShell loading={loading} error={error} empty={grouped.length === 0}>
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50">
+            <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
               {["Date Created", "Ticket No.", "Total Amount", "Entries", "Company", "Contact Person", "Contact No.", "Remarks"].map((h) => (
-                <TableHead key={h} className="text-[11px] text-slate-500 font-semibold">{h}</TableHead>
+                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">{h}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -449,35 +472,37 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
             {paginated.map((group) => {
               const { ticket, latest, total: rowTotal, count } = group;
               return (
-                <TableRow key={latest.id} className="text-xs hover:bg-slate-50/60 font-mono">
-                  <TableCell className="text-slate-500 whitespace-nowrap">
+                <TableRow key={latest.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                  <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">
                     {fmtDate(latest.date_created)}
                   </TableCell>
-                  <TableCell className="uppercase text-slate-600">{ticket || "—"}</TableCell>
-                  <TableCell className="text-slate-700">{fmt(rowTotal)}</TableCell>
-                  <TableCell>
+                  <TableCell className="uppercase text-zinc-600 px-3 font-bold">{ticket || "—"}</TableCell>
+                  <TableCell className="text-zinc-700 px-3 font-bold">{fmt(rowTotal)}</TableCell>
+                  <TableCell className="px-3">
                     <button
                       onClick={() => openDialog(group)}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[10px] font-bold uppercase tracking-tighter bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all cursor-pointer shadow-sm"
                       title="Click to view all entries"
                     >
                       {count} {count === 1 ? "entry" : "entries"} ↗
                     </button>
                   </TableCell>
-                  <TableCell className="text-slate-700">{latest.company_name || "—"}</TableCell>
-                  <TableCell className="text-slate-600">{latest.contact_person || "—"}</TableCell>
-                  <TableCell className="text-slate-500">{latest.contact_number || "—"}</TableCell>
-                  <TableCell className="capitalize text-slate-500">{latest.remarks || "—"}</TableCell>
+                  <TableCell className="text-zinc-800 px-3 font-bold">{latest.company_name || "—"}</TableCell>
+                  <TableCell className="text-zinc-600 px-3 capitalize font-medium">{latest.contact_person || "—"}</TableCell>
+                  <TableCell className="text-zinc-500 px-3 font-mono text-[11px]">{latest.contact_number || "—"}</TableCell>
+                  <TableCell className="capitalize text-zinc-500 px-3 truncate max-w-[200px]" title={latest.remarks || ""}>
+                    {latest.remarks || "—"}
+                  </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
           <tfoot>
-            <TableRow className="bg-slate-50 font-semibold text-xs border-t border-slate-200">
-              <TableCell colSpan={2} className="text-slate-500">
+            <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+              <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">
                 Total ({grouped.length} tickets)
               </TableCell>
-              <TableCell className="text-slate-800">{fmt(grandTotal)}</TableCell>
+              <TableCell className="text-zinc-900 px-3">{fmt(grandTotal)}</TableCell>
               <TableCell colSpan={5} />
             </TableRow>
           </tfoot>

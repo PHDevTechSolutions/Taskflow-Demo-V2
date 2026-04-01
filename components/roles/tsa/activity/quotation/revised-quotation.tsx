@@ -672,7 +672,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => openEditDialog(item)}
-                          className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 transition-all group"
+                          className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group"
                           title="Edit Quotation"
                         >
                           <PenIcon className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-600" />

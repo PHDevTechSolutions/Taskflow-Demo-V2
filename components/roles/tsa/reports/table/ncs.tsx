@@ -58,33 +58,51 @@ function TableShell({ children, loading, error, empty, emptyIcon, emptyText }: {
   emptyIcon: string;
   emptyText: string;
 }) {
-  if (loading) return <div className="flex justify-center items-center h-40 text-xs text-slate-400">Loading...</div>;
-  if (error)   return <div className="flex justify-center items-center h-40 text-xs text-red-500">{error}</div>;
-  if (empty)   return (
-    <div className="flex flex-col items-center justify-center h-40 gap-2 text-slate-300">
-      <span className="text-3xl">{emptyIcon}</span>
-      <p className="text-sm font-medium">{emptyText}</p>
+  if (loading) return (
+    <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-mono">
+      <Search className="w-4 h-4 animate-spin mr-2" /> Loading records...
     </div>
   );
-  return <div className="rounded-xl border border-slate-200 overflow-hidden">{children}</div>;
+  if (error) return (
+    <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">{error}</div>
+  );
+  if (empty) return (
+    <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-300">
+      <span className="text-3xl grayscale opacity-30">{emptyIcon}</span>
+      <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">{emptyText}</p>
+    </div>
+  );
+  return <div className="rounded-none border border-zinc-200 bg-white overflow-hidden shadow-sm">{children}</div>;
 }
 
 function PaginationBar({ page, pageCount, setPage }: { page: number; pageCount: number; setPage: (p: number) => void }) {
   if (pageCount <= 1) return null;
   return (
-    <Pagination>
-      <PaginationContent className="flex items-center gap-4 justify-center text-xs">
-        <PaginationItem>
-          <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
-            aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-40" : ""} />
-        </PaginationItem>
-        <span className="text-slate-500 font-medium select-none">{page} / {pageCount}</span>
-        <PaginationItem>
-          <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
-            aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-40" : ""} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
+    <div className="flex items-center justify-center py-4 border-t border-zinc-100 bg-zinc-50/30">
+      <Pagination>
+        <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+          <PaginationItem>
+            <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+              aria-disabled={page === 1} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === 1 ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+          <span className="text-zinc-500 font-mono text-[11px] font-bold select-none bg-white px-3 py-1 border border-zinc-200 shadow-sm">
+            {page} / {pageCount}
+          </span>
+          <PaginationItem>
+            <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+              aria-disabled={page === pageCount} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === pageCount ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
 
@@ -102,34 +120,44 @@ function SearchFilterBar({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <Input
             placeholder={placeholder}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
+            className="pl-9 h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
           />
         </div>
         {children && (
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors
-              ${showFilters ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-none border transition-all shadow-sm
+              ${showFilters ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"}`}
           >
             <SlidersHorizontal size={12} /> Filters
           </button>
         )}
         {count > 0 && (
-          <span className="text-[11px] text-slate-500 font-mono ml-auto">
-            {count} records{total != null ? ` · Total: ${fmt(total)}` : ""}
-          </span>
+          <div className="bg-white px-3 py-1.5 border border-zinc-200 shadow-sm flex items-center gap-3 ml-auto">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-r border-zinc-100 pr-3">
+              {count} records
+            </span>
+            {total != null && (
+              <span className="text-[11px] font-mono font-bold text-zinc-700">
+                Total: {fmt(total)}
+              </span>
+            )}
+          </div>
         )}
       </div>
       {showFilters && (
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-zinc-100 mt-2">
           {children}
           {hasActiveFilter && (
-            <button onClick={onClear} className="h-8 px-3 text-[11px] font-semibold text-red-500 border border-red-200 hover:border-red-400 rounded-lg transition-colors">
+            <button 
+              onClick={onClear} 
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest text-red-600 border border-red-100 hover:bg-red-50 rounded-none transition-all"
+            >
               Clear all
             </button>
           )}
@@ -292,49 +320,51 @@ export const NCSTable: React.FC<{ referenceid: string; target_quota?: string; da
           onClear={() => { setFilterClient("all"); setSearchTerm(""); }}
         >
           <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger className="h-8 w-[180px] text-xs border-slate-200"><SelectValue placeholder="All Client Types" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Client Types</SelectItem>
-              {NCS_CLIENT_TYPES.map((t) => <SelectItem key={t} value={t} className="text-xs capitalize">{t}</SelectItem>)}
+            <SelectTrigger className="h-8 w-[180px] text-[10px] font-bold uppercase tracking-widest border-zinc-200 rounded-none shadow-sm"><SelectValue placeholder="All Client Types" /></SelectTrigger>
+            <SelectContent className="rounded-none">
+              <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">All Client Types</SelectItem>
+              {NCS_CLIENT_TYPES.map((t) => <SelectItem key={t} value={t} className="text-[10px] font-bold uppercase tracking-widest capitalize">{t}</SelectItem>)}
             </SelectContent>
           </Select>
         </SearchFilterBar>
         
+        {/*
         <button
           onClick={exportToExcel}
-          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
+          className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white rounded-none hover:bg-zinc-800 transition-all shrink-0 shadow-sm active:scale-95"
         >
           <Download size={14} />
           Export Excel
-        </button>
+        </button>*/}
+        
       </div>
 
       <TableShell loading={loading} error={error} empty={filtered.length === 0} emptyIcon="🤝" emptyText="No NCS records found">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50">
+            <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
               {["Date Created", "Quotation No.", "Amount", "Company", "Contact Person", "Contact No.", "Client Type"].map((h) => (
-                <TableHead key={h} className="text-[11px] text-slate-500 font-semibold">{h}</TableHead>
+                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">{h}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginated.map((item) => (
-              <TableRow key={item.id} className="text-xs hover:bg-slate-50/60 font-mono">
-                <TableCell className="text-slate-500 whitespace-nowrap">{fmtDate(item.date_created)}</TableCell>
-                <TableCell className="uppercase text-slate-600">{item.quotation_number || "—"}</TableCell>
-                <TableCell className="text-right text-slate-700">{item.quotation_amount != null ? fmt(item.quotation_amount) : "—"}</TableCell>
-                <TableCell className="text-slate-700">{item.company_name || "—"}</TableCell>
-                <TableCell className="text-slate-600">{item.contact_person || "—"}</TableCell>
-                <TableCell className="text-slate-500">{item.contact_number || "—"}</TableCell>
-                <TableCell className="capitalize text-slate-500">{item.type_client || "—"}</TableCell>
+              <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.date_created)}</TableCell>
+                <TableCell className="uppercase text-zinc-600 px-3 font-bold">{item.quotation_number || "—"}</TableCell>
+                <TableCell className="text-right text-zinc-700 px-3 font-bold">{item.quotation_amount != null ? fmt(item.quotation_amount) : "—"}</TableCell>
+                <TableCell className="text-zinc-800 px-3 font-bold">{item.company_name || "—"}</TableCell>
+                <TableCell className="text-zinc-600 px-3 capitalize font-medium">{item.contact_person || "—"}</TableCell>
+                <TableCell className="text-zinc-500 px-3 font-mono text-[11px]">{item.contact_number || "—"}</TableCell>
+                <TableCell className="capitalize text-zinc-500 px-3 font-medium">{item.type_client || "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
           <tfoot>
-            <TableRow className="bg-slate-50 font-semibold text-xs border-t border-slate-200">
-              <TableCell colSpan={2} className="text-slate-500">Total ({filtered.length})</TableCell>
-              <TableCell className="text-right text-slate-800">{fmt(total)}</TableCell>
+            <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+              <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">Total ({filtered.length})</TableCell>
+              <TableCell className="text-right text-zinc-900 px-3">{fmt(total)}</TableCell>
               <TableCell colSpan={4} />
             </TableRow>
           </tfoot>

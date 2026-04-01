@@ -239,53 +239,60 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             <Input
               placeholder="Search company, DR number, remarks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white"
+              className="pl-9 h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
             />
           </div>
           <button
             onClick={() => setShowFilters((v) => !v)}
-            className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors
-              ${showFilters ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}
+            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-none border transition-all shadow-sm
+              ${showFilters ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"}`}
           >
             <SlidersHorizontal size={12} /> Filters
           </button>
           {filteredActivities.length > 0 && (
-            <span className="text-[11px] text-slate-500 font-mono ml-auto">
-              {filteredActivities.length} records · Total: <strong className="text-slate-700">{fmt(totalSales)}</strong>
-            </span>
+            <div className="bg-white px-3 py-1.5 border border-zinc-200 shadow-sm flex items-center gap-3 ml-auto">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-r border-zinc-100 pr-3">
+                {filteredActivities.length} records
+              </span>
+              <span className="text-[11px] font-mono font-bold text-zinc-700">
+                Total: {fmt(totalSales)}
+              </span>
+            </div>
           )}
         </div>
-
-        <button
+        
+        {/** ── Export Excel button ── 
+         * <button
           onClick={exportToExcel}
-          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shrink-0"
+          className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white rounded-none hover:bg-zinc-800 transition-all shrink-0 shadow-sm active:scale-95"
         >
           <Download size={14} />
           Export Excel
         </button>
+        */}
       </div>
 
       {/* Expandable filters */}
       {showFilters && (
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center bg-zinc-50/50 p-3 border border-zinc-200 shadow-sm border-t-0 -mt-4">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-8 w-[180px] text-xs border-slate-200">
+            <SelectTrigger className="h-9 w-[180px] text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-200 rounded-none shadow-sm">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {statusOptions.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+            <SelectContent className="rounded-none">
+              <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">All Statuses</SelectItem>
+              {statusOptions.map((s) => <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-widest">{s}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasActiveFilter && (
             <button
               onClick={() => { setFilterStatus("all"); setSearchTerm(""); }}
-              className="h-8 px-3 text-[11px] font-semibold text-red-500 border border-red-200 hover:border-red-400 rounded-lg transition-colors"
+              className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest text-red-600 border border-red-100 hover:bg-red-50 rounded-none transition-all"
             >
               Clear all
             </button>
@@ -294,66 +301,90 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       )}
 
       {/* Table */}
-      {loading ? (
-        <div className="flex justify-center items-center h-40 text-xs text-slate-400">Loading...</div>
-      ) : error ? (
-        <div className="flex justify-center items-center h-40 text-xs text-red-500">{error}</div>
-      ) : filteredActivities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-40 gap-2 text-slate-300">
-          <span className="text-3xl">🧾</span>
-          <p className="text-sm font-medium">No SI records found</p>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50">
-                {["Delivery Date", "SI Date", "SI Amount", "SO Number", "DR Number", "Company", "Contact Person", "Contact No.", "Remarks", "Payment Terms"].map((h) => (
-                  <TableHead key={h} className="text-[11px] text-slate-500 font-semibold">{h}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginated.map((item) => (
-                <TableRow key={item.id} className="text-xs hover:bg-slate-50/60 font-mono">
-                  <TableCell className="text-slate-500 whitespace-nowrap">{fmtDate(item.delivery_date)}</TableCell>
-                  <TableCell className="text-slate-500 whitespace-nowrap">{fmtDate(item.si_date)}</TableCell>
-                  <TableCell className="text-left text-slate-700">{item.actual_sales != null ? fmt(item.actual_sales) : "—"}</TableCell>
-                  <TableCell className="uppercase text-slate-600">{item.so_number || "—"}</TableCell>
-                  <TableCell className="uppercase text-slate-600">{item.dr_number || "—"}</TableCell>
-                  <TableCell className="text-slate-700">{item.company_name || "—"}</TableCell>
-                  <TableCell className="text-slate-600">{item.contact_person || "—"}</TableCell>
-                  <TableCell className="text-slate-500">{item.contact_number || "—"}</TableCell>
-                  <TableCell className="capitalize text-slate-500">{item.remarks || "—"}</TableCell>
-                  <TableCell className="text-slate-500">{item.payment_terms || "—"}</TableCell>
+      <div className="rounded-none border border-zinc-200 bg-white overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-mono">
+            <Search className="w-4 h-4 animate-spin mr-2" /> Loading records...
+          </div>
+        ) : error ? (
+          <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">{error}</div>
+        ) : filteredActivities.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-300">
+            <span className="text-3xl grayscale opacity-30">🧾</span>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">No SI records found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
+                  {[
+                    "Delivery Date", "SI Date", "SI Amount", "SO Number", 
+                    "DR Number", "Company", "Contact Person", "Contact No.", 
+                    "Remarks", "Payment Terms"
+                  ].map((h) => (
+                    <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">
+                      {h}
+                    </TableHead>
+                  ))}
                 </TableRow>
-              ))}
-            </TableBody>
-            <tfoot>
-              <TableRow className="bg-slate-50 font-semibold text-xs border-t border-slate-200">
-                <TableCell colSpan={2} className="text-slate-500">Total ({filteredActivities.length})</TableCell>
-                <TableCell className="text-left text-slate-800">{fmt(totalSales)}</TableCell>
-                <TableCell colSpan={6} />
-              </TableRow>
-            </tfoot>
-          </Table>
-        </div>
-      )}
+              </TableHeader>
+              <TableBody>
+                {paginated.map((item) => (
+                  <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                    <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.delivery_date)}</TableCell>
+                    <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.si_date)}</TableCell>
+                    <TableCell className="text-left text-zinc-900 px-3 font-bold">{item.actual_sales != null ? fmt(item.actual_sales) : "—"}</TableCell>
+                    <TableCell className="uppercase text-zinc-600 px-3 font-bold font-mono">{item.so_number || "—"}</TableCell>
+                    <TableCell className="uppercase text-zinc-600 px-3 font-bold font-mono">{item.dr_number || "—"}</TableCell>
+                    <TableCell className="text-zinc-800 px-3 font-bold">{item.company_name || "—"}</TableCell>
+                    <TableCell className="text-zinc-600 px-3 capitalize font-medium">{item.contact_person || "—"}</TableCell>
+                    <TableCell className="text-zinc-500 px-3 font-mono text-[11px]">{item.contact_number || "—"}</TableCell>
+                    <TableCell className="capitalize text-zinc-500 px-3 truncate max-w-[200px]" title={item.remarks || ""}>
+                      {item.remarks || "—"}
+                    </TableCell>
+                    <TableCell className="text-zinc-500 px-3 font-medium">{item.payment_terms || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <tfoot>
+                <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+                  <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">Total ({filteredActivities.length})</TableCell>
+                  <TableCell className="text-left text-zinc-900 px-3">{fmt(totalSales)}</TableCell>
+                  <TableCell colSpan={6} />
+                </TableRow>
+              </tfoot>
+            </Table>
+          </div>
+        )}
+      </div>
 
       {pageCount > 1 && (
-        <Pagination>
-          <PaginationContent className="flex items-center gap-4 justify-center text-xs">
-            <PaginationItem>
-              <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
-                aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-40" : ""} />
-            </PaginationItem>
-            <span className="text-slate-500 font-medium select-none">{page} / {pageCount}</span>
-            <PaginationItem>
-              <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
-                aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-40" : ""} />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+        <div className="flex items-center justify-center py-4 border-t border-zinc-100 bg-zinc-50/30">
+          <Pagination>
+            <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+              <PaginationItem>
+                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+                  aria-disabled={page === 1} 
+                  className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    page === 1 ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200 shadow-sm"
+                  }`} 
+                />
+              </PaginationItem>
+              <span className="text-zinc-500 font-mono text-[11px] font-bold select-none bg-white px-3 py-1 border border-zinc-200 shadow-sm">
+                {page} / {pageCount}
+              </span>
+              <PaginationItem>
+                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+                  aria-disabled={page === pageCount} 
+                  className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    page === pageCount ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200 shadow-sm"
+                  }`} 
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       )}
     </div>
   );
