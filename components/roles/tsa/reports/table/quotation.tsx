@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -12,8 +11,6 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Download } from "lucide-react";
-import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
 /* ================= TYPES ================= */
@@ -30,6 +27,7 @@ interface Quotation {
   type_activity: string;
   status: string;
   quotation_status?: string;
+  quotation_status_sub?: string;
 }
 
 interface QuotationProps {
@@ -39,47 +37,30 @@ interface QuotationProps {
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
-/* ================= PRIORITY MAP ================= */
-
-const PRIORITY_MAP: Record<string, "HOT" | "WARM" | "COLD" | "DONE"> = {
-  "PENDING CLIENT APPROVAL": "WARM",
-  "FOR BIDDING": "WARM",
-  "NEGO": "WARM",
-  "ORDER COMPLETE": "DONE",
-  "CONVERT TO SO": "HOT",
-  "LOSS PRICE IS TOO HIGH": "COLD",
-  "LEAD TIME ISSUE": "COLD",
-  "OUT OF STOCK": "COLD",
-  "INSUFFICIENT STOCK": "COLD",
-  "LOST BID": "COLD",
-  "CANVASS ONLY": "COLD",
-  "DID NOT MEET THE SPECS": "COLD",
-  "DECLINE / DISAPPROVED": "COLD",
-};
-
-const ALL_STATUSES = [
-  "PENDING CLIENT APPROVAL",
-  "FOR BIDDING",
-  "NEGO",
-  "ORDER COMPLETE",
-  "CONVERT TO SO",
-  "LOSS PRICE IS TOO HIGH",
-  "LEAD TIME ISSUE",
-  "OUT OF STOCK",
-  "INSUFFICIENT STOCK",
-  "LOST BID",
-  "CANVASS ONLY",
-  "DID NOT MEET THE SPECS",
-  "DECLINE / DISAPPROVED",
-];
+/* ================= PRIORITY ================= */
 
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
+// quotation_status_sub overrides quotation_status
+function getPriority(status?: string, sub?: string): "HOT" | "WARM" | "COLD" | "DONE" | null {
+  if (sub && sub.trim() !== "") {
+    const s = sub.toUpperCase();
+    if (s.includes("DECLINE")) return "COLD";
+  }
+
+  switch (status?.toUpperCase()) {
+    case "CONVERT TO SO":           return "HOT";
+    case "PENDING CLIENT APPROVAL": return "WARM";
+    case "ORDER COMPLETE":          return "DONE";
+    default:                        return null;
+  }
+}
+
 const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  HOT:  { badge: "bg-red-50 text-red-700 border-red-100",       dot: "bg-red-500"   },
-  WARM: { badge: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-400" },
-  COLD: { badge: "bg-blue-50 text-blue-700 border-blue-100",    dot: "bg-blue-400"  },
-  DONE: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
+  HOT:  { badge: "bg-red-50 text-red-700 border-red-100",                  dot: "bg-red-500"      },
+  WARM: { badge: "bg-amber-50 text-amber-700 border-amber-100",            dot: "bg-amber-400"    },
+  COLD: { badge: "bg-blue-50 text-blue-700 border-blue-100",               dot: "bg-blue-400"     },
+  DONE: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100",      dot: "bg-emerald-500"  },
 };
 
 const PAGE_SIZE = 10;
@@ -93,28 +74,23 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterPriority, setFilterPriority] = useState<Priority>("all");
-  const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
+  const [searchTerm,           setSearchTerm]           = useState("");
+  const [filterPriority,       setFilterPriority]       = useState<Priority>("all");
+  const [filterQuotationStatus,setFilterQuotationStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
 
-  /* ---- Fetch activities ---- */
+  /* ── Fetch ── */
   const fetchActivities = useCallback(() => {
-    if (!referenceid) {
-      setActivities([]);
-      return;
-    }
-
+    if (!referenceid) { setActivities([]); return; }
     setLoading(true);
     setError(null);
 
     const from = dateCreatedFilterRange?.from
       ? new Date(dateCreatedFilterRange.from).toISOString()
       : null;
-
     const to = dateCreatedFilterRange?.to
       ? new Date(new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999)).toISOString()
       : null;
@@ -136,7 +112,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
-  /* ---- Realtime subscription ---- */
+  /* ── Realtime ── */
   useEffect(() => {
     fetchActivities();
     if (!referenceid) return;
@@ -164,80 +140,91 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return () => { supabase.removeChannel(channel); };
   }, [referenceid, fetchActivities]);
 
-  /* ---- Base list ---- */
+  /* ── Base list: quotation preparation only, newest first ── */
   const baseActivities = useMemo(() =>
     [...activities]
       .filter(item => item.type_activity?.toLowerCase() === "quotation preparation")
-      .sort((a, b) =>
-        new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
-      ),
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime()),
     [activities]
   );
 
-  /* ---- Filtered activities ---- */
-  const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-
-    return baseActivities
-      .filter(item => {
-        if (!search) return true;
-        return (
-          (item.company_name?.toLowerCase().includes(search) ?? false) ||
-          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
-          (item.remarks?.toLowerCase().includes(search) ?? false)
-        );
-      })
-      .filter(item => {
-        if (filterQuotationStatus !== "all") {
-          return item.quotation_status?.toUpperCase() === filterQuotationStatus;
-        }
-        return true;
-      })
-      .filter(item => {
-        if (filterPriority !== "all") {
-          const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
-          return priority === filterPriority;
-        }
-        return true;
-      })
-      .filter(item => {
-        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-
-        const itemDate = new Date(item.date_created);
-        if (isNaN(itemDate.getTime())) return false;
-
-        const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-        const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
-
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
-
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(itemDate, fromDate);
-        if (fromDate && itemDate < fromDate) return false;
-        if (toDate && itemDate > toDate) return false;
-        return true;
-      });
-  }, [baseActivities, searchTerm, filterQuotationStatus, filterPriority, dateCreatedFilterRange]);
-
-  /* ---- Reset page on filter change ---- */
-  useEffect(() => { setPage(1); }, [searchTerm, filterQuotationStatus, filterPriority, dateCreatedFilterRange]);
-
-  /* ---- Reset quotation status filter when priority changes ---- */
-  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
-
-  /* ---- Priority summary counts ---- */
+  /* ── Priority counts (unfiltered) ── */
   const priorityCounts = useMemo(() => {
     const counts: Record<string, number> = { HOT: 0, WARM: 0, COLD: 0, DONE: 0 };
     baseActivities.forEach(item => {
-      const p = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
+      const p = getPriority(item.quotation_status, item.quotation_status_sub);
       if (p) counts[p]++;
     });
     return counts;
   }, [baseActivities]);
 
-  /* ---- Totals ---- */
+  /* ── Available statuses scoped to selected priority ── */
+  // Collect all unique quotation_status values from base, then filter by priority
+  const availableStatuses = useMemo(() => {
+    const all = Array.from(
+      new Set(baseActivities.map(a => a.quotation_status?.toUpperCase()).filter(Boolean) as string[])
+    ).sort();
+
+    if (filterPriority === "all") return all;
+
+    return all.filter(s => {
+      // For a status to appear under a priority pill, it must have at least one
+      // record whose resolved priority matches — respecting sub override
+      return baseActivities.some(a =>
+        a.quotation_status?.toUpperCase() === s &&
+        getPriority(a.quotation_status, a.quotation_status_sub) === filterPriority
+      );
+    });
+  }, [baseActivities, filterPriority]);
+
+  /* ── Reset status filter when priority changes ── */
+  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
+
+  /* ── Filtered list ── */
+  const filteredActivities = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+
+    return baseActivities.filter(item => {
+      // Search
+      if (search && ![item.company_name, item.quotation_number, item.remarks]
+        .some(v => v?.toLowerCase().includes(search))) return false;
+
+      // Priority filter
+      if (filterPriority !== "all") {
+        const p = getPriority(item.quotation_status, item.quotation_status_sub);
+        if (p !== filterPriority) return false;
+      }
+
+      // Status filter (applied after priority)
+      if (filterQuotationStatus !== "all") {
+        if (item.quotation_status?.toUpperCase() !== filterQuotationStatus) return false;
+      }
+
+      // Date range
+      if (dateCreatedFilterRange?.from || dateCreatedFilterRange?.to) {
+        const itemDate = new Date(item.date_created);
+        if (isNaN(itemDate.getTime())) return false;
+        const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+        const to   = dateCreatedFilterRange.to   ? new Date(dateCreatedFilterRange.to)   : null;
+        const sameDay = (d1: Date, d2: Date) =>
+          d1.getFullYear() === d2.getFullYear() &&
+          d1.getMonth()    === d2.getMonth()    &&
+          d1.getDate()     === d2.getDate();
+        if (from && to && sameDay(from, to)) { if (!sameDay(itemDate, from)) return false; }
+        else {
+          if (from && itemDate < from) return false;
+          if (to   && itemDate > to)   return false;
+        }
+      }
+
+      return true;
+    });
+  }, [baseActivities, searchTerm, filterPriority, filterQuotationStatus, dateCreatedFilterRange]);
+
+  /* ── Reset page on filter change ── */
+  useEffect(() => { setPage(1); }, [searchTerm, filterPriority, filterQuotationStatus, dateCreatedFilterRange]);
+
+  /* ── Totals ── */
   const totalQuotationAmount = useMemo(() =>
     filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0),
     [filteredActivities]
@@ -249,106 +236,12 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return s.size;
   }, [filteredActivities]);
 
-  /* ---- Statuses filtered by selected priority ---- */
-  const availableStatuses = useMemo(() => {
-    if (filterPriority === "all") return ALL_STATUSES;
-    return ALL_STATUSES.filter(s => PRIORITY_MAP[s] === filterPriority);
-  }, [filterPriority]);
-
-  /* ---- Pagination ---- */
+  /* ── Pagination ── */
   const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
   const paginatedActivities = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredActivities.slice(start, start + PAGE_SIZE);
   }, [filteredActivities, page]);
-
-  /* ---- Excel Export ---- */
-  const exportToExcel = async () => {
-    if (filteredActivities.length === 0) {
-      alert("No data to export");
-      return;
-    }
-
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Quotation Report");
-
-      // Add headers
-      worksheet.columns = [
-        { header: "Date Created", key: "dateCreated", width: 15 },
-        { header: "Status", key: "status", width: 25 },
-        { header: "Quotation No.", key: "quotationNo", width: 20 },
-        { header: "Amount", key: "amount", width: 18 },
-        { header: "Company", key: "company", width: 30 },
-        { header: "Contact", key: "contact", width: 20 },
-        { header: "Priority", key: "priority", width: 12 },
-        { header: "Remarks", key: "remarks", width: 40 }
-      ];
-
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      // Add data rows
-      filteredActivities.forEach((item) => {
-        const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
-        const priority = PRIORITY_MAP[quotationStatus] || "-";
-
-        worksheet.addRow({
-          dateCreated: new Date(item.date_created).toLocaleDateString(),
-          status: item.quotation_status || "-",
-          quotationNo: item.quotation_number || "-",
-          amount: item.quotation_amount ?? 0,
-          company: item.company_name || "-",
-          contact: item.contact_number || "-",
-          priority: priority,
-          remarks: item.remarks || "-"
-        });
-      });
-
-      // Add totals row
-      const totalsRow = worksheet.addRow({
-        dateCreated: "TOTAL",
-        amount: totalQuotationAmount
-      });
-      totalsRow.font = { bold: true };
-
-      // Format currency column
-      const amountCol = worksheet.getColumn('amount');
-      if (amountCol && amountCol.number > 0) {
-        amountCol.numFmt = '#,##0.00" ₱"';
-      }
-
-      // Generate filename with date range
-      let filename = "Quotation_Report";
-      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
-        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
-      }
-      filename += ".xlsx";
-
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-    } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
-    }
-  };
 
   /* ================= RENDER ================= */
 
@@ -380,9 +273,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                   ? p === "all"
                     ? "bg-zinc-900 text-white border-zinc-900"
                     : style?.badge + " ring-1 ring-zinc-900 ring-offset-0"
-                  : p === "all"
-                    ? "bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400"
-                    : "bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400"
+                  : "bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400"
                 }`}
             >
               {p !== "all" && <span className={`w-1.5 h-1.5 rounded-full ${style?.dot}`} />}
@@ -398,47 +289,39 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       </div>
 
       {/* ── Filters row ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
-          <Input
-            type="text"
-            placeholder="Search company, quotation no., remarks..."
-            className="max-w-xs h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search quotations"
-          />
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          type="text"
+          placeholder="Search company, quotation no., remarks..."
+          className="max-w-xs h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
 
-          <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
-            <SelectTrigger className="w-[240px] h-9 text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-200 rounded-none shadow-sm">
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent className="rounded-none">
-              <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">All Statuses</SelectItem>
-              {availableStatuses.map((s) => {
-                const priority = PRIORITY_MAP[s];
-                const style = PRIORITY_STYLES[priority];
-                return (
-                  <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-widest">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style?.dot}`} />
-                      {s}
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/*
-        <button
-          onClick={exportToExcel}
-          className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white rounded-none hover:bg-zinc-800 transition-all shrink-0 shadow-sm active:scale-95"
-        >
-          <Download size={14} />
-          Export Excel
-        </button>*/}
+        <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
+          <SelectTrigger className="w-[240px] h-9 text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-200 rounded-none shadow-sm">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent className="rounded-none">
+            <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">
+              All Statuses
+            </SelectItem>
+            {availableStatuses.map((s) => {
+              // Show dot color based on what priority this status resolves to
+              // (use a neutral sample — sub overrides, so show status-only priority here)
+              const p = getPriority(s, undefined);
+              const style = p ? PRIORITY_STYLES[p] : null;
+              return (
+                <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-2">
+                    {style && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />}
+                    {s}
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ── Summary bar ── */}
@@ -467,7 +350,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             Loading records...
           </div>
         ) : error ? (
-          <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">{error}</div>
+          <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">
+            {error}
+          </div>
         ) : filteredActivities.length === 0 ? (
           <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-bold uppercase tracking-widest italic">
             No quotation records found.
@@ -477,10 +362,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             <Table>
               <TableHeader>
                 <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
-                  {[
-                    "Date Created", "Status", "Quotation No.", "Amount", 
-                    "Company", "Contact", "Priority", "Remarks"
-                  ].map((h) => (
+                  {["Date Created","Status","Quotation Remarks","Quotation No.","Amount","Company","Contact","Priority","Remarks"].map((h) => (
                     <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">
                       {h}
                     </TableHead>
@@ -490,8 +372,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
               <TableBody>
                 {paginatedActivities.map((item) => {
-                  const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
-                  const priority = PRIORITY_MAP[quotationStatus];
+                  const priority = getPriority(item.quotation_status, item.quotation_status_sub);
                   const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
 
                   return (
@@ -503,6 +384,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         <span className="inline-block px-2 py-0.5 rounded-none text-[10px] font-bold uppercase tracking-tighter bg-zinc-100 text-zinc-600 border border-zinc-200">
                           {item.quotation_status || "-"}
                         </span>
+                      </TableCell>
+                      <TableCell className="px-3 capitalize text-zinc-500 text-[11px]">
+                        {item.quotation_status_sub || "-"}
                       </TableCell>
                       <TableCell className="uppercase text-zinc-700 px-3 font-bold font-mono">
                         {item.quotation_number || "-"}
@@ -534,7 +418,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
               <tfoot>
                 <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
-                  <TableCell colSpan={3} className="text-zinc-500 px-3 uppercase tracking-wider">Total</TableCell>
+                  <TableCell colSpan={4} className="text-zinc-500 px-3 uppercase tracking-wider">Total</TableCell>
                   <TableCell className="text-right text-zinc-900 px-3">
                     {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                   </TableCell>

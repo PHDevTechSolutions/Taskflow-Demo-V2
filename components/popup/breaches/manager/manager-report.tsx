@@ -316,11 +316,11 @@ export default function TSMReports() {
     }
   }, []);
 
-  const fetchOverdue = useCallback(async (refId: string, from: string, to: string) => {
-    if (!refId || !from || !to) return;
+  const fetchOverdue = useCallback(async (refId: string) => {
+    if (!refId) return;
     setLoadingOverdue(true);
     try {
-      const url = `/api/activity/manager/breaches/fetch?manager=${encodeURIComponent(refId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      const url = `/api/activity/manager/breaches/fetch-activity?manager=${encodeURIComponent(refId)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -416,7 +416,7 @@ export default function TSMReports() {
     if (!refId) return;
     fetchClusterData(refId);
     fetchActivities(refId);
-    fetchOverdue(refId, fromDate, toDate);
+    fetchOverdue(refId);
     fetchCsrMetrics(refId, fromDate, toDate);
   }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
@@ -623,7 +623,7 @@ export default function TSMReports() {
     if (!refId) return;
     fetchClusterData(refId);
     fetchActivities(refId);
-    fetchOverdue(refId, fromDate, toDate);
+    fetchOverdue(refId);
     fetchCsrMetrics(refId, fromDate, toDate);
     sileo.success({
       title: "Syncing",

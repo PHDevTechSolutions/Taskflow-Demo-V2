@@ -21,6 +21,25 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
+
+const QUOTATION_STATUS_OPTIONS = {
+  "Pending Client Approval": [
+    "For Bidding",
+    "Nego",
+    "Waiting for Approval",
+  ],
+  "Order Complete": [],
+  "Convert to SO": [],
+  "Decline": [
+    "Loss Price is Too High",
+    "Lead Time Issue",
+    "Insufficient Stock",
+    "Lost Bid",
+    "Canvass Only",
+    "Did not Meet the Specs",
+    "Declined / Dissaproved",
+  ],
+};
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +90,7 @@ interface Completed {
   quotation_number?: string;
   quotation_amount?: number;
   quotation_status?: string;
+  quotation_status_sub?: string;
   so_number?: string;
   so_amount?: number;
   actual_sales?: number;
@@ -154,21 +174,7 @@ function toDatetimeLocal(dateStr?: string | null): string {
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 const EDIT_TIME_PASSWORD = "PHDEVTECH";
 
-const QUOTATION_STATUS_OPTIONS = [
-  "Pending Client Approval",
-  "For Bidding",
-  "Nego",
-  "Order Complete",
-  "Convert to SO",
-  "Loss Price is Too High",
-  "Lead Time Issue",
-  "Out of Stock",
-  "Insufficient Stock",
-  "Lost Bid",
-  "Canvass Only",
-  "Did Not Meet the Specs",
-  "Declined / Disapproved",
-];
+
 
 // ─── Password Gate Dialog ─────────────────────────────────────────────────────
 
@@ -520,13 +526,14 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   // ── Inline Update ──────────────────────────────────────────────────────────
 
-  const handleInlineUpdate = async (id: number, field: string, value: string) => {
+  const handleInlineUpdate = async (id: number, field: string, value: any) => {
     try {
-      const res = await fetch(`/api/activity/tsa/historical/update?id=${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
-      });
+      const res = await fetch(`/api/activity/tsa/historical/update?id=${id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value }),
+        });
       if (!res.ok) throw new Error("Failed to update");
 
       sileo.success({
@@ -543,6 +550,37 @@ export const TaskList: React.FC<CompletedProps> = ({
       sileo.error({
         title: "Update Failed",
         description: "Could not update the record.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    }
+  };
+
+  const handleQuotationStatusUpdate = async (id: number, main: string, sub: string) => {
+    try {
+      const res = await fetch("/api/activity/tsa/historical/update-quotation-status", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, quotation_status: main, quotation_status_sub: sub }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+
+      sileo.success({
+        title: "Updated",
+        description: `Quotation status updated successfully.`,
+        duration: 2000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      fetchActivities();
+    } catch (error) {
+      console.error("Quotation status update failed:", error);
+      sileo.error({
+        title: "Update Failed",
+        description: "Could not update the quotation status.",
         duration: 3000,
         position: "top-right",
         fill: "black",
@@ -890,7 +928,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                   </TableHead>
                   <TableHead className="w-24 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
                   {[
-                    "Date", "Duration", "Company", "Status", "Quotation Status",
+                    "Date", "Duration", "Company", "Status", "Quotation Status", "Quotation Remarks",
                     "Contact #", "Type Client", "Project Name", "Project Type",
                     "Source", "Target Quota", "Activity Type", "Callback",
                     "Call Status", "Call Type", "Quotation #", "Quotation Amount",
@@ -910,6 +948,8 @@ export const TaskList: React.FC<CompletedProps> = ({
               <TableBody>
                 {paginatedActivities.map((item) => {
                   const isSelected = selectedIds.has(item.id);
+
+
                   return (
                     <TableRow
                       key={item.id}
@@ -1000,25 +1040,36 @@ export const TaskList: React.FC<CompletedProps> = ({
                       <TableCell className="px-3">
                         {item.status === "Quote-Done" ? (
                           <Select
-                            value={item.quotation_status || ""}
-                            onValueChange={(val) => handleInlineUpdate(item.id, "quotation_status", val)}
+                            value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
+                            onValueChange={(val) => {
+                              const [main, sub] = val.split("__");
+                              handleQuotationStatusUpdate(item.id, main, sub || "");
+                            }}
                           >
                             <SelectTrigger className="h-7 text-[10px] w-[140px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50 transition-colors font-bold uppercase tracking-tight">
-                              <SelectValue placeholder="Select status" />
+                              <SelectValue asChild><span>{item.quotation_status || 'Select status'}</span></SelectValue>
                             </SelectTrigger>
                             <SelectContent className="rounded-none">
-                              <SelectGroup>
-                                {QUOTATION_STATUS_OPTIONS.map((opt) => (
-                                  <SelectItem key={opt} value={opt} className="text-[10px] uppercase font-semibold">
-                                    {opt}
+                              {Object.entries(QUOTATION_STATUS_OPTIONS).map(([mainStatus, subStatuses]) => (
+                                <SelectGroup key={mainStatus}>
+                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-semibold">
+                                    {mainStatus}
                                   </SelectItem>
-                                ))}
-                              </SelectGroup>
+                                  {subStatuses.map(subStatus => (
+                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-8">
+                                      {subStatus}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ))}
                             </SelectContent>
                           </Select>
                         ) : (
                           <span className="text-zinc-500 font-medium">{displayValue(item.quotation_status)}</span>
                         )}
+                      </TableCell>
+                      <TableCell className="px-3 capitalize">
+                        {displayValue(item.quotation_status_sub)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap px-3 font-mono text-[11px] text-zinc-500">{displayValue(item.contact_number)}</TableCell>
                       <TableCell className="whitespace-nowrap px-3">

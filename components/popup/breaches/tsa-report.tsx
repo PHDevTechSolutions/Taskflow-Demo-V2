@@ -255,11 +255,11 @@ export default function TSAReports() {
     }
   }, []);
 
-  const fetchOverdue = useCallback(async (refId: string, from: string, to: string) => {
-    if (!refId || !from || !to) return;
+  const fetchOverdue = useCallback(async (refId: string) => {
+    if (!refId) return;
     setLoadingOverdue(true);
     try {
-      const url = `/api/activity/tsa/breaches/fetch-activity?referenceid=${encodeURIComponent(refId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      const url = `/api/activity/tsa/breaches/fetch-activity?referenceid=${encodeURIComponent(refId)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -350,7 +350,7 @@ export default function TSAReports() {
     setOverdueCount(0);
     fetchClusterData(selectedRefId);
     fetchActivities(selectedRefId);
-    fetchOverdue(selectedRefId, fromDate, toDate);
+    fetchOverdue(selectedRefId);
     fetchCsrMetrics(selectedRefId, fromDate, toDate);
   }, [selectedRefId, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
@@ -547,7 +547,7 @@ export default function TSAReports() {
     if (!selectedRefId) return;
     fetchClusterData(selectedRefId);
     fetchActivities(selectedRefId);
-    fetchOverdue(selectedRefId, fromDate, toDate);
+    fetchOverdue(selectedRefId);
     fetchCsrMetrics(selectedRefId, fromDate, toDate);
     sileo.success({
       title: "Syncing",
