@@ -473,8 +473,18 @@ function QuotationView({
                             </div>
                             <div style={{ padding: "9px 10px" }}>
                               <span style={{ ...F, fontSize: "7.5px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, display: "block", marginBottom: "4px" }}>Description</span>
-                              <p style={{ ...F, fontSize: "11px", color: item.item_description ? "#111827" : "#9ca3af", lineHeight: 1.6, margin: 0 }}>
-                                {item.item_description || "No description provided."}
+                              <p
+                                style={{
+                                  ...F,
+                                  fontSize: "11px",
+                                  color: item.item_description ? "#111827" : "#9ca3af",
+                                  margin: 0,
+                                  whiteSpace: "pre-line",
+                                }}
+                              >
+                                {(item.item_description || "No description provided.")
+                                  .replace(/([A-Za-z ]+:\s*)/g, "\n$1")
+                                  .trim()}
                               </p>
                             </div>
                           </div>

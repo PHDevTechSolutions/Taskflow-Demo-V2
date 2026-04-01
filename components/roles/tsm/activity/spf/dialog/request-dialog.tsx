@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Loader2, ShieldCheck, SendToBack, FileText, Package, Building2 } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldX, SendToBack, FileText, Package, Building2 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -66,7 +66,6 @@ interface OfferProduct {
   port_of_discharge: string;
   subtotal: string;
   pcs_per_carton: string;
-
   company_name: string;
   supplier_brand: string;
   contact_number: string;
@@ -77,11 +76,27 @@ interface OfferProduct {
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 
-/** Split a field value into a 2D array: rows (|ROW|) → products (,) */
+/**
+ * Separators:
+ *   |ROW|  — splits item rows (groups of products)
+ *   ||     — splits product variants within a row  (specs, costs, packaging, etc.)
+ *   ,      — splits product variants within a row  (images, qty, item_code, lead_time, selling_cost)
+ *   |      — splits multiple values within a single spec field (handled inside parseSpec)
+ */
+
+/** For spec/cost/packaging/factory/port/subtotal/pcs fields — variants separated by || */
 const parseField2D = (val?: string): string[][] => {
   if (!val?.trim()) return [[""]];
   return val.split("|ROW|").map((row) =>
-    row.split(",").map((s) => s.trim())
+    row.split("||").map((s) => s.trim()).filter((s) => s.length > 0)
+  );
+};
+
+/** For image, qty, item_code, lead_time, selling_cost — variants separated by , (comma) */
+const parseCommaField2D = (val?: string): string[][] => {
+  if (!val?.trim()) return [[""]];
+  return val.split("|ROW|").map((row) =>
+    row.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
   );
 };
 
@@ -114,13 +129,20 @@ const parseSpec = (raw: string): SpecCategory[] => {
 
 /**
  * Build 2D array of products per row for a given offer.
- * Returns: rows → products
+ * Returns: rows → products (variants)
  */
 const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
   const f = parseField2D;
+  const fc = parseCommaField2D;
 
-  const images = f(row.product_offer_image);
-  const qtys = f(row.product_offer_qty);
+  // comma-separated variant fields
+  const images = fc(row.product_offer_image);
+  const qtys = fc(row.product_offer_qty);
+  const codes = fc(row.item_code);
+  const leads = fc(row.proj_lead_time);
+  const sellings = fc(row.final_selling_cost);
+
+  // ||-separated variant fields
   const specs = f(row.product_offer_technical_specification);
   const costs = f(row.product_offer_unit_cost);
   const packs = f(row.product_offer_packaging_details);
@@ -128,18 +150,11 @@ const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
   const ports = f(row.product_offer_port_of_discharge);
   const subtotals = f(row.product_offer_subtotal);
   const pcs = f(row.product_offer_pcs_per_carton);
-
-  // Mga bagong pinaparse base sa instruction mo:
   const companies = f(row.company_name);
   const brands = f(row.supplier_brand);
   const contacts = f(row.contact_number);
-  const codes = f(row.item_code);
-  const leads = f(row.proj_lead_time);
-  const sellings = f(row.final_selling_cost);
 
-  const numRows = Math.max(
-    images.length, qtys.length, specs.length, companies.length, leads.length
-  );
+  const numRows = Math.max(images.length, qtys.length, specs.length);
 
   return Array.from({ length: numRows }, (_, ri) => {
     const rImg = images[ri] ?? [""];
@@ -151,8 +166,6 @@ const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
     const rPrt = ports[ri] ?? [""];
     const rSub = subtotals[ri] ?? [""];
     const rPcs = pcs[ri] ?? [""];
-
-    // Row mapping para sa mga bago:
     const rComp = companies[ri] ?? [""];
     const rBrnd = brands[ri] ?? [""];
     const rCont = contacts[ri] ?? [""];
@@ -160,9 +173,7 @@ const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
     const rLead = leads[ri] ?? [""];
     const rSell = sellings[ri] ?? [""];
 
-    const numProds = Math.max(
-      rImg.length, rQty.length, rSpc.length, rComp.length
-    );
+    const numProds = Math.max(rImg.length, rQty.length, rSpc.length);
 
     return Array.from({ length: numProds }, (_, pi) => ({
       image: rImg[pi] ?? "",
@@ -174,7 +185,6 @@ const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
       port_of_discharge: rPrt[pi] ?? "",
       subtotal: rSub[pi] ?? "",
       pcs_per_carton: rPcs[pi] ?? "",
-      // Pag-assign sa bawat variant:
       company_name: rComp[pi] ?? "",
       supplier_brand: rBrnd[pi] ?? "",
       contact_number: rCont[pi] ?? "",
@@ -185,13 +195,13 @@ const parseOfferRows = (row: SPFCreationRow): OfferProduct[][] => {
   });
 };
 
-// ─── Style constants ─────────────────────────────────────────────────────────
+// ─── Style constants ──────────────────────────────────────────────────────────
 
 const F: React.CSSProperties = {
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
 };
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 const FormRow = ({ label, value, wide }: { label: string; value?: string; wide?: boolean }) => (
   <div className={`flex flex-col gap-0.5 ${wide ? "col-span-2" : ""}`}>
@@ -212,60 +222,29 @@ const SectionHeader = ({ children, accent = "#1f2937" }: { children: React.React
   </div>
 );
 
-const DataPill = ({ label, value }: { label: string; value?: string }) => (
-  <div style={{ border: "1px solid #e5e7eb", padding: "5px 8px", background: "#f9fafb", minWidth: 0 }}>
-    <div style={{ ...F, fontSize: "7.5px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, marginBottom: "2px" }}>{label}</div>
-    <div style={{ ...F, fontSize: "11px", color: value ? "#111827" : "#d1d5db", fontWeight: value ? 600 : 400, wordBreak: "break-word" }}>{value || "—"}</div>
-  </div>
-);
-
-/** Renders parsed SpecCategory[] in a structured card layout */
 const SpecDisplay = ({ categories }: { categories: SpecCategory[] }) => {
   if (!categories.length) return (
     <span style={{ ...F, fontSize: "10px", color: "#9ca3af", fontStyle: "italic" }}>No specifications</span>
   );
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
       {categories.map((cat, ci) => (
         <div key={ci} style={{ border: "1px solid #dbeafe", overflow: "hidden" }}>
-          {/* Category header */}
           <div style={{ background: "#eff6ff", borderBottom: "1px solid #dbeafe", padding: "3px 9px" }}>
             <span style={{ ...F, fontSize: "8px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1e40af" }}>
               {cat.name}
             </span>
           </div>
-          {/* Key-value rows */}
           <div style={{ padding: "0" }}>
             {cat.items.map((item, ii) => (
-              <div
-                key={ii}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "38% 62%",
-                  borderBottom: ii < cat.items.length - 1 ? "1px solid #f0f9ff" : "none",
-                }}
-              >
-                {/* Key */}
+              <div key={ii} style={{ display: "grid", gridTemplateColumns: "38% 62%", borderBottom: ii < cat.items.length - 1 ? "1px solid #f0f9ff" : "none" }}>
                 <div style={{ background: "#f8faff", borderRight: "1px solid #dbeafe", padding: "4px 9px" }}>
                   <span style={{ ...F, fontSize: "9.5px", color: "#374151", fontWeight: 600 }}>{item.key}</span>
                 </div>
-                {/* Value — handle multi-values (pipe-separated) */}
                 <div style={{ padding: "4px 9px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px" }}>
                   {item.multiValues.length > 1
                     ? item.multiValues.map((v, vi) => (
-                      <span
-                        key={vi}
-                        style={{
-                          ...F,
-                          fontSize: "9px",
-                          background: "#dbeafe",
-                          color: "#1e40af",
-                          padding: "1px 6px",
-                          fontWeight: 600,
-                          border: "1px solid #bfdbfe",
-                        }}
-                      >
+                      <span key={vi} style={{ ...F, fontSize: "9px", background: "#dbeafe", color: "#1e40af", padding: "1px 6px", fontWeight: 600, border: "1px solid #bfdbfe" }}>
                         {v}
                       </span>
                     ))
@@ -291,11 +270,9 @@ export function RequestDialog({
   const [offers, setOffers] = useState<SPFCreationRow[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
 
-  const fullName =
-    [firstname, lastname].filter(Boolean).join(" ").trim() || prepared_by || "";
+  const fullName = [firstname, lastname].filter(Boolean).join(" ").trim() || prepared_by || "";
 
-  const isReadyForQuotation =
-    (currentSPF?.status || "").toLowerCase() === "approved by procurement";
+  const isReadyForQuotation = (currentSPF?.status || "").toLowerCase() === "approved by procurement";
 
   // ── Parse main SPF items ──
   const items = (() => {
@@ -303,19 +280,13 @@ export function RequestDialog({
     const photos = (currentSPF?.item_photo || "").split(",").map((s: string) => s.trim());
     const maxLen = Math.max(descs.filter(Boolean).length, photos.filter(Boolean).length);
     return maxLen > 0
-      ? Array.from({ length: maxLen }, (_, i) => ({
-        item_description: descs[i] || "",
-        item_photo: photos[i] || "",
-      }))
+      ? Array.from({ length: maxLen }, (_, i) => ({ item_description: descs[i] || "", item_photo: photos[i] || "" }))
       : [];
   })();
 
   // ── Fetch spf_creation offers ──
   useEffect(() => {
-    if (!open || !isReadyForQuotation || !currentSPF?.spf_number) {
-      setOffers([]);
-      return;
-    }
+    if (!open || !isReadyForQuotation || !currentSPF?.spf_number) { setOffers([]); return; }
     setLoadingOffers(true);
     supabase
       .from("spf_creation")
@@ -329,7 +300,7 @@ export function RequestDialog({
   }, [open, isReadyForQuotation, currentSPF?.spf_number]);
 
   // ── Submit ──
-  const handleSubmit = async (status: "Approved by TSM" | "Endorsed to Sales Head") => {
+  const handleSubmit = async (status: "Approved by TSM" | "Endorsed to Sales Head" | "Declined by TSM") => {
     setSubmitting(true);
     const updated = { ...currentSPF, approved_by: fullName, status };
     setCurrentSPF(updated);
@@ -341,15 +312,14 @@ export function RequestDialog({
     }
   };
 
-  const today = new Date().toLocaleDateString("en-PH", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  const today = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
 
   const sl = (currentSPF?.status || "").toLowerCase();
   const statusColor = sl === "approved" ? "#065f46" : sl === "endorsed to sales head" ? "#1e40af" : "#92400e";
   const statusBg = sl === "approved" ? "#d1fae5" : sl === "endorsed to sales head" ? "#dbeafe" : "#fef3c7";
   const statusBorder = sl === "approved" ? "#6ee7b7" : sl === "endorsed to sales head" ? "#93c5fd" : "#fcd34d";
   const statusLabel = sl === "approved by procurement" ? "Ready for Quotation" : currentSPF?.status;
+
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -367,9 +337,7 @@ export function RequestDialog({
         <div style={{ background: "#f8f7f4", maxHeight: "calc(100vh - 60px)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
-            {/* ════════════════════════════
-                            LEFT — SPF Form (read-only)
-                        ════════════════════════════ */}
+            {/* LEFT — SPF Form */}
             <div style={{ flex: isReadyForQuotation ? "0 0 490px" : "1", minWidth: 0 }}>
               <div style={{ background: "#fff", margin: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
 
@@ -398,15 +366,7 @@ export function RequestDialog({
                   </div>
                 )}
 
-                <div
-                  style={{
-                    padding: "14px 18px 18px",
-                    flex: 1,
-                    overflowY: "auto",
-                    minHeight: 0,
-                    maxHeight: "70vh", // optional fallback
-                  }}
-                >
+                <div style={{ padding: "14px 18px 18px", flex: 1, overflowY: "auto", minHeight: 0, maxHeight: "70vh" }}>
                   {/* 01 Customer Info */}
                   <div style={{ marginBottom: "16px" }}>
                     <SectionHeader>01 · Customer Information</SectionHeader>
@@ -428,11 +388,7 @@ export function RequestDialog({
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "11px 14px", padding: "0 2px" }}>
                       <FormRow label="Payment Terms" value={currentSPF?.payment_terms} />
                       <FormRow label="Warranty" value={currentSPF?.warranty} />
-                      <FormRow label="Delivery Date"
-                        value={currentSPF?.delivery_date
-                          ? new Date(currentSPF.delivery_date).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
-                          : undefined}
-                      />
+                      <FormRow label="Delivery Date" value={currentSPF?.delivery_date ? new Date(currentSPF.delivery_date).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) : undefined} />
                       <FormRow label="Special Instructions" value={currentSPF?.special_instructions} wide />
                     </div>
                   </div>
@@ -463,8 +419,18 @@ export function RequestDialog({
                             </div>
                             <div style={{ padding: "9px 10px" }}>
                               <span style={{ ...F, fontSize: "7.5px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, display: "block", marginBottom: "4px" }}>Description</span>
-                              <p style={{ ...F, fontSize: "11px", color: item.item_description ? "#111827" : "#9ca3af", lineHeight: 1.6, margin: 0 }}>
-                                {item.item_description || "No description provided."}
+                              <p
+                                style={{
+                                  ...F,
+                                  fontSize: "11px",
+                                  color: item.item_description ? "#111827" : "#9ca3af",
+                                  margin: 0,
+                                  whiteSpace: "pre-line",
+                                }}
+                              >
+                                {(item.item_description || "No description provided.")
+                                  .replace(/([A-Za-z ]+:\s*)/g, "\n$1")
+                                  .trim()}
                               </p>
                             </div>
                           </div>
@@ -480,6 +446,7 @@ export function RequestDialog({
                       <FormRow label="Sales Person" value={currentSPF?.sales_person} />
                       <FormRow label="Prepared By" value={currentSPF?.prepared_by} />
                       <FormRow label="Approved By" value={fullName || currentSPF?.approved_by} />
+
                     </div>
                   </div>
                 </div>
@@ -491,14 +458,11 @@ export function RequestDialog({
               </div>
             </div>
 
-            {/* ══════════════════════════════════════════
-                            RIGHT — Product Offers
-                        ══════════════════════════════════════════ */}
+            {/* RIGHT — Product Offers */}
             {isReadyForQuotation && (
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ background: "#fff", margin: "16px 16px 16px 0", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", height: "calc(100% - 32px)" }}>
 
-                  {/* Panel header */}
                   <div style={{ borderBottom: "3px solid #1e3a8a", padding: "16px 20px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0 }}>
                     <div>
                       <div style={{ ...F, fontSize: "13px", fontWeight: 900, letterSpacing: "0.15em", textTransform: "uppercase", color: "#1e3a8a", lineHeight: 1 }}>Product Offers</div>
@@ -512,7 +476,6 @@ export function RequestDialog({
                     </div>
                   </div>
 
-                  {/* Offers scroll area */}
                   <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
                     {loadingOffers ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100px", gap: "8px" }}>
@@ -529,119 +492,63 @@ export function RequestDialog({
                         {offers.map((offer, oi) => {
                           const offerRows = parseOfferRows(offer);
                           const totalProducts = offerRows.reduce((sum, r) => sum + r.length, 0);
-
                           return (
                             <div key={offer.id} style={{ border: "1px solid #e2e8f0", overflow: "hidden" }}>
-
-                              {/* Offer header */}
                               <div style={{ background: "#1e3a8a", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
                                   <Building2 style={{ width: "11px", height: "11px", color: "#93c5fd", flexShrink: 0 }} />
-                                  {/* Offer header 
-                                  <span style={{ ...F, fontSize: "11px", fontWeight: 700, color: "#f0f9ff", letterSpacing: "0.04em" }}>
-                                    {offer.company_name || `Supplier #${oi + 1}`}
-                                  </span>
-                                  {offer.supplier_brand && (
-                                    <span style={{ ...F, fontSize: "9px", color: "#7dd3fc" }}>· {offer.supplier_brand}</span>
-                                  )}*/}
-                                  
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                   <span style={{ ...F, fontSize: "8px", color: "#93c5fd", background: "rgba(255,255,255,0.1)", padding: "2px 7px", border: "1px solid rgba(147,197,253,0.3)" }}>
                                     {offerRows.length} row{offerRows.length !== 1 ? "s" : ""} · {totalProducts} product{totalProducts !== 1 ? "s" : ""}
                                   </span>
-                                  <span style={{ ...F, fontSize: "10px", color: "#60a5fa", fontWeight: 900 }}>
-                                    {String(oi + 1).padStart(2, "0")}
-                                  </span>
+                                  <span style={{ ...F, fontSize: "10px", color: "#60a5fa", fontWeight: 900 }}>{String(oi + 1).padStart(2, "0")}</span>
                                 </div>
                               </div>
 
-                              {/* ── Rows (|ROW| groups) ── */}
                               <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "12px" }}>
                                 {offerRows.map((rowProducts, ri) => (
                                   <div key={ri}>
-                                    {/* Row label */}
                                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "7px" }}>
                                       <div style={{ background: "#1e3a8a", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                        <span style={{ ...F, fontSize: "7.5px", color: "#bfdbfe", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                                          Item Row {ri + 1}
-                                        </span>
+                                        <span style={{ ...F, fontSize: "7.5px", color: "#bfdbfe", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Item Row {ri + 1}</span>
                                       </div>
                                       <div style={{ flex: 1, height: "1px", background: "#dbeafe" }} />
-                                      <span style={{ ...F, fontSize: "7.5px", color: "#93c5fd" }}>
-                                        {rowProducts.length} variant{rowProducts.length !== 1 ? "s" : ""}
-                                      </span>
+                                      <span style={{ ...F, fontSize: "7.5px", color: "#93c5fd" }}>{rowProducts.length} variant{rowProducts.length !== 1 ? "s" : ""}</span>
                                     </div>
 
-                                    {/* Products in this row — side by side if >1, stacked if 1 */}
-                                    <div style={{
-                                      display: "grid",
-                                      gridTemplateColumns: rowProducts.length > 1 ? `repeat(${Math.min(rowProducts.length, 2)}, 1fr)` : "1fr",
-                                      gap: "8px",
-                                    }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: rowProducts.length > 1 ? `repeat(${Math.min(rowProducts.length, 2)}, 1fr)` : "1fr", gap: "8px" }}>
                                       {rowProducts.map((prod, pi) => (
                                         <div key={pi} style={{ border: "1px solid #e5e7eb", overflow: "hidden" }}>
-
-                                          {/* Product header */}
                                           <div style={{ background: "#f0f9ff", borderBottom: "1px solid #dbeafe", padding: "4px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <span style={{ ...F, fontSize: "7.5px", color: "#1e40af", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                                              Variant {pi + 1}
-                                            </span>
-                                            {prod.image && (
+                                            <span style={{ ...F, fontSize: "7.5px", color: "#1e40af", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Variant {pi + 1}</span>
+                                            {prod.image ? (
                                               <div style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                                 <img src={prod.image} alt={`R${ri + 1}P${pi + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                                               </div>
-                                            )}
-                                            {!prod.image && (
+                                            ) : (
                                               <div style={{ width: "32px", height: "32px", border: "1.5px dashed #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                                 <span style={{ fontSize: "6px", color: "#bfdbfe", ...F, textTransform: "uppercase" }}>No Img</span>
                                               </div>
                                             )}
                                           </div>
 
-                                          {/* Metrics strip */}
                                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0", borderBottom: "1px solid #e5e7eb" }}>
                                             {[
-                                              //{ label: "Supplier", value: prod.company_name },
-                                              //{ label: "Brand", value: prod.supplier_brand },
                                               { label: "Item Code", value: prod.item_code },
-                                              //{ label: "Contact", value: prod.contact_number },
                                               { label: "Lead Time", value: prod.lead_time },
-                                              //{ label: "Selling Cost", value: prod.final_selling },
+                                              { label: "Selling Cost", value: prod.final_selling },
                                               { label: "Qty", value: prod.qty },
-                                              //{ label: "Unit Cost", value: prod.unit_cost },
-                                              //{ label: "Subtotal", value: prod.subtotal },
-                                              //{ label: "Pcs/Ctn", value: prod.pcs_per_carton },
-                                              //{ label: "Port", value: prod.port_of_discharge },
-                                              //{ label: "Packaging", value: prod.packaging },
-
                                             ].map(({ label, value }, mi) => (
-                                              <div key={mi} style={{
-                                                padding: "4px 7px",
-                                                borderRight: (mi % 3 !== 2) ? "1px solid #f3f4f6" : "none",
-                                                borderBottom: mi < 3 ? "1px solid #f3f4f6" : "none",
-                                                background: mi % 2 === 0 ? "#fff" : "#fafafa",
-                                              }}>
+                                              <div key={mi} style={{ padding: "4px 7px", borderRight: mi % 3 !== 2 ? "1px solid #f3f4f6" : "none", borderBottom: mi < 3 ? "1px solid #f3f4f6" : "none", background: mi % 2 === 0 ? "#fff" : "#fafafa" }}>
                                                 <div style={{ ...F, fontSize: "7px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700 }}>{label}</div>
                                                 <div style={{ ...F, fontSize: "10px", color: value ? "#1f2937" : "#d1d5db", fontWeight: 600 }}>{value || "—"}</div>
                                               </div>
                                             ))}
                                           </div>
 
-                                          {/* Factory address 
-                                          {prod.factory_address && (
-                                            <div style={{ padding: "5px 9px", borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>
-                                              <div style={{ ...F, fontSize: "7px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, marginBottom: "2px" }}>Factory Address</div>
-                                              <div style={{ ...F, fontSize: "10px", color: "#374151" }}>{prod.factory_address}</div>
-                                            </div>
-                                          )}*/}
-                                          
-
-                                          {/* Spec display */}
                                           <div style={{ padding: "8px 9px" }}>
-                                            <div style={{ ...F, fontSize: "7px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, marginBottom: "6px" }}>
-                                              Technical Specifications
-                                            </div>
+                                            <div style={{ ...F, fontSize: "7px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, marginBottom: "6px" }}>Technical Specifications</div>
                                             <SpecDisplay categories={prod.spec} />
                                           </div>
                                         </div>
@@ -666,119 +573,60 @@ export function RequestDialog({
             )}
           </div>
 
-          {/* ── Action Bar ── */}
-          {currentSPF?.status !== "Approved By Procurement" && (
-            <div
-              style={{
-                position: "sticky",
-                bottom: 0,
-                zIndex: 10,
-                background: "#1f2937",
-                padding: "12px 16px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderTop: "1px solid #374151"
-              }}
-            >
-              <button
-                onClick={onClose}
-                disabled={submitting}
-                style={{
-                  ...F,
-                  fontSize: "9px",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "#9ca3af",
-                  background: "transparent",
-                  border: "1px solid #4b5563",
-                  padding: "7px 16px",
-                  cursor: "pointer",
-                  fontWeight: 700
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "#f9fafb";
-                  e.currentTarget.style.borderColor = "#9ca3af";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "#9ca3af";
-                  e.currentTarget.style.borderColor = "#4b5563";
-                }}
-              >
-                ← Close
-              </button>
-
-              <div style={{ display: "flex", gap: "8px" }}>
+          {/* Action Bar */}
+          {!(
+            currentSPF?.status?.includes("Approved By Procurement") ||
+            ["Processed by PD"].includes(currentSPF?.status || "") ||
+            currentSPF?.status?.includes("Approved by TSM") ||
+            currentSPF?.status?.includes("Approved by Sales Head")
+          ) && (
+              <div style={{ position: "sticky", bottom: 0, zIndex: 10, background: "#1f2937", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #374151" }}>
                 <button
-                  onClick={() => handleSubmit("Endorsed to Sales Head")}
+                  onClick={onClose}
                   disabled={submitting}
-                  style={{
-                    ...F,
-                    fontSize: "9px",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: "#bfdbfe",
-                    background: "#1e3a8a",
-                    border: "1px solid #3b82f6",
-                    padding: "7px 16px",
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    opacity: submitting ? 0.6 : 1
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!submitting) e.currentTarget.style.background = "#1e40af";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#1e3a8a";
-                  }}
+                  style={{ ...F, fontSize: "9px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", background: "transparent", border: "1px solid #4b5563", padding: "7px 16px", cursor: "pointer", fontWeight: 700 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#f9fafb"; e.currentTarget.style.borderColor = "#9ca3af"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; e.currentTarget.style.borderColor = "#4b5563"; }}
                 >
-                  {submitting ? (
-                    <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} />
-                  ) : (
-                    <SendToBack style={{ width: "10px", height: "10px" }} />
-                  )}
-                  Endorse to Sales Head
+                  ← Close
                 </button>
 
-                <button
-                  onClick={() => handleSubmit("Approved by TSM")}
-                  disabled={submitting}
-                  style={{
-                    ...F,
-                    fontSize: "9px",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: "#d1fae5",
-                    background: "#065f46",
-                    border: "1px solid #10b981",
-                    padding: "7px 16px",
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    opacity: submitting ? 0.6 : 1
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!submitting) e.currentTarget.style.background = "#047857";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#065f46";
-                  }}
-                >
-                  {submitting ? (
-                    <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} />
-                  ) : (
-                    <ShieldCheck style={{ width: "10px", height: "10px" }} />
-                  )}
-                  Approve
-                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={() => handleSubmit("Endorsed to Sales Head")}
+                    disabled={submitting}
+                    style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#bfdbfe", background: "#1e3a8a", border: "1px solid #3b82f6", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
+                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#1e40af"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#1e3a8a"; }}
+                  >
+                    {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <SendToBack style={{ width: "10px", height: "10px" }} />}
+                    Endorse to Sales Head
+                  </button>
+
+                  <button
+                    onClick={() => handleSubmit("Declined by TSM")}
+                    disabled={submitting}
+                    style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#fecaca", background: "#7f1d1d", border: "1px solid #ef4444", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
+                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#991b1b"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#7f1d1d"; }}
+                  >
+                    {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <ShieldX style={{ width: "10px", height: "10px" }} />}
+                    Decline
+                  </button>
+
+                  <button
+                    onClick={() => handleSubmit("Approved by TSM")}
+                    disabled={submitting}
+                    style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#d1fae5", background: "#065f46", border: "1px solid #10b981", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
+                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#047857"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#065f46"; }}
+                  >
+                    {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <ShieldCheck style={{ width: "10px", height: "10px" }} />}
+                    Approve
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       </DialogContent>
     </Dialog>

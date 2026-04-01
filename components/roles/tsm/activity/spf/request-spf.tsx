@@ -34,6 +34,7 @@ interface SPFRecord {
     delivery_date?: string;
     prepared_by?: string;
     approved_by?: string;
+    noted_by?: string;
     sales_person?: string;
     start_date?: string;
     end_date?: string;
