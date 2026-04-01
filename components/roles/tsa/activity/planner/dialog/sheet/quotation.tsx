@@ -1862,122 +1862,122 @@ Procurement
       {step === 6 && (
         <div>
           <FieldGroup>
-  <FieldSet>
-    {followUpDate ? (
-      <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
-        <div>
-          <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
-          <AlertDescription>
-            {followUpDate} — This is the scheduled date to reconnect with the client.
-          </AlertDescription>
-        </div>
+            <FieldSet>
+              {followUpDate ? (
+                <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
+                  <div>
+                    <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
+                    <AlertDescription>
+                      {followUpDate} — This is the scheduled date to reconnect with the client.
+                    </AlertDescription>
+                  </div>
 
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <Input
-            type="checkbox"
-            checked={useToday}
-            onChange={(e) => setUseToday(e.target.checked)}
-            className="h-4 w-4"
-          />
-          <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
-        </label>
-      </Alert>
-    ) : (
-      <></>
-    )}
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Input
+                      type="checkbox"
+                      checked={useToday}
+                      onChange={(e) => setUseToday(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
+                  </label>
+                </Alert>
+              ) : (
+                <></>
+              )}
 
-    <FieldLabel className="font-bold">Remarks</FieldLabel>
-    <Textarea
-      value={remarks}
-      onChange={(e) => setRemarks(e.target.value)}
-      placeholder="Enter any remarks here..."
-      rows={3}
-      className="capitalize rounded-none"
-    />
+              <FieldLabel className="font-bold">Remarks</FieldLabel>
+              <Textarea
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Enter any remarks here..."
+                rows={3}
+                className="capitalize rounded-none"
+              />
 
-    <FieldLabel className="font-bold">Status </FieldLabel>
-    <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
-      <SelectTrigger className="w-full rounded-none">
-        <SelectValue placeholder="Select status" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-          <SelectItem value="For Bidding">For Bidding</SelectItem>
-          <SelectItem value="Nego">Nego</SelectItem>
-          <SelectItem value="Order Completed">Order Completed</SelectItem>
-          <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-          <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
-          <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
-          <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-          <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
-          <SelectItem value="Lost Bid">Lost Bid</SelectItem>
-          <SelectItem value="Canvass Only">Canvass Only</SelectItem>
-          <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
-          <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+              <FieldLabel className="font-bold">Status </FieldLabel>
+              <Select value={quotationStatus} onValueChange={setQuotationStatus} required>
+                <SelectTrigger className="w-full rounded-none">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
+                    <SelectItem value="For Bidding">For Bidding</SelectItem>
+                    <SelectItem value="Nego">Nego</SelectItem>
+                    <SelectItem value="Order Completed">Order Completed</SelectItem>
+                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
+                    <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
+                    <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
+                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
+                    <SelectItem value="Lost Bid">Lost Bid</SelectItem>
+                    <SelectItem value="Canvass Only">Canvass Only</SelectItem>
+                    <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
+                    <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
-    <FieldLabel className="font-bold">Approval Process </FieldLabel>
-    <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
-      <SelectTrigger className="w-full rounded-none">
-        <SelectValue placeholder="Select Approval Status" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value="Pending">Endorsed to TSM</SelectItem>
-          <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+              <FieldLabel className="font-bold">Approval Process </FieldLabel>
+              <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
+                <SelectTrigger className="w-full rounded-none">
+                  <SelectValue placeholder="Select Approval Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="Pending">Endorsed to TSM</SelectItem>
+                    <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
-    {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
-    {quotationStatus && tsmApprovalStatus ? (
-      <>
-        <FieldLabel className="mt-3">Action</FieldLabel>
-        <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
-          {[
-            {
-              value: "Quote-Done",
-              title: "Quote-Done",
-              desc: "The quotation process is complete and finalized.",
-            },
-          ].map((item) => (
-            <FieldLabel key={item.value}>
-              <Field orientation="horizontal" className="w-full items-start">
-                {/* LEFT */}
-                <FieldContent className="flex-1">
-                  <FieldTitle>{item.title}</FieldTitle>
-                  <FieldDescription>{item.desc}</FieldDescription>
+              {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
+              {quotationStatus && tsmApprovalStatus ? (
+                <>
+                  <FieldLabel className="mt-3">Action</FieldLabel>
+                  <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                    {[
+                      {
+                        value: "Quote-Done",
+                        title: "Quote-Done",
+                        desc: "The quotation process is complete and finalized.",
+                      },
+                    ].map((item) => (
+                      <FieldLabel key={item.value}>
+                        <Field orientation="horizontal" className="w-full items-start">
+                          {/* LEFT */}
+                          <FieldContent className="flex-1">
+                            <FieldTitle>{item.title}</FieldTitle>
+                            <FieldDescription>{item.desc}</FieldDescription>
 
-                  {/* Buttons only visible if selected */}
-                  {status === item.value && (
-                    <div className="mt-4 flex gap-2">
-                      <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
-                        <ArrowLeft /> Back
-                      </Button>
-                      <Button className="rounded-none" onClick={handleSaveClick}>
-                        Save <CheckCircle2Icon />
-                      </Button>
-                    </div>
-                  )}
-                </FieldContent>
+                            {/* Buttons only visible if selected */}
+                            {status === item.value && (
+                              <div className="mt-4 flex gap-2">
+                                <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                                  <ArrowLeft /> Back
+                                </Button>
+                                <Button className="rounded-none" onClick={handleSaveClick}>
+                                  Save <CheckCircle2Icon />
+                                </Button>
+                              </div>
+                            )}
+                          </FieldContent>
 
-                {/* RIGHT */}
-                <RadioGroupItem value={item.value} />
-              </Field>
-            </FieldLabel>
-          ))}
-        </RadioGroup>
-      </>
-    ) : (
-      <p className="mt-3 text-xs text-gray-400 italic">
-        Complete the Status and Approval Process fields above to proceed.
-      </p>
-    )}
-  </FieldSet>
-</FieldGroup>
+                          {/* RIGHT */}
+                          <RadioGroupItem value={item.value} />
+                        </Field>
+                      </FieldLabel>
+                    ))}
+                  </RadioGroup>
+                </>
+              ) : (
+                <p className="mt-3 text-xs text-gray-400 italic">
+                  Complete the Status and Approval Process fields above to proceed.
+                </p>
+              )}
+            </FieldSet>
+          </FieldGroup>
 
           {/* Confirmation alert modal/dialog */}
           {showConfirmFollowUp && (
@@ -2097,21 +2097,21 @@ Procurement
             </div>
             {/* Mobile Tab Switcher — always shown on mobile */}
             <div className="flex lg:hidden border-t border-gray-100 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setMobilePanelTab("search")}
-                  className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "search" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
-                >
-                  🔍 Search
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMobilePanelTab("products")}
-                  className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
-                >
-                  🛒 Products ({selectedProducts.length})
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setMobilePanelTab("search")}
+                className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "search" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
+              >
+                🔍 Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobilePanelTab("products")}
+                className={`flex-1 py-2.5 transition-colors border-b-2 ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}
+              >
+                🛒 Products ({selectedProducts.length})
+              </button>
+            </div>
           </div>
 
           {/* BODY */}
@@ -2369,8 +2369,8 @@ Procurement
                             <div
                               key={r.id}
                               className={`w-full rounded-none border transition overflow-hidden ${spf1Selected?.id === r.id
-                                  ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
-                                  : "border-red-200 bg-white shadow-sm"
+                                ? "border-red-500 bg-white ring-1 ring-red-200 shadow-sm"
+                                : "border-red-200 bg-white shadow-sm"
                                 }`}
                             >
                               <button
@@ -2822,252 +2822,251 @@ ${spec.value}
                           <p className="font-black text-blue-500 text-base uppercase tracking-widest">📥 Drop to add product</p>
                         </div>
                       )}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs table-auto border-collapse border border-gray-300">
-                        <thead>
-                          <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
-                            <th className="border border-gray-700 p-2 text-center w-7 text-gray-400 select-none" title="Drag to reorder">⠿</th>
-                            <th className="border border-gray-700 p-2 text-center w-8 font-bold">#</th>
-                            <th className="border border-gray-700 p-2 text-center w-10">
-                              <label className="flex items-center justify-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedProducts.every((p) => p.isDiscounted)}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    setSelectedProducts((prev) =>
-                                      prev.map((p) => ({
-                                        ...p,
-                                        isDiscounted: checked,
-                                        discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
-                                      }))
-                                    );
-                                  }}
-                                />
-                                <span className="font-bold">Disc%</span>
-                              </label>
-                            </th>
-                            <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
-                            <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
-                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
-                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
-                            <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
-                            <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
-                            <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedProducts.map((p, idx) => {
-                            const isDiscounted = p.isDiscounted ?? false;
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                          <thead>
+                            <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                              <th className="border border-gray-700 p-2 text-center w-7 text-gray-400 select-none" title="Drag to reorder">⠿</th>
+                              <th className="border border-gray-700 p-2 text-center w-8 font-bold">#</th>
+                              <th className="border border-gray-700 p-2 text-center w-10">
+                                <label className="flex items-center justify-center gap-1 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProducts.every((p) => p.isDiscounted)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedProducts((prev) =>
+                                        prev.map((p) => ({
+                                          ...p,
+                                          isDiscounted: checked,
+                                          discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
+                                        }))
+                                      );
+                                    }}
+                                  />
+                                  <span className="font-bold">Disc%</span>
+                                </label>
+                              </th>
+                              <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
+                              <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
+                              <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedProducts.map((p, idx) => {
+                              const isDiscounted = p.isDiscounted ?? false;
 
-                            // default discount based on VAT type
-                            const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
-                            const rowDiscount = p.discount ?? defaultDiscount;
+                              // default discount based on VAT type
+                              const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
+                              const rowDiscount = p.discount ?? defaultDiscount;
 
-                            const baseAmount = p.price * p.quantity;
-                            const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
-                            const totalAfterDiscount = baseAmount - discountedAmount;
+                              const baseAmount = p.price * p.quantity;
+                              const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
+                              const totalAfterDiscount = baseAmount - discountedAmount;
 
-                            const isExpanded = expandedRows[p.uid] ?? false;
+                              const isExpanded = expandedRows[p.uid] ?? false;
 
-                            return (
-                              <React.Fragment key={p.uid}>
-                                <tr
-                                  className={`even:bg-gray-50 cursor-pointer transition-all ${
-                                    dragOverRowUid === p.uid && dragRowUid !== p.uid
-                                      ? "border-t-2 border-t-blue-400"
-                                      : ""
-                                  } ${dragRowUid === p.uid ? "opacity-40" : ""}`}
-                                  draggable
-                                  onDragStart={(e) => {
-                                    e.dataTransfer.effectAllowed = "move";
-                                    e.dataTransfer.setData("text/x-row-uid", p.uid);
-                                    setDragRowUid(p.uid);
-                                  }}
-                                  onDragEnd={() => {
-                                    setDragRowUid(null);
-                                    setDragOverRowUid(null);
-                                  }}
-                                  onDragOver={(e) => {
-                                    // Only process row reorder, not product-from-left drops
-                                    if (!e.dataTransfer.types.includes("text/x-row-uid")) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (dragOverRowUid !== p.uid) setDragOverRowUid(p.uid);
-                                  }}
-                                  onDrop={(e) => {
-                                    const fromUid = e.dataTransfer.getData("text/x-row-uid");
-                                    if (!fromUid || fromUid === p.uid) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setSelectedProducts((prev) => {
-                                      const arr = [...prev];
-                                      const fromIdx = arr.findIndex((x) => x.uid === fromUid);
-                                      const toIdx = arr.findIndex((x) => x.uid === p.uid);
-                                      if (fromIdx === -1 || toIdx === -1) return prev;
-                                      const [moved] = arr.splice(fromIdx, 1);
-                                      arr.splice(toIdx, 0, moved);
-                                      return arr;
-                                    });
-                                    setDragRowUid(null);
-                                    setDragOverRowUid(null);
-                                  }}
-                                >
-                                  {/* Drag handle */}
-                                  <td className="border border-gray-300 p-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none text-base">
-                                    ⠿
-                                  </td>
-                                  {/* Row order number */}
-                                  <td className="border border-gray-300 p-2 text-center text-gray-400 font-mono font-bold text-[11px]">
-                                    {idx + 1}
-                                  </td>
-                                  <td className="border border-gray-300 p-4">
-                                    <div className="flex items-center justify-start gap-2">
-                                      {/* Styled Checkbox */}
-                                      <input
-                                        type="checkbox"
-                                        checked={isDiscounted}
-                                        onChange={(e) => {
-                                          const checked = e.target.checked;
-                                          setSelectedProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[idx] = {
-                                              ...copy[idx],
-                                              isDiscounted: checked,
-                                              discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
-                                            };
-                                            return copy;
-                                          });
-                                        }}
-                                      />
-
-                                      {/* Discount Input */}
-                                      {isDiscounted && (
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          step="0.01"
-                                          value={p.discount ?? 0}
+                              return (
+                                <React.Fragment key={p.uid}>
+                                  <tr
+                                    className={`even:bg-gray-50 cursor-pointer transition-all ${dragOverRowUid === p.uid && dragRowUid !== p.uid
+                                        ? "border-t-2 border-t-blue-400"
+                                        : ""
+                                      } ${dragRowUid === p.uid ? "opacity-40" : ""}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.effectAllowed = "move";
+                                      e.dataTransfer.setData("text/x-row-uid", p.uid);
+                                      setDragRowUid(p.uid);
+                                    }}
+                                    onDragEnd={() => {
+                                      setDragRowUid(null);
+                                      setDragOverRowUid(null);
+                                    }}
+                                    onDragOver={(e) => {
+                                      // Only process row reorder, not product-from-left drops
+                                      if (!e.dataTransfer.types.includes("text/x-row-uid")) return;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (dragOverRowUid !== p.uid) setDragOverRowUid(p.uid);
+                                    }}
+                                    onDrop={(e) => {
+                                      const fromUid = e.dataTransfer.getData("text/x-row-uid");
+                                      if (!fromUid || fromUid === p.uid) return;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setSelectedProducts((prev) => {
+                                        const arr = [...prev];
+                                        const fromIdx = arr.findIndex((x) => x.uid === fromUid);
+                                        const toIdx = arr.findIndex((x) => x.uid === p.uid);
+                                        if (fromIdx === -1 || toIdx === -1) return prev;
+                                        const [moved] = arr.splice(fromIdx, 1);
+                                        arr.splice(toIdx, 0, moved);
+                                        return arr;
+                                      });
+                                      setDragRowUid(null);
+                                      setDragOverRowUid(null);
+                                    }}
+                                  >
+                                    {/* Drag handle */}
+                                    <td className="border border-gray-300 p-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none text-base">
+                                      ⠿
+                                    </td>
+                                    {/* Row order number */}
+                                    <td className="border border-gray-300 p-2 text-center text-gray-400 font-mono font-bold text-[11px]">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="border border-gray-300 p-4">
+                                      <div className="flex items-center justify-start gap-2">
+                                        {/* Styled Checkbox */}
+                                        <input
+                                          type="checkbox"
+                                          checked={isDiscounted}
                                           onChange={(e) => {
-                                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                            const checked = e.target.checked;
                                             setSelectedProducts((prev) => {
                                               const copy = [...prev];
-                                              copy[idx] = { ...copy[idx], discount: val };
+                                              copy[idx] = {
+                                                ...copy[idx],
+                                                isDiscounted: checked,
+                                                discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
+                                              };
                                               return copy;
                                             });
                                           }}
-                                          className="w-15 p-0 border-none rounded-none"
                                         />
-                                      )}
-                                    </div>
-                                  </td>
 
-                                  <td className="hidden sm:table-cell">
-                                    <Textarea
-                                      value={p.itemRemarks || ""}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setSelectedProducts((prev) => {
-                                          const copy = [...prev];
-                                          copy[idx] = { ...copy[idx], itemRemarks: val };
-                                          return copy;
-                                        });
-                                      }}
-                                      placeholder="Enter any remarks here..."
-                                      rows={3}
-                                      className="capitalize rounded-none text-[10px] w-full p-1"
-                                    />
-                                  </td>
+                                        {/* Discount Input */}
+                                        {isDiscounted && (
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={p.discount ?? 0}
+                                            onChange={(e) => {
+                                              const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[idx] = { ...copy[idx], discount: val };
+                                                return copy;
+                                              });
+                                            }}
+                                            className="w-15 p-0 border-none rounded-none"
+                                          />
+                                        )}
+                                      </div>
+                                    </td>
 
-                                  <td className="p-1 sm:p-2">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                      {/* Product Image */}
-                                      <img
-                                        src={p.images?.[0]?.src || "/Taskflow.png"}
-                                        alt={p.title}
-                                        className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
-                                      />
-
-                                      {/* Product Title (Editable) */}
-                                      <div
-                                        contentEditable
-                                        suppressContentEditableWarning
-                                        className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
-                                        onBlur={(e) => {
-                                          const html = e.currentTarget.innerHTML; // keep HTML
+                                    <td className="hidden sm:table-cell">
+                                      <Textarea
+                                        value={p.itemRemarks || ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
                                           setSelectedProducts((prev) => {
                                             const copy = [...prev];
-                                            copy[idx] = { ...copy[idx], description: html };
+                                            copy[idx] = { ...copy[idx], itemRemarks: val };
                                             return copy;
                                           });
                                         }}
-                                      >
-                                        {p.title}
+                                        placeholder="Enter any remarks here..."
+                                        rows={3}
+                                        className="capitalize rounded-none text-[10px] w-full p-1"
+                                      />
+                                    </td>
+
+                                    <td className="p-1 sm:p-2">
+                                      <div className="flex items-center gap-1 sm:gap-2">
+                                        {/* Product Image */}
+                                        <img
+                                          src={p.images?.[0]?.src || "/Taskflow.png"}
+                                          alt={p.title}
+                                          className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
+                                        />
+
+                                        {/* Product Title (Editable) */}
+                                        <div
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
+                                          onBlur={(e) => {
+                                            const html = e.currentTarget.innerHTML; // keep HTML
+                                            setSelectedProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[idx] = { ...copy[idx], description: html };
+                                              return copy;
+                                            });
+                                          }}
+                                        >
+                                          {p.title}
+                                        </div>
+                                        {p.procurementLeadTime && (
+                                          <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
+                                            Lead Time: {p.procurementLeadTime}
+                                          </div>
+                                        )}
                                       </div>
-                                      {p.procurementLeadTime && (
-                                        <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
-                                          Lead Time: {p.procurementLeadTime}
+                                    </td>
+
+                                    <td className="border border-gray-300 p-1 sm:p-2">
+                                      <Input
+                                        type="number"
+                                        min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
+                                        value={p.quantity}
+                                        onChange={(e) => {
+                                          const raw = parseInt(e.target.value, 10) || 1;
+                                          const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
+                                          const val = Math.max(floor, raw);
+                                          setSelectedProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[idx] = { ...copy[idx], quantity: val };
+                                            return copy;
+                                          });
+                                        }}
+                                        className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
+                                      />
+                                      {p.procurementMinQty != null && p.procurementMinQty > 0 && (
+                                        <div className="text-[9px] text-gray-500 mt-1">
+                                          Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
                                         </div>
                                       )}
-                                    </div>
-                                  </td>
+                                    </td>
 
-                                  <td className="border border-gray-300 p-1 sm:p-2">
-                                    <Input
-                                      type="number"
-                                      min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
-                                      value={p.quantity}
-                                      onChange={(e) => {
-                                        const raw = parseInt(e.target.value, 10) || 1;
-                                        const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
-                                        const val = Math.max(floor, raw);
-                                        setSelectedProducts((prev) => {
-                                          const copy = [...prev];
-                                          copy[idx] = { ...copy[idx], quantity: val };
-                                          return copy;
-                                        });
-                                      }}
-                                      className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
-                                    />
-                                    {p.procurementMinQty != null && p.procurementMinQty > 0 && (
-                                      <div className="text-[9px] text-gray-500 mt-1">
-                                        Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
-                                      </div>
-                                    )}
-                                  </td>
+                                    <td className="border border-gray-300 p-1 sm:p-2">
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={p.price}
+                                        readOnly={p.procurementLockedPrice}
+                                        onChange={(e) => {
+                                          if (p.procurementLockedPrice) return;
+                                          const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                          setSelectedProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[idx] = { ...copy[idx], price: val };
+                                            return copy;
+                                          });
+                                        }}
+                                        className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
+                                      />
+                                      {p.procurementLockedPrice && (
+                                        <div className="text-[9px] text-gray-500 mt-1">
+                                          Final selling price (locked)
+                                        </div>
+                                      )}
+                                    </td>
 
-                                  <td className="border border-gray-300 p-1 sm:p-2">
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step="0.01"
-                                      value={p.price}
-                                      readOnly={p.procurementLockedPrice}
-                                      onChange={(e) => {
-                                        if (p.procurementLockedPrice) return;
-                                        const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                        setSelectedProducts((prev) => {
-                                          const copy = [...prev];
-                                          copy[idx] = { ...copy[idx], price: val };
-                                          return copy;
-                                        });
-                                      }}
-                                      className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
-                                    />
-                                    {p.procurementLockedPrice && (
-                                      <div className="text-[9px] text-gray-500 mt-1">
-                                        Final selling price (locked)
-                                      </div>
-                                    )}
-                                  </td>
+                                    <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
+                                      {isDiscounted && discountedAmount > 0
+                                        ? `₱${discountedAmount.toFixed(2)}`
+                                        : "₱0.00"}
+                                    </td>
 
-                                  <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
-                                    {isDiscounted && discountedAmount > 0
-                                      ? `₱${discountedAmount.toFixed(2)}`
-                                      : "₱0.00"}
-                                  </td>
-
-                                  {/* <td className="border border-gray-300 p-2 text-right">
+                                    {/* <td className="border border-gray-300 p-2 text-right">
                                 <div className="flex items-center gap-1 justify-end">
                                   <span className="text-gray-400 text-xs">₱</span>
                                   <Input
@@ -3088,54 +3087,54 @@ ${spec.value}
                                 </div>
                               </td> */}
 
-                                  <td className="border border-gray-300 p-2 font-semibold text-center">
-                                    ₱{totalAfterDiscount.toFixed(2)}
-                                  </td>
+                                    <td className="border border-gray-300 p-2 font-semibold text-center">
+                                      ₱{totalAfterDiscount.toFixed(2)}
+                                    </td>
 
-                                  <td className="border border-gray-300 text-center">
-                                    <div className="flex items-center justify-center gap-2">
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => toggleRow(p.uid)}
-                                        className="flex items-center rounded-none gap-1 px-2"
-                                      >
-                                        {expandedRows[p.uid] ? (
-                                          <>
-                                            <EyeOff className="w-4 h-4" />
-                                            <span className="hidden sm:inline">Hide</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Eye className="w-4 h-4" />
-                                            <span className="hidden sm:inline">View</span>
-                                          </>
-                                        )}
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        className="flex items-center rounded-none gap-1"
-                                        onClick={() => {
-                                          if (p.cloudinaryPublicId) {
-                                            deleteCloudinaryImage(p.cloudinaryPublicId);
-                                          }
-                                          setSelectedProducts((prev) =>
-                                            prev.filter((item) => item.uid !== p.uid)
-                                          );
-                                          setVisibleDescriptions((prev) => {
-                                            const copy = { ...prev };
-                                            delete copy[p.uid];
-                                            return copy;
-                                          });
-                                        }}
-                                      >
-                                        <Trash className="text-red-600" />
-                                      </Button>
+                                    <td className="border border-gray-300 text-center">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          onClick={() => toggleRow(p.uid)}
+                                          className="flex items-center rounded-none gap-1 px-2"
+                                        >
+                                          {expandedRows[p.uid] ? (
+                                            <>
+                                              <EyeOff className="w-4 h-4" />
+                                              <span className="hidden sm:inline">Hide</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Eye className="w-4 h-4" />
+                                              <span className="hidden sm:inline">View</span>
+                                            </>
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          className="flex items-center rounded-none gap-1"
+                                          onClick={() => {
+                                            if (p.cloudinaryPublicId) {
+                                              deleteCloudinaryImage(p.cloudinaryPublicId);
+                                            }
+                                            setSelectedProducts((prev) =>
+                                              prev.filter((item) => item.uid !== p.uid)
+                                            );
+                                            setVisibleDescriptions((prev) => {
+                                              const copy = { ...prev };
+                                              delete copy[p.uid];
+                                              return copy;
+                                            });
+                                          }}
+                                        >
+                                          <Trash className="text-red-600" />
+                                        </Button>
 
-                                    </div>
-                                  </td>
-                                </tr>
-                                {/* need to fix */}
-                                {/* <tr className="even:bg-gray-50">
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {/* need to fix */}
+                                  {/* <tr className="even:bg-gray-50">
                               <td colSpan={7} className="border border-gray-300 p-2">
                                 <label className="block text-xs font-medium mb-1">Description:</label>
                                 <div
@@ -3156,90 +3155,90 @@ ${spec.value}
                                 />
                               </td>
                             </tr> */}
-                                {/* SECTION: Product Technical Specifications (Read-Only) */}
-                                {isExpanded && (
-                                  <tr className="even:bg-[#F9FAFA]">
-                                    <td colSpan={7} className="border border-gray-300 p-4 align-top">
-                                      <label className="block text-xs font-medium mb-1">Description:</label>
-                                      <div
-                                        className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            p.description ||
-                                            '<span class="text-gray-400 italic">No specifications provided.</span>',
-                                        }}
-                                      />
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
+                                  {/* SECTION: Product Technical Specifications (Read-Only) */}
+                                  {isExpanded && (
+                                    <tr className="even:bg-[#F9FAFA]">
+                                      <td colSpan={7} className="border border-gray-300 p-4 align-top">
+                                        <label className="block text-xs font-medium mb-1">Description:</label>
+                                        <div
+                                          className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                          dangerouslySetInnerHTML={{
+                                            __html:
+                                              p.description ||
+                                              '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                          }}
+                                        />
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
 
-                        </tbody>
-                        <tfoot className="bg-gray-100 font-bold text-xs">
-                          <tr>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2 text-center"></td>
-                            <td className="border border-gray-300 p-2"></td>
-                            <td className="border border-gray-300 p-2 text-center font-black">
-                              {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-black">
-                              {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
-                              ₱{selectedProducts.reduce((acc, p) => {
-                                const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                const baseAmount = p.price * p.quantity;
-                                return acc + (baseAmount * discount) / 100;
-                              }, 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-black">
-                              ₱{selectedProducts.reduce((acc, p) => {
-                                const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                const baseAmount = p.price * p.quantity;
-                                return acc + baseAmount - (baseAmount * discount) / 100;
-                              }, 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 p-2"></td>
-                          </tr>
+                          </tbody>
+                          <tfoot className="bg-gray-100 font-bold text-xs">
+                            <tr>
+                              <td className="border border-gray-300 p-2 text-center"></td>
+                              <td className="border border-gray-300 p-2 text-center"></td>
+                              <td className="border border-gray-300 p-2 text-center"></td>
+                              <td className="border border-gray-300 p-2 text-center"></td>
+                              <td className="border border-gray-300 p-2"></td>
+                              <td className="border border-gray-300 p-2 text-center font-black">
+                                {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-black">
+                                {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
+                                ₱{selectedProducts.reduce((acc, p) => {
+                                  const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                  const baseAmount = p.price * p.quantity;
+                                  return acc + (baseAmount * discount) / 100;
+                                }, 0).toFixed(2)}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-black">
+                                ₱{selectedProducts.reduce((acc, p) => {
+                                  const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                  const baseAmount = p.price * p.quantity;
+                                  return acc + baseAmount - (baseAmount * discount) / 100;
+                                }, 0).toFixed(2)}
+                              </td>
+                              <td className="border border-gray-300 p-2"></td>
+                            </tr>
 
-                          {/* Delivery & Restocking Fee Row — desktop only inside table */}
-                          <tr className="hidden sm:table-row">
-                            <td colSpan={6} className="border border-gray-300 p-2"></td>
-                            <td colSpan={4} className="border border-gray-300 p-2">
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                    placeholder="0.00"
-                                    value={deliveryFee}
-                                    onChange={(e) => setDeliveryFee(e.target.value)}
-                                  />
+                            {/* Delivery & Restocking Fee Row — desktop only inside table */}
+                            <tr className="hidden sm:table-row">
+                              <td colSpan={6} className="border border-gray-300 p-2"></td>
+                              <td colSpan={4} className="border border-gray-300 p-2">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                      placeholder="0.00"
+                                      value={deliveryFee}
+                                      onChange={(e) => setDeliveryFee(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                      placeholder="0.00"
+                                      value={restockingFee}
+                                      onChange={(e) => setRestockingFee(e.target.value)}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                    placeholder="0.00"
-                                    value={restockingFee}
-                                    onChange={(e) => setRestockingFee(e.target.value)}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
                     </div>
 
                     {/* Delivery & Restocking Fee — mobile only, below table */}
@@ -3552,13 +3551,17 @@ ${spec.value}
                           <td colSpan={2} className="p-0">
                             <table className="w-full border-collapse">
                               <tbody className="text-[10px]">
+
                                 {/* Row 1: Net Sales */}
                                 <tr className="border-b border-gray-100">
                                   <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
                                     Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
                                   </td>
                                 </tr>
 
@@ -3568,17 +3571,23 @@ ${spec.value}
                                     Delivery Charge
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{Number(payload.deliveryFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{Number(payload.deliveryFee).toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
                                   </td>
                                 </tr>
 
-                                {/* Row 3: Restocking Fee (RESTORED) */}
+                                {/* Row 3: Restocking Fee */}
                                 <tr className="border-b-2 border-black">
                                   <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
                                     Restocking Fee
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{(restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{(restockingFee || 0).toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
                                   </td>
                                 </tr>
 
@@ -3588,7 +3597,10 @@ ${spec.value}
                                     Total Invoice Amount
                                   </td>
                                   <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900">
-                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{payload.totalPrice.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
                                   </td>
                                 </tr>
 
@@ -3600,24 +3612,35 @@ ${spec.value}
                                         Less: VAT (12%)
                                       </td>
                                       <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                                        ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2
+                                        })}
                                       </td>
                                     </tr>
+
                                     <tr className={payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
                                       <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
                                         Net of VAT (Tax Base)
                                       </td>
                                       <td className="px-3 py-1.5 text-right font-bold text-gray-400">
-                                        ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2
+                                        })}
                                       </td>
                                     </tr>
+
                                     {payload.whtType !== "none" && (
                                       <tr className="border-b-2 border-black bg-blue-50/50">
                                         <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-blue-700 text-[8px]">
                                           LESS: {payload.whtLabel}
                                         </td>
                                         <td className="px-3 py-2 text-right font-black text-blue-700">
-                                          - ₱{payload.whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                          - ₱{payload.whtAmount.toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2
+                                          })}
                                         </td>
                                       </tr>
                                     )}
@@ -3639,9 +3662,13 @@ ${spec.value}
                                     {payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
                                   </td>
                                   <td className="px-3 py-3 text-right font-black text-[16px]">
-                                    ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{payload.netAmountToCollect.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
                                   </td>
                                 </tr>
+
                               </tbody>
                             </table>
                           </td>
