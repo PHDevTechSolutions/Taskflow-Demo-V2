@@ -367,7 +367,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                             {payload.vatType === "vat_inc" && (
                                                 <>
                                                     <tr className="border-b border-gray-100">
-                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12/112)</td>
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12)</td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
                                                             ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
@@ -462,7 +462,8 @@ export const Preview: React.FC<PreviewProps> = ({
 
                         <div className="col-span-2 font-black uppercase">Warranty:</div>
                         <div className="col-span-10 pl-4 border-l border-gray-100 bg-yellow-50">
-                            <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                            <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                            <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
                             <p>The warranty will be VOID under the following circumstances:</p>
                             <p>*If the unit is being tampered with.</p>
                             <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
