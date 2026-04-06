@@ -80,6 +80,12 @@ interface TSMStat {
     total: number;
 }
 
+interface AgentStat {
+    agentName: string;
+    agentId: string;
+    total: number;
+}
+
 export const ApprovalQuotation: React.FC<CompletedProps> = ({
     referenceid,
     target_quota,
@@ -101,29 +107,52 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
     const [tsmFilter, setTsmFilter] = useState("all");
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [showTSMStats, setShowTSMStats] = useState(false);
+    const [showAgentStats, setShowAgentStats] = useState(false);
+    const [selectedTSM, setSelectedTSM] = useState<string>("all");
+    const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
-    // Fetch activities
+    const toLocalYMD = (value: Date) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, "0");
+        const day = String(value.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    // -----------------------------
     const fetchActivities = useCallback(async () => {
+        if (!referenceid) {
+            setActivities([]);
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
         try {
-            const { data, error: supabaseError } = await supabase
-                .from('history')
-                .select('*')
-                .order('date_created', { ascending: false });
+            const from = dateCreatedFilterRange?.from
+                ? toLocalYMD(new Date(dateCreatedFilterRange.from))
+                : null;
+            const to = dateCreatedFilterRange?.to
+                ? toLocalYMD(new Date(dateCreatedFilterRange.to))
+                : null;
 
-            if (supabaseError) {
-                throw new Error(supabaseError.message);
-            }
+            const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("statusType", "approved");
+            if (from) url.searchParams.append("from", from);
+            if (to) url.searchParams.append("to", to);
 
-            setActivities(data || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to fetch activities');
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch activities");
+            const data = await res.json();
+            setActivities(data.activities || []);
+        } catch (err: any) {
+            setError(err.message ?? "Unknown error");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [referenceid, dateCreatedFilterRange]);
 
     useEffect(() => {
         fetchActivities();
@@ -176,6 +205,25 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
         return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
     }, [baseFilteredActivities]);
 
+    // Agent Statistics
+    const agentStats = useMemo(() => {
+        const statsMap = new Map<string, AgentStat>();
+
+        baseFilteredActivities.forEach((item) => {
+            const agentId = item.referenceid || "unknown";
+            const agentName = item.agent_name || "Unknown Agent";
+
+            if (!statsMap.has(agentId)) {
+                statsMap.set(agentId, { agentId, agentName, total: 0 });
+            }
+
+            const stat = statsMap.get(agentId)!;
+            stat.total += 1;
+        });
+
+        return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
+    }, [baseFilteredActivities]);
+
     // Overall statistics - MODIFIED FOR APPROVED STATUS
     const stats = useMemo(() => {
         const approved = baseFilteredActivities.filter(
@@ -189,22 +237,18 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
         };
     }, [baseFilteredActivities]);
 
-    // Final filtered activities with search and filters
+    // Final filtered activities with search, TSM, and Agent filters
     const filteredActivities = useMemo(() => {
         const search = searchTerm.toLowerCase().trim();
 
         return baseFilteredActivities
             .filter((item) => {
-                if (statusFilter === "all") return true;
-                const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-                if (statusFilter === "approved") {
-                    return status === "approved by sales head" || status === "approved";
-                }
-                return status === statusFilter;
+                if (selectedTSM === "all") return true;
+                return item.tsm === selectedTSM;
             })
             .filter((item) => {
-                if (tsmFilter === "all") return true;
-                return item.tsm === tsmFilter;
+                if (selectedAgent === "all") return true;
+                return item.referenceid === selectedAgent;
             })
             .filter((item) => {
                 if (!search) return true;
@@ -212,7 +256,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                     (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
                 );
             });
-    }, [baseFilteredActivities, searchTerm, statusFilter, tsmFilter]);
+    }, [baseFilteredActivities, searchTerm, selectedTSM, selectedAgent]);
 
     // TSM filter options
     const tsmOptions = useMemo(() => {
@@ -363,35 +407,150 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                     </div>
                 </div>
 
-                {/* TSM Statistics Table */}
-                {tsmStats.length > 0 && (
-                    <div className="rounded-lg border bg-card p-4 shadow-sm mb-6">
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                            <Users className="w-5 h-5" />
+                {/* Breakdown Toggles */}
+                <div className="mb-4 flex flex-wrap gap-2">
+                    <Button
+                        onClick={() => {
+                            setShowTSMStats(!showTSMStats);
+                            setShowAgentStats(false);
+                        }}
+                        className={`rounded-none text-xs px-4 py-2 ${showTSMStats ? "bg-purple-700" : "bg-purple-600"} hover:bg-purple-700 text-white w-full sm:w-auto`}
+                    >
+                        <Users className="w-4 h-4 mr-2" />
+                        {showTSMStats ? "Hide" : "Show"} TSM Breakdown ({tsmStats.length} TSMs)
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setShowAgentStats(!showAgentStats);
+                            setShowTSMStats(false);
+                        }}
+                        className={`rounded-none text-xs px-4 py-2 ${showAgentStats ? "bg-blue-700" : "bg-blue-600"} hover:bg-blue-700 text-white w-full sm:w-auto`}
+                    >
+                        <Users className="w-4 h-4 mr-2" />
+                        {showAgentStats ? "Hide" : "Show"} Agent Breakdown ({agentStats.length} Agents)
+                    </Button>
+                </div>
+
+                {/* TSM Statistics Grid */}
+                {showTSMStats && tsmStats.length > 0 && (
+                    <div className="mb-6 bg-purple-50 border border-purple-200 rounded-sm p-4">
+                        <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center">
+                            <TrendingUp className="w-4 h-4 mr-2" />
                             TSM Performance Summary
                         </h3>
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>TSM Name</TableHead>
-                                        <TableHead className="text-right">Approved</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {tsmStats.map((stat) => (
-                                        <TableRow key={stat.tsmId}>
-                                            <TableCell className="font-medium">{stat.tsmName}</TableCell>
-                                            <TableCell className="text-right">
-                                                <span className="text-green-600 font-semibold">{stat.approved}</span>
-                                            </TableCell>
-                                            <TableCell className="text-right">{stat.total}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            {tsmStats.map((stat) => (
+                                <div
+                                    key={stat.tsmId}
+                                    className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                        selectedTSM === stat.tsmId ? "border-purple-600 ring-2 ring-purple-200" : "border-gray-200"
+                                    }`}
+                                    onClick={() => setSelectedTSM(selectedTSM === stat.tsmId ? "all" : stat.tsmId)}
+                                >
+                                    <div className="flex items-start justify-between mb-2">
+                                        <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
+                                            {stat.tsmName}
+                                        </p>
+                                        {selectedTSM === stat.tsmId && (
+                                            <CheckCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                                        )}
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px]">
+                                        <span className="text-gray-500">Approved:</span>
+                                        <span className="font-bold text-green-600">{stat.approved}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px]">
+                                        <span className="text-gray-500">Total:</span>
+                                        <span className="font-bold text-gray-900">{stat.total}</span>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
+                        {selectedTSM !== "all" && (
+                            <div className="mt-3 text-center">
+                                <Button
+                                    onClick={() => setSelectedTSM("all")}
+                                    variant="outline"
+                                    className="rounded-none text-xs px-4 py-2"
+                                >
+                                    Clear TSM Filter
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Agent Statistics Grid */}
+                {showAgentStats && agentStats.length > 0 && (
+                    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-sm p-4">
+                        <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
+                            <TrendingUp className="w-4 h-4 mr-2" />
+                            Agent Performance Summary
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            {agentStats.map((agent) => (
+                                <div
+                                    key={agent.agentId}
+                                    className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                        selectedAgent === agent.agentId ? "border-blue-600 ring-2 ring-blue-200" : "border-gray-200"
+                                    }`}
+                                    onClick={() => setSelectedAgent(selectedAgent === agent.agentId ? "all" : agent.agentId)}
+                                >
+                                    <div className="flex items-start justify-between mb-2">
+                                        <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
+                                            {agent.agentName}
+                                        </p>
+                                        {selectedAgent === agent.agentId && (
+                                            <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                        )}
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px]">
+                                        <span className="text-gray-500">Approved:</span>
+                                        <span className="font-bold text-gray-900">{agent.total}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {selectedAgent !== "all" && (
+                            <div className="mt-3 text-center">
+                                <Button
+                                    onClick={() => setSelectedAgent("all")}
+                                    variant="outline"
+                                    className="rounded-none text-xs px-4 py-2"
+                                >
+                                    Clear Agent Filter
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {(selectedTSM !== "all" || selectedAgent !== "all") && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs mb-4">
+                        <span className="text-gray-500 font-semibold">Active Filters:</span>
+                        {selectedTSM !== "all" && (
+                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                                TSM: {tsmStats.find(t => t.tsmId === selectedTSM)?.tsmName}
+                                <Button
+                                    variant="ghost"
+                                    className="h-auto p-0 ml-1 text-purple-800 hover:text-purple-900"
+                                    onClick={() => setSelectedTSM("all")}
+                                >
+                                    <XCircle className="w-3 h-3" />
+                                </Button>
+                            </span>
+                        )}
+                        {selectedAgent !== "all" && (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                                Agent: {agentStats.find(a => a.agentId === selectedAgent)?.agentName}
+                                <Button
+                                    variant="ghost"
+                                    className="h-auto p-0 ml-1 text-blue-800 hover:text-blue-900"
+                                    onClick={() => setSelectedAgent("all")}
+                                >
+                                    <XCircle className="w-3 h-3" />
+                                </Button>
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
@@ -419,7 +578,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Activity Ref #</TableHead>
+                                    <TableHead>Agent</TableHead>
                                     <TableHead>Company</TableHead>
                                     <TableHead>Contact Person</TableHead>
                                     <TableHead>Quotation #</TableHead>
@@ -433,8 +592,8 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                             <TableBody>
                                 {filteredActivities.map((item) => (
                                     <TableRow key={item.id}>
-                                        <TableCell className="font-medium">
-                                            {displayValue(item.activity_reference_number)}
+                                        <TableCell>
+                                            {displayValue(item.agent_name)}
                                         </TableCell>
                                         <TableCell>
                                             <div className="max-w-[150px] truncate" title={displayValue(item.company_name)}>
@@ -478,19 +637,21 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="sm">
+                                                    <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
+                                                        Actions
                                                         <MoreVertical className="w-4 h-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
+                                                <DropdownMenuContent align="end" className="rounded-none text-xs">
                                                     <DropdownMenuItem
                                                         onClick={() => {
                                                             setEditItem(item);
                                                             setEditDialogOpen(true);
                                                         }}
+                                                        className="flex items-center gap-2 cursor-pointer"
                                                     >
-                                                        <Eye className="w-4 h-4 mr-2" />
-                                                        View Details
+                                                        <Eye className="w-4 h-4" />
+                                                        View
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -507,11 +668,33 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
             {editItem && (
                 <TaskListEditDialog
                     item={editItem}
-                    onClose={() => setEditDialogOpen(false)}
-                    onSave={() => {
-                        fetchActivities();
+                    onClose={() => {
+                        setEditDialogOpen(false);
                         setEditItem(null);
                     }}
+                    onSave={() => {
+                        fetchActivities();
+                        setEditDialogOpen(false);
+                        setEditItem(null);
+                    }}
+                    firstname={firstname}
+                    lastname={lastname}
+                    email={email}
+                    contact={contact}
+                    tsmname={tsmname}
+                    managername={managername}
+                    signature={signature}
+                    company={{
+                        company_name: editItem.company_name,
+                        contact_number: editItem.contact_number,
+                        email_address: editItem.email_address,
+                        address: editItem.address,
+                        contact_person: editItem.contact_person,
+                    }}
+                    vatType={editItem.vat_type}
+                    restockingFee={editItem.restocking_fee ?? ""}
+                    whtType={editItem.quotation_vatable ?? "none"}
+                    quotationSubject={editItem.quotation_subject ?? "For Quotation"}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}

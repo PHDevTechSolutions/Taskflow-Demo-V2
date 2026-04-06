@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, ChangeEvent } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Preview } from "./preview";
 import { Button } from "@/components/ui/button";
 import { Check, ArrowRight, XIcon, FileText } from "lucide-react";
@@ -812,11 +812,19 @@ export default function TaskListEditDialog({
 
     return (
         <>
-            <Dialog open={true} onOpenChange={onClose}>
+            <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
                 <DialogContent
                     className="max-w-[1000px] w-[95vw] max-h-[90vh] p-0 border-none bg-white shadow-2xl flex flex-col"
                     style={{ maxWidth: "950px", width: "100vw" }}
                 >
+                    {/* Close button */}
+                    <button
+                        onClick={onClose}
+                        className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-100 transition-colors z-50"
+                        aria-label="Close"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
                     {/* Scrollable content */}
                     <div className="flex flex-col flex-1 overflow-auto p-2 space-y-4">
                         <Preview
@@ -828,6 +836,14 @@ export default function TaskListEditDialog({
 
                     {/* Footer always visible */}
                     <DialogFooter className="flex justify-end gap-2 border-t p-4 bg-white">
+                        <Button
+                            variant="outline"
+                            onClick={onClose}
+                            disabled={isUpdating}
+                            className="rounded-none p-6"
+                        >
+                            <XIcon className="w-4 h-4 mr-2" /> Close
+                        </Button>
                         <Button
                             onClick={() => openStatusDialog("Approved By Sales Head")}
                             disabled={isUpdating}
