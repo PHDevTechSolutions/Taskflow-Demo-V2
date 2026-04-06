@@ -260,6 +260,16 @@ export const Progress: React.FC<NewTaskProps> = ({
     return true;
   };
 
+  const isToday = (dateStr: string): boolean => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    return (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    );
+  };
+
   const allowedStatuses = [
     "On-Progress",
     "Assisted",
@@ -271,6 +281,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
+    .filter((a) => !isToday(a.scheduled_date))
     
     .map((activity) => {
       const relatedHistoryItems = history.filter(
