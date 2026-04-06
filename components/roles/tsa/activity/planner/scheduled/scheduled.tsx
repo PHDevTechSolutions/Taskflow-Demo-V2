@@ -789,17 +789,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                 disabled={updatingId === item.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openDoneDialog(item.id);
-                                }}
-                              >
-                                <Check className="mr-2 h-4 w-4 text-red-600" />
-                                Mark as Pending
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem
-                                disabled={updatingId === item.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
                                   openDeliveredDialog(item.id);
                                 }}
                               >
