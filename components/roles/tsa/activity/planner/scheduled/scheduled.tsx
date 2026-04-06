@@ -245,15 +245,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     .filter((item) => {
       const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
-      // ── When there is a search term, skip ALL date filtering so the user
-      //    can find any activity regardless of scheduled_date.
-      if (searchTerm.trim() !== "") {
-        // only apply status filter, then let text search below decide
-      } else {
-        // ✅ ALWAYS TODAY ONLY
-        if (itemScheduledDate !== todayStr) {
-          return false;
-        }
+      // ✅ ALWAYS TODAY ONLY (even when searching)
+      if (itemScheduledDate !== todayStr) {
+        return false;
       }
 
       // ── Status filter ─────────────────────────────────────────────────────
@@ -658,7 +652,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   // ─── Label shown beside the list to inform the user which date is active ──
   const activeDateLabel = (() => {
-    if (searchTerm.trim() !== "") return "Showing all (search active)";
     if (dateCreatedFilterRange?.from) {
       const from = toLocalDateString(dateCreatedFilterRange.from);
       const to = dateCreatedFilterRange.to
