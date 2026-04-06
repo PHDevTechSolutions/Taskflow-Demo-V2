@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -68,6 +69,17 @@ export async function PUT(req: Request) {
     if (updated.length === 0) {
       return NextResponse.json({ success: false, error: "Account not found." }, { status: 404 });
     }
+
+    // Log audit trail for account update
+    await logAuditTrailApp(
+      req,
+      "update",
+      "company account",
+      id,
+      company_name,
+      `Updated company account: ${company_name}`,
+      { company_name, status, region }
+    );
 
     return NextResponse.json({ success: true, data: updated[0] }, { status: 200 });
   } catch (error: any) {

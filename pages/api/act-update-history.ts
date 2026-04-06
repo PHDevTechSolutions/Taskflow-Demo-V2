@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -186,6 +187,17 @@ export default async function handler(
       error: "Failed to update history",
     });
   }
+
+  // Log audit trail for quotation update
+  await logAuditTrailWithSession(
+    req,
+    "update",
+    "quotation",
+    id,
+    originalQuotationNumber,
+    `Updated quotation and created revision: ${revisedQuotationNumber}`,
+    { revisedQuotationNumber, changes: Object.keys(filteredData) }
+  );
 
   /**
    * ------------------------------------------------

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -35,6 +36,17 @@ export default async function handler(
     if (!data || data.length === 0) {
       return res.status(404).json({ error: "Ticket not found" });
     }
+
+    // Log audit trail for ticket status update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "ticket status",
+      ticket_reference_number,
+      ticket_reference_number,
+      `Updated ticket status to ${status}`,
+      { status }
+    );
 
     return res.status(200).json({
       success: true,

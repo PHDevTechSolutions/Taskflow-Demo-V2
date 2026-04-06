@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
 import { MongoClient } from "mongodb";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 const MONGODB_DB = process.env.MONGODB_DB!;
@@ -154,6 +155,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
     }
+
+    // Log audit trail for ticket transfer
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "ticket transfer",
+      ticketRef,
+      ticketRef,
+      `Transferred ticket to new agent`,
+      { newReferenceID, ticketRef }
+    );
 
     return res.status(200).json({ success: true, results });
   } catch (err: any) {

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 function incrementSPF(spf: string) {
     const parts = spf.split("-");
@@ -64,6 +65,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 .select();
 
             if (!error) {
+                // Log audit trail for SPF creation
+                await logAuditTrailWithSession(
+                    req,
+                    "create",
+                    "SPF request",
+                    inserted[0].id,
+                    spfNumber,
+                    `Created SPF request for ${data.customer_name}`,
+                    { customer_name: data.customer_name, status: "Approval For TSM" }
+                );
+
                 return res.status(200).json({
                     message: "SPF record created successfully.",
                     record: inserted[0]

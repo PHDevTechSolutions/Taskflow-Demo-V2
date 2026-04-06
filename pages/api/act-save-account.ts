@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
 import redis from "../../lib/redis";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -60,6 +61,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn("Failed to clear cache:", cacheErr);
       // Don't fail the request just because cache clearing failed
     }
+
+    // Log audit trail for account creation
+    await logAuditTrailWithSession(
+      req,
+      "create",
+      "account",
+      account_reference_number,
+      company_name || account_reference_number,
+      `Created account for ${company_name || "N/A"}`,
+      { type_client, status }
+    );
 
     return res.status(200).json({ success: true, data });
   } catch (err: any) {

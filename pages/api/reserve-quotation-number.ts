@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 import redis from "@/lib/redis";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -47,6 +48,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const prefix = quotationNumber.split("-").slice(0, -1).join("-");
     const cacheKey = `quotations:prefix:${prefix}`;
     await redis.del(cacheKey);
+
+    // Log audit trail for quotation reservation
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "quotation reservation",
+      quotationNumber,
+      quotationNumber,
+      `Reserved quotation number: ${quotationNumber}`,
+      { quotationNumber, is_reserved: true }
+    );
 
     return res.status(200).json({
       success: true,

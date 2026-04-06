@@ -1,5 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") return res.status(405).json({ error: "Method not allowed" });
@@ -62,6 +63,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Update history table
   const { error } = await supabase.from("history").update(filteredData).eq("id", id);
   if (error) return res.status(500).json({ error: "Failed to update history." });
+
+  // Log audit trail for historical update
+  await logAuditTrailWithSession(
+    req,
+    "update",
+    "history record",
+    id as string,
+    originalQuotationNumber || `Record ${id}`,
+    `Updated historical record`,
+    { revisedQuotationNumber, changes: Object.keys(filteredData) }
+  );
 
   return res.status(200).json({ success: true });
 }

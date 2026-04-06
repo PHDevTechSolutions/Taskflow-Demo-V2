@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -32,6 +33,17 @@ export async function PATCH(req: Request) {
         { status: 404 }
       );
     }
+
+    // Log audit trail for next available date update
+    await logAuditTrailApp(
+      req,
+      "update",
+      "account next date",
+      id,
+      `Account ID: ${id}`,
+      `Updated next available date to ${next_available_date}`,
+      { next_available_date }
+    );
 
     return NextResponse.json(
       { success: true, data: result },

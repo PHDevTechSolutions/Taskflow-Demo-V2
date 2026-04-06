@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 const safe = (v: any) => (v === undefined || v === "" ? null : v);
 
@@ -257,6 +258,17 @@ export default async function handler(
     }
 
     /* ================= SUCCESS ================= */
+
+    // Log audit trail for activity creation
+    await logAuditTrailWithSession(
+      req,
+      "create",
+      type_activity === "Quotation Preparation" ? "quotation" : "activity",
+      activity_reference_number,
+      quotation_number || activity_reference_number,
+      `Created ${type_activity} for ${company_name || "N/A"}`,
+      { type_activity, company_name, status }
+    );
 
     return res.status(200).json({
       success: true,

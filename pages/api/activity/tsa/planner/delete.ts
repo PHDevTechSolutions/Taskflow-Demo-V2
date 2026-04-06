@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 // Import your DB client here
 // Example with Supabase:
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 type Data = {
   success: boolean;
@@ -34,6 +35,18 @@ export default async function handler(
     if (error) {
       throw error;
     }
+
+    // Log audit trail for deletion
+    const { company_name } = req.body;
+    await logAuditTrailWithSession(
+      req,
+      "delete",
+      "planner activity",
+      ids.join(", "),
+      `Deleted ${ids.length} planner record(s)`,
+      `Deleted activity records from planner`,
+      { deletedIds: ids, companyName: company_name }
+    );
 
     return res.status(200).json({ success: true });
   } catch (error: any) {

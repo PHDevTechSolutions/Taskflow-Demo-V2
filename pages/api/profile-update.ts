@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
 import { v2 as cloudinary } from "cloudinary";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 // Cloudinary Configuration
 cloudinary.config({
@@ -118,6 +119,17 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     );
 
     if (result.matchedCount === 1) {
+      // Log audit trail for profile update
+      await logAuditTrailWithSession(
+        req,
+        "update",
+        "user profile",
+        id,
+        `${Firstname} ${Lastname}`,
+        `Updated profile for ${Firstname} ${Lastname}`,
+        { updatedFields: Object.keys(updatedUser).filter(k => k !== "updatedAt") }
+      );
+
       return res.status(200).json({ message: "Profile updated successfully" });
     } else {
       return res.status(404).json({ error: "No changes applied" });

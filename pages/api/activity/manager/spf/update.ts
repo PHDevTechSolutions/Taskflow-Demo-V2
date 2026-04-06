@@ -1,6 +1,7 @@
 // /pages/api/activity/tsa/spf/update.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Siguraduhin na PUT method ang ginagamit
@@ -10,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         // Kunin lamang ang ID at ang dalawang fields na kailangang i-update
-        const { id, status, noted_by } = req.body;
+        const { id, status, noted_by, referenceid } = req.body;
 
         // Validation para sa ID
         if (!id) {
@@ -28,6 +29,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .single();
 
         if (error) throw error;
+
+        // Log audit trail for manager SPF status update
+        await logAuditTrailWithSession(
+            req,
+            "update",
+            "SPF request",
+            id,
+            data.spf_number || id,
+            `Manager updated SPF status to ${status}`,
+            { status, noted_by }
+        );
 
         return res.status(200).json({ 
             success: true, 

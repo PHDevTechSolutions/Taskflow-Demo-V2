@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -85,6 +86,17 @@ export default async function handler(
       console.error("Update old record error:", updateOldError);
       return res.status(500).json({ error: updateOldError.message });
     }
+
+    // Log audit trail for SO update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "sales order",
+      id.toString(),
+      so_number,
+      `Created Re-Sales Order: ${so_number}`,
+      { so_number, so_amount }
+    );
 
     /* =======================
        SUCCESS RESPONSE

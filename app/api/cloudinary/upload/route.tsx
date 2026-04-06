@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import cloudinary from "@/lib/cloudinary";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +21,17 @@ export async function POST(req: NextRequest) {
       folder: "quotation/spf",
       resource_type: "image",
     });
+
+    // Log audit trail for image upload
+    await logAuditTrailApp(
+      req,
+      "create",
+      "cloudinary image",
+      result.public_id,
+      result.public_id,
+      `Uploaded image to Cloudinary: ${result.public_id}`,
+      { public_id: result.public_id, folder: "quotation/spf" }
+    );
 
     return NextResponse.json({
       url: result.secure_url,

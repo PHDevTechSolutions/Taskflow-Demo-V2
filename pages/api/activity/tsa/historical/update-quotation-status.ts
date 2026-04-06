@@ -1,4 +1,5 @@
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -25,6 +26,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single();
 
     if (error) throw error;
+
+    // Log audit trail for quotation status update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "quotation status",
+      id,
+      `Status: ${quotation_status}`,
+      `Updated quotation status to ${quotation_status}`,
+      { quotation_status, quotation_status_sub }
+    );
 
     return res.status(200).json(data);
   } catch (err: any) {

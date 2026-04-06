@@ -26,6 +26,7 @@ interface Meeting {
 
 type DismissedByDate = Record<string, string[]>;
 type DismissedLogoutByDate = Record<string, boolean>;
+type SnoozeLogoutByDate = Record<string, string>; // ISO string of snooze time
 
 interface UserDetails {
   referenceid: string;
@@ -34,8 +35,10 @@ interface UserDetails {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MEETINGS_KEY = "dismissedMeetings";
 const LOGOUT_KEY = "dismissedLogoutReminders";
+const SNOOZE_KEY = "snoozedLogoutReminders";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const FIVE_MINUTES = 5 * 60 * 1000;
+const SNOOZE_DURATION = 15 * 60 * 1000; // 15 minutes
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(date: Date): string {
@@ -90,6 +93,14 @@ function minutesUntil(date: Date, now: Date): number {
   return Math.round((date.getTime() - now.getTime()) / 60000);
 }
 
+/** Check if snooze has expired (15 minutes passed) */
+function isSnoozeExpired(snoozeTimeISO: string | undefined): boolean {
+  if (!snoozeTimeISO) return true;
+  const snoozeTime = new Date(snoozeTimeISO).getTime();
+  const now = Date.now();
+  return now - snoozeTime >= SNOOZE_DURATION;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function Reminders() {
   const searchParams = useSearchParams();
@@ -104,6 +115,7 @@ export function Reminders() {
   const [showLogout, setShowLogout] = useState(false);
   const [dismissedMeetings, setDismissedMeetings] = useState<string[]>([]);
   const [dismissedLogout, setDismissedLogout] = useState(false);
+  const [snoozeUntil, setSnoozeUntil] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
@@ -136,8 +148,10 @@ export function Reminders() {
 
     const meetingsLS = readLS<DismissedByDate>(MEETINGS_KEY, {});
     const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
+    const snoozeLS = readLS<SnoozeLogoutByDate>(SNOOZE_KEY, {});
     setDismissedMeetings(meetingsLS[todayKey()] || []);
     setDismissedLogout(!!logoutLS[todayKey()]);
+    setSnoozeUntil(snoozeLS[todayKey()] || null);
 
     // FCM setup
     (async () => {
@@ -215,9 +229,12 @@ export function Reminders() {
 
     // Double-check sa localStorage para siguradong dismissed na ito (para sa multi-tab)
     const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
+    const snoozeLS = readLS<SnoozeLogoutByDate>(SNOOZE_KEY, {});
     const isActuallyDismissed = !!logoutLS[todayKey()];
+    const snoozeTime = snoozeLS[todayKey()];
+    const isSnoozeActive = snoozeTime && !isSnoozeExpired(snoozeTime);
 
-    if (isAfter430 && isBefore5 && !dismissedLogout && !isActuallyDismissed && !showLogout) {
+    if (isAfter430 && isBefore5 && !isActuallyDismissed && !isSnoozeActive && !showLogout) {
       setShowLogout(true);
     }
   }, [now, meetings, dismissedMeetings, dismissedLogout, showLogout]);
@@ -247,6 +264,23 @@ export function Reminders() {
     writeLS(LOGOUT_KEY, data);
     setDismissedLogout(true);
     setShowLogout(false);
+  }
+
+  function snoozeLogout() {
+    const snoozeTime = new Date().toISOString();
+    const snoozeData = readLS<SnoozeLogoutByDate>(SNOOZE_KEY, {});
+    snoozeData[todayKey()] = snoozeTime;
+    writeLS(SNOOZE_KEY, snoozeData);
+    setSnoozeUntil(snoozeTime);
+    setShowLogout(false);
+    
+    // Auto-show again after 15 minutes
+    setTimeout(() => {
+      const logoutLS = readLS<DismissedLogoutByDate>(LOGOUT_KEY, {});
+      if (!logoutLS[todayKey()]) {
+        setShowLogout(true);
+      }
+    }, SNOOZE_DURATION);
   }
 
   // FIX: removed loading/error full-page returns — reminders are background,
@@ -337,7 +371,7 @@ export function Reminders() {
                 </DialogTitle>
               </div>
               <DialogDescription className="text-zinc-400 text-xs">
-                It&apos;s 5:00 PM — time to wrap up for the day.
+                Understood, will sign off before leaving.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -347,18 +381,25 @@ export function Reminders() {
             <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 px-4 py-3">
               <LogOut className="h-4 w-4 text-zinc-500 flex-shrink-0" />
               <p className="text-xs text-zinc-600">
-                Don&apos;t forget to <strong>logout of Taskflow</strong> before you leave.
+                Understood, will sign off before leaving.
               </p>
             </div>
           </div>
 
           {/* Footer */}
-          <DialogFooter className="px-6 py-4 border-t border-zinc-100">
+          <DialogFooter className="px-6 py-4 border-t border-zinc-100 flex gap-2">
             <Button
-              className="rounded-none w-full text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              variant="outline"
+              className="rounded-none flex-1 text-xs h-10"
+              onClick={snoozeLogout}
+            >
+              Snooze (15m)
+            </Button>
+            <Button
+              className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
               onClick={dismissLogout}
             >
-              Got it, logging out
+              Got it
             </Button>
           </DialogFooter>
         </DialogContent>

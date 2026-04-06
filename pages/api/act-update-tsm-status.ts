@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -44,6 +45,17 @@ export default async function handler(
     if (!data || data.length === 0) {
       return res.status(404).json({ error: "No matching activity found" });
     }
+
+    // Log audit trail for TSM status update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "TSM approval status",
+      activity_reference_number,
+      activity_reference_number,
+      `Updated TSM approval status to ${tsmapprovedstatus || "Approved"}`,
+      { status: tsmapprovedstatus, remarks: tsmapprovedremarks }
+    );
 
     return res.status(200).json({ success: true, data });
   } catch (err) {

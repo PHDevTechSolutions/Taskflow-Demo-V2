@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -76,7 +77,7 @@ export default async function handler(
       .from("signatories")
       .select("id")
       .eq("quotation_number", quotation_number)
-      .maybeSingle(); // ✅ FIX HERE
+      .maybeSingle(); // 
 
     if (signatoryFetchError) {
       return res.status(500).json({
@@ -117,7 +118,21 @@ export default async function handler(
     }
 
     /* =============================
-       5️⃣ SUCCESS RESPONSE
+       5️⃣ LOG AUDIT TRAIL
+    ============================= */
+    // Log audit trail for TSM quotation approval
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "quotation approval",
+      quotation_number,
+      quotation_number,
+      `TSM ${tsm_approved_status === "Decline" ? "declined" : "approved"} quotation`,
+      { status: tsm_approved_status, tsm_remarks }
+    );
+
+    /* =============================
+       6️⃣ SUCCESS RESPONSE
     ============================= */
     return res.status(200).json({
       success: true,

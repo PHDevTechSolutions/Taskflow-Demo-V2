@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 // helper function
 const capitalize = (str: string = "") =>
@@ -28,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Missing or invalid tsm_approved_status" });
     }
 
-    // ✅ Capitalize each word before saving
+    // Capitalize each word before saving
     const normalizedStatus = capitalize(tsm_approved_status.trim());
 
     const { data, error } = await supabase
@@ -48,6 +49,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!data || data.length === 0) {
       return res.status(404).json({ error: "Record not found" });
     }
+
+    // Log audit trail for status update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "activity status",
+      id.toString(),
+      `Status: ${normalizedStatus}`,
+      `Updated activity status to ${normalizedStatus}`,
+      { status: normalizedStatus }
+    );
 
     return res.status(200).json({ success: true, data });
   } catch (err: any) {

@@ -1,6 +1,7 @@
 // pages/api/activity/tsa/historical/update-history-time.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -50,6 +51,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!data || data.length === 0) {
       return res.status(404).json({ error: `No record found with id ${parsedId}.` });
     }
+
+    // Log audit trail for history time update
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "history schedule",
+      parsedId.toString(),
+      `Updated schedule`,
+      `Updated history schedule dates`,
+      { start_date, end_date }
+    );
 
     return res.status(200).json({ success: true, id: parsedId });
   } catch (err: any) {

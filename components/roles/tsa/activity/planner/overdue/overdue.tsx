@@ -242,14 +242,14 @@ export const Overdue: React.FC<ScheduledProps> = ({
   .filter((item) => {
     const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
+    // ❗ ALWAYS exclude TODAY and FUTURE dates - only show PAST (overdue)
+    if (itemScheduledDate >= todayStr) {
+      return false;
+    }
+
     if (searchTerm.trim() !== "") {
       // skip date filter when searching
     } else {
-      // ❗ ALWAYS exclude TODAY
-      if (itemScheduledDate === todayStr) {
-        return false;
-      }
-
       if (dateCreatedFilterRange?.from) {
         const fromStr = toLocalDateString(dateCreatedFilterRange.from);
         const toStr = dateCreatedFilterRange.to
@@ -257,11 +257,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
           : fromStr;
 
         if (itemScheduledDate < fromStr || itemScheduledDate > toStr) {
-          return false;
-        }
-      } else {
-        // past only (still safe)
-        if (itemScheduledDate > todayStr) {
           return false;
         }
       }
