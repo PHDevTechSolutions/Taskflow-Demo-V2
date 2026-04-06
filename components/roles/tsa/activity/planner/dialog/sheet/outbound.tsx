@@ -205,10 +205,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             >
                                 {(isCSR
                                     ? [
+                                        
                                         {
-                                            value: "CSR Endorsement",
-                                            title: "CSR Endorsement",
-                                            desc: "Client endorsed by CSR team.",
+                                            value: "Outbound - Follow-up",
+                                            title: "Outbound - Follow-up",
+                                            desc: "Follow-up call for progress or requirements.",
                                         },
                                     ]
                                     : [
