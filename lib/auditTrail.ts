@@ -344,7 +344,8 @@ export async function logAuditTrailApp(
 
 /**
  * Client-side audit logging for Excel exports and button clicks
- * This function can be called directly from React components
+ * This function calls the API to log audit trails from React components
+ * to avoid bundling MongoDB code client-side
  */
 export async function logClientAudit(
   userId: string,
@@ -356,30 +357,28 @@ export async function logClientAudit(
   changes?: Record<string, any>
 ): Promise<void> {
   try {
-    const userInfo = await getUserInfo(userId);
-
-    if (!userInfo) {
-      console.error(`Cannot log client audit: User ${userId} not found`);
-      return;
-    }
-
-    await logAuditTrail({
-      userId,
-      firstName: userInfo.firstName,
-      lastName: userInfo.lastName,
-      email: userInfo.email,
-      action,
-      entityType,
-      entityId,
-      entityName,
-      details,
-      changes,
-      department: userInfo.department,
-      role: userInfo.role,
-      referenceId: userInfo.referenceId,
-      ipAddress: typeof window !== "undefined" ? window.location.hostname : undefined,
-      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+    const response = await fetch("/api/audit-log", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId,
+        action,
+        entityType,
+        entityId,
+        entityName,
+        details,
+        changes,
+        ipAddress: typeof window !== "undefined" ? window.location.hostname : undefined,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+      }),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to log client audit:", error);
+    }
   } catch (error) {
     console.error("Error in logClientAudit:", error);
   }

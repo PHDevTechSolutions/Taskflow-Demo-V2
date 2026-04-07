@@ -310,197 +310,198 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       };
       
       const totalsRowIndex = worksheet.addRow(totalsRow);
+      totalsRowIndex.font = { bold: true };
 
-    // Format currency column
-    worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
+      // Format currency column
+      worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
 
-    // Generate filename with date range
-    let filename = "Sales_Invoice_Summary";
-    if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
-      const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-      filename += `_${fromDate}_to_${toDate}`;
+      // Generate filename with date range
+      let filename = "Sales_Invoice_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Log audit trail for Excel export
+      await logExcelExport(
+        userDetails.referenceid,
+        "Manager Sales Invoice Summary Report",
+        tsmSummary.length,
+        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+          : undefined
+      );
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
     }
-    filename += ".xlsx";
-
-    // Create buffer and download
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    // Log audit trail for Excel export
-    await logExcelExport(
-      userDetails.referenceid,
-      "Manager Sales Invoice Summary Report",
-      tsmSummary.length,
-      dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
-        ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
-        : undefined
-    );
-  } catch (error) {
-    console.error("Error exporting to Excel:", error);
-    alert("Failed to export data to Excel");
-  }
   };
 
 /* ================= RENDER ================= */
-  return (
-    <div className="space-y-4">
+return (
+  <div className="space-y-4">
 
-      {/* ── TSM Summary Table ── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
-      ) : error ? (
-        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
-      ) : tsmSummary.length === 0 ? (
-        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SI records found.</div>
-      ) : (
-        <>
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={exportToExcel}
-              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <Download size={14} />
-              Export Excel
-            </button>
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
-            <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-gray-500">TSM</TableHead>
-                <TableHead className="text-gray-500 text-right">Total SO</TableHead>
-                <TableHead className="text-gray-500 text-right">Total SI / Delivered</TableHead>
-                <TableHead className="text-gray-500 text-right">Total SI Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tsmSummary.map(item => {
-                const isExpanded = expandedTsmId === item.tsmId;
-                return (
-                  <TableRow
-                    key={item.tsmId}
-                    className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
-                    onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
-                  >
-                    <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
-                    <TableCell className="text-right text-gray-700">
-                      {item.soCount > 0 ? item.soCount.toLocaleString() : <span className="text-gray-300">—</span>}
-                    </TableCell>
-                    <TableCell className="text-right text-green-600 font-semibold">
-                      {item.deliveredCount > 0 ? item.deliveredCount.toLocaleString() : <span className="text-gray-300">—</span>}
-                    </TableCell>
-                    <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSIAmount)}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                <TableCell className="text-gray-500">Total</TableCell>
-                <TableCell className="text-right text-gray-700">
-                  {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right text-green-600">
-                  {tsmSummary.reduce((s, i) => s + i.deliveredCount, 0).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right text-gray-800">
-                  {fmt(tsmSummary.reduce((s, i) => s + i.totalSIAmount, 0))}
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-          </div>
-        </>
-      )}
+    {/* ── TSM Summary Table ── */}
+    {loading ? (
+      <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+    ) : error ? (
+      <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+    ) : tsmSummary.length === 0 ? (
+      <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SI records found.</div>
+    ) : (
+      <>
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Download size={14} />
+            Export Excel
+          </button>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+          <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50 text-[11px]">
+              <TableHead className="text-gray-500">TSM</TableHead>
+              <TableHead className="text-gray-500 text-right">Total SO</TableHead>
+              <TableHead className="text-gray-500 text-right">Total SI / Delivered</TableHead>
+              <TableHead className="text-gray-500 text-right">Total SI Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tsmSummary.map(item => {
+              const isExpanded = expandedTsmId === item.tsmId;
+              return (
+                <TableRow
+                  key={item.tsmId}
+                  className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                  onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                >
+                  <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                  <TableCell className="text-right text-gray-700">
+                    {item.soCount > 0 ? item.soCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right text-green-600 font-semibold">
+                    {item.deliveredCount > 0 ? item.deliveredCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSIAmount)}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          <TableFooter>
+            <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+              <TableCell className="text-gray-500">Total</TableCell>
+              <TableCell className="text-right text-gray-700">
+                {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right text-green-600">
+                {tsmSummary.reduce((s, i) => s + i.deliveredCount, 0).toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right text-gray-800">
+                {fmt(tsmSummary.reduce((s, i) => s + i.totalSIAmount, 0))}
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+        </div>
+      </>
+    )}
 
-      {/* ── Expanded TSA Details ── */}
-      {expandedTsmId && (
-        <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
-          <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">TSA Details</p>
-          {expandedTsaGroups.length === 0 ? (
-            <div className="text-xs text-gray-500 italic py-2">No TSA SI records under this TSM.</div>
-          ) : (
-            expandedTsaGroups.map(group => (
-              <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
-                <div className="px-4 py-2.5 border-b bg-gray-50">
-                  <p className="text-xs font-semibold text-gray-700 uppercase">
-                    {group.tsaName}{" "}
-                    <span className="text-gray-400 font-normal">({group.rows.length} deliveries)</span>
-                  </p>
-                  <div className="flex flex-wrap items-center justify-end gap-3">
-                    <Input
-                      placeholder="Search company, DR no., remarks..."
-                      className="max-w-xs text-xs"
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50 text-[11px]">
-                        <TableHead className="text-gray-500">Delivery Date</TableHead>
-                        <TableHead className="text-gray-500">SI Date</TableHead>
-                        <TableHead className="text-gray-500 text-right">SI Amount</TableHead>
-                        <TableHead className="text-gray-500">DR Number</TableHead>
-                        <TableHead className="text-gray-500">Company</TableHead>
-                        <TableHead className="text-gray-500">Contact Person</TableHead>
-                        <TableHead className="text-gray-500">Contact No.</TableHead>
-                        <TableHead className="text-gray-500">Payment Terms</TableHead>
-                        <TableHead className="text-gray-500">Duration</TableHead>
-                        <TableHead className="text-gray-500">Remarks</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.rows.map(row => {
-                        const dur = computeDuration(row.start_date, row.end_date);
-                        return (
-                          <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
-                            <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.delivery_date)}</TableCell>
-                            <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.si_date)}</TableCell>
-                            <TableCell className="text-right text-gray-700">{row.actual_sales != null ? fmt(row.actual_sales) : "-"}</TableCell>
-                            <TableCell className="uppercase text-gray-700">{row.dr_number || "-"}</TableCell>
-                            <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
-                            <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
-                            <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
-                            <TableCell className="text-gray-500">{row.payment_terms || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {dur === "—"
-                                ? <span className="text-gray-300">—</span>
-                                : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{dur}</span>
-                              }
-                            </TableCell>
-                            <TableCell className="capitalize text-gray-500">{row.remarks || "-"}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                    <TableFooter>
-                      <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                        <TableCell colSpan={2} className="text-gray-500">Subtotal</TableCell>
-                        <TableCell className="text-right text-gray-800">
-                          {fmt(group.rows.reduce((s, r) => s + (r.actual_sales ?? 0), 0))}
-                        </TableCell>
-                        <TableCell colSpan={7} />
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
+    {/* ── Expanded TSA Details ── */}
+    {expandedTsmId && (
+      <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
+        <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">TSA Details</p>
+        {expandedTsaGroups.length === 0 ? (
+          <div className="text-xs text-gray-500 italic py-2">No TSA SI records under this TSM.</div>
+        ) : (
+          expandedTsaGroups.map(group => (
+            <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+              <div className="px-4 py-2.5 border-b bg-gray-50">
+                <p className="text-xs font-semibold text-gray-700 uppercase">
+                  {group.tsaName}{" "}
+                  <span className="text-gray-400 font-normal">({group.rows.length} deliveries)</span>
+                </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <Input
+                    placeholder="Search company, DR no., remarks..."
+                    className="max-w-xs text-xs"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 text-[11px]">
+                      <TableHead className="text-gray-500">Delivery Date</TableHead>
+                      <TableHead className="text-gray-500">SI Date</TableHead>
+                      <TableHead className="text-gray-500 text-right">SI Amount</TableHead>
+                      <TableHead className="text-gray-500">DR Number</TableHead>
+                      <TableHead className="text-gray-500">Company</TableHead>
+                      <TableHead className="text-gray-500">Contact Person</TableHead>
+                      <TableHead className="text-gray-500">Contact No.</TableHead>
+                      <TableHead className="text-gray-500">Payment Terms</TableHead>
+                      <TableHead className="text-gray-500">Duration</TableHead>
+                      <TableHead className="text-gray-500">Remarks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {group.rows.map(row => {
+                      const dur = computeDuration(row.start_date, row.end_date);
+                      return (
+                        <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
+                          <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.delivery_date)}</TableCell>
+                          <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.si_date)}</TableCell>
+                          <TableCell className="text-right text-gray-700">{row.actual_sales != null ? fmt(row.actual_sales) : "-"}</TableCell>
+                          <TableCell className="uppercase text-gray-700">{row.dr_number || "-"}</TableCell>
+                          <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
+                          <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
+                          <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
+                          <TableCell className="text-gray-500">{row.payment_terms || "-"}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {dur === "—"
+                              ? <span className="text-gray-300">—</span>
+                              : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{dur}</span>
+                            }
+                          </TableCell>
+                          <TableCell className="capitalize text-gray-500">{row.remarks || "-"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                      <TableCell colSpan={2} className="text-gray-500">Subtotal</TableCell>
+                      <TableCell className="text-right text-gray-800">
+                        {fmt(group.rows.reduce((s, r) => s + (r.actual_sales ?? 0), 0))}
+                      </TableCell>
+                      <TableCell colSpan={7} />
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    )}
+  </div>
+);
 };
