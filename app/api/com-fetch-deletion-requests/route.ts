@@ -21,13 +21,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: "Missing TSM ID." }, { status: 400 });
     }
 
-    // ✅ Only return accounts with status 'Subject for Transfer', deduplicated by company_name
+    // ✅ Only return accounts with status 'Pending Deletion', deduplicated by company_name
     const accounts = await Xchire_sql`
       SELECT DISTINCT ON (company_name) *
       FROM accounts
       WHERE TRIM(LOWER(tsm)) = LOWER(${tsm})
-        AND TRIM(LOWER(status)) = 'subject for transfer'
-      ORDER BY company_name, date_transferred ASC, id ASC
+        AND TRIM(LOWER(status)) = 'pending deletion'
+      ORDER BY company_name, date_removed ASC, id ASC
       LIMIT ${safeLimit}
       OFFSET ${safeOffset};
     `;
@@ -35,9 +35,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: true, data: accounts }, { status: 200 });
 
   } catch (err: any) {
-    console.error("Error fetching accounts:", err);
+    console.error("Error fetching deletion requests:", err);
     return NextResponse.json(
-      { success: false, error: err.message || "Failed to fetch accounts." },
+      { success: false, error: err.message || "Failed to fetch deletion requests." },
       { status: 500 }
     );
   }

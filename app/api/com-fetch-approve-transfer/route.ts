@@ -21,13 +21,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: "Missing TSM ID." }, { status: 400 });
     }
 
-    // ✅ Only return accounts with status 'Subject for Transfer', deduplicated by company_name
+    // ✅ Safer query: trim & lower, deduplicate by company_name
     const accounts = await Xchire_sql`
       SELECT DISTINCT ON (company_name) *
       FROM accounts
       WHERE TRIM(LOWER(tsm)) = LOWER(${tsm})
-        AND TRIM(LOWER(status)) = 'subject for transfer'
-      ORDER BY company_name, date_transferred ASC, id ASC
+      ORDER BY company_name, date_created ASC, id ASC
       LIMIT ${safeLimit}
       OFFSET ${safeOffset};
     `;

@@ -80,7 +80,9 @@ function DashboardContent() {
     const [loadingUser, setLoadingUser] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [posts, setPosts] = useState<Account[]>([]);
+    const [deletionRequests, setDeletionRequests] = useState<Account[]>([]);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
+    const [loadingDeletions, setLoadingDeletions] = useState(false);
     const [agentFilter, setAgentFilter] = useState<string>("all");
 
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
@@ -218,8 +220,87 @@ function DashboardContent() {
         fetchAccounts();
     }, [userDetails.referenceid]);
 
+    useEffect(() => {
+        if (!userDetails.referenceid) {
+            setDeletionRequests([]);
+            return;
+        }
+
+        const fetchDeletionRequests = async () => {
+            setError(null);
+            setLoadingDeletions(true);
+            try {
+                const response = await fetch(
+                    `/api/com-fetch-deletion-requests?tsm=${encodeURIComponent(
+                        userDetails.referenceid
+                    )}`
+                );
+
+                if (!response.ok) throw new Error("Failed to fetch deletion requests");
+
+                const data = await response.json();
+                setDeletionRequests(data.data || []);
+
+                sileo.success({
+                    title: "Success",
+                    description: "Deletion requests loaded successfully!",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+            } catch (err) {
+                sileo.error({
+                    title: "Failed",
+                    description: "Failed to connect to server. Please try again later or refresh your network connection",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
+            } finally {
+                setLoadingDeletions(false);
+            }
+        };
+
+        fetchDeletionRequests();
+    }, [userDetails.referenceid]);
+
     const filteredData = useMemo(() => {
         let filteredPosts = posts;
+
+        if (
+            dateCreatedFilterRange &&
+            dateCreatedFilterRange.from &&
+            dateCreatedFilterRange.to
+        ) {
+            const fromTime = new Date(dateCreatedFilterRange.from).setHours(0, 0, 0, 0);
+            const toTime = new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999);
+
+            filteredPosts = filteredPosts.filter((item) => {
+                if (!item.date_transferred) return false;
+
+                const transferredTime = new Date(item.date_transferred).getTime();
+
+                return transferredTime >= fromTime && transferredTime <= toTime;
+            });
+        }
+
+        if (agentFilter !== "all") {
+            filteredPosts = filteredPosts.filter((item) => item.tsm === agentFilter);
+        }
+
+        return filteredPosts;
+    }, [posts, dateCreatedFilterRange, agentFilter]);
+
+    const filteredDeletionData = useMemo(() => {
+        let filteredPosts = deletionRequests;
 
         if (
             dateCreatedFilterRange &&
@@ -243,7 +324,7 @@ function DashboardContent() {
         }
 
         return filteredPosts;
-    }, [posts, dateCreatedFilterRange, agentFilter]);
+    }, [deletionRequests, dateCreatedFilterRange, agentFilter]);
 
     async function refreshAccounts() {
         try {
@@ -259,6 +340,43 @@ function DashboardContent() {
             sileo.success({
                 title: "Success",
                 description: "Accounts loaded successfully!",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
+        } catch (error) {
+            sileo.error({
+                title: "Failed",
+                description: "Failed to connect to server. Please try again later or refresh your network connection",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
+        }
+    }
+
+    async function refreshDeletionRequests() {
+        try {
+            const response = await fetch(
+                `/api/com-fetch-deletion-requests?tsm=${encodeURIComponent(
+                    userDetails.referenceid
+                )}`
+            );
+            if (!response.ok) throw new Error("Failed to fetch deletion requests");
+
+            const data = await response.json();
+            setDeletionRequests(data.data || []);
+            sileo.success({
+                title: "Success",
+                description: "Deletion requests loaded successfully!",
                 duration: 4000,
                 position: "top-right",
                 fill: "black",
@@ -385,11 +503,11 @@ function DashboardContent() {
                                 </CardHeader>
                                 <CardContent>
                                     <RequestTable
-                                        posts={filteredData}
+                                        posts={filteredDeletionData}
                                         dateCreatedFilterRange={dateCreatedFilterRange}
                                         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                                         userDetails={userDetails}
-                                        onRefreshAccountsAction={refreshAccounts}
+                                        onRefreshAccountsAction={refreshDeletionRequests}
                                     />
                                 </CardContent>
                             </Card>
