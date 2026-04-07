@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 
 /* ================= TYPES ================= */
 interface SI {
@@ -309,39 +310,47 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       };
       
       const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
 
-      // Format currency column
-      worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
+    // Format currency column
+    worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
 
-      // Generate filename with date range
-      let filename = "Sales_Invoice_Summary";
-      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
-        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
-      }
-      filename += ".xlsx";
-
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-    } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+    // Generate filename with date range
+    let filename = "Sales_Invoice_Summary";
+    if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+      const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+      const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+      filename += `_${fromDate}_to_${toDate}`;
     }
+    filename += ".xlsx";
+
+    // Create buffer and download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    // Log audit trail for Excel export
+    await logExcelExport(
+      userDetails.referenceid,
+      "Manager Sales Invoice Summary Report",
+      tsmSummary.length,
+      dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+        ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+        : undefined
+    );
+  } catch (error) {
+    console.error("Error exporting to Excel:", error);
+    alert("Failed to export data to Excel");
+  }
   };
 
-  /* ================= RENDER ================= */
+/* ================= RENDER ================= */
   return (
     <div className="space-y-4">
 

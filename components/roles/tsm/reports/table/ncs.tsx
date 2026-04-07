@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,12 +14,7 @@ import {
   Pagination, PaginationContent, PaginationItem,
   PaginationPrevious, PaginationNext,
 } from "@/components/ui/pagination";
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Download } from "lucide-react";
-import ExcelJS from "exceljs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

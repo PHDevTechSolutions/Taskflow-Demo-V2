@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 
 /* ================= TYPES ================= */
 
@@ -383,6 +384,16 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      // Log audit trail for Excel export
+      await logExcelExport(
+        userDetails.referenceid,
+        "Manager Quotation Summary Report",
+        tsmSummary.length,
+        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+          : undefined
+      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);

@@ -302,29 +302,12 @@ function DashboardContent() {
     const filteredDeletionData = useMemo(() => {
         let filteredPosts = deletionRequests;
 
-        if (
-            dateCreatedFilterRange &&
-            dateCreatedFilterRange.from &&
-            dateCreatedFilterRange.to
-        ) {
-            const fromTime = new Date(dateCreatedFilterRange.from).setHours(0, 0, 0, 0);
-            const toTime = new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999);
-
-            filteredPosts = filteredPosts.filter((item) => {
-                if (!item.date_removed) return false;
-
-                const removedTime = new Date(item.date_removed).getTime();
-
-                return removedTime >= fromTime && removedTime <= toTime;
-            });
-        }
-
         if (agentFilter !== "all") {
             filteredPosts = filteredPosts.filter((item) => item.tsm === agentFilter);
         }
 
         return filteredPosts;
-    }, [deletionRequests, dateCreatedFilterRange, agentFilter]);
+    }, [deletionRequests, agentFilter]);
 
     async function refreshAccounts() {
         try {

@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 
 /* ================= TYPES ================= */
 interface SI {
@@ -337,6 +338,16 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      // Log audit trail for Excel export
+      await logExcelExport(
+        userDetails.referenceid,
+        "Admin Sales Invoice Summary Report",
+        tsmSummary.length,
+        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+          : undefined
+      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);

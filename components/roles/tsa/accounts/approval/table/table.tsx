@@ -113,8 +113,9 @@ export function RequestTable({
             const matchesAgent =
                 agentFilter === "all" || agentMap[item.referenceid] === agentFilter;
             const matchesIndustry = industryFilter === "all" || item.industry === industryFilter;
+            const matchesStatus = item.status?.toLowerCase() === "removed";
 
-            return matchesSearch && matchesType && matchesAgent && matchesIndustry;
+            return matchesSearch && matchesType && matchesAgent && matchesIndustry && matchesStatus;
         });
 
         // Sorting

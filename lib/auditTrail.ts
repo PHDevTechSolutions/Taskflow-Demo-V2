@@ -8,7 +8,7 @@ import { ObjectId } from "mongodb";
 import { parse } from "cookie";
 
 // Types for audit trail
-export type AuditAction = "create" | "update" | "delete";
+export type AuditAction = "create" | "update" | "delete" | "export" | "action";
 
 /**
  * Extract userId from session cookie in request
@@ -175,6 +175,14 @@ export function createAuditMessage(
       return entityName
         ? `${fullName} has deleted this ${entityType}: ${entityName}`
         : `${fullName} has deleted a ${entityType}`;
+    case "export":
+      return entityName
+        ? `${fullName} exported ${entityType} to Excel: ${entityName}`
+        : `${fullName} exported ${entityType} to Excel`;
+    case "action":
+      return entityName
+        ? `${fullName} performed action '${entityType}' on: ${entityName}`
+        : `${fullName} performed action '${entityType}'`;
     default:
       return `${fullName} performed an action on ${entityType}`;
   }
@@ -332,4 +340,87 @@ export async function logAuditTrailApp(
   } catch (error) {
     console.error("Error in logAuditTrailApp:", error);
   }
+}
+
+/**
+ * Client-side audit logging for Excel exports and button clicks
+ * This function can be called directly from React components
+ */
+export async function logClientAudit(
+  userId: string,
+  action: AuditAction,
+  entityType: string,
+  entityId?: string,
+  entityName?: string,
+  details?: string,
+  changes?: Record<string, any>
+): Promise<void> {
+  try {
+    const userInfo = await getUserInfo(userId);
+
+    if (!userInfo) {
+      console.error(`Cannot log client audit: User ${userId} not found`);
+      return;
+    }
+
+    await logAuditTrail({
+      userId,
+      firstName: userInfo.firstName,
+      lastName: userInfo.lastName,
+      email: userInfo.email,
+      action,
+      entityType,
+      entityId,
+      entityName,
+      details,
+      changes,
+      department: userInfo.department,
+      role: userInfo.role,
+      referenceId: userInfo.referenceId,
+      ipAddress: typeof window !== "undefined" ? window.location.hostname : undefined,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+    });
+  } catch (error) {
+    console.error("Error in logClientAudit:", error);
+  }
+}
+
+/**
+ * Log Excel export audit from client-side
+ * Convenience wrapper for Excel download tracking
+ */
+export async function logExcelExport(
+  userId: string,
+  reportType: string,
+  recordCount: number,
+  filters?: string
+): Promise<void> {
+  await logClientAudit(
+    userId,
+    "export",
+    "excel_report",
+    undefined,
+    reportType,
+    `Exported ${reportType} with ${recordCount} records${filters ? ` (${filters})` : ""}`
+  );
+}
+
+/**
+ * Log button click action from client-side
+ * Convenience wrapper for tracking important button clicks
+ */
+export async function logButtonAction(
+  userId: string,
+  actionName: string,
+  targetEntity?: string,
+  details?: string
+): Promise<void> {
+  await logClientAudit(
+    userId,
+    "action",
+    actionName,
+    undefined,
+    targetEntity,
+    details
+  );
 }

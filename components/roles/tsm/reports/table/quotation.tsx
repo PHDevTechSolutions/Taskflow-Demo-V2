@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Spinner } from "@/components/ui/spinner";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,15 +22,7 @@ import {
   PaginationPrevious,
   PaginationNext,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Download } from "lucide-react";
-import ExcelJS from "exceljs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /* ================= TYPES ================= */
 

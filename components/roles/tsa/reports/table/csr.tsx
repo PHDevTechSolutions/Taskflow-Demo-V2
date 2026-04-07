@@ -7,6 +7,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Search, Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 import { supabase } from "@/utils/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -402,6 +403,16 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      // Log audit trail for Excel export
+      await logExcelExport(
+        referenceid,
+        "TSA CSR Report",
+        grouped.length,
+        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+          : undefined
+      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);

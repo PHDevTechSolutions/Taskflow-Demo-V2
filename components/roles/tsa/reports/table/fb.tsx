@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, SlidersHorizontal, Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import { logExcelExport } from "@/lib/auditTrail";
 import { supabase } from "@/utils/supabase";
 
 const PAGE_SIZE = 10;
@@ -296,6 +297,16 @@ export const FBTable: React.FC<{ referenceid: string; target_quota?: string; dat
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      // Log audit trail for Excel export
+      await logExcelExport(
+        referenceid,
+        "TSA FB Marketplace Report",
+        filtered.length,
+        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
+          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
+          : undefined
+      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);
