@@ -80,7 +80,7 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
   }, {} as TimeByActivity);
 
 const isOutboundTouchbase = (a: any): boolean =>
-  a.source === "Outbound - Touchbase";
+  a.source === "Outbound - Touchbase" && a.call_status === "Successful";
 
 const getFixedCount = (refId: string, date: Date): number => {
   const month = date.getMonth() + 1;

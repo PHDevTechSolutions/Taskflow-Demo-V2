@@ -79,10 +79,9 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
     return acc;
   }, {} as TimeByActivity);
 
-// Outbound is determined ONLY by source === "Outbound - Touchbase"
+// Outbound is determined by source === "Outbound - Touchbase" AND call_status === "successful"
 const isOutboundTouchbase = (a: any): boolean =>
-  a.source === "Outbound - Touchbase";
-
+  a.source === "Outbound - Touchbase" && a.call_status === "Successful";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
