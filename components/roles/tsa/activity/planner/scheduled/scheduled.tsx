@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -238,52 +238,68 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       return { ...activity, relatedHistoryItems };
     });
 
-  // ─── TODAY (local) ────────────────────────────────────────────────────────
   const todayStr = toLocalDateString(new Date());
 
-  const filteredActivities = mergedActivities
-    .filter((item) => {
-      const itemScheduledDate = toLocalDateString(item.scheduled_date);
+  const filteredActivities = useMemo(() => {
+    return mergedActivities
+      .filter((item) => {
+        const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
-      // ✅ ALWAYS TODAY ONLY (even when searching)
-      if (itemScheduledDate !== todayStr) {
-        return false;
-      }
+        // ── Date range filter (for scheduled_date, future dates only) ─────────
+        if (dateCreatedFilterRange?.from) {
+          const fromDate = toLocalDateString(dateCreatedFilterRange.from);
+          const toDate = dateCreatedFilterRange.to
+            ? toLocalDateString(dateCreatedFilterRange.to)
+            : fromDate;
 
-      // ── Status filter ─────────────────────────────────────────────────────
-      if (statusFilter !== "All" && item.status !== statusFilter) return false;
+          // Only allow future dates (today onwards)
+          if (itemScheduledDate < todayStr) {
+            return false;
+          }
 
-      // ── Text search ───────────────────────────────────────────────────────
-      if (searchTerm.trim() !== "") {
-        const termLower = searchTerm.toLowerCase();
+          // Check if within selected date range
+          if (itemScheduledDate < fromDate || itemScheduledDate > toDate) {
+            return false;
+          }
+        } else {
+          // ✅ DEFAULT: Show today only when no date range selected
+          if (itemScheduledDate !== todayStr) {
+            return false;
+          }
+        }
 
-        const activityValues = Object.values(item)
-          .map((v) => (v != null ? v.toString() : ""))
-          .join(" ")
-          .toLowerCase();
+        // ── Status filter ─────────────────────────────────────────────────────
+        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
-        if (activityValues.includes(termLower)) return true;
+        // ── Text search ───────────────────────────────────────────────────────
+        if (searchTerm.trim() !== "") {
+          const termLower = searchTerm.toLowerCase();
 
-        const historyValues = item.relatedHistoryItems
-          .map((h) =>
-            Object.values(h)
-              .map((v) => (v != null ? v.toString() : ""))
-              .join(" ")
-              .toLowerCase(),
-          )
-          .join(" ");
+          const activityValues = Object.values(item)
+            .map((v) => (v != null ? v.toString() : ""))
+            .join(" ")
+            .toLowerCase();
 
-        if (historyValues.includes(termLower)) return true;
+          const historyValues = item.relatedHistoryItems
+            .map((h) =>
+              Object.values(h)
+                .map((v) => (v != null ? v.toString() : ""))
+                .join(" ")
+                .toLowerCase(),
+            )
+            .join(" ");
 
-        return false;
-      }
+          const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
+          if (!matchesSearch) return false;
+        }
 
-      return true;
-    })
-    .sort(
-      (a, b) =>
-        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
-    );
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+      );
+  }, [mergedActivities, dateCreatedFilterRange, todayStr, statusFilter, searchTerm]);
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
@@ -372,7 +388,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     | null
     | undefined;
 
-  function getBadgeProps(status: string): {
+  function getBadgeProps(status: string, isFutureDate: boolean): {
     variant: BadgeVariant;
     className?: string;
   } {
@@ -383,7 +399,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       case "SO-Done":
         return { variant: "default", className: "bg-yellow-400 text-white" };
       case "Quote-Done":
-        return { variant: "outline", className: "bg-blue-500 text-white" };
+        return { variant: "outline", className: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white" };
       case "Cancelled":
         return { variant: "destructive", className: "bg-red-600 text-white" };
       default:
@@ -391,7 +407,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
-  function getStatusStyles(status: string): {
+  function getStatusStyles(status: string, isFutureDate: boolean): {
     badgeClass?: string;
     bgClass?: string;
   } {
@@ -408,7 +424,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           bgClass: "bg-yellow-100",
         };
       case "Quote-Done":
-        return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+        return { badgeClass: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white", bgClass: "bg-blue-100" };
       case "Cancelled":
         return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
       default:
@@ -695,7 +711,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
               {Array.from(new Set(filteredActivities.map((a) => a.status))).map(
                 (status) => {
-                  const { badgeClass } = getStatusStyles(status);
+                  const { badgeClass } = getStatusStyles(status, false);
                   return (
                     <DropdownMenuItem
                       key={status}
@@ -726,8 +742,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             </p>
           ) : (
             filteredActivities.map((item) => {
-              const badgeProps = getBadgeProps(item.status);
-              const statusStyles = getStatusStyles(item.status);
+              const today = toLocalDateString(new Date());
+              const itemDate = toLocalDateString(item.scheduled_date);
+              const isFutureDate = itemDate > today;
+              const badgeProps = getBadgeProps(item.status, isFutureDate);
+              const statusStyles = getStatusStyles(item.status, isFutureDate);
 
               return (
                 <AccordionItem

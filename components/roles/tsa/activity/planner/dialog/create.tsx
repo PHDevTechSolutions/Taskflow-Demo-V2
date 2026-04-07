@@ -245,6 +245,7 @@ export function CreateActivityDialog({
 
     const [selectedContactPerson, setSelectedContactPerson] = useState(contact_person);
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
+    const [selectedEmailAddress, setSelectedEmailAddress] = useState(email_address);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
     const [quotationSubject, setQuotationSubject] = useState("For Quotation");
@@ -635,6 +636,7 @@ export function CreateActivityDialog({
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
     const contactPersons = (contact_person || "").split(",").map(c => c.trim());
     const contactNumbers = (contact_number || "").split(",").map(c => c.trim());
+    const emailAddresses = (email_address || "").split(",").map(e => e.trim());
 
     return (
         <>
@@ -651,6 +653,7 @@ export function CreateActivityDialog({
                         <div className="grid grid-cols-1 gap-3">
                             {contactPersons.map((person, idx) => {
                                 const number = contactNumbers[idx] || "";
+                                const email = emailAddresses[idx] || "";
                                 const isSelected = selectedContacts.includes(person);
 
                                 return (
@@ -665,6 +668,7 @@ export function CreateActivityDialog({
                                         <div className="flex flex-col">
                                             <p className="font-semibold">{person}</p>
                                             <p className="text-sm text-gray-600">{number}</p>
+                                            <p className="text-sm text-gray-500">{email}</p>
                                         </div>
                                     </div>
                                 );
@@ -700,9 +704,11 @@ export function CreateActivityDialog({
                                 const selectedPerson = selectedContacts[0];
                                 const idx = contactPersons.indexOf(selectedPerson);
                                 const selectedNumber = contactNumbers[idx] || "";
+                                const selectedEmail = emailAddresses[idx] || "";
 
                                 setSelectedContactPerson(selectedPerson);
                                 setSelectedContactNumber(selectedNumber);
+                                setSelectedEmailAddress(selectedEmail);
 
                                 setShowContactDialog(false);
                                 handleNext(); // move to next step
@@ -1042,7 +1048,7 @@ export function CreateActivityDialog({
                                     managername={managername}
                                     company_name={company_name}
                                     address={address}
-                                    email_address={email_address}
+                                    email_address={selectedEmailAddress}
                                     contact_number={selectedContactNumber}
                                     contact_person={selectedContactPerson}
                                     managerDetails={managerDetails ?? null}

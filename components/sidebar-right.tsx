@@ -170,6 +170,7 @@ function SidebarInner({
         <DatePicker
           selectedDateRange={dateCreatedFilterRange}
           onDateSelectAction={setDateCreatedFilterRangeAction}
+          disableFuture={false}
         />
 
         <div className="mx-0 border-t border-sidebar-border" />
@@ -340,6 +341,7 @@ export function SidebarRight({
           <DatePicker
             selectedDateRange={dateCreatedFilterRange}
             onDateSelectAction={setDateCreatedFilterRangeAction}
+            disableFuture={false}
           />
 
           <SidebarSeparator className="mx-0" />
