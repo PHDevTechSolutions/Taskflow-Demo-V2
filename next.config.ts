@@ -25,11 +25,11 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      tls: './node_modules/next/dist/esm/lib/empty.js',
-      net: './node_modules/next/dist/esm/lib/empty.js',
-      fs: './node_modules/next/dist/esm/lib/empty.js',
-      dns: './node_modules/next/dist/esm/lib/empty.js',
       child_process: './node_modules/next/dist/esm/lib/empty.js',
+      dns: './node_modules/next/dist/esm/lib/empty.js',
+      fs: './node_modules/next/dist/esm/lib/empty.js',
+      net: './node_modules/next/dist/esm/lib/empty.js',
+      tls: './node_modules/next/dist/esm/lib/empty.js',
     },
   },
 };

@@ -3,8 +3,6 @@
 
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { connectToDatabase } from "./mongodb";
-import { ObjectId } from "mongodb";
 import { parse } from "cookie";
 
 // Types for audit trail
@@ -126,9 +124,14 @@ export interface AuditTrailData {
 
 /**
  * Get user information from MongoDB by user ID
+ * Uses dynamic import to avoid bundling MongoDB in client-side code
  */
 export async function getUserInfo(userId: string) {
   try {
+    // Dynamic import to prevent client-side bundling of MongoDB
+    const { connectToDatabase } = await import("./mongodb");
+    const { ObjectId } = await import("mongodb");
+    
     const db = await connectToDatabase();
     const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
 
