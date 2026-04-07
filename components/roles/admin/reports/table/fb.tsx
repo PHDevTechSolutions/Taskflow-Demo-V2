@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
-import { logExcelExport } from "@/lib/auditTrail";
 
 interface FB {
   id: number;
@@ -211,16 +210,6 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      // Log audit trail for Excel export
-      await logExcelExport(
-        userDetails.referenceid,
-        "Admin FB Marketplace Summary Report",
-        tsmSummary.length,
-        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
-          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
-          : undefined
-      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);

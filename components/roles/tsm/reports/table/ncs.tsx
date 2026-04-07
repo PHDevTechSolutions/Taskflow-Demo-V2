@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Search, SlidersHorizontal, Download } from "lucide-react";
 import ExcelJS from "exceljs";
-import { logExcelExport } from "@/lib/auditTrail";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import {

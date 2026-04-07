@@ -6,7 +6,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon, ArrowLeft, Settings2, RotateCcw, ChevronRight, Download } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import ExcelJS from "exceljs";
-import { logExcelExport } from "@/lib/auditTrail";
 import {
   Table, TableBody, TableCell, TableFooter,
   TableHead, TableHeader, TableRow,
@@ -906,16 +905,6 @@ export const SalesTable: React.FC<SalesProps> = ({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      // Log audit trail for Excel export
-      await logExcelExport(
-        userDetails.referenceid,
-        `Admin Sales Performance - ${title}`,
-        dataToExport.length,
-        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
-          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
-          : undefined
-      );
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);

@@ -8,7 +8,6 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
-import { logExcelExport } from "@/lib/auditTrail";
 
 /* ================= TYPES ================= */
 

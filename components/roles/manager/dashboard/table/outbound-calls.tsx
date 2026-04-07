@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Info, Download } from "lucide-react";
 import ExcelJS from "exceljs";
-import { logExcelExport } from "@/lib/auditTrail";
 
 /* ================= TYPES ================= */
 
@@ -309,17 +308,6 @@ export function OutboundCallsTableCard({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      // Log audit trail for Excel export
-      const userId = (window as any).__USER_ID__ || "unknown";
-      await logExcelExport(
-        userId,
-        "Manager Outbound Performance Report",
-        statsByAgent.length,
-        dateCreatedFilterRange?.from && dateCreatedFilterRange?.to
-          ? `Date range: ${new Date(dateCreatedFilterRange.from).toLocaleDateString()} - ${new Date(dateCreatedFilterRange.to).toLocaleDateString()}`
-          : undefined
-      );
 
     } catch (err) {
       console.error("Export failed:", err);
