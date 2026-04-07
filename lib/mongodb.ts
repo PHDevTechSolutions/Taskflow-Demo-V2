@@ -1,3 +1,4 @@
+import "server-only";
 import { MongoClient, ObjectId, Db } from "mongodb";
 import bcrypt from "bcrypt";
 

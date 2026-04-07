@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   experimental: {
     turbopack: false,
   },
@@ -13,6 +13,19 @@ const nextConfig = {
       },
     ],
   },
-} as NextConfig; // <-- type assertion to avoid error
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        tls: false,
+        net: false,
+        fs: false,
+        dns: false,
+        child_process: false,
+      };
+    }
+    return config;
+  },
+};
 
 export default nextConfig;
