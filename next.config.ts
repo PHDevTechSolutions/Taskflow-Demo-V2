@@ -27,14 +27,11 @@ const nextConfig: NextConfig = {
     resolveAlias: {
       child_process: './node_modules/next/dist/esm/lib/empty.js',
       dns: './node_modules/next/dist/esm/lib/empty.js',
-      fs: './node_modules/next/dist/esm/lib/empty.js',
       net: './node_modules/next/dist/esm/lib/empty.js',
       tls: './node_modules/next/dist/esm/lib/empty.js',
     },
   },
-  experimental: {
-    serverComponentsExternalPackages: ['mongodb', 'mongoose', '@grpc/grpc-js'],
-  },
+  serverExternalPackages: ['mongodb', 'mongoose', '@grpc/grpc-js', 'exceljs', 'fast-csv', '@fast-csv/format', '@fast-csv/parse', 'archiver', 'cloudinary', '@grpc/proto-loader', 'fs-constants', 'tar-stream'],
 };
 
 export default nextConfig;
