@@ -26,7 +26,6 @@ export async function GET(req: Request) {
       SELECT DISTINCT ON (company_name) *
       FROM accounts
       WHERE TRIM(LOWER(tsm)) = LOWER(${tsm})
-        AND TRIM(LOWER(status)) = 'active'
       ORDER BY company_name, date_created ASC, id ASC
       LIMIT ${safeLimit}
       OFFSET ${safeOffset};
