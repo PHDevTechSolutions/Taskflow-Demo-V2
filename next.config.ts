@@ -32,6 +32,9 @@ const nextConfig: NextConfig = {
       tls: './node_modules/next/dist/esm/lib/empty.js',
     },
   },
+  experimental: {
+    serverComponentsExternalPackages: ['mongodb', 'mongoose', '@grpc/grpc-js'],
+  },
 };
 
 export default nextConfig;
