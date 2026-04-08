@@ -251,6 +251,8 @@ export const EndorsedQuotation: React.FC<ScheduledProps> = ({
     const closeEditDialog = () => {
         setEditOpen(false);
         setEditItem(null);
+        // Force refresh to ensure list is updated after status change
+        setTimeout(() => fetchActivities(), 300);
     };
 
     const statusColor = (status: string) => {

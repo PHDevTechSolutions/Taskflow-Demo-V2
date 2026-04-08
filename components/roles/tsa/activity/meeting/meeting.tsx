@@ -49,13 +49,43 @@ function formatDateTime(dateStr: string) {
   return `${datePart} · ${h}:${min} ${ampm}`;
 }
 
-// Convert ISO / DB string → "YYYY-MM-DDTHH:MM" for datetime-local input
+// Convert UTC ISO string from DB → "YYYY-MM-DDTHH:MM" for datetime-local input (local time)
 function toInputValue(dateStr: string) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // Convert UTC to local time for the input field
+  const result = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  console.log(`[toInputValue] Input (UTC): ${dateStr} -> Output (local): ${result}`);
+  return result;
+}
+
+// Convert datetime-local value (local time) → UTC ISO string for PostgreSQL timestamp
+// datetime-local format: "YYYY-MM-DDTHH:MM"
+function toUTCISOString(dateStr: string) {
+  if (!dateStr) return "";
+  
+  // Parse the datetime-local string components (local time)
+  const [datePart, timePart] = dateStr.split('T');
+  if (!datePart || !timePart) return "";
+  
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hours, minutes] = timePart.split(':').map(Number);
+  
+  // Create date object assuming LOCAL time
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  
+  if (isNaN(localDate.getTime())) return "";
+  
+  // Convert to UTC by subtracting timezone offset
+  const tzOffset = localDate.getTimezoneOffset() * 60000; // offset in milliseconds
+  const utcDate = new Date(localDate.getTime() - tzOffset);
+  
+  // Return UTC ISO string
+  const result = utcDate.toISOString();
+  console.log(`[toUTCISOString] Input (local): ${dateStr} -> Output (UTC): ${result}`);
+  return result;
 }
 
 // ─── Meeting Card ─────────────────────────────────────────────────────────────
@@ -164,8 +194,12 @@ function EditMeetingDialog({
   // Populate fields when meeting changes
   useEffect(() => {
     if (meeting) {
-      setStartDate(toInputValue(meeting.start_date));
-      setEndDate(toInputValue(meeting.end_date));
+      console.log(`[useEffect] Loading meeting data:`, meeting);
+      const startInput = toInputValue(meeting.start_date);
+      const endInput = toInputValue(meeting.end_date);
+      console.log(`[useEffect] Set input values - start: ${startInput}, end: ${endInput}`);
+      setStartDate(startInput);
+      setEndDate(endInput);
       setRemarks(meeting.remarks || "");
       setError(null);
     }
@@ -187,12 +221,19 @@ function EditMeetingDialog({
     setSaving(true);
     setError(null);
 
+    console.log(`[handleSave] Saving meeting - startDate input: ${startDate}, endDate input: ${endDate}`);
+
     try {
+      const startIso = toUTCISOString(startDate);
+      const endIso = toUTCISOString(endDate);
+      
+      console.log(`[handleSave] Converted to UTC ISO - start: ${startIso}, end: ${endIso}`);
+
       const { data, error: supaErr } = await supabase
         .from("meetings")
         .update({
-          start_date:   new Date(startDate).toISOString(),
-          end_date:     new Date(endDate).toISOString(),
+          start_date:   startIso,
+          end_date:     endIso,
           remarks,
           date_updated: new Date().toISOString(),
         })

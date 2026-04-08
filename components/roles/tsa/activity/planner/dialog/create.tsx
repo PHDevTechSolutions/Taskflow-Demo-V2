@@ -609,15 +609,22 @@ export function CreateActivityDialog({
         }
     };
 
-    // Intercept sheet close request:
+    // Handle sheet open/close
     const onSheetOpenChange = (open: boolean) => {
         if (!open) {
-            // User trying to close the sheet (click outside or close button)
-            // Show confirmation dialog instead of closing immediately
+            // User trying to close - show confirmation dialog
             setShowConfirmCancel(true);
+            // Don't update sheetOpen yet, let user confirm first
         } else {
             setSheetOpen(true);
         }
+    };
+
+    // Force close sheet (for emergencies when it gets stuck)
+    const forceCloseSheet = () => {
+        setShowConfirmCancel(false);
+        setSheetOpen(false);
+        resetForm();
     };
 
     // Handle user confirmed cancel
@@ -1175,12 +1182,47 @@ export function CreateActivityDialog({
                         </div>
                     )}
 
-                    {showConfirmCancel && (
-                        <CancelDialog
-                            onCancel={cancelCancel}
-                            onConfirm={confirmCancel}
-                        />
-                    )}
+                    {/* Confirmation Dialog with Escape key handling */}
+                    <Dialog open={showConfirmCancel} onOpenChange={(open) => {
+                        if (!open) cancelCancel();
+                    }}>
+                        <DialogContent className="rounded-none" onEscapeKeyDown={(e) => {
+                            e.preventDefault();
+                            cancelCancel();
+                        }}>
+                            <DialogHeader>
+                                <DialogTitle>Discard Changes?</DialogTitle>
+                            </DialogHeader>
+                            <p className="text-sm text-gray-600">
+                                You have unsaved changes. Are you sure you want to close and discard them?
+                            </p>
+                            <DialogFooter className="mt-4 flex gap-2 justify-end">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-none"
+                                    onClick={cancelCancel}
+                                >
+                                    Continue Editing
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    className="rounded-none"
+                                    onClick={confirmCancel}
+                                >
+                                    Discard & Close
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Emergency close button if sheet gets stuck */}
+                    <button
+                        onClick={forceCloseSheet}
+                        className="fixed top-2 right-2 z-[9999] p-2 bg-red-500 text-white text-xs opacity-0 hover:opacity-100 transition-opacity"
+                        aria-label="Emergency close"
+                    >
+                        Force Close
+                    </button>
 
                 </SheetContent>
             </Sheet>

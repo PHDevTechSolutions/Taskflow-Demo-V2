@@ -27,6 +27,30 @@ import { Combobox } from "@/components/ui/combobox";
 import { supabase } from "@/utils/supabase";
 import { sileo } from "sileo";
 
+// Convert datetime-local value (local time) → UTC ISO string for PostgreSQL timestamp
+function toUTCISOString(dateStr: string) {
+  if (!dateStr) return "";
+  
+  // Parse the datetime-local string components (local time)
+  const [datePart, timePart] = dateStr.split('T');
+  if (!datePart || !timePart) return "";
+  
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hours, minutes] = timePart.split(':').map(Number);
+  
+  // Create date object assuming LOCAL time
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  
+  if (isNaN(localDate.getTime())) return "";
+  
+  // Convert to UTC by subtracting timezone offset
+  const tzOffset = localDate.getTimezoneOffset() * 60000; // offset in milliseconds
+  const utcDate = new Date(localDate.getTime() - tzOffset);
+  
+  // Return UTC ISO string
+  return utcDate.toISOString();
+}
+
 interface MeetingDialogProps {
   referenceid: string;
   tsm: string;
@@ -105,8 +129,8 @@ export function MeetingDialog({
             manager,
             type_activity: typeActivity,
             remarks: remarks || "No remarks",
-            start_date: new Date(startDate).toISOString(),
-            end_date: new Date(endDate).toISOString(),
+            start_date: toUTCISOString(startDate),
+            end_date: toUTCISOString(endDate),
             date_updated: new Date(),
             company_name: selectedCompany,
           },
