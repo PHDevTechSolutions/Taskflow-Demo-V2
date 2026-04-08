@@ -188,7 +188,7 @@ export default async function handler(
         quotation_number: safe(quotation_number),
         quotation_amount: safe(quotation_amount),
         quotation_type: safe(quotation_type),
-        quotation_status: safe(quotation_status) || "Pending Client Approval",
+        quotation_status: safe(quotation_status) || (status === "Quote-Done" ? "Pending Client Approval" : null),
 
         so_number: safe(so_number),
         so_amount: safe(so_amount),

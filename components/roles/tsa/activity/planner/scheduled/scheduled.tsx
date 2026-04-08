@@ -447,7 +447,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDoneOpen(false);
 
       const res = await fetch("/api/act-update-status", {
         method: "POST",
@@ -471,7 +470,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
+      setDialogDoneOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       sileo.success({
         title: "Success",
@@ -501,7 +502,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDeliveredOpen(false);
 
       const res = await fetch("/api/act-update-status-delivered", {
         method: "POST",
@@ -525,7 +525,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
+      setDialogDeliveredOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       sileo.success({
         title: "Success",

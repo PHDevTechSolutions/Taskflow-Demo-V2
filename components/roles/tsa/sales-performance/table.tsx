@@ -449,13 +449,14 @@ export const SalesTable: React.FC<SalesProps> = ({
                     </span>
                 </div>
 
-                <button
+                {/*<button
                     onClick={exportToExcel}
                     className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-none hover:bg-blue-700 transition-colors"
                 >
                     <Download size={14} />
                     Export Excel
-                </button>
+                </button>*/}
+                
             </div>
 
             {/* Sales Metrics Table */}

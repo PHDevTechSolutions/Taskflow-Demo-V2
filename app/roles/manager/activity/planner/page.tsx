@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, useMemo, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
@@ -12,17 +13,20 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/c
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { sileo } from "sileo";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Bell, FileText, ExternalLink } from "lucide-react";
 
 // FIX: Was incorrectly importing as "Scheduled" — the export is "PendingQuotation"
 import { PendingQuotation } from "@/components/roles/manager/activity/quotation/pending/pending-quotation";
 import { EndorsedQuotation } from "@/components/roles/manager/activity/quotation/endorsed/endorsed-quotation";
 // import { AccountsCards } from "@/components/roles/tsm/accounts/transfer/transfer";
-// import { RequestTable } from "@/components/roles/tsa/accounts/approval/table/table";
 
 interface UserDetails {
     referenceid: string;
@@ -59,6 +63,18 @@ interface Account {
     date_removed: string;
 }
 
+interface SPFRequest {
+    id: number;
+    spf_number: string;
+    customer_name: string;
+    contact_person: string;
+    contact_number: string;
+    registered_address: string;
+    status?: string;
+    date_created?: string;
+    prepared_by?: string;
+}
+
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
@@ -83,6 +99,19 @@ function DashboardContent() {
     const [posts, setPosts] = useState<Account[]>([]);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [agentFilter, setAgentFilter] = useState<string>("all");
+
+    // SPF Notifications
+    const [spfRequests, setSpfRequests] = useState<SPFRequest[]>([]);
+    const [loadingSpf, setLoadingSpf] = useState(false);
+    const [spfNotificationOpen, setSpfNotificationOpen] = useState(false);
+    const [prevSpfCount, setPrevSpfCount] = useState(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Initialize audio
+    useEffect(() => {
+        audioRef.current = new Audio("/reminder-notification.mp3");
+        audioRef.current.volume = 0.5;
+    }, []);
 
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
 
@@ -168,6 +197,53 @@ function DashboardContent() {
     }, [userId]);
 
 
+    // Fetch SPF requests with "Endorsed to Sales Head" status for Manager
+    useEffect(() => {
+        if (!userDetails.referenceid) {
+            setSpfRequests([]);
+            return;
+        }
+
+        const fetchSpfRequests = async () => {
+            setLoadingSpf(true);
+            try {
+                // Fetch from the SPF endpoint for manager
+                const response = await fetch(
+                    `/api/activity/manager/spf/fetch?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+                );
+
+                if (!response.ok) throw new Error("Failed to fetch SPF requests");
+
+                const data = await response.json();
+                // Filter only those with "Endorsed to Sales Head" status for manager approval
+                const pendingApprovals = (data.activities || []).filter(
+                    (req: SPFRequest) => req.status === "Endorsed to Sales Head"
+                );
+
+                // Play sound if new requests detected
+                if (pendingApprovals.length > prevSpfCount && prevSpfCount > 0) {
+                    audioRef.current?.play().catch(() => {
+                        // Ignore autoplay errors
+                    });
+                }
+
+                setPrevSpfCount(pendingApprovals.length);
+                setSpfRequests(pendingApprovals);
+            } catch (err) {
+                console.error("Error fetching SPF requests:", err);
+                setSpfRequests([]);
+            } finally {
+                setLoadingSpf(false);
+            }
+        };
+
+        fetchSpfRequests();
+
+        // Set up polling every 30 seconds
+        const interval = setInterval(fetchSpfRequests, 30000);
+        return () => clearInterval(interval);
+    }, [userDetails.referenceid]);
+
     const filteredData = useMemo(() => {
         let filteredPosts = posts;
 
@@ -211,6 +287,87 @@ function DashboardContent() {
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
+                        </div>
+
+                        {/* SPF Notification Bell */}
+                        <div className="flex items-center px-3">
+                            <Popover open={spfNotificationOpen} onOpenChange={setSpfNotificationOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="relative"
+                                        aria-label="SPF Notifications"
+                                    >
+                                        <Bell className="h-5 w-5" />
+                                        {spfRequests.length > 0 && (
+                                            <Badge
+                                                variant="destructive"
+                                                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                                            >
+                                                {spfRequests.length > 99 ? "99+" : spfRequests.length}
+                                            </Badge>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-0" align="end">
+                                    <div className="flex items-center justify-between p-3 border-b">
+                                        <h4 className="font-semibold text-sm">SPF Requests - Endorsed to Sales Head</h4>
+                                        <Badge variant="secondary" className="text-xs">
+                                            {spfRequests.length} pending
+                                        </Badge>
+                                    </div>
+                                    <ScrollArea className="h-64">
+                                        {loadingSpf ? (
+                                            <div className="p-4 text-center text-sm text-muted-foreground">
+                                                Loading...
+                                            </div>
+                                        ) : spfRequests.length === 0 ? (
+                                            <div className="p-4 text-center text-sm text-muted-foreground">
+                                                No pending SPF requests
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y">
+                                                {spfRequests.map((request) => (
+                                                    <Link
+                                                        key={request.id}
+                                                        href={`/roles/manager/activity/spf?highlight=${encodeURIComponent(request.spf_number)}`}
+                                                        onClick={() => setSpfNotificationOpen(false)}
+                                                    >
+                                                        <div className="p-3 hover:bg-muted transition-colors cursor-pointer">
+                                                            <div className="flex items-start gap-2">
+                                                                <FileText className="h-4 w-4 mt-0.5 text-blue-500" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium truncate">
+                                                                        {request.customer_name || "Unknown Customer"}
+                                                                    </p>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        SPF: {request.spf_number}
+                                                                    </p>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        Prepared by: {request.prepared_by || "N/A"}
+                                                                    </p>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {request.date_created ? new Date(request.date_created).toLocaleDateString() : "—"}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </ScrollArea>
+                                    <div className="p-2 border-t">
+                                        <Link href="/roles/manager/activity/spf">
+                                            <Button variant="ghost" className="w-full justify-between text-xs" size="sm">
+                                                View all SPF requests
+                                                <ExternalLink className="h-3 w-3" />
+                                            </Button>
+                                        </Link>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </header>
 
