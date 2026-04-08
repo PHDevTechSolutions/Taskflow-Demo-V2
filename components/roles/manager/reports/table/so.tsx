@@ -35,6 +35,7 @@ interface SO {
   referenceid: string;
   call_type: string;
   tsm?: string;
+  activity_reference_number?: string;
 }
 
 interface Agent {
@@ -176,6 +177,7 @@ export const SOTable: React.FC<SOProps> = ({
       .filter((i) =>
         !s ||
         i.company_name?.toLowerCase().includes(s) ||
+        i.activity_reference_number?.toLowerCase().includes(s) ||
         i.so_number?.toLowerCase().includes(s) ||
         i.remarks?.toLowerCase().includes(s)
       )
@@ -526,7 +528,7 @@ export const SOTable: React.FC<SOProps> = ({
                           <TableCell className="whitespace-nowrap text-gray-500">
                             {new Date(row.date_created).toLocaleDateString()}
                           </TableCell>
-                          <TableCell>{row.so_number || "-"}</TableCell>
+                          <TableCell>{row.activity_reference_number || row.so_number || "-"}</TableCell>
                           <TableCell className="text-right text-gray-700">
                             {row.so_amount != null ? fmt(row.so_amount) : "-"}
                           </TableCell>

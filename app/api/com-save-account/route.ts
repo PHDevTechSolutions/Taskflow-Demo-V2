@@ -165,3 +165,8 @@ export async function POST(req: Request) {
 }
 
 export const dynamic = "force-dynamic";
+
+// PUT handler - same logic as POST (for frontend compatibility)
+export async function PUT(req: Request) {
+  return POST(req);
+}
