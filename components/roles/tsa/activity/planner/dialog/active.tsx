@@ -215,7 +215,7 @@ export function AccountDialog({
       setNewIndustryInput("");
       setShowAddIndustry(false);
     }
-  }, [open]);
+  }, [open, initialData]);
 
   // ── Fetch regions ───────────────────────────────────────────────────────────
   useEffect(() => {

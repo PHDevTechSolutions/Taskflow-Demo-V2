@@ -260,68 +260,17 @@ function DashboardContent() {
     try {
       const isEdit = Boolean(payload.id);
 
-      // For edits, create approval request instead of direct save
-      if (isEdit && originalData) {
-        const response = await fetch("/api/com-edit-approval", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            account_id: payload.id,
-            tsm_reference_id: userDetails.tsm,
-            original_data: {
-              company_name: originalData.company_name,
-              contact_person: originalData.contact_person,
-              contact_number: originalData.contact_number,
-              email_address: originalData.email_address,
-              address: originalData.address,
-              delivery_address: originalData.delivery_address,
-              region: originalData.region,
-              industry: originalData.industry,
-              type_client: originalData.type_client,
-              company_group: originalData.company_group,
-            },
-            proposed_changes: {
-              company_name: payload.company_name,
-              contact_person: payload.contact_person?.join(", "),
-              contact_number: payload.contact_number?.join(", "),
-              email_address: payload.email_address?.join(", "),
-              address: payload.address,
-              delivery_address: payload.delivery_address,
-              region: payload.region,
-              industry: payload.industry,
-              type_client: payload.type_client,
-              company_group: payload.company_group,
-            },
-            edited_by: userDetails.referenceid,
-            edited_by_name: `${userDetails.firstname || ''} ${userDetails.lastname || ''}`.trim(),
-          }),
-        });
-
-        if (!response.ok) throw new Error("Failed to submit approval request");
-
-        sileo.success({
-          title: "Success",
-          description: "Edit approval request submitted to TSM for review!",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
-        });
-
-        return;
-      }
-
-      // For new accounts, proceed with direct save
-      const url = "/api/com-save-account";
-      const method = "POST";
+      // Direct save for both create and edit
+      const url = isEdit ? "/api/com-edit-account" : "/api/com-save-account";
+      const method = "PUT";
 
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          date_updated: new Date().toISOString(),
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to save account");
