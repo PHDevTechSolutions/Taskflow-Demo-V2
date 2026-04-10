@@ -2401,11 +2401,6 @@ Procurement
                                       <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
                                         Ref: {r.referenceid || "—"}
                                       </span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {summarizeProcField(r.company_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {summarizeProcField(r.supplier_brand)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {summarizeProcField(r.contact_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {summarizeProcField(r.contact_number)}</span>
-                                      <span className="truncate col-span-2"><span className="font-bold text-gray-600">Project lead time:</span> {summarizeProcField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
                                     </div>
                                     <button
                                       type="button"

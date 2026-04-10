@@ -1914,11 +1914,6 @@ ${payload.whtType && payload.whtType !== "none"
                                       <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
                                         Ref: {r.referenceid || "—"}
                                       </span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {spfSummarizeField(r.company_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {spfSummarizeField(r.supplier_brand)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {spfSummarizeField(r.contact_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {spfSummarizeField(r.contact_number)}</span>
-                                      <span className="truncate col-span-2"><span className="font-bold text-gray-600">Lead time:</span> {spfSummarizeField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
                                     </div>
                                     <button
                                       type="button"
