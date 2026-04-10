@@ -614,7 +614,7 @@ export function RequestDialog({
                     Decline
                   </button>
 
-                  <button
+                  {/*<button
                     onClick={() => handleSubmit("Approved by TSM")}
                     disabled={submitting}
                     style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#d1fae5", background: "#065f46", border: "1px solid #10b981", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
@@ -623,7 +623,8 @@ export function RequestDialog({
                   >
                     {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <ShieldCheck style={{ width: "10px", height: "10px" }} />}
                     Approve
-                  </button>
+                  </button>*/}
+                  
                 </div>
               </div>
             )}

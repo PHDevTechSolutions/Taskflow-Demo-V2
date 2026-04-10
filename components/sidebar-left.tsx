@@ -5,7 +5,7 @@ import {
   Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home,
   BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
   XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, GitGraph, CreditCard,
-  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon,
+  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon, Edit,
 } from "lucide-react";
 import { NavFavorites } from "@/components/nav/favorites";
 import { NavSecondary } from "@/components/nav/secondary";
@@ -78,6 +78,7 @@ const data = {
         { name: "Deletion", url: "/roles/tsa/companies/remove", icon: Trash2 },
         { name: "Group / Industry", url: "/roles/tsa/companies/group", icon: Users },
         { name: "All", url: "/roles/tsm/companies/all", icon: BookOpen },
+        //{ name: "Approval Editing", url: "/roles/tsm/companies/approval-editing", icon: Edit },
         { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },
         { name: "Active", url: "/roles/admin/companies/active", icon: BookOpen },
         { name: "Group / Industry", url: "/roles/admin/companies/group", icon: Users },

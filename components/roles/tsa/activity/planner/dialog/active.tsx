@@ -83,6 +83,28 @@ function formatPH(val: string): string {
   return `${val.slice(0, 4)}-${val.slice(4, 7)}-${val.slice(7)}`;
 }
 
+/** Format landline number → (02) 8123-4567 or (043) 123-4567 */
+function formatLandline(val: string): string {
+  val = val.replace(/\D/g, "").slice(0, 10); // Max 10 digits for PH landline
+  if (val.length === 0) return "";
+  
+  // Area code: 2 digits for NCR (02), 3 digits for others (043, 032, etc.)
+  let areaCodeLen = val.startsWith("2") ? 2 : 3;
+  
+  if (val.length <= areaCodeLen) {
+    return val.length === 2 && val.startsWith("2") ? `(${val})` : val;
+  }
+  
+  const areaCode = val.slice(0, areaCodeLen);
+  const rest = val.slice(areaCodeLen);
+  
+  if (rest.length <= 3) {
+    return `(${areaCode}) ${rest}`;
+  }
+  
+  return `(${areaCode}) ${rest.slice(0, 4)}-${rest.slice(4, 7)}${rest.slice(7) ? `-${rest.slice(7)}` : ""}`;
+}
+
 /** Format international number → +63 917 123 4567 */
 function formatIntl(val: string): string {
   val = val.replace(/[^0-9+]/g, "");
@@ -215,7 +237,7 @@ export function AccountDialog({
       setNewIndustryInput("");
       setShowAddIndustry(false);
     }
-  }, [open]);
+  }, [open, initialData]);
 
   // ── Fetch regions ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -680,46 +702,82 @@ export function AccountDialog({
                   </FieldContent>
 
                   {formData.contact_number.map((cn, i) => {
+                    // Determine type: custom, intl (+), landline (starts with 0 but not 09), or mobile (starts with 09)
                     const isIntl = cn.startsWith("+");
-                    const displayVal = isIntl ? formatIntl(cn) : formatPH(cn);
+                    const digits = cn.replace(/\D/g, "");
+                    const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
+                    const isMobile = !isIntl && digits.startsWith("09");
+                    const isCustom = cn.startsWith("#"); // Custom numbers start with #
+                    
+                    let displayVal = cn;
+                    if (isCustom) displayVal = cn.slice(1); // Remove # prefix for display
+                    else if (isIntl) displayVal = formatIntl(cn);
+                    else if (isLandline) displayVal = formatLandline(cn);
+                    else displayVal = formatPH(cn);
 
                     return (
                       <div key={i} className="flex flex-col gap-1 mb-4">
                         <div className="flex items-center gap-2">
                           <Select
-                            value={isIntl ? "intl" : "local"}
+                            value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
                             onValueChange={(v) => {
                               const copy = [...formData.contact_number];
-                              const digits = cn.replace(/\D/g, "");
-                              copy[i] =
-                                v === "local"
-                                  ? digits.startsWith("63")
-                                    ? "0" + digits.slice(2)
-                                    : ""
-                                  : digits.startsWith("0")
-                                  ? `+63${digits.slice(1)}`
-                                  : "+";
+                              const currentDigits = cn.replace(/\D/g, "");
+                              
+                              if (v === "local") {
+                                // Convert to mobile format
+                                copy[i] = currentDigits.startsWith("63")
+                                  ? "0" + currentDigits.slice(2)
+                                  : currentDigits.startsWith("0")
+                                  ? currentDigits
+                                  : "09";
+                              } else if (v === "intl") {
+                                // Convert to international
+                                copy[i] = currentDigits.startsWith("0")
+                                  ? `+63${currentDigits.slice(1)}`
+                                  : currentDigits.startsWith("63")
+                                  ? "+" + currentDigits
+                                  : "+63";
+                              } else if (v === "landline") {
+                                // Convert to landline (start with 0 and area code)
+                                copy[i] = currentDigits.startsWith("63")
+                                  ? "0" + currentDigits.slice(2, 3) // Take first digit after 63 for area code
+                                  : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
+                                  ? currentDigits.slice(0, 4) // Keep first 4 digits (0 + area code)
+                                  : "02"; // Default to NCR area code
+                              } else if (v === "custom") {
+                                // Convert to custom - add # prefix, keep original
+                                copy[i] = "#" + (cn.startsWith("#") ? cn.slice(1) : cn);
+                              }
                               updateField("contact_number", copy);
                             }}
                           >
                             <SelectTrigger className="w-[100px] rounded-none">
-                              {isIntl ? "Intl" : "Phil"}
+                              {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="local">Phil</SelectItem>
+                              <SelectItem value="landline">Landline</SelectItem>
                               <SelectItem value="intl">Intl</SelectItem>
+                              <SelectItem value="custom">Custom</SelectItem>
                             </SelectContent>
                           </Select>
 
                           <Input
                             value={displayVal}
                             onChange={(e) => {
-                              const raw = e.target.value.replace(/\D/g, "");
+                              const raw = e.target.value;
                               const copy = [...formData.contact_number];
-                              copy[i] = isIntl ? "+" + raw : raw;
+                              if (isCustom) {
+                                // For custom, keep as-is but preserve # prefix
+                                copy[i] = "#" + raw;
+                              } else {
+                                const digitsOnly = raw.replace(/\D/g, "");
+                                copy[i] = isIntl ? "+" + digitsOnly : digitsOnly;
+                              }
                               updateField("contact_number", copy);
                             }}
-                            placeholder={isIntl ? "+63 917 123 4567" : "0917-123-4567"}
+                            placeholder={isCustom ? "Any format (e.g. ext. 123)" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567"}
                             className="rounded-none flex-1"
                           />
 
@@ -751,14 +809,24 @@ export function AccountDialog({
                         </div>
 
                         {/* Inline validation */}
-                        {!isIntl && cn.replace(/\D/g, "").length > 0 && cn.replace(/\D/g, "").length !== 11 && (
+                        {isMobile && digits.length > 0 && digits.length !== 11 && (
                           <p className="text-red-500 text-xs">
-                            Local PH numbers must be exactly 11 digits.
+                            Mobile numbers must be exactly 11 digits.
+                          </p>
+                        )}
+                        {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
+                          <p className="text-red-500 text-xs">
+                            Landline numbers must be 9-10 digits (including area code).
                           </p>
                         )}
                         {isIntl && cn.length > 1 && !/^\+\d{5,15}$/.test(cn.replace(/\s+/g, "")) && (
                           <p className="text-red-500 text-xs">
                             Invalid international number format.
+                          </p>
+                        )}
+                        {isCustom && (
+                          <p className="text-blue-500 text-xs">
+                            Custom format - no validation applied
                           </p>
                         )}
                       </div>

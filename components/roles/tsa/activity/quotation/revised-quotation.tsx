@@ -633,6 +633,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Duration</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Company</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Timeline</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Feedback / Notes</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-right">Amount</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Created</TableHead>
                 </TableRow>
@@ -749,6 +750,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                           </div>
                         )}
                         {!item.tsm_approval_date && !item.manager_approval_date && <span className="text-zinc-300 italic">No activity logs</span>}
+                      </TableCell>
+
+                      <TableCell className="text-right font-mono font-bold text-zinc-700">
+                        {item.tsm_remarks || "—"}{item.manager_remarks}
                       </TableCell>
 
                       <TableCell className="text-right font-mono font-bold text-zinc-700">

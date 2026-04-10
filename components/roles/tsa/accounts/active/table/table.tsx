@@ -92,7 +92,7 @@ interface AccountsTableProps {
     React.SetStateAction<DateRange | undefined>
   >;
   userDetails: UserDetails;
-  onSaveAccountAction: (data: any) => void;
+  onSaveAccountAction: (data: any, originalData?: Account) => void;
   onRefreshAccountsAction: () => Promise<void>;
 }
 
@@ -820,7 +820,7 @@ export function AccountsTable({
           }}
           userDetails={userDetails}
           onSaveAction={(data) => {
-            onSaveAccountAction(data);
+            onSaveAccountAction(data, editingAccount);
             setEditingAccount(null);
             setIsEditDialogOpen(false);
           }}

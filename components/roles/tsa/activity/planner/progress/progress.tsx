@@ -323,7 +323,6 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogOpen(false);
 
       const res = await fetch("/api/act-update-status", {
         method: "POST",
@@ -342,7 +341,9 @@ export const Progress: React.FC<NewTaskProps> = ({
         return;
       }
 
+      setDialogOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       toast.success("Transaction marked as Done.");
     } catch {
@@ -410,7 +411,6 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDeliveredOpen(false);
 
       const res = await fetch("/api/act-update-status-delivered", {
         method: "POST",
@@ -434,7 +434,9 @@ export const Progress: React.FC<NewTaskProps> = ({
         return;
       }
 
+      setDialogDeliveredOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       sileo.success({
         title: "Success",
