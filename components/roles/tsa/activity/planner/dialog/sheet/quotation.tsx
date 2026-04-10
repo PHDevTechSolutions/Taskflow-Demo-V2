@@ -2130,7 +2130,7 @@ Procurement
                   <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {[
                       { source: "shopify", label: "Shopify", icon: "🛍️" },
-                      { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                      // { source: "firebase_shopify", label: "CMS", icon: "📦" },
                       { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
                     ].map(({ source: s, label, icon }) => (
                       <button

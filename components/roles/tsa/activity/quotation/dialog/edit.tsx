@@ -1734,7 +1734,7 @@ ${payload.whtType && payload.whtType !== "none"
                   <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {[
                       { source: "shopify", label: "Shopify", icon: "🛍️" },
-                      { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                      // { source: "firebase_shopify", label: "CMS", icon: "📦" },
                       { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
                     ].map(({ source: s, label, icon }) => (
                       <button key={s} type="button"
