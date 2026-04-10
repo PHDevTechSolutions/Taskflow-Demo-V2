@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 /* ================= TYPES ================= */
 interface SI {
@@ -263,7 +264,106 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
 
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Sales Invoice Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "Total SO", key: "soCount", width: 15 },
+      { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
+      { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    tsmSummary.forEach((item) => {
+      worksheet.addRow({
+        tsm: item.tsmName,
+        soCount: item.soCount,
+        deliveredCount: item.deliveredCount,
+        totalSIAmount: item.totalSIAmount
+      });
+    });
+
+    const totalsRow = {
+      tsm: "TOTAL",
+      soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
+      deliveredCount: tsmSummary.reduce((sum, t) => sum + t.deliveredCount, 0),
+      totalSIAmount: tsmSummary.reduce((sum, t) => sum + t.totalSIAmount, 0)
+    };
+    
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Delivery Date", key: "deliveryDate", width: 15 },
+      { header: "SI Date", key: "siDate", width: 15 },
+      { header: "SI Amount", key: "siAmount", width: 18 },
+      { header: "DR Number", key: "drNumber", width: 20 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Contact Person", key: "contactPerson", width: 20 },
+      { header: "Contact Number", key: "contactNumber", width: 18 },
+      { header: "Payment Terms", key: "paymentTerms", width: 15 },
+      { header: "Duration", key: "duration", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    const byTsa = new Map<string, { tsaName: string; rows: SI[] }>();
+    activities.forEach((row) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a, b) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]) => {
+      rows.forEach((row) => {
+        const duration = computeDuration(row.start_date, row.end_date);
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          deliveryDate: recordDateStr(row.delivery_date) ?? "-",
+          siDate: recordDateStr(row.si_date) ?? "-",
+          siAmount: row.actual_sales ?? 0,
+          drNumber: row.dr_number || "-",
+          company: row.company_name || "-",
+          contactPerson: row.contact_person || "-",
+          contactNumber: row.contact_number || "-",
+          paymentTerms: row.payment_terms || "-",
+          duration: duration,
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    worksheet.getColumn('siAmount').numFmt = '#,##0.00" ₱"';
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -271,72 +371,40 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Sales Invoice Summary");
+      const zip = new JSZip();
+      const folderName = "sales_invoice_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "Total SO", key: "soCount", width: 15 },
-        { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
-        { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
-      ];
+      const tsmWorkbook = await createTsmSummaryWorkbook();
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        worksheet.addRow({
-          tsm: item.tsmName,
-          soCount: item.soCount,
-          deliveredCount: item.deliveredCount,
-          totalSIAmount: item.totalSIAmount
-        });
-      });
-
-      // Add totals row
-      const totalsRow = {
-        tsm: "TOTAL",
-        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
-        deliveredCount: tsmSummary.reduce((sum, t) => sum + t.deliveredCount, 0),
-        totalSIAmount: tsmSummary.reduce((sum, t) => sum + t.totalSIAmount, 0)
-      };
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Format currency column
-      worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
-
-      // Generate filename with date range
-      let filename = "Sales_Invoice_Summary";
+      let zipFilename = "Sales_Invoice_Reports";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 

@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 interface SPF { id: number; so_amount?: number; so_number?: string; remarks?: string; date_created: string; date_updated?: string; company_name?: string; contact_number?: string; contact_person: string; call_type: string; status: string; referenceid: string; start_date?: string; end_date?: string; }
 interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
@@ -86,6 +89,150 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
   }, [activities, searchTerm, filterType, selectedAgent]);
 
   useEffect(() => { setPage(1); }, [searchTerm, filterType, selectedAgent, dateCreatedFilterRange]);
+
+  // ─── Summary by Type for TSM Summary ─────────────────────────────────────────
+  const summaryByType = useMemo(() => {
+    const result = {
+      "spf - special project": { count: 0, totalAmount: 0 },
+      "spf - local": { count: 0, totalAmount: 0 },
+      "spf - foreign": { count: 0, totalAmount: 0 }
+    };
+    filtered.forEach(i => {
+      const type = i.call_type?.toLowerCase();
+      if (type && result[type as keyof typeof result]) {
+        result[type as keyof typeof result].count += 1;
+        result[type as keyof typeof result].totalAmount += i.so_amount ?? 0;
+      }
+    });
+    return result;
+  }, [filtered]);
+
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("SPF Summary");
+
+    worksheet.columns = [
+      { header: "SPF Type", key: "type", width: 25 },
+      { header: "Count", key: "count", width: 12 },
+      { header: "Total Amount", key: "totalAmount", width: 18 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    SPF_TYPES.forEach(type => {
+      const data = summaryByType[type as keyof typeof summaryByType];
+      worksheet.addRow({
+        type: SPF_LABEL[type] || type,
+        count: data.count,
+        totalAmount: data.totalAmount
+      });
+    });
+
+    const totalsRow = {
+      type: "TOTAL",
+      count: Object.values(summaryByType).reduce((s, i) => s + i.count, 0),
+      totalAmount: Object.values(summaryByType).reduce((s, i) => s + i.totalAmount, 0)
+    };
+    
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    const amountCol = worksheet.getColumn('totalAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook ---- */
+  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "SO Number", key: "soNumber", width: 20 },
+      { header: "SO Amount", key: "soAmount", width: 18 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Type", key: "type", width: 20 },
+      { header: "Status", key: "status", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    filtered.forEach((row) => {
+      const info = agentMap[row.referenceid?.toLowerCase() ?? ""];
+      worksheet.addRow({
+        agentName: info?.name || row.referenceid || "Unknown Agent",
+        date: new Date(row.date_created).toLocaleDateString(),
+        soNumber: row.so_number || "-",
+        soAmount: row.so_amount ?? 0,
+        company: row.company_name || "-",
+        type: SPF_LABEL[row.call_type?.toLowerCase() ?? ""] || row.call_type || "-",
+        status: row.status || "-",
+        remarks: row.remarks || "-"
+      });
+    });
+
+    const amountCol = worksheet.getColumn('soAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      const folderName = "spf_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
+
+      const tsmWorkbook = await createTsmSummaryWorkbook();
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
+
+      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
+
+      let zipFilename = "SPF_Reports";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        zipFilename += `_${fromDate}_to_${toDate}`;
+      }
+      zipFilename += ".zip";
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = zipFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel ZIP");
+    }
+  };
+
   const total = useMemo(() => filtered.reduce((s, i) => s + (i.so_amount ?? 0), 0), [filtered]);
   const uniqueCount = useMemo(() => new Set(filtered.map(i => i.so_number).filter(Boolean)).size, [filtered]);
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
@@ -103,6 +250,13 @@ export const SPFTable: React.FC<SPFProps> = ({ referenceid, dateCreatedFilterRan
           <SelectTrigger className="w-[200px] text-xs"><SelectValue placeholder="Filter by Agent" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All Agents</SelectItem>{agents.map(a => <SelectItem className="capitalize" key={a.ReferenceID} value={a.ReferenceID}>{a.Firstname} {a.Lastname}</SelectItem>)}</SelectContent>
         </Select>
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
       {filtered.length > 0 && (
         <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">

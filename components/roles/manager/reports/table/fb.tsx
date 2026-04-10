@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 interface FB {
   id: number;
@@ -136,7 +137,89 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
       }));
   }, [selectedTsm, companySearch, activities, agentMap]);
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("FB Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "Quote Count", key: "quoteCount", width: 15 },
+      { header: "SO Count", key: "soCount", width: 15 },
+      { header: "Total Sales", key: "totalSales", width: 18 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    tsmSummary.forEach((item) => {
+      worksheet.addRow({
+        tsm: item.tsmName,
+        quoteCount: item.quoteCount,
+        soCount: item.soCount,
+        totalSales: item.totalSales
+      });
+    });
+
+    const totalsRow = {
+      tsm: "TOTAL",
+      quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
+      soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
+      totalSales: tsmSummary.reduce((sum, t) => sum + t.totalSales, 0)
+    };
+    
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    worksheet.getColumn('totalSales').numFmt = '#,##0.00" ₱"';
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Status", key: "status", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    const byTsa = new Map<string, { tsaName: string; rows: FB[] }>();
+    activities.forEach((row) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a, b) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]) => {
+      rows.forEach((row) => {
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          company: row.company_name || "-",
+          status: row.status || "-",
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -144,65 +227,32 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("FB Summary");
+      const zip = new JSZip();
+      const folderName = "fb_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "Quote Count", key: "quoteCount", width: 15 },
-        { header: "SO Count", key: "soCount", width: 15 },
-        { header: "Total Sales", key: "totalSales", width: 18 }
-      ];
+      const tsmWorkbook = await createTsmSummaryWorkbook();
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        worksheet.addRow({
-          tsm: item.tsmName,
-          quoteCount: item.quoteCount,
-          soCount: item.soCount,
-          totalSales: item.totalSales
-        });
-      });
-
-      // Add totals row
-      const totalsRow = {
-        tsm: "TOTAL",
-        quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
-        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
-        totalSales: tsmSummary.reduce((sum, t) => sum + t.totalSales, 0)
-      };
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Format currency column
-      worksheet.getColumn('totalSales').numFmt = '#,##0.00" ₱"';
-
-      // Generate filename with date range
-      let filename = "FB_Summary";
+      let zipFilename = "FB_Reports";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -210,7 +260,7 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 
