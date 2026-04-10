@@ -23,7 +23,7 @@ import { SOSheet } from "./sheet/so";
 import { DRSheet } from "./sheet/dr";
 
 interface Activity {
-    id: string;
+    id?: string;
     type_client: string;
     company_name: string;
     contact_person: string;
@@ -443,7 +443,6 @@ export function CreateActivityDialog({
         const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
 
         const newActivity: Activity = {
-            id: activityRef,
             activity_reference_number: activityRef,
             account_reference_number: accountRef,
             type_client,
