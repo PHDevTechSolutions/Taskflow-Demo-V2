@@ -1734,7 +1734,7 @@ ${payload.whtType && payload.whtType !== "none"
                   <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {[
                       { source: "shopify", label: "Shopify", icon: "🛍️" },
-                      { source: "firebase_shopify", label: "CMS", icon: "📦" },
+                      // { source: "firebase_shopify", label: "CMS", icon: "📦" },
                       { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
                     ].map(({ source: s, label, icon }) => (
                       <button key={s} type="button"
@@ -1914,11 +1914,6 @@ ${payload.whtType && payload.whtType !== "none"
                                       <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
                                         Ref: {r.referenceid || "—"}
                                       </span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Company:</span> {spfSummarizeField(r.company_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Brand:</span> {spfSummarizeField(r.supplier_brand)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">Contact:</span> {spfSummarizeField(r.contact_name)}</span>
-                                      <span className="truncate"><span className="font-bold text-gray-600">No.:</span> {spfSummarizeField(r.contact_number)}</span>
-                                      <span className="truncate col-span-2"><span className="font-bold text-gray-600">Lead time:</span> {spfSummarizeField(r.proj_lead_time ?? r.project_lead_time, 4)}</span>
                                     </div>
                                     <button
                                       type="button"
