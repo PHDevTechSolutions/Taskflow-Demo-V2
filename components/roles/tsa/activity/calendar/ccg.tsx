@@ -35,10 +35,9 @@ interface CCGItem {
   tsm: string;
   manager: string;
   type_activity?: string;
-  date_created: string;
+  date_updated: string;
   start_date?: string;
   end_date?: string;
-  date_updated?: string;
   status: string;
   company_name: string;
   remarks: string;
@@ -100,12 +99,12 @@ function buildHourSlots(items: CCGItem[]): {
   meetingSlots: MeetingSlot[];
   activitySlots: ActivitySlot[];
 } {
-  const meetings = items.filter((it) => it.start_date && it.date_updated);
-  const activities = items.filter((it) => !it.start_date || !it.date_updated);
+  const meetings = items.filter((it) => it.start_date && it.end_date);
+  const activities = items.filter((it) => !it.start_date || !it.end_date);
 
   const meetingSlots: MeetingSlot[] = meetings.map((meeting) => {
     const startDate = parseDate(meeting.start_date!)!;
-    const endDate = parseDate(meeting.date_updated!)!;
+    const endDate = parseDate(meeting.end_date!)!;
     const startHour = startDate.getHours();
     const endHour = endDate.getHours();
 
@@ -143,9 +142,9 @@ const STATUS_STYLES: Record<string, string> = {
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
-  const isMeeting = ev.start_date && ev.date_updated;
+  const isMeeting = ev.start_date && ev.end_date;
   const startDate = parseDate(isMeeting ? ev.start_date : ev.date_updated);
-  const endDate = isMeeting ? parseDate(ev.date_updated) : null;
+  const endDate = isMeeting ? parseDate(ev.end_date) : null;
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
@@ -310,14 +309,14 @@ export const CCG: React.FC<{
   // ── Derived Data ───────────────────────────────────────────────────────────
 
   const sortedActivities = useMemo(
-  () =>
-    [...activities].sort(
-      (a, b) =>
-        new Date(b.start_date || b.date_updated).getTime() -
-        new Date(a.start_date || a.date_updated).getTime()
-    ),
-  [activities]
-);
+    () =>
+      [...activities].sort(
+        (a, b) =>
+          new Date(b.start_date || b.date_updated).getTime() -
+          new Date(a.start_date || a.date_updated).getTime()
+      ),
+    [activities]
+  );
 
   const statusOptions = useMemo(
     () =>
@@ -755,12 +754,12 @@ export const CCG: React.FC<{
                                 {meetingSlot.children
                                   .sort(
                                     (a, b) =>
-                                      new Date(a.end_date).getTime() -
-                                      new Date(b.end_date).getTime()
+                                      new Date(a.date_updated).getTime() -
+                                      new Date(b.date_updated).getTime()
                                   )
                                   .map((child) => {
                                     const childTime = parseDate(
-                                      child.end_date
+                                      child.date_updated
                                     );
                                     return (
                                       <div
