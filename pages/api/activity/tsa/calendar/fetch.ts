@@ -29,6 +29,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           type_activity,
           date_created,
           date_updated,
+          start_date,
+          end_date,
           status,
           company_name,
           remarks

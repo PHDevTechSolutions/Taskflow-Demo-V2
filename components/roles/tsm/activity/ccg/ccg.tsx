@@ -30,6 +30,7 @@ interface CCGItem {
   tsm: string;
   manager: string;
   type_activity?: string;
+  date_created: string;
   date_updated: string;
   status: string;
   company_name: string;

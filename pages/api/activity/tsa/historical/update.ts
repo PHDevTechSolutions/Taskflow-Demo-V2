@@ -60,8 +60,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Update history table
-  const { error } = await supabase.from("history").update(filteredData).eq("id", id);
+  // Update history table while preserving date_updated
+  const { error } = await supabase
+    .rpc('update_history_preserve_updated', {
+      record_id: id,
+      update_data: filteredData
+    });
   if (error) return res.status(500).json({ error: "Failed to update history." });
 
   // Log audit trail for historical update

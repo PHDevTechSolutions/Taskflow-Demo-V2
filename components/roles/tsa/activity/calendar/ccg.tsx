@@ -60,19 +60,6 @@ interface Account {
   industry?: string;
 }
 
-interface MeetingSlot {
-  type: "meeting";
-  meeting: CCGItem;
-  children: CCGItem[];
-  startHour: number;
-  endHour: number;
-}
-
-interface ActivitySlot {
-  type: "activity";
-  item: CCGItem;
-  hour: number;
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,9 +73,10 @@ function formatDateLocal(date: Date) {
 function formatTime(date: Date) {
   let h = date.getHours();
   const min = String(date.getMinutes()).padStart(2, "0");
+  const sec = String(date.getSeconds()).padStart(2, "0");
   const ampm = h >= 12 ? "PM" : "AM";
   h = h % 12 || 12;
-  return `${h}:${min} ${ampm}`;
+  return `${h}:${min}:${sec} ${ampm}`;
 }
 
 function formatHourLabel(h: number) {
@@ -112,41 +100,6 @@ function getFirstWeekday(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-function buildHourSlots(items: CCGItem[]): {
-  meetingSlots: MeetingSlot[];
-  activitySlots: ActivitySlot[];
-} {
-  const meetings = items.filter((it) => it.start_date && it.end_date);
-  const activities = items.filter((it) => !it.start_date || !it.end_date);
-
-  const meetingSlots: MeetingSlot[] = meetings.map((meeting) => {
-    const startDate = parseDate(meeting.start_date!)!;
-    const endDate = parseDate(meeting.end_date!)!;
-    const startHour = startDate.getHours();
-    const endHour = endDate.getHours();
-
-    const children = activities.filter((act) => {
-      const actTime = parseDate(act.date_updated);
-      if (!actTime) return false;
-      return actTime >= startDate && actTime <= endDate;
-    });
-
-    return { type: "meeting", meeting, children, startHour, endHour };
-  });
-
-  const coveredActivityIds = new Set(
-    meetingSlots.flatMap((ms) => ms.children.map((c) => c.id))
-  );
-
-  const activitySlots: ActivitySlot[] = activities
-    .filter((act) => !coveredActivityIds.has(act.id))
-    .map((act) => {
-      const d = parseDate(act.date_updated);
-      return { type: "activity", item: act, hour: d ? d.getHours() : 0 };
-    });
-
-  return { meetingSlots, activitySlots };
-}
 
 // Status badge styling
 const STATUS_STYLES: Record<string, string> = {
@@ -176,20 +129,87 @@ function getClusterStyle(typeClient: string) {
   );
 }
 
+// Helper function to calculate duration
+function calculateDuration(startDate: Date, endDate: Date): string {
+  const diffMs = endDate.getTime() - startDate.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const hours = Math.floor(diffSecs / 3600);
+  const minutes = Math.floor((diffSecs % 3600) / 60);
+  const seconds = diffSecs % 60;
+  
+  if (hours > 0) {
+    if (minutes > 0 && seconds > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (seconds > 0) {
+      return `${hours}h ${seconds}s`;
+    } else {
+      return `${hours}h`;
+    }
+  } else if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
-  const isMeeting = ev.start_date && ev.end_date;
-  const startDate = parseDate(isMeeting ? ev.start_date : ev.date_updated);
-  const endDate = isMeeting ? parseDate(ev.end_date) : null;
+  const isMeeting = ev.type_activity === "Meeting" && ev.start_date && ev.end_date;
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
+  // For meetings: show start_date to end_date with duration
+  // For activities: show duration between start_date and end_date if available
+  let timeDisplay = null;
+  let durationDisplay = null;
+
+  if (isMeeting) {
+    // Meeting: show start and end time
+    const startDate = parseDate(ev.start_date!);
+    const endDate = parseDate(ev.end_date!);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(startDate)} - {formatTime(endDate)}
+        </span>
+      );
+      durationDisplay = (
+        <span className="text-[9px] text-purple-500 font-medium">
+          {calculateDuration(startDate, endDate)}
+        </span>
+      );
+    }
+  } else if (ev.start_date && ev.end_date) {
+    // Activity with both dates: show duration
+    const startDate = parseDate(ev.start_date);
+    const endDate = parseDate(ev.end_date);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          Duration: {calculateDuration(startDate, endDate)}
+        </span>
+      );
+    }
+  } else {
+    // Regular activity: show end_date time
+    const eventDate = parseDate(ev.end_date || ev.date_updated);
+    if (eventDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(eventDate)}
+        </span>
+      );
+    }
+  }
+
   return (
-    <div className="group relative rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div
-        className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${isMeeting ? "bg-purple-400" : "bg-green-400"}`}
-      />
+    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-slate-800 truncate">
@@ -205,13 +225,8 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          {startDate && (
-            <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-              <Clock size={10} />
-              {formatTime(startDate)}
-              {endDate && ` - ${formatTime(endDate)}`}
-            </span>
-          )}
+          {timeDisplay}
+          {durationDisplay}
           <span
             className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
           >
@@ -354,11 +369,13 @@ export const CCG: React.FC<{
 
   const sortedActivities = useMemo(
     () =>
-      [...activities].sort(
-        (a, b) =>
-          new Date(b.start_date || b.date_updated).getTime() -
-          new Date(a.start_date || a.date_updated).getTime()
-      ),
+      [...activities].sort((a, b) => {
+        // Sort by end_date (or date_updated as fallback)
+        const aDate = parseDate(a.end_date || a.date_updated);
+        const bDate = parseDate(b.end_date || b.date_updated);
+        if (!aDate || !bDate) return 0;
+        return bDate.getTime() - aDate.getTime();
+      }),
     [activities]
   );
 
@@ -409,12 +426,15 @@ export const CCG: React.FC<{
 
   const allEventsByDate = useMemo(() => {
     const map: Record<string, number> = {};
+    
     for (const item of sortedActivities) {
-      const d = parseDate(item.start_date || item.date_updated);
-      if (!d) continue;
-      const key = formatDateLocal(d);
+      const eventDate = parseDate(item.end_date || item.date_updated);
+      if (!eventDate) continue;
+      
+      const key = formatDateLocal(eventDate);
       map[key] = (map[key] ?? 0) + 1;
     }
+    
     return map;
   }, [sortedActivities]);
 
@@ -445,27 +465,10 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const d = parseDate(item.start_date || item.date_updated);
-      return d ? formatDateLocal(d) === selectedDateStr : false;
+      const eventDate = parseDate(item.end_date || item.date_updated);
+      return eventDate ? formatDateLocal(eventDate) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
-
-  // Build hour slots from selected day events
-  const { meetingSlots, activitySlots } = useMemo(
-    () => buildHourSlots(selectedDayEvents),
-    [selectedDayEvents]
-  );
-
-  // Map: hour → meeting slot (for spanning)
-  const hourToMeeting = useMemo(() => {
-    const map = new Map<number, MeetingSlot>();
-    meetingSlots.forEach((ms) => {
-      for (let h = ms.startHour; h <= ms.endHour; h++) {
-        map.set(h, ms);
-      }
-    });
-    return map;
-  }, [meetingSlots]);
 
   // ── Calendar helpers ───────────────────────────────────────────────────────
 
@@ -512,14 +515,14 @@ export const CCG: React.FC<{
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white min-h-[680px]">
+    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-green-400 shadow-lg bg-white min-h-[680px]">
       {/* ── LEFT: Calendar panel ── */}
-      <div className="lg:w-[320px] shrink-0 border-r border-slate-100 bg-slate-50 flex flex-col">
+      <div className="lg:w-[320px] shrink-0 border-r border-green-200 bg-white flex flex-col">
         {/* Month nav */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <button
             onClick={prevMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronLeft size={16} />
           </button>
@@ -533,7 +536,7 @@ export const CCG: React.FC<{
           </div>
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronRight size={16} />
           </button>
@@ -585,7 +588,7 @@ export const CCG: React.FC<{
                       ? "bg-green-600 text-white shadow-md shadow-green-200"
                       : isTodayCell
                         ? "bg-green-50 text-green-700 ring-1 ring-green-300"
-                        : "text-slate-700 hover:bg-slate-200"
+                        : "text-slate-700 hover:bg-green-50"
                   }`}
               >
                 {day}
@@ -604,7 +607,7 @@ export const CCG: React.FC<{
         </div>
 
         {/* Month summary */}
-        <div className="mt-auto border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+        <div className="mt-auto border-t border-green-200 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-slate-500">
             <CalendarDays size={13} />
             <span className="text-xs">
@@ -642,7 +645,7 @@ export const CCG: React.FC<{
       {/* ── RIGHT: Timeline panel ── */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Panel header */}
-        <div className="border-b border-slate-100 px-5 pt-4 pb-3 flex flex-col gap-3">
+        <div className="border-b border-green-200 px-5 pt-4 pb-3 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-slate-800">
@@ -689,14 +692,14 @@ export const CCG: React.FC<{
               placeholder="Search company, activity, remarks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white focus:border-green-300"
+              className="pl-8 h-8 text-xs bg-slate-50 border-green-200 focus:bg-white focus:border-green-400"
             />
           </div>
 
           {showFilters && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[150px] text-xs border-green-200">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -713,7 +716,7 @@ export const CCG: React.FC<{
                 value={filterTypeActivity}
                 onValueChange={setFilterTypeActivity}
               >
-                <SelectTrigger className="h-7 w-[170px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[170px] text-xs border-green-200">
                   <SelectValue placeholder="All Activity Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -763,7 +766,7 @@ export const CCG: React.FC<{
             <div className="px-4 py-3 space-y-0">
               {/* Scheduled Accounts Section */}
               {selectedDateAccounts.length > 0 && (
-                <div className="mb-4 pb-4 border-b border-slate-200">
+                <div className="mb-4 pb-4 border-b border-green-200">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-2 h-2 rounded-full bg-purple-500" />
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -774,7 +777,7 @@ export const CCG: React.FC<{
                     {selectedDateAccounts.slice(0, 2).map((account) => (
                       <div
                         key={account.id}
-                        className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 transition-colors"
+                        className="flex items-center justify-between p-2 rounded-lg border border-green-100 bg-white hover:bg-green-50 transition-colors"
                       >
                         <div>
                           <p className="text-xs font-semibold text-slate-800 uppercase">
@@ -836,7 +839,7 @@ export const CCG: React.FC<{
                       {selectedDateAccounts.map((account) => (
                         <div
                           key={account.id}
-                          className="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors"
+                          className="flex items-center justify-between p-3 border border-green-100 rounded-lg hover:bg-green-50 transition-colors"
                         >
                           <div>
                             <p className="text-xs font-semibold text-slate-800 uppercase">
@@ -862,7 +865,7 @@ export const CCG: React.FC<{
                       ))}
                     </div>
                   </div>
-                  <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+                  <div className="px-6 py-3 border-t border-green-100 bg-green-50 flex justify-end">
                     <Button
                       variant="outline"
                       size="sm"
@@ -874,169 +877,53 @@ export const CCG: React.FC<{
                   </div>
                 </DialogContent>
               </Dialog>
-              {(() => {
-                const renderedMeetingIds = new Set<number>();
-
-                return Array.from({ length: 24 }, (_, h) => h).map((hour) => {
-                  const isCurrentHour = !!isToday && hour === currentHour;
-                  const meetingSlot = hourToMeeting.get(hour);
-
-                  // Skip hours inside a meeting that's already been rendered
-                  if (
-                    meetingSlot &&
-                    renderedMeetingIds.has(meetingSlot.meeting.id)
-                  ) {
-                    return null;
-                  }
-
-                  // Render spanning meeting block at its START hour
-                  if (meetingSlot) {
-                    renderedMeetingIds.add(meetingSlot.meeting.id);
-                    const startDate = parseDate(meetingSlot.meeting.start_date!)!;
-                    const endDate = parseDate(meetingSlot.meeting.end_date!)!;
-                    const spanHours =
-                      meetingSlot.endHour - meetingSlot.startHour + 1;
-
-                    return (
-                      <div
-                        key={`meeting-${meetingSlot.meeting.id}`}
-                        ref={isCurrentHour ? currentHourRef : null}
-                        className="flex gap-3"
-                        style={{ minHeight: `${spanHours * 48}px` }}
-                      >
-                        {/* Hour label + vertical line */}
-                        <div className="flex flex-col items-center w-14 shrink-0 pt-1">
-                          <span className="text-[10px] font-bold leading-none select-none text-purple-500">
-                            {formatHourLabel(hour)}
-                          </span>
-                          <div className="flex-1 w-px mt-1.5 bg-purple-300" />
-                        </div>
-
-                        {/* Spanning meeting block */}
-                        <div className="flex-1 pb-2 pt-0.5">
-                          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden h-full flex flex-col">
-                            {/* Meeting header */}
-                            <div className="px-4 pt-3 pb-2 border-b border-purple-200 bg-purple-100/60 shrink-0">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-bold text-purple-900 truncate">
-                                    {meetingSlot.meeting.company_name || "—"}
-                                  </p>
-                                  <p className="text-[11px] text-purple-600 mt-0.5 truncate">
-                                    {meetingSlot.meeting.type_activity ??
-                                      meetingSlot.meeting
-                                        .activity_reference_number}
-                                  </p>
-                                  {meetingSlot.meeting.remarks && (
-                                    <p className="text-[11px] text-purple-500 mt-1 line-clamp-2 capitalize">
-                                      {meetingSlot.meeting.remarks}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <span className="flex items-center gap-1 text-[10px] text-purple-500 font-medium">
-                                    <Clock size={10} />
-                                    {formatTime(startDate)} –{" "}
-                                    {formatTime(endDate)}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${STATUS_STYLES[meetingSlot.meeting.status] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}
-                                  >
-                                    {meetingSlot.meeting.status || "—"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Children activities */}
-                            {meetingSlot.children.length > 0 ? (
-                              <div className="px-3 py-2 space-y-1.5 flex-1">
-                                <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1.5">
-                                  Activities during this meeting
-                                </p>
-                                {meetingSlot.children
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(a.date_updated).getTime() -
-                                      new Date(b.date_updated).getTime()
-                                  )
-                                  .map((child) => {
-                                    const childTime = parseDate(
-                                      child.date_updated
-                                    );
-                                    return (
-                                      <div
-                                        key={child.id}
-                                        className="flex gap-2 items-start"
-                                      >
-                                        <span className="text-[9px] text-purple-400 font-bold pt-[14px] w-12 shrink-0 text-right">
-                                          {childTime
-                                            ? formatTime(childTime)
-                                            : "—"}
-                                        </span>
-                                        <div className="flex-1">
-                                          <EventCard ev={child} />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            ) : (
-                              <div className="px-4 py-3 text-[11px] text-purple-300 italic flex-1">
-                                No activities logged during this meeting
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Normal hour row
-                  const hourActivities = activitySlots.filter(
-                    (s) => s.hour === hour
-                  );
-                  const hasEvents = hourActivities.length > 0;
-
-                  return (
-                    <div
-                      key={hour}
-                      ref={isCurrentHour ? currentHourRef : null}
-                      className={`flex gap-3 min-h-[48px] group ${isCurrentHour ? "relative" : ""}`}
-                    >
-                      <div className="flex flex-col items-center w-14 shrink-0 pt-1">
-                        <span
-                          className={`text-[10px] font-bold leading-none select-none ${isCurrentHour ? "text-green-600" : "text-slate-400"}`}
-                        >
-                          {formatHourLabel(hour)}
-                        </span>
-                        <div
-                          className={`flex-1 w-px mt-1.5 ${isCurrentHour ? "bg-green-400" : hasEvents ? "bg-slate-300" : "bg-slate-100"}`}
-                        />
-                      </div>
-                      <div className="flex-1 pb-2 pt-0.5 space-y-1.5">
-                        {isCurrentHour && (
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className="w-2 h-2 rounded-full bg-green-500 shadow-md shadow-green-300 animate-pulse" />
-                            <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase">
-                              Now · {formatTime(nowDate)}
-                            </span>
-                          </div>
-                        )}
-                        {hasEvents ? (
-                          hourActivities.map(({ item }) => (
-                            <EventCard key={item.id} ev={item} />
-                          ))
-                        ) : (
-                          <div className="text-[11px] text-slate-200 pt-1 select-none">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
+              {/* Simple timeline with all events */}
+              {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
+                const isCurrentHour = !!isToday && hour === currentHour;
+                const hourEvents = selectedDayEvents.filter((event) => {
+                  const eventDate = parseDate(event.end_date || event.date_updated);
+                  return eventDate ? eventDate.getHours() === hour : false;
                 });
-              })()}
+                const hasEvents = hourEvents.length > 0;
+
+                return (
+                  <div
+                    key={hour}
+                    ref={isCurrentHour ? currentHourRef : null}
+                    className={`flex gap-3 min-h-[48px] group ${isCurrentHour ? "relative" : ""}`}
+                  >
+                    <div className="flex flex-col items-center w-14 shrink-0 pt-1">
+                      <span
+                        className={`text-[10px] font-bold leading-none select-none ${isCurrentHour ? "text-green-600" : "text-slate-400"}`}
+                      >
+                        {formatHourLabel(hour)}
+                      </span>
+                      <div
+                        className={`flex-1 w-px mt-1.5 ${isCurrentHour ? "bg-green-400" : hasEvents ? "bg-green-300" : "bg-green-100"}`}
+                      />
+                    </div>
+                    <div className="flex-1 pb-2 pt-0.5 space-y-1.5">
+                      {isCurrentHour && (
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="w-2 h-2 rounded-full bg-green-500 shadow-md shadow-green-300 animate-pulse" />
+                          <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase">
+                            Now · {formatTime(nowDate)}
+                          </span>
+                        </div>
+                      )}
+                      {hasEvents ? (
+                        hourEvents.map((event) => (
+                          <EventCard key={event.id} ev={event} />
+                        ))
+                      ) : (
+                        <div className="text-[11px] text-slate-200 pt-1 select-none">
+                          â
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
