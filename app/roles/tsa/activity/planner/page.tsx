@@ -37,7 +37,7 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import {
   PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck,
   AlertCircle, ChevronDown, ChevronRight, Bell, CheckCircle2,
-  XCircle, Eye, Download, Trash2, PackageCheck, Clock,
+  XCircle, Eye, Download, Trash2, PackageCheck, Clock, List,
 } from "lucide-react";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -148,6 +148,7 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevIdsRef = useRef<Set<number>>(new Set());
   const isFirstLoad = useRef(true);
+  const hasUserInteracted = useRef(false);
   const READ_KEY = `notif_read_${referenceid}`;
 
   useEffect(() => {
@@ -158,17 +159,45 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
     } catch { localStorage.removeItem(READ_KEY); }
   }, [referenceid]);
 
-  const playSound = () => {
+  // Track user interaction to enable audio autoplay
+  useEffect(() => {
+    const markInteracted = () => { hasUserInteracted.current = true; };
+    window.addEventListener("click", markInteracted, { once: true });
+    window.addEventListener("keydown", markInteracted, { once: true });
+    window.addEventListener("touchstart", markInteracted, { once: true });
+    return () => {
+      window.removeEventListener("click", markInteracted);
+      window.removeEventListener("keydown", markInteracted);
+      window.removeEventListener("touchstart", markInteracted);
+    };
+  }, []);
+
+  // Initialize audio on mount (but wait for interaction to play)
+  useEffect(() => {
+    audioRef.current = new Audio("/alert-notification.mp3");
+    audioRef.current.volume = 0.6;
+    audioRef.current.load();
+  }, []);
+
+  const playSound = useCallback(() => {
+    if (!hasUserInteracted.current) return; // Don't play if user hasn't interacted
     try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio("/alert-notification.mp3");
-        audioRef.current.volume = 0.6;
-        audioRef.current.load();
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.catch((err) => {
+          // Autoplay blocked - this is expected before user interaction
+          if (err.name !== "NotAllowedError") {
+            console.error("Failed to play notification sound:", err);
+          }
+        });
       }
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch((err) => console.error("Failed to play notification sound:", err));
-    } catch (err) { console.error("Error in playSound:", err); }
-  };
+    } catch (err) {
+      console.error("Error in playSound:", err);
+    }
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!referenceid) return;
@@ -320,16 +349,6 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
                     )}
                     {q.tsm_remarks && <p className="text-muted-foreground italic">TSM: &ldquo;{q.tsm_remarks}&rdquo;</p>}
                     {q.manager_remarks && <p className="text-muted-foreground italic">Manager: &ldquo;{q.manager_remarks}&rdquo;</p>}
-                    {isApproved && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleViewPdf(e, q)}>
-                          <Eye className="w-3 h-3" /> View PDF
-                        </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-none flex items-center gap-1 cursor-pointer" onClick={(e) => handleDownloadPdf(e, q)}>
-                          <Download className="w-3 h-3" /> Download PDF
-                        </Button>
-                      </div>
-                    )}
                     {isUnread && <div className="flex justify-end mt-0.5"><span className="w-2 h-2 rounded-full bg-blue-500" /></div>}
                   </div>
                 );
@@ -615,6 +634,15 @@ function DashboardContent() {
               </Breadcrumb>
             </div>
             <div className="flex items-center gap-2 px-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-none text-xs"
+                onClick={() => window.location.href = `/roles/tsa/activity/planner/all?id=${userId}`}
+              >
+                <List className="w-4 h-4 mr-2" />
+                View All
+              </Button>
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}

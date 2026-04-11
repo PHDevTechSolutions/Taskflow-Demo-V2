@@ -173,8 +173,7 @@ function toDatetimeLocal(dateStr?: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
-const EDIT_TIME_PASSWORD = "PHDEVTECH";
+// Remove hardcoded password - authentication handled server-side
 
 
 
@@ -212,12 +211,32 @@ function PasswordGateDialog({ open, onClose, onSuccess }: PasswordGateDialogProp
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  const handleSubmit = () => {
-    if (password === EDIT_TIME_PASSWORD) {
+  const handleSubmit = async () => {
+    if (!password.trim()) {
+      setError(true);
+      setShake(true);
+      setPassword("");
+      setTimeout(() => setShake(false), 500);
+      setTimeout(() => inputRef.current?.focus(), 50);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth/verify-edit-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Authentication failed");
+      }
+      
       setError(false);
       onSuccess();
       onClose();
-    } else {
+    } catch (err: any) {
       setError(true);
       setShake(true);
       setPassword("");
@@ -309,9 +328,10 @@ interface EditTimeDialogProps {
   onClose: () => void;
   item: Completed | null;
   onSaved: () => void;
+  onAutoUpdateStatus?: (item: Completed, trigger: 'quotation' | 'so' | 'delivery') => Promise<void>;
 }
 
-function EditTimeDialog({ open, onClose, item, onSaved }: EditTimeDialogProps) {
+function EditTimeDialog({ open, onClose, item, onSaved, onAutoUpdateStatus }: EditTimeDialogProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate]     = useState("");
   const [saving, setSaving]       = useState(false);
@@ -334,32 +354,73 @@ function EditTimeDialog({ open, onClose, item, onSaved }: EditTimeDialogProps) {
 
   const handleSave = async () => {
     if (!item) return;
-    if (!startDate || !endDate) { setError("Both start and end date are required."); return; }
+    
+    // Validate inputs
+    if (!startDate?.trim() || !endDate?.trim()) { 
+      setError("Both start and end date are required."); 
+      return; 
+    }
 
-    const start = new Date(startDate);
-    const end   = new Date(endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) { setError("Invalid date format."); return; }
-    if (end <= start) { setError("End date must be after start date."); return; }
+    let start: Date, end: Date;
+    try {
+      // Fix: Parse datetime-local string correctly (no timezone offset)
+      // datetime-local format: "YYYY-MM-DDTHH:mm"
+      start = new Date(startDate + ":00"); // Add seconds
+      end = new Date(endDate + ":00");     // Add seconds
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) { 
+        setError("Invalid date format."); 
+        return; 
+      }
+      
+      if (end <= start) { 
+        setError("End date must be after start date."); 
+        return; 
+      }
+    } catch (dateErr) {
+      setError("Invalid date format.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
+    
     try {
+      // Debug: Log what we're sending
+      console.log("Updating time:", { 
+        id: item.id, 
+        start_date: start.toISOString(), 
+        end_date: end.toISOString() 
+      });
+
       const res = await fetch("/api/activity/tsa/historical/update-history-time", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
         body: JSON.stringify({
           id: item.id,
           start_date: start.toISOString(),
           end_date:   end.toISOString(),
         }),
       });
+      
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "Failed to update time");
       }
+      
       onSaved();
+      
+      // Trigger status progression for time updates if callback provided
+      if (onAutoUpdateStatus) {
+        await onAutoUpdateStatus(item, 'quotation');
+      }
+      
       onClose();
     } catch (err: any) {
+      console.error("Edit time error:", err);
       setError(err.message ?? "Something went wrong.");
     } finally {
       setSaving(false);
@@ -472,6 +533,10 @@ export const TaskList: React.FC<CompletedProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
+  const [filterSource, setFilterSource] = useState<string>("all");
+  const [filterTypeClient, setFilterTypeClient] = useState<string>("all");
+  const [filterCallStatus, setFilterCallStatus] = useState<string>("all");
+  const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
 
   const [editItem, setEditItem] = useState<Completed | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -498,6 +563,85 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // ── Status Progression Automation ─────────────────────────────────────────────
+
+  const autoUpdateStatus = async (item: Completed, trigger: 'quotation' | 'so' | 'delivery') => {
+    try {
+      let newStatus: string | null = null;
+      let reason = '';
+      
+      // Business rules for status progression
+      switch (trigger) {
+        case 'quotation':
+          if (item.quotation_status === 'Convert to SO' && item.quotation_number && item.quotation_amount) {
+            newStatus = 'Quote-Done';
+            reason = 'Quotation marked for SO conversion';
+          }
+          break;
+          
+        case 'so':
+          if (item.so_number && item.so_amount && item.status === 'Quote-Done') {
+            newStatus = 'SO-Done';
+            reason = 'Sales Order created';
+          }
+          break;
+          
+        case 'delivery':
+          if (item.dr_number && item.delivery_date && item.status === 'SO-Done') {
+            newStatus = 'Delivered';
+            reason = 'Delivery recorded';
+          }
+          break;
+      }
+      
+      if (newStatus && newStatus !== item.status) {
+        const res = await fetch('/api/activity/tsa/historical/auto-update-status', {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRF-Protection': '1'
+          },
+          body: JSON.stringify({
+            id: item.id,
+            newStatus,
+            previousStatus: item.status,
+            trigger,
+            reason,
+            autoUpdate: true
+          })
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData?.error || 'Failed to auto-update status');
+        }
+        
+        // Show notification for auto-update
+        sileo.success({
+          title: 'Status Auto-Updated',
+          description: `${item.company_name} status changed to ${newStatus.replace('-', ' ')}`,
+          duration: 3000,
+          position: 'top-right',
+          fill: 'black',
+          styles: { title: 'text-white!', description: 'text-white' },
+        });
+        
+        // Refresh data
+        fetchActivities();
+      }
+    } catch (error: any) {
+      console.error('Auto status update failed:', error);
+      sileo.error({
+        title: 'Auto-Update Failed',
+        description: error?.message || 'Could not auto-update status',
+        duration: 3000,
+        position: 'top-right',
+        fill: 'black',
+        styles: { title: 'text-white!', description: 'text-white' },
+      });
+    }
+  };
 
   // ── Alt + Ctrl + T shortcut ───────────────────────────────────────────────
   useEffect(() => {
@@ -529,14 +673,37 @@ export const TaskList: React.FC<CompletedProps> = ({
   // ── Inline Update ──────────────────────────────────────────────────────────
 
   const handleInlineUpdate = async (id: number, field: string, value: any) => {
+    // Input validation
+    if (!id || !field?.trim()) {
+      sileo.error({
+        title: "Invalid Request",
+        description: "Missing required parameters.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    // Sanitize value
+    const sanitizedValue = typeof value === 'string' ? value.trim() : value;
+    
     try {
-      const res = await fetch(`/api/activity/tsa/historical/update?id=${id}`,
+      const res = await fetch(`/api/activity/tsa/historical/update?id=${encodeURIComponent(id)}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ [field]: value }),
+          headers: { 
+            "Content-Type": "application/json",
+            "X-CSRF-Protection": "1"
+          },
+          body: JSON.stringify({ [field]: sanitizedValue }),
         });
-      if (!res.ok) throw new Error("Failed to update");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to update");
+      }
 
       sileo.success({
         title: "Updated",
@@ -547,11 +714,11 @@ export const TaskList: React.FC<CompletedProps> = ({
         styles: { title: "text-white!", description: "text-white" },
       });
       fetchActivities();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Inline update failed:", error);
       sileo.error({
         title: "Update Failed",
-        description: "Could not update the record.",
+        description: error?.message || "Could not update the record.",
         duration: 3000,
         position: "top-right",
         fill: "black",
@@ -561,13 +728,47 @@ export const TaskList: React.FC<CompletedProps> = ({
   };
 
   const handleQuotationStatusUpdate = async (id: number, main: string, sub: string) => {
+    // Input validation
+    if (!id || !main?.trim()) {
+      sileo.error({
+        title: "Invalid Request",
+        description: "Missing required parameters.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
     try {
       const res = await fetch("/api/activity/tsa/historical/update-quotation-status", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, quotation_status: main, quotation_status_sub: sub }),
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
+        body: JSON.stringify({ 
+          id, 
+          quotation_status: main.trim(), 
+          quotation_status_sub: sub?.trim() || "" 
+        }),
       });
-      if (!res.ok) throw new Error("Failed to update");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to update");
+      }
+
+      // Find the updated item to trigger automation
+      const updatedItem = activities.find(item => item.id === id);
+      if (updatedItem) {
+        // Create updated item object
+        const itemWithNewStatus = { ...updatedItem, quotation_status: main.trim() };
+        
+        // Trigger status progression automation
+        await autoUpdateStatus(itemWithNewStatus, 'quotation');
+      }
 
       sileo.success({
         title: "Updated",
@@ -578,11 +779,11 @@ export const TaskList: React.FC<CompletedProps> = ({
         styles: { title: "text-white!", description: "text-white" },
       });
       fetchActivities();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Quotation status update failed:", error);
       sileo.error({
         title: "Update Failed",
-        description: "Could not update the quotation status.",
+        description: error?.message || "Could not update the quotation status.",
         duration: 3000,
         position: "top-right",
         fill: "black",
@@ -593,8 +794,8 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
-  const fetchActivities = useCallback(() => {
-    if (!referenceid) {
+  const fetchActivities = useCallback(async () => {
+    if (!referenceid?.trim()) {
       setActivities([]);
       return;
     }
@@ -602,44 +803,78 @@ export const TaskList: React.FC<CompletedProps> = ({
     setLoading(true);
     setError(null);
 
-    const from = dateCreatedFilterRange?.from
-      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-      : null;
-    const to = dateCreatedFilterRange?.to
-      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-      : null;
+    try {
+      const from = dateCreatedFilterRange?.from
+        ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+        : null;
+      const to = dateCreatedFilterRange?.to
+        ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+        : null;
 
-    const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
-    url.searchParams.append("referenceid", referenceid);
-    if (from && to) {
-      url.searchParams.append("from", from);
-      url.searchParams.append("to", to);
+      const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
+      url.searchParams.append("referenceid", encodeURIComponent(referenceid.trim()));
+      if (from && to) {
+        url.searchParams.append("from", from);
+        url.searchParams.append("to", to);
+      }
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          "X-CSRF-Protection": "1"
+        }
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to fetch activities");
+      }
+      
+      const data = await res.json();
+      setActivities(Array.isArray(data.activities) ? data.activities : []);
+    } catch (err: any) {
+      console.error("Fetch activities failed:", err);
+      setError(err.message || "Failed to fetch activities");
+      setActivities([]);
+    } finally {
+      setLoading(false);
     }
-
-    fetch(url.toString())
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch activities");
-        return res.json();
-      })
-      .then((data) => setActivities(data.activities || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
-    if (!referenceid) return;
-    fetchActivities();
+    if (!referenceid?.trim()) return;
+    
+    let mounted = true;
+    let channel: any = null;
+    
+    const initializeChannel = async () => {
+      try {
+        await fetchActivities();
+        
+        if (mounted) {
+          channel = supabase
+            .channel(`history-${referenceid}`)
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
+              () => {
+                if (mounted) fetchActivities();
+              },
+            )
+            .subscribe();
+        }
+      } catch (err) {
+        console.error("Failed to initialize supabase channel:", err);
+      }
+    };
+    
+    initializeChannel();
 
-    const channel = supabase
-      .channel(`history-${referenceid}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
-        () => fetchActivities(),
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      mounted = false;
+      if (channel) {
+        supabase.removeChannel(channel).catch(console.error);
+      }
+    };
   }, [referenceid, fetchActivities]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -656,6 +891,10 @@ export const TaskList: React.FC<CompletedProps> = ({
       .filter((item) => {
         if (filterStatus !== "all" && item.status !== filterStatus) return false;
         if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
+        if (filterSource !== "all" && item.source !== filterSource) return false;
+        if (filterTypeClient !== "all" && item.type_client !== filterTypeClient) return false;
+        if (filterCallStatus !== "all" && item.call_status !== filterCallStatus) return false;
+        if (filterQuotationStatus !== "all" && item.quotation_status !== filterQuotationStatus) return false;
         return true;
       })
       .filter((item) => {
@@ -673,9 +912,9 @@ export const TaskList: React.FC<CompletedProps> = ({
         new Date(b.date_updated ?? b.date_created).getTime() -
         new Date(a.date_updated ?? a.date_created).getTime(),
       );
-  }, [activities, searchTerm, filterStatus, filterTypeActivity, dateCreatedFilterRange]);
+  }, [activities, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterTypeActivity, dateCreatedFilterRange]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
 
   const statusOptions = useMemo(() => {
     return [...new Set(activities.map((a) => a.status).filter(Boolean))].sort() as string[];
@@ -683,6 +922,22 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   const typeActivityOptions = useMemo(() => {
     return [...new Set(activities.map((a) => a.type_activity).filter(Boolean))].sort() as string[];
+  }, [activities]);
+
+  const sourceOptions = useMemo(() => {
+    return [...new Set(activities.map((a) => a.source).filter(Boolean))].sort() as string[];
+  }, [activities]);
+
+  const typeClientOptions = useMemo(() => {
+    return [...new Set(activities.map((a) => a.type_client).filter(Boolean))].sort() as string[];
+  }, [activities]);
+
+  const callStatusOptions = useMemo(() => {
+    return [...new Set(activities.map((a) => a.call_status).filter(Boolean))].sort() as string[];
+  }, [activities]);
+
+  const quotationStatusOptions = useMemo(() => {
+    return [...new Set(activities.map((a) => a.quotation_status).filter(Boolean))].sort() as string[];
   }, [activities]);
 
   const totalPages = Math.max(1, Math.ceil(filteredActivities.length / itemsPerPage));
@@ -725,39 +980,122 @@ export const TaskList: React.FC<CompletedProps> = ({
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const onConfirmRemove = async () => {
+    if (selectedIds.size === 0) {
+      sileo.error({
+        title: "No Selection",
+        description: "Please select items to delete.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
     try {
       const res = await fetch("/api/act-delete-history", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: Array.from(selectedIds), remarks: removeRemarks }),
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
+        body: JSON.stringify({ 
+          ids: Array.from(selectedIds), 
+          remarks: removeRemarks?.trim() || "" 
+        }),
       });
-      if (!res.ok) throw new Error("Failed to delete");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to delete");
+      }
+      
       setDeleteDialogOpen(false);
       setSelectedIds(new Set());
       setRemoveRemarks("");
       fetchActivities();
-    } catch (err) {
-      console.error(err);
+      
+      sileo.success({
+        title: "Deleted",
+        description: "Selected items deleted successfully.",
+        duration: 2000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      sileo.error({
+        title: "Delete Failed",
+        description: err?.message || "Could not delete items.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
     }
   };
+
 
   // ── SO Update ──────────────────────────────────────────────────────────────
 
   const handleSaveSo = async () => {
-    if (!reSoItem || !editSoNumber || editSoAmount === "") return;
+    if (!reSoItem?.id || !editSoNumber?.trim() || editSoAmount === "") {
+      sileo.error({
+        title: "Invalid Input",
+        description: "Please fill in all required fields.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+    
     setSavingSo(true);
     try {
       const res = await fetch("/api/act-update-so", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reSoItem.id, so_number: editSoNumber, so_amount: editSoAmount }),
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
+        body: JSON.stringify({ 
+          id: reSoItem.id, 
+          so_number: editSoNumber.trim().toUpperCase(), 
+          so_amount: Number(editSoAmount) 
+        }),
       });
-      if (!res.ok) throw new Error("Failed to update SO");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to update SO");
+      }
+      
       setIsEditingSo(false);
       setReSoOpen(false);
-      fetchActivities();
-    } catch (err) {
+      
+      // Trigger status progression automation
+      await autoUpdateStatus(reSoItem, 'so');
+      
+      sileo.success({
+        title: "Updated",
+        description: "Sales Order updated successfully.",
+        duration: 2000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch (err: any) {
       console.error("Failed to update SO", err);
+      sileo.error({
+        title: "Update Failed",
+        description: err?.message || "Could not update Sales Order.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
     } finally {
       setSavingSo(false);
     }
@@ -807,6 +1145,7 @@ export const TaskList: React.FC<CompletedProps> = ({
         onClose={() => { setEditTimeOpen(false); setEditTimeItem(null); }}
         item={editTimeItem}
         onSaved={fetchActivities}
+        onAutoUpdateStatus={autoUpdateStatus}
       />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
@@ -834,10 +1173,25 @@ export const TaskList: React.FC<CompletedProps> = ({
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}
+              filterSource={filterSource}
+              filterTypeClient={filterTypeClient}
+              filterCallStatus={filterCallStatus}
+              filterQuotationStatus={filterQuotationStatus}
               setFilterStatus={setFilterStatus}
               setFilterTypeActivity={setFilterTypeActivity}
+              setFilterSource={setFilterSource}
+              setFilterTypeClient={setFilterTypeClient}
+              setFilterCallStatus={setFilterCallStatus}
+              setFilterQuotationStatus={setFilterQuotationStatus}
               statusOptions={statusOptions}
               typeActivityOptions={typeActivityOptions}
+              sourceOptions={sourceOptions}
+              typeClientOptions={typeClientOptions}
+              callStatusOptions={callStatusOptions}
+              quotationStatusOptions={quotationStatusOptions}
+              itemsPerPage={itemsPerPage}
+              setItemsPerPage={setItemsPerPage}
+              setCurrentPage={setCurrentPage}
             />
             {selectedIds.size > 0 && (
               <Button
@@ -850,19 +1204,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                 <span className="text-[11px] font-bold uppercase tracking-wider">Delete ({selectedIds.size})</span>
               </Button>
             )}
-          </div>
-
-          <div className="flex items-center gap-1.5 border border-zinc-200 p-1 bg-white">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase px-2">Rows:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border-none bg-transparent text-[11px] font-bold focus:ring-0 cursor-pointer h-6 rounded-none"
-            >
-              {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
           </div>
         </div>
       </div>
@@ -979,7 +1320,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                             <PenIcon className="h-3.5 w-3.5 text-zinc-400 group-hover/edit:text-blue-600" />
                           </Button>
 
-                          {item.type_activity === "Sales Order Preparation" && (
+                          {item?.type_activity === "Sales Order Preparation" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1071,7 +1412,14 @@ export const TaskList: React.FC<CompletedProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="px-3 capitalize">
-                        {displayValue(item.quotation_status_sub)}
+                        <div className="flex items-center gap-1">
+                          {displayValue(item.quotation_status_sub)}
+                          {item.quotation_status === 'Convert to SO' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800">
+                              AUTO
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap px-3 font-mono text-[11px] text-zinc-500">{displayValue(item.contact_number)}</TableCell>
                       <TableCell className="whitespace-nowrap px-3">
@@ -1090,7 +1438,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                           : "-"}
                       </TableCell>
                       <TableCell className="px-3">
-                        {item.type_activity === "Outbound Calls" ? (
+                        {item?.type_activity === "Outbound Calls" ? (
                           <Select
                             value={item.call_status || ""}
                             onValueChange={(val) => handleInlineUpdate(item.id, "call_status", val)}
@@ -1116,7 +1464,16 @@ export const TaskList: React.FC<CompletedProps> = ({
                           ? item.quotation_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })
                           : "-"}
                       </TableCell>
-                      <TableCell className="uppercase px-3 font-mono">{displayValue(item.so_number)}</TableCell>
+                      <TableCell className="uppercase px-3 font-mono">
+                        <div className="flex items-center gap-1">
+                          {displayValue(item.so_number)}
+                          {item.so_number && item.status === 'Quote-Done' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-800">
+                              AUTO
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="px-3 tabular-nums">
                         {item.so_amount != null
                           ? item.so_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })
@@ -1130,7 +1487,16 @@ export const TaskList: React.FC<CompletedProps> = ({
                       <TableCell className="whitespace-nowrap px-3">
                         {item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : "-"}
                       </TableCell>
-                      <TableCell className="uppercase px-3 font-mono">{displayValue(item.dr_number)}</TableCell>
+                      <TableCell className="uppercase px-3 font-mono">
+                        <div className="flex items-center gap-1">
+                          {displayValue(item.dr_number)}
+                          {item.dr_number && item.status === 'SO-Done' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-800">
+                              AUTO
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="px-3">{displayValue(item.ticket_reference_number)}</TableCell>
                       <TableCell className="px-3 capitalize max-w-[200px]">
                         <span className="block truncate" title={item.remarks ?? ""}>

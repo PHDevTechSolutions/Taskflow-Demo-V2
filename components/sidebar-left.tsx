@@ -5,7 +5,7 @@ import {
   Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home,
   BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
   XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, GitGraph, CreditCard,
-  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon, Edit,
+  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon, Edit, List,
 } from "lucide-react";
 import { NavFavorites } from "@/components/nav/favorites";
 import { NavSecondary } from "@/components/nav/secondary";

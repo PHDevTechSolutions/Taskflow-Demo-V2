@@ -10,7 +10,7 @@ import {
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, Trash, Pen, Plus, FileText, Loader2, Clock } from "lucide-react";
+import { Check, Trash, Pen, Plus, FileText, Loader2, Clock, Search, Filter, TrendingUp, AlertCircle } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +21,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface NoteItem {
-  id: number;
+  id: string;
   referenceid: string;
   tsm: string;
   manager: string;
@@ -45,7 +45,9 @@ const truncate = (text: string, len = 40) =>
   text.length > len ? text.slice(0, len) + "…" : text;
 
 const toLocalDateTimeInput = (utc: string): string => {
+  if (!utc) return "";
   const d = new Date(utc);
+  if (isNaN(d.getTime())) return "";
   const offset = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 };
@@ -95,7 +97,9 @@ const NoteDeleteDialog: React.FC<NoteDeleteDialogProps> = ({
     }
   };
 
-  useEffect(() => () => clearTimer(), []);
+  useEffect(() => {
+    return () => clearTimer();
+  }, []);
 
   // Reset progress when dialog closes
   useEffect(() => {
@@ -220,12 +224,21 @@ export const Notes: React.FC<NotesProps> = ({
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
   const [deleteNote, setDeleteNote] = useState<NoteItem | null>(null);
 
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+
   // Form state
   const [typeActivity, setTypeActivity] = useState("Documentation");
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Time tracking state
+  const [totalHours, setTotalHours] = useState(0);
+  const [overlappingEntries, setOverlappingEntries] = useState<string[]>([]);
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -255,6 +268,71 @@ export const Notes: React.FC<NotesProps> = ({
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  // Calculate total hours and detect overlaps
+  useEffect(() => {
+    let total = 0;
+    const overlaps: string[] = [];
+    
+    notes.forEach((note, i) => {
+      const duration = new Date(note.end_date).getTime() - new Date(note.start_date).getTime();
+      total += duration;
+      
+      // Check for overlapping entries
+      notes.forEach((otherNote, j) => {
+        if (i !== j) {
+          const start1 = new Date(note.start_date).getTime();
+          const end1 = new Date(note.end_date).getTime();
+          const start2 = new Date(otherNote.start_date).getTime();
+          const end2 = new Date(otherNote.end_date).getTime();
+          
+          if ((start1 < end2 && end1 > start2)) {
+            overlaps.push(`${note.type_activity} overlaps with ${otherNote.type_activity}`);
+          }
+        }
+      });
+    });
+    
+    setTotalHours(total / 3600000);
+    setOverlappingEntries([...new Set(overlaps)]);
+  }, [notes]);
+
+  // Filter notes based on search and type
+  const filteredNotes = notes.filter(note => {
+    const matchesSearch = !searchQuery || 
+      note.type_activity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.remarks.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesType = filterType === "all" || note.type_activity === filterType;
+    
+    return matchesSearch && matchesType;
+  });
+
+  // Auto-suggest activity type based on remarks
+  const suggestActivityType = (remarks: string): string => {
+    return "Documentation";
+  };
+
+  // Auto-fill current time for new entries
+  const autoFillCurrentTime = () => {
+    const now = new Date();
+    const localDateTime = toLocalDateTimeInput(now.toISOString());
+    setStartDate(localDateTime);
+    
+    // Suggest end time (default 1 hour later)
+    const endTime = new Date(now.getTime() + 60 * 60 * 1000);
+    setEndDate(toLocalDateTimeInput(endTime.toISOString()));
+  };
+
+  // Suggest end time based on typical duration
+  const suggestEndTime = (activityType: string) => {
+    if (!startDate) return;
+    
+    const start = new Date(startDate);
+    const duration = 30 * 60 * 1000; // 30 minutes for Documentation
+    const endTime = new Date(start.getTime() + duration);
+    setEndDate(toLocalDateTimeInput(endTime.toISOString()));
+  };
 
   // ─── Reset form ─────────────────────────────────────────────────────────────
 
@@ -326,17 +404,21 @@ export const Notes: React.FC<NotesProps> = ({
 
   const confirmDelete = async () => {
     if (!deleteNote) return;
-    const { error } = await supabase
-      .from("documentation")
-      .delete()
-      .eq("id", deleteNote.id);
+    try {
+      const { error } = await supabase
+        .from("documentation")
+        .delete()
+        .eq("id", deleteNote.id);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    notify.success("Note deleted");
-    if (selectedNote?.id === deleteNote.id) resetForm();
-    setDeleteNote(null);
-    await fetchNotes();
+      notify.success("Note deleted");
+      if (selectedNote?.id === deleteNote.id) resetForm();
+      setDeleteNote(null);
+      await fetchNotes();
+    } catch (error) {
+      notify.error("Failed to delete note");
+    }
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -347,21 +429,101 @@ export const Notes: React.FC<NotesProps> = ({
       {/* ── Left: Table ─────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 border border-zinc-200 bg-white overflow-hidden shadow-sm">
 
-        {/* Table header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-zinc-400" />
-            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-              Documentation
-            </span>
-            {notes.length > 0 && (
-              <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
-                {notes.length}
-              </Badge>
+        {/* Table header bar with search */}
+        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-zinc-400" />
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                Documentation
+              </span>
+              {notes.length > 0 && (
+                <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+                  {notes.length}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="rounded-none h-7 text-xs border-zinc-200"
+              >
+                <Filter className="w-3 h-3 mr-1" />
+                Filters
+              </Button>
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />}
+            </div>
+          </div>
+          
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+            <Input
+              placeholder="Search by type or remarks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-none h-8 text-xs pl-9 border-zinc-200 focus:ring-0 focus:border-zinc-400"
+            />
+          </div>
+        </div>
+
+        {/* Filters panel */}
+        {showFilters && (
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Type:</span>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="rounded-none h-7 text-xs border-zinc-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="all" className="text-xs">All Types</SelectItem>
+                    <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="rounded-none bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                  {filteredNotes.length} results
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time tracking summary */}
+        {(totalHours > 0 || overlappingEntries.length > 0) && (
+          <div className="px-4 py-2 border-b border-zinc-100 bg-blue-50/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-[10px] font-bold text-blue-700">
+                    Total: {totalHours.toFixed(1)} hours
+                  </span>
+                </div>
+                {overlappingEntries.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-[10px] font-bold text-amber-700">
+                      {overlappingEntries.length} overlaps
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            {overlappingEntries.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {overlappingEntries.slice(0, 2).map((overlap, i) => (
+                  <p key={i} className="text-[9px] text-amber-600 truncate">{overlap}</p>
+                ))}
+              </div>
             )}
           </div>
-          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />}
-        </div>
+        )}
 
         <div className="overflow-auto max-h-[560px] custom-scrollbar">
           {!loading && notes.length === 0 ? (
@@ -391,7 +553,7 @@ export const Notes: React.FC<NotesProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {notes.map((n, idx) => {
+                {filteredNotes.map((n, idx) => {
                   const isSelected = selectedNote?.id === n.id;
                   return (
                     <tr
@@ -481,6 +643,11 @@ export const Notes: React.FC<NotesProps> = ({
                 <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
               </SelectContent>
             </Select>
+            {remarks && suggestActivityType(remarks) !== typeActivity && (
+              <p className="text-[9px] text-blue-600 mt-1">
+                💡 Suggested: {suggestActivityType(remarks)}
+              </p>
+            )}
           </div>
 
           {/* Remarks */}
@@ -494,10 +661,21 @@ export const Notes: React.FC<NotesProps> = ({
             />
           </div>
 
-          {/* Date range */}
+          {/* Date range with smart features */}
           <div className="space-y-4">
             <div>
-              <SectionLabel>Start Date & Time</SectionLabel>
+              <div className="flex items-center justify-between mb-1.5">
+                <SectionLabel>Start Date & Time</SectionLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={autoFillCurrentTime}
+                  className="rounded-none h-6 text-[9px] border-zinc-200 px-2"
+                >
+                  Now
+                </Button>
+              </div>
               <Input
                 type="datetime-local"
                 className="rounded-none h-9 text-xs border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
@@ -514,11 +692,16 @@ export const Notes: React.FC<NotesProps> = ({
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate || undefined}
               />
+              {startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime()) && (
+                <p className="text-[9px] text-zinc-500 mt-1">
+                  ⏱️ Suggested duration for Documentation: 30 min
+                </p>
+              )}
             </div>
           </div>
 
           {/* Duration preview */}
-          {startDate && endDate && new Date(endDate) >= new Date(startDate) && (
+          {startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime()) && new Date(endDate) >= new Date(startDate) && (
             <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50 border border-zinc-100">
               <Clock className="w-4 h-4 text-zinc-400 shrink-0" />
               <span className="text-[11px] font-mono font-bold text-zinc-600">

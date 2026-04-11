@@ -24,10 +24,25 @@ import { Filter, X, CheckCircle2 } from "lucide-react";
 interface TaskListDialogProps {
   filterStatus: string;
   filterTypeActivity: string;
+  filterSource: string;
+  filterTypeClient: string;
+  filterCallStatus: string;
+  filterQuotationStatus: string;
   setFilterStatus: React.Dispatch<React.SetStateAction<string>>;
   setFilterTypeActivity: React.Dispatch<React.SetStateAction<string>>;
+  setFilterSource: React.Dispatch<React.SetStateAction<string>>;
+  setFilterTypeClient: React.Dispatch<React.SetStateAction<string>>;
+  setFilterCallStatus: React.Dispatch<React.SetStateAction<string>>;
+  setFilterQuotationStatus: React.Dispatch<React.SetStateAction<string>>;
   statusOptions: string[];
   typeActivityOptions: string[];
+  sourceOptions: string[];
+  typeClientOptions: string[];
+  callStatusOptions: string[];
+  quotationStatusOptions: string[];
+  itemsPerPage: number;
+  setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
+  setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
 }
 
 // ─── Status color map ─────────────────────────────────────────────────────────
@@ -48,31 +63,58 @@ function getStatusDot(status: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+
 export const TaskListDialog: React.FC<TaskListDialogProps> = ({
   filterStatus,
   filterTypeActivity,
+  filterSource,
+  filterTypeClient,
+  filterCallStatus,
+  filterQuotationStatus,
   setFilterStatus,
   setFilterTypeActivity,
+  setFilterSource,
+  setFilterTypeClient,
+  setFilterCallStatus,
+  setFilterQuotationStatus,
   statusOptions,
   typeActivityOptions,
+  sourceOptions,
+  typeClientOptions,
+  callStatusOptions,
+  quotationStatusOptions,
+  itemsPerPage,
+  setItemsPerPage,
+  setCurrentPage,
 }) => {
   const [open, setOpen] = useState(false);
 
   const activeCount =
     (filterStatus !== "all" ? 1 : 0) +
-    (filterTypeActivity !== "all" ? 1 : 0);
+    (filterTypeActivity !== "all" ? 1 : 0) +
+    (filterSource !== "all" ? 1 : 0) +
+    (filterTypeClient !== "all" ? 1 : 0) +
+    (filterCallStatus !== "all" ? 1 : 0) +
+    (filterQuotationStatus !== "all" ? 1 : 0) +
+    (itemsPerPage !== 20 ? 1 : 0); // Default is 20
 
   const hasActiveFilters = activeCount > 0;
 
   const handleClearAll = () => {
     setFilterStatus("all");
     setFilterTypeActivity("all");
+    setFilterSource("all");
+    setFilterTypeClient("all");
+    setFilterCallStatus("all");
+    setFilterQuotationStatus("all");
+    setItemsPerPage(20);
   };
 
   return (
     <>
       {/* ── Trigger button ───────────────────────────────────────────── */}
-      <div className="relative inline-flex">
+      <div className="relative inline-flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -82,6 +124,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
         >
           <Filter className="h-4 w-4" />
         </Button>
+        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Advance Filter</span>
 
         {/* Active filter badge */}
         {hasActiveFilters && (
@@ -112,60 +155,175 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
                 )}
               </div>
               <DialogDescription className="text-zinc-400 text-xs">
-                Filter by status and activity type.
+                Advance Filter - Filter by status, activity type, source, and more.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          {/* Body */}
-          <div className="px-6 py-5 space-y-5">
+          {/* Body - 2 Column Grid */}
+          <div className="px-6 py-5">
+            <div className="grid grid-cols-2 gap-4">
 
-            {/* Status filter */}
-            <div>
-              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest block mb-2">
-                Status
-              </label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-full rounded-none text-xs">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs">
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-zinc-300" />
-                      All Status
-                    </span>
-                  </SelectItem>
-                  {statusOptions.map((status) => (
-                    <SelectItem key={status} value={status} className="text-xs">
-                      <span className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${getStatusDot(status)}`} />
-                        {status.replace("-", " ")}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Status filter - only show if has options */}
+              {statusOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Status
+                  </label>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status} value={status} className="text-xs">
+                          <span className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(status)}`} />
+                            {status.replace("-", " ")}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-            {/* Activity type filter */}
-            <div>
-              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest block mb-2">
-                Activity Type
-              </label>
-              <Select value={filterTypeActivity} onValueChange={setFilterTypeActivity}>
-                <SelectTrigger className="w-full rounded-none text-xs">
-                  <SelectValue placeholder="All Activity Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs">All Activity Types</SelectItem>
-                  {typeActivityOptions.map((type) => (
-                    <SelectItem key={type} value={type} className="text-xs">
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Activity type filter - only show if has options */}
+              {typeActivityOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Activity Type
+                  </label>
+                  <Select value={filterTypeActivity} onValueChange={setFilterTypeActivity}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {typeActivityOptions.map((type) => (
+                        <SelectItem key={type} value={type} className="text-xs">
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Source filter - only show if has options */}
+              {sourceOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Source
+                  </label>
+                  <Select value={filterSource} onValueChange={setFilterSource}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {sourceOptions.map((source) => (
+                        <SelectItem key={source} value={source} className="text-xs">
+                          {source}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Type Client filter - only show if has options */}
+              {typeClientOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Client Type
+                  </label>
+                  <Select value={filterTypeClient} onValueChange={setFilterTypeClient}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {typeClientOptions.map((type) => (
+                        <SelectItem key={type} value={type} className="text-xs">
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Call Status filter - only show if has options */}
+              {callStatusOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Call Status
+                  </label>
+                  <Select value={filterCallStatus} onValueChange={setFilterCallStatus}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {callStatusOptions.map((status) => (
+                        <SelectItem key={status} value={status} className="text-xs">
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Quotation Status filter - only show if has options */}
+              {quotationStatusOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    Quotation Status
+                  </label>
+                  <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
+                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">All</SelectItem>
+                      {quotationStatusOptions.map((status) => (
+                        <SelectItem key={status} value={status} className="text-xs">
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Rows per page - always show */}
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  Rows Per Page
+                </label>
+                <Select 
+                  value={String(itemsPerPage)} 
+                  onValueChange={(val) => {
+                    setItemsPerPage(Number(val));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectValue placeholder="20" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ITEMS_PER_PAGE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)} className="text-xs">
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
             </div>
 
             {/* Active filters summary */}
@@ -173,7 +331,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 px-3 py-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
                 <p className="text-xs text-zinc-600 flex-1">
-                  {activeCount} filter{activeCount > 1 ? "s" : ""} active
+                  {activeCount} setting{activeCount > 1 ? "s" : ""} active
                 </p>
                 <button
                   type="button"

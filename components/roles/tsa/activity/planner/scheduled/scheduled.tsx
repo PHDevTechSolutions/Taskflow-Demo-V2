@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,9 @@ function toLocalDateString(date: Date | string | null | undefined): string {
   return d.toLocaleDateString("en-CA");
 }
 
+// Only these two statuses are shown in this view
+const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+
 export const Scheduled: React.FC<ScheduledProps> = ({
   referenceid,
   tsm,
@@ -137,6 +140,51 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+
+  // Wrapper to validate date range - only allow today and future dates
+  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
+    if (!range?.from) {
+      setDateCreatedFilterRangeAction(range);
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fromDate = new Date(range.from);
+    fromDate.setHours(0, 0, 0, 0);
+
+    // Prevent selecting past dates
+    if (fromDate < today) {
+      sileo.error({
+        title: "Invalid Date",
+        description: "Cannot select past dates. Please choose today or a future date.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    // Also validate to date if present
+    if (range.to) {
+      const toDate = new Date(range.to);
+      toDate.setHours(0, 0, 0, 0);
+      if (toDate < today) {
+        sileo.error({
+          title: "Invalid Date",
+          description: "Cannot select past dates. Please choose today or a future date.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        return;
+      }
+    }
+
+    setDateCreatedFilterRangeAction(range);
+  }, [setDateCreatedFilterRangeAction]);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -222,21 +270,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       "Done",
       "Completed",
       "Cancelled",
-      "On-Progress",
       "Transfer",
-      "Pending"
     ].includes(status);
   }
 
-  const mergedActivities = activities
-    .filter((a) => !isDelivered(a.status))
-    .map((activity) => {
-      const relatedHistoryItems = history.filter(
-        (h) =>
-          h.activity_reference_number === activity.activity_reference_number,
-      );
-      return { ...activity, relatedHistoryItems };
-    });
+  const mergedActivities = useMemo(() => {
+    return activities
+      // Only show Assisted and Quote-Done statuses
+      .filter((a) => ALLOWED_STATUSES.includes(a.status))
+      .map((activity) => {
+        const relatedHistoryItems = history.filter(
+          (h) =>
+            h.activity_reference_number === activity.activity_reference_number,
+        );
+        return { ...activity, relatedHistoryItems };
+      });
+  }, [activities, history]);
 
   const todayStr = toLocalDateString(new Date());
 
@@ -245,33 +294,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       .filter((item) => {
         const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
-        // ── Date range filter (for scheduled_date, future dates only) ─────────
-        if (dateCreatedFilterRange?.from) {
-          const fromDate = toLocalDateString(dateCreatedFilterRange.from);
-          const toDate = dateCreatedFilterRange.to
-            ? toLocalDateString(dateCreatedFilterRange.to)
-            : fromDate;
-
-          // Only allow future dates (today onwards)
-          if (itemScheduledDate < todayStr) {
-            return false;
-          }
-
-          // Check if within selected date range
-          if (itemScheduledDate < fromDate || itemScheduledDate > toDate) {
-            return false;
-          }
-        } else {
-          // ✅ DEFAULT: Show today only when no date range selected
-          if (itemScheduledDate !== todayStr) {
-            return false;
-          }
-        }
-
-        // ── Status filter ─────────────────────────────────────────────────────
-        if (statusFilter !== "All" && item.status !== statusFilter) return false;
-
-        // ── Text search ───────────────────────────────────────────────────────
+        // ── Text search (skip date filters when searching) ─────────────────────
         if (searchTerm.trim() !== "") {
           const termLower = searchTerm.toLowerCase();
 
@@ -291,7 +314,36 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
           const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
           if (!matchesSearch) return false;
+          
+          // Skip date filters when searching
+          return true;
         }
+
+        // ── Date range filter (for scheduled_date, today and future dates only) ─────────
+        if (dateCreatedFilterRange?.from) {
+          const fromDate = toLocalDateString(dateCreatedFilterRange.from);
+          const toDate = dateCreatedFilterRange.to
+            ? toLocalDateString(dateCreatedFilterRange.to)
+            : fromDate;
+
+          // Only allow today and future dates
+          if (itemScheduledDate < todayStr) {
+            return false;
+          }
+
+          // Check if within selected date range
+          if (itemScheduledDate < fromDate || itemScheduledDate > toDate) {
+            return false;
+          }
+        } else {
+          // ✅ DEFAULT: Show today only when no date range selected
+          if (itemScheduledDate !== todayStr) {
+            return false;
+          }
+        }
+
+        // ── Status filter ─────────────────────────────────────────────────────
+        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
         return true;
       })
@@ -711,21 +763,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 All
               </DropdownMenuItem>
 
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map(
-                (status) => {
-                  const { badgeClass } = getStatusStyles(status, false);
-                  return (
-                    <DropdownMenuItem
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className="flex items-center gap-2"
-                    >
-                      <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
-                      <span className="capitalize">{status}</span>
-                    </DropdownMenuItem>
-                  );
-                },
-              )}
+              {ALLOWED_STATUSES.map((status) => {
+                const { badgeClass } = getStatusStyles(status, false);
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
+                    <span className="capitalize">{status}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -744,9 +794,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             </p>
           ) : (
             filteredActivities.map((item) => {
-              const today = toLocalDateString(new Date());
               const itemDate = toLocalDateString(item.scheduled_date);
-              const isFutureDate = itemDate > today;
+              const isFutureDate = itemDate > todayStr;
               const badgeProps = getBadgeProps(item.status, isFutureDate);
               const statusStyles = getStatusStyles(item.status, isFutureDate);
 
@@ -1118,7 +1167,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.so_number && h.so_number !== "-",
+                          (h) => h.so_amount !== null && h.so_amount !== undefined,
                         ) && (
                             <p>
                               <strong>Total SO Amount:</strong>{" "}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -54,10 +54,7 @@ function DashboardContent() {
         target_quota: "",
     });
 
-    const [posts, setPosts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
         DateRange | undefined
     >(undefined);
@@ -79,7 +76,6 @@ function DashboardContent() {
         }
 
         const fetchUserData = async () => {
-            setError(null);
             setLoadingUser(true);
             try {
                 const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
@@ -134,8 +130,6 @@ function DashboardContent() {
 
         fetchUserData();
     }, [userId]);
-
-    const loading = loadingUser || loadingAccounts;
 
     return (
         <>

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, Calendar, CheckSquare, Square, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Calendar, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
 interface SupervisorDetails {
@@ -77,7 +76,7 @@ interface HistoryItem {
   status?: string;
 }
 
-interface ScheduledProps {
+interface AllActivitiesProps {
   referenceid: string;
   target_quota?: string;
   firstname: string;
@@ -104,10 +103,21 @@ function toLocalDateString(date: Date | string | null | undefined): string {
   return d.toLocaleDateString("en-CA");
 }
 
-// Only these three statuses are shown in this view
-const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+// All statuses allowed in this view
+const ALL_STATUSES = [
+  "Assisted",
+  "Quote-Done",
+  "SO-Done",
+  "On-Progress",
+  "Delivered",
+  "Done",
+  "Completed",
+  "Cancelled",
+  "Transfer",
+  "Pending",
+];
 
-export const Overdue: React.FC<ScheduledProps> = ({
+export const AllActivities: React.FC<AllActivitiesProps> = ({
   referenceid,
   tsm,
   target_quota,
@@ -137,12 +147,11 @@ export const Overdue: React.FC<ScheduledProps> = ({
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
   const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
   const [dialogTransferOpen, setDialogTransferOpen] = useState(false);
+  const [dialogRescheduleOpen, setDialogRescheduleOpen] = useState(false);
 
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set());
-  const [dialogRescheduleOpen, setDialogRescheduleOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<string>("");
 
   const fetchAllData = useCallback(() => {
@@ -157,21 +166,10 @@ export const Overdue: React.FC<ScheduledProps> = ({
     setError(null);
 
     const url = new URL(
-      "/api/activity/tsa/planner/fetch-scheduled",
+      "/api/activity/tsa/planner/fetch",
       window.location.origin,
     );
     url.searchParams.append("referenceid", referenceid);
-
-    if (dateCreatedFilterRange?.from) {
-      const fromStr = toLocalDateString(dateCreatedFilterRange.from);
-      url.searchParams.append("from", fromStr);
-      url.searchParams.append(
-        "to",
-        dateCreatedFilterRange.to
-          ? toLocalDateString(dateCreatedFilterRange.to)
-          : fromStr,
-      );
-    }
 
     fetch(url.toString())
       .then(async (res) => {
@@ -187,7 +185,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
         setActivitiesLoading(false);
         setHistoryLoading(false);
       });
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid]);
 
   useEffect(() => {
     if (!referenceid) return;
@@ -231,79 +229,56 @@ export const Overdue: React.FC<ScheduledProps> = ({
     };
   }, [referenceid, fetchAllData]);
 
-  const mergedActivities = activities
-    // FIX: whitelist — only show Assisted, Quote-Done, SO-Done
-    .filter((a) => ALLOWED_STATUSES.includes(a.status))
-    .map((activity) => {
-      const relatedHistoryItems = history.filter(
-        (h) =>
-          h.activity_reference_number === activity.activity_reference_number,
-      );
-      return { ...activity, relatedHistoryItems };
-    });
+  const mergedActivities = useMemo(() => {
+    return activities
+      .map((activity) => {
+        const relatedHistoryItems = history.filter(
+          (h) =>
+            h.activity_reference_number === activity.activity_reference_number,
+        );
+        return { ...activity, relatedHistoryItems };
+      });
+  }, [activities, history]);
 
-  const todayStr = toLocalDateString(new Date());
+  const filteredActivities = useMemo(() => {
+    return mergedActivities
+      .filter((item) => {
+        // ── Status filter ─────────────────────────────────────────────────────
+        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
-  const filteredActivities = mergedActivities
-  .filter((item) => {
-    const itemScheduledDate = toLocalDateString(item.scheduled_date);
+        // ── Text search ───────────────────────────────────────────────────────
+        if (searchTerm.trim() !== "") {
+          const termLower = searchTerm.toLowerCase();
 
-    // ❗ ALWAYS exclude TODAY and FUTURE dates - only show PAST (overdue)
-    if (itemScheduledDate >= todayStr) {
-      return false;
-    }
-
-    if (searchTerm.trim() !== "") {
-      // skip date filter when searching
-    } else {
-      if (dateCreatedFilterRange?.from) {
-        const fromStr = toLocalDateString(dateCreatedFilterRange.from);
-        const toStr = dateCreatedFilterRange.to
-          ? toLocalDateString(dateCreatedFilterRange.to)
-          : fromStr;
-
-        if (itemScheduledDate < fromStr || itemScheduledDate > toStr) {
-          return false;
-        }
-      }
-    }
-
-    if (statusFilter !== "All" && item.status !== statusFilter) return false;
-
-    if (searchTerm.trim() !== "") {
-      const termLower = searchTerm.toLowerCase();
-
-      const activityValues = Object.values(item)
-        .map((v) => (v != null ? v.toString() : ""))
-        .join(" ")
-        .toLowerCase();
-
-      if (activityValues.includes(termLower)) return true;
-
-      const historyValues = item.relatedHistoryItems
-        .map((h) =>
-          Object.values(h)
+          const activityValues = Object.values(item)
             .map((v) => (v != null ? v.toString() : ""))
             .join(" ")
-            .toLowerCase(),
-        )
-        .join(" ");
+            .toLowerCase();
 
-      if (historyValues.includes(termLower)) return true;
+          const historyValues = item.relatedHistoryItems
+            .map((h) =>
+              Object.values(h)
+                .map((v) => (v != null ? v.toString() : ""))
+                .join(" ")
+                .toLowerCase(),
+            )
+            .join(" ");
 
-      return false;
-    }
+          const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
+          if (!matchesSearch) return false;
+        }
 
-    return true;
-  })
-  .sort(
-    (a, b) =>
-      new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
-  );
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+      );
+  }, [mergedActivities, statusFilter, searchTerm]);
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
-  }, [filteredActivities]);
+  }, [filteredActivities, onCountChange]);
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -395,13 +370,20 @@ export const Overdue: React.FC<ScheduledProps> = ({
     switch (status) {
       case "Assisted":
       case "On-Progress":
+      case "Pending":
         return { variant: "secondary", className: "bg-orange-500 text-white" };
       case "SO-Done":
         return { variant: "default", className: "bg-yellow-400 text-white" };
       case "Quote-Done":
         return { variant: "outline", className: "bg-blue-500 text-white" };
+      case "Delivered":
+      case "Done":
+      case "Completed":
+        return { variant: "default", className: "bg-green-600 text-white" };
       case "Cancelled":
         return { variant: "destructive", className: "bg-red-600 text-white" };
+      case "Transfer":
+        return { variant: "outline", className: "bg-purple-500 text-white" };
       default:
         return { variant: "default" };
     }
@@ -414,13 +396,20 @@ export const Overdue: React.FC<ScheduledProps> = ({
     switch (status) {
       case "Assisted":
       case "On-Progress":
+      case "Pending":
         return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
       case "SO-Done":
         return { badgeClass: "bg-yellow-400 text-white", bgClass: "bg-yellow-100" };
       case "Quote-Done":
         return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+      case "Delivered":
+      case "Done":
+      case "Completed":
+        return { badgeClass: "bg-green-600 text-white", bgClass: "bg-green-100" };
       case "Cancelled":
         return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
+      case "Transfer":
+        return { badgeClass: "bg-purple-500 text-white", bgClass: "bg-purple-100" };
       default:
         return { badgeClass: "", bgClass: "bg-white" };
     }
@@ -434,6 +423,12 @@ export const Overdue: React.FC<ScheduledProps> = ({
   const openDeliveredDialog = (id: string) => {
     setSelectedActivityId(id);
     setDialogDeliveredOpen(true);
+  };
+
+  const openRescheduleDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setRescheduleDate("");
+    setDialogRescheduleOpen(true);
   };
 
   const handleConfirmDone = async () => {
@@ -525,7 +520,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
 
       sileo.success({
         title: "Success",
-        description: "Transaction marked as Done.",
+        description: "Transaction marked as Completed.",
         duration: 4000,
         position: "top-right",
         fill: "black",
@@ -620,77 +615,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
     }
   };
 
-  const selectedActivity = activities.find((a) => a.id === selectedActivityId);
-  const selectedTicketReferenceNumber =
-    selectedActivity?.ticket_reference_number || null;
-
-  const toggleActivitySelection = (activityId: string) => {
-    setSelectedActivities(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(activityId)) {
-        newSet.delete(activityId);
-      } else {
-        newSet.add(activityId);
-      }
-      return newSet;
-    });
-  };
-
-  const toggleAllActivities = () => {
-    if (selectedActivities.size === filteredActivities.length) {
-      setSelectedActivities(new Set());
-    } else {
-      setSelectedActivities(new Set(filteredActivities.map(a => a.id)));
-    }
-  };
-
-  const handleBulkComplete = async () => {
-    if (selectedActivities.size === 0) return;
-
-    try {
-      setUpdatingId('bulk');
-      const promises = Array.from(selectedActivities).map(id => 
-        fetch("/api/act-update-status-delivered", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id }),
-          cache: "no-store",
-        })
-      );
-
-      await Promise.all(promises);
-      setSelectedActivities(new Set());
-      await fetchAllData();
-      window.location.reload();
-
-      sileo.success({
-        title: "Success",
-        description: `${selectedActivities.size} transactions marked as completed.`,
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch {
-      sileo.error({
-        title: "Failed",
-        description: "An error occurred while updating status.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const openRescheduleDialog = (id: string) => {
-    setSelectedActivityId(id);
-    setRescheduleDate("");
-    setDialogRescheduleOpen(true);
-  };
-
   const handleConfirmReschedule = async () => {
     if (!selectedActivityId || !rescheduleDate) return;
 
@@ -767,6 +691,10 @@ export const Overdue: React.FC<ScheduledProps> = ({
     }
   };
 
+  const selectedActivity = activities.find((a) => a.id === selectedActivityId);
+  const selectedTicketReferenceNumber =
+    selectedActivity?.ticket_reference_number || null;
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -805,41 +733,21 @@ export const Overdue: React.FC<ScheduledProps> = ({
   }
 
   const activeDateLabel = (() => {
-    if (searchTerm.trim() !== "") return "Showing all (search active)";
-    if (dateCreatedFilterRange?.from) {
-      const from = toLocalDateString(dateCreatedFilterRange.from);
-      const to = dateCreatedFilterRange.to
-        ? toLocalDateString(dateCreatedFilterRange.to)
-        : from;
-      return from === to
-        ? `Scheduled: ${from}`
-        : `Scheduled: ${from} → ${to}`;
-    }
-    return `Scheduled today: ${todayStr}`;
+    if (searchTerm.trim() !== "") return `Showing all matching "${searchTerm}"`;
+    return `All Activities (${filteredActivities.length} items)`;
   })();
 
   return (
     <>
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 w-full">
-          {filteredActivities.length > 0 && (
-            <div className="flex items-center gap-2 mb-2">
-              <Checkbox
-                checked={selectedActivities.size === filteredActivities.length && filteredActivities.length > 0}
-                onCheckedChange={toggleAllActivities}
-                className="rounded-none"
-              />
-              <span className="text-xs">Select All</span>
-            </div>
-          )}
-          
           <Input
             type="search"
-            placeholder="Search..."
+            placeholder="Search all activities..."
             className="text-xs grow rounded-none mb-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search accounts"
+            aria-label="Search all activities"
           />
 
           <DropdownMenu>
@@ -858,38 +766,21 @@ export const Overdue: React.FC<ScheduledProps> = ({
                 All
               </DropdownMenuItem>
 
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map(
-                (status) => {
-                  const { badgeClass } = getStatusStyles(status);
-                  return (
-                    <DropdownMenuItem
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className="flex items-center gap-2"
-                    >
-                      <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
-                      <span className="capitalize">{status}</span>
-                    </DropdownMenuItem>
-                  );
-                },
-              )}
+              {ALL_STATUSES.map((status) => {
+                const { badgeClass } = getStatusStyles(status);
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
+                    <span className="capitalize">{status}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {selectedActivities.size > 0 && (
-            <Button
-              onClick={handleBulkComplete}
-              disabled={updatingId === 'bulk'}
-              className="bg-green-600 hover:bg-green-700 text-white rounded-none mb-2"
-            >
-              {updatingId === 'bulk' ? (
-                <Spinner className="size-4 mr-2" />
-              ) : (
-                <CheckSquare className="mr-2 h-4 w-4" />
-              )}
-              Complete ({selectedActivities.size})
-            </Button>
-          )}
         </div>
       </div>
 
@@ -901,7 +792,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
         <Accordion type="single" collapsible className="w-full">
           {filteredActivities.length === 0 ? (
             <p className="text-muted-foreground text-xs px-2">
-              No scheduled activities found.
+              No activities found.
             </p>
           ) : (
             filteredActivities.map((item) => {
@@ -916,16 +807,9 @@ export const Overdue: React.FC<ScheduledProps> = ({
                 >
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={selectedActivities.has(item.id)}
-                          onCheckedChange={() => toggleActivitySelection(item.id)}
-                          className="rounded-none"
-                        />
-                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
-                          {item.company_name}
-                        </AccordionTrigger>
-                      </div>
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                        {item.company_name}
+                      </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
                         <CreateActivityDialog

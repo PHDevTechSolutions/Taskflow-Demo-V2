@@ -173,13 +173,25 @@ export default function TaskListEditDialog({
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
+    
+    // Debug: Log what we're sending
+    console.log("Saving edit:", { id: item.id, formData });
+    
     try {
       const res = await fetch(`/api/activity/tsa/historical/update?id=${item.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
         body: JSON.stringify(formData),
       });
-      if (!res.ok) throw new Error("Failed to update");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Update failed:", errorData);
+        throw new Error(errorData?.error || "Failed to update");
+      }
 
       sileo.success({
         title: "Saved",
@@ -190,10 +202,11 @@ export default function TaskListEditDialog({
         styles: { title: "text-white!", description: "text-white" },
       });
       onSave();
-    } catch {
+    } catch (err: any) {
+      console.error("Edit save error:", err);
       sileo.error({
         title: "Failed",
-        description: "Update failed. Please try again.",
+        description: err?.message || "Update failed. Please try again.",
         duration: 4000,
         position: "top-right",
         fill: "black",

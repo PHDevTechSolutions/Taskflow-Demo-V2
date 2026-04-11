@@ -11,6 +11,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const body = req.body;
 
   const allowedFields = [
+    "company_name",
+    "contact_person",
+    "contact_number",
+    "email_address",
     "quotation_number",
     "quotation_amount",
     "quotation_status",
@@ -60,13 +64,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Update history table while preserving date_updated
+  // Update history table directly (RPC has ambiguous id issue)
+  console.log("Updating history record:", { id, filteredData });
+  
+  const parsedId = parseInt(id as string, 10);
+  if (isNaN(parsedId)) {
+    return res.status(400).json({ error: "Invalid ID format" });
+  }
+  
   const { error } = await supabase
-    .rpc('update_history_preserve_updated', {
-      record_id: id,
-      update_data: filteredData
-    });
-  if (error) return res.status(500).json({ error: "Failed to update history." });
+    .from("history")
+    .update(filteredData)
+    .eq("id", parsedId)
+    .select("id");
+    
+  if (error) {
+    console.error("Supabase update error:", error);
+    return res.status(500).json({ error: error.message || "Failed to update history." });
+  }
 
   // Log audit trail for historical update
   await logAuditTrailWithSession(

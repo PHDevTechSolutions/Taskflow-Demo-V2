@@ -27,6 +27,7 @@ interface Activity {
 
 const ALLOWED_STATUSES   = ["Assisted", "Quote-Done"];
 const DISMISSED_KEY      = "dismissedActivities";
+const SHOWN_KEY          = "activityShownDate";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,20 @@ const isToday = (dateStr: string) => {
 const getDismissed = (): string[] => {
   if (typeof window === "undefined") return [];
   return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+};
+
+const hasShownToday = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const lastShown = localStorage.getItem(SHOWN_KEY);
+  if (!lastShown) return false;
+  const today = new Date().toISOString().split('T')[0];
+  return lastShown === today;
+};
+
+const markShownToday = () => {
+  if (typeof window === "undefined") return;
+  const today = new Date().toISOString().split('T')[0];
+  localStorage.setItem(SHOWN_KEY, today);
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -115,9 +130,12 @@ export function ActivityToday() {
     .filter((a) => ALLOWED_STATUSES.includes(a.status))
     .filter((a) => !getDismissed().includes(a.id));
 
-  // ── Auto-open when new activities appear ───────────────────────────────────
+  // ── Auto-open when new activities appear (Once per day) ────────────────────
   useEffect(() => {
-    setOpen(filtered.length > 0);
+    if (filtered.length > 0 && !hasShownToday()) {
+      setOpen(true);
+      markShownToday();
+    }
   }, [filtered.length]);
 
   // ── Dismiss ────────────────────────────────────────────────────────────────
@@ -125,6 +143,8 @@ export function ActivityToday() {
     const prev    = getDismissed();
     const updated = Array.from(new Set([...prev, ...filtered.map((a) => a.id)]));
     localStorage.setItem(DISMISSED_KEY, JSON.stringify(updated));
+    // Clear shown date so dismissed items won't trigger popup again today
+    localStorage.removeItem(SHOWN_KEY);
     setConfirmOpen(false);
     setOpen(false);
   };
