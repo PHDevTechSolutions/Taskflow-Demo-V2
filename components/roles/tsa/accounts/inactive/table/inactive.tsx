@@ -48,13 +48,25 @@ interface AccountsTableProps {
     userDetails: UserDetails;
     onSaveAccountAction: (data: any) => void;
     onRefreshAccountsAction: () => Promise<void>;
+    regionFilter: string;
+    setRegionFilter: React.Dispatch<React.SetStateAction<string>>;
+    industryFilter: string[];
+    setIndustryFilter: React.Dispatch<React.SetStateAction<string[]>>;
+    nextAvailableDateRange: DateRange | undefined;
+    setNextAvailableDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
 }
 
 export function AccountsTable({
     posts = [],
     userDetails,
     onSaveAccountAction,
-    onRefreshAccountsAction
+    onRefreshAccountsAction,
+    regionFilter,
+    setRegionFilter,
+    industryFilter,
+    setIndustryFilter,
+    nextAvailableDateRange,
+    setNextAvailableDateRange
 }: AccountsTableProps) {
     const [localPosts, setLocalPosts] = useState<Account[]>(posts);
 
@@ -66,11 +78,11 @@ export function AccountsTable({
     const [isFiltering, setIsFiltering] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [industryFilter, setIndustryFilter] = useState<string>("all");
     const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
-
-    // Advanced filters states
     const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
+    const [regionFilter, setRegionFilter] = useState<string>("all");
+    const [industryFilter, setIndustryFilter] = useState<string[]>([]);
+    const [nextAvailableDateRange, setNextAvailableDateRange] = useState<DateRange | undefined>(undefined);
 
     // For edit dialog
     const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -112,7 +124,7 @@ export function AccountsTable({
                 statusFilter === "all" || item.status === statusFilter;
 
             const matchesIndustry =
-                industryFilter === "all" || item.industry === industryFilter;
+                industryFilter.length === 0 || industryFilter.includes(item.industry);
 
             return matchesSearch && matchesType && matchesStatus && matchesIndustry;
         });
@@ -352,6 +364,13 @@ export function AccountsTable({
                         setDateCreatedFilterAction={setDateCreatedFilter}
                         alphabeticalFilter={alphabeticalFilter}
                         setAlphabeticalFilterAction={setAlphabeticalFilter}
+                        regionFilter={regionFilter}
+                        setRegionFilterAction={setRegionFilter}
+                        industryFilter={industryFilter}
+                        setIndustryFilterAction={setIndustryFilter}
+                        nextAvailableDateRange={nextAvailableDateRange}
+                        setNextAvailableDateRangeAction={setNextAvailableDateRange}
+                        posts={posts}
                     />
 
                     {selectedAccountIds.length > 0 && (

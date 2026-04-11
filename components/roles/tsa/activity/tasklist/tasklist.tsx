@@ -107,6 +107,8 @@ interface Completed {
   date_updated?: string;
   company_name: string;
   contact_number: string;
+  contact_person?: string;
+  email_address?: string;
   payment_terms?: string;
   scheduled_status?: string;
 }

@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/tooltip";
 import { MoreHorizontal, Edit } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import { format } from "date-fns";
 import { AccountDialog } from "../../../activity/planner/dialog/active";
 import { sileo } from "sileo";
 import {
@@ -43,10 +44,7 @@ import {
   Repeat,
   Archive,
   Users,
-  Layers,
-  Calendar,
   Building2,
-  TrendingUp,
   Star,
   Activity,
   ChevronUp,
@@ -58,6 +56,8 @@ import { AccountsActiveFilter } from "../filter";
 import { AccountsActivePagination } from "../pagination";
 import { AccountsActiveDeleteDialog } from "../../../activity/planner/dialog/delete";
 import { TransferDialog } from "../dialog/transfer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { X } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Account {
@@ -229,9 +229,11 @@ export function AccountsTable({
   const [isFiltering, setIsFiltering] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [industryFilter, setIndustryFilter] = useState<string>("all");
+  const [industryFilter, setIndustryFilter] = useState<string[]>([]);
   const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
   const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
+  const [regionFilter, setRegionFilter] = useState<string>("all");
+  const [nextAvailableDateRange, setNextAvailableDateRange] = useState<DateRange | undefined>(undefined);
 
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -269,9 +271,31 @@ export function AccountsTable({
       const matchesStatus =
         statusFilter === "all" ||
         item.status?.toLowerCase() === statusFilter.toLowerCase();
+      // Industry multi-select filter
       const matchesIndustry =
-        industryFilter === "all" || item.industry === industryFilter;
-      return matchesSearch && matchesType && matchesStatus && matchesIndustry;
+        industryFilter.length === 0 || industryFilter.includes(item.industry);
+      // Region filter
+      const matchesRegion =
+        regionFilter === "all" || item.region === regionFilter;
+      // Next available date range filter
+      let matchesNextAvailableDate = true;
+      if (nextAvailableDateRange?.from) {
+        const itemDate = item.next_available_date ? new Date(item.next_available_date) : null;
+        if (itemDate) {
+          const fromDate = new Date(nextAvailableDateRange.from);
+          fromDate.setHours(0, 0, 0, 0);
+          if (nextAvailableDateRange.to) {
+            const toDate = new Date(nextAvailableDateRange.to);
+            toDate.setHours(23, 59, 59, 999);
+            matchesNextAvailableDate = itemDate >= fromDate && itemDate <= toDate;
+          } else {
+            matchesNextAvailableDate = itemDate >= fromDate;
+          }
+        } else {
+          matchesNextAvailableDate = false;
+        }
+      }
+      return matchesSearch && matchesType && matchesStatus && matchesIndustry && matchesRegion && matchesNextAvailableDate;
     });
 
     data = data.sort((a, b) => {
@@ -285,13 +309,12 @@ export function AccountsTable({
     });
 
     return data;
-  }, [localPosts, globalFilter, typeFilter, statusFilter, industryFilter, alphabeticalFilter, dateCreatedFilter]);
+  }, [localPosts, globalFilter, typeFilter, statusFilter, industryFilter, alphabeticalFilter, dateCreatedFilter, regionFilter, nextAvailableDateRange]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const count = (type: string) =>
       filteredData.filter((a) => a.type_client?.toLowerCase() === type).length;
-    const todayStr = new Date().toISOString().split("T")[0];
     return {
       total: filteredData.length,
       top50: count("top 50"),
@@ -300,9 +323,6 @@ export function AccountsTable({
       tsa: count("tsa client"),
       csr: count("csr client"),
       newClient: count("new client"),
-      scheduledToday: filteredData.filter(
-        (a) => a.next_available_date?.startsWith(todayStr),
-      ).length,
     };
   }, [filteredData]);
 
@@ -453,39 +473,8 @@ export function AccountsTable({
         header: "Industry",
         cell: ({ row }) => (
           <p className="text-[11px] text-slate-500 uppercase font-medium">
-            {row.original.industry?.replace(/_/g, " ") ?? "—"}
-          </p>
+            {row.original.industry?.replace(/_/g, " ") ?? "—"}</p>
         ),
-      },
-      {
-        accessorKey: "next_available_date",
-        header: "Next Call",
-        cell: ({ row }) => {
-          const d = row.original.next_available_date;
-          if (!d) return <span className="text-[11px] text-slate-400">—</span>;
-          const date = new Date(d);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const isToday = date.toDateString() === today.toDateString();
-          const isPast = date < today;
-          return (
-            <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-none ${
-                isToday
-                  ? "bg-purple-100 text-purple-700"
-                  : isPast
-                  ? "bg-red-50 text-red-500"
-                  : "bg-slate-100 text-slate-500"
-              }`}
-            >
-              {date.toLocaleDateString("en-PH", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
-          );
-        },
       },
       {
         accessorKey: "status",
@@ -605,7 +594,7 @@ export function AccountsTable({
     return null;
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
 
@@ -643,12 +632,12 @@ export function AccountsTable({
           </div>
         </StatCard>
 
-        <StatCard icon={Calendar} label="Scheduled Today" value={stats.scheduledToday} accent="#8b5cf6" />
       </div>
 
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+        {/* Left side: Add button + Search bar */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <AccountDialog
             mode="create"
             userDetails={userDetails}
@@ -672,7 +661,8 @@ export function AccountsTable({
           />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Right side: Advanced Filter + Bulk actions */}
+        <div className="flex items-center gap-2">
           <AccountsActiveFilter
             typeFilter={typeFilter}
             setTypeFilterAction={setTypeFilter}
@@ -680,6 +670,13 @@ export function AccountsTable({
             setDateCreatedFilterAction={setDateCreatedFilter}
             alphabeticalFilter={alphabeticalFilter}
             setAlphabeticalFilterAction={setAlphabeticalFilter}
+            regionFilter={regionFilter}
+            setRegionFilterAction={setRegionFilter}
+            industryFilter={industryFilter}
+            setIndustryFilterAction={setIndustryFilter}
+            nextAvailableDateRange={nextAvailableDateRange}
+            setNextAvailableDateRangeAction={setNextAvailableDateRange}
+            posts={posts}
           />
 
           {selectedAccountIds.length > 0 && (

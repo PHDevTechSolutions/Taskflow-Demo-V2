@@ -10,6 +10,13 @@ import React, {
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -41,6 +48,16 @@ interface CCGItem {
   status: string;
   company_name: string;
   remarks: string;
+}
+
+interface Account {
+  id: string;
+  company_name: string;
+  contact_person: string;
+  type_client: string;
+  next_available_date?: string;
+  region?: string;
+  industry?: string;
 }
 
 interface MeetingSlot {
@@ -139,6 +156,26 @@ const STATUS_STYLES: Record<string, string> = {
   Active: "bg-blue-100   text-blue-700   border-blue-200",
 };
 
+// Cluster config for scheduled accounts
+const CLUSTER_CONFIG: Record<string, { color: string; bg: string; textColor: string }> = {
+  "top 50": { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
+  "next 30": { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
+  "balance 20": { color: "#8b5cf6", bg: "#ede9fe", textColor: "#5b21b6" },
+  "new client": { color: "#10b981", bg: "#d1fae5", textColor: "#065f46" },
+  "tsa client": { color: "#ef4444", bg: "#fee2e2", textColor: "#991b1b" },
+  "csr client": { color: "#f97316", bg: "#ffedd5", textColor: "#9a3412" },
+};
+
+function getClusterStyle(typeClient: string) {
+  return (
+    CLUSTER_CONFIG[typeClient?.toLowerCase()] ?? {
+      color: "#6b7280",
+      bg: "#f3f4f6",
+      textColor: "#374151",
+    }
+  );
+}
+
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
@@ -193,7 +230,13 @@ export const CCG: React.FC<{
   target_quota?: string;
   dateCreatedFilterRange: any;
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-}> = ({ referenceid, dateCreatedFilterRange, setDateCreatedFilterRangeAction }) => {
+  accounts?: Account[];
+}> = ({
+  referenceid,
+  dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
+  accounts = [],
+}) => {
   const [activities, setActivities] = useState<CCGItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +245,7 @@ export const CCG: React.FC<{
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeActivity, setFilterTypeActivity] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [showScheduledDialog, setShowScheduledDialog] = useState(false);
 
   const today = useMemo(() => new Date(), []);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -374,6 +418,28 @@ export const CCG: React.FC<{
     return map;
   }, [sortedActivities]);
 
+  // ── Scheduled Accounts ───────────────────────────────────────────────────────
+  const scheduledAccountsByDate = useMemo(() => {
+    const map: Record<string, Account[]> = {};
+    for (const account of accounts) {
+      if (account.next_available_date) {
+        const dateObj = new Date(account.next_available_date);
+        if (!isNaN(dateObj.getTime())) {
+          const key = formatDateLocal(dateObj);
+          if (!map[key]) map[key] = [];
+          map[key].push(account);
+        }
+      }
+    }
+    return map;
+  }, [accounts]);
+
+  const selectedDateAccounts = useMemo(() => {
+    if (!selectedDate) return [];
+    const selectedDateStr = formatDateLocal(selectedDate);
+    return scheduledAccountsByDate[selectedDateStr] || [];
+  }, [scheduledAccountsByDate, selectedDate]);
+
   const selectedDateStr = selectedDate ? formatDateLocal(selectedDate) : null;
 
   const selectedDayEvents = useMemo(() => {
@@ -502,6 +568,9 @@ export const CCG: React.FC<{
               currentMonth === today.getMonth() &&
               currentYear === today.getFullYear();
             const eventCount = allEventsByDate[dateKey] ?? 0;
+            const scheduledCount = scheduledAccountsByDate[dateKey]?.length ?? 0;
+            const hasEvents = eventCount > 0;
+            const hasScheduled = scheduledCount > 0;
 
             return (
               <button
@@ -520,11 +589,15 @@ export const CCG: React.FC<{
                   }`}
               >
                 {day}
-                {eventCount > 0 && (
-                  <span
-                    className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-white/70" : "bg-green-400"}`}
-                  />
-                )}
+                {/* Event dots */}
+                <div className="absolute bottom-1 flex gap-0.5">
+                  {hasEvents && (
+                    <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-white/70" : "bg-green-400"}`} />
+                  )}
+                  {hasScheduled && (
+                    <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-purple-300" : "bg-purple-500"}`} />
+                  )}
+                </div>
               </button>
             );
           })}
@@ -541,16 +614,28 @@ export const CCG: React.FC<{
               total
             </span>
           </div>
-          <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
-            {Object.entries(allEventsByDate)
-              .filter(([k]) =>
-                k.startsWith(
-                  `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
+              {Object.entries(allEventsByDate)
+                .filter(([k]) =>
+                  k.startsWith(
+                    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+                  )
                 )
-              )
-              .reduce((acc, [, v]) => acc + v, 0)}{" "}
-            events
-          </Badge>
+                .reduce((acc, [, v]) => acc + v, 0)}{" "}
+              events
+            </Badge>
+            <Badge variant="outline" className="text-[11px] px-2 py-0.5 border-purple-200 text-purple-600">
+              {Object.entries(scheduledAccountsByDate)
+                .filter(([k]) =>
+                  k.startsWith(
+                    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+                  )
+                )
+                .reduce((acc, [, v]) => acc + v.length, 0)}{" "}
+              scheduled
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -574,6 +659,11 @@ export const CCG: React.FC<{
                 {selectedDate
                   ? `${selectedDayEvents.length} event${selectedDayEvents.length !== 1 ? "s" : ""}`
                   : "No date selected"}
+                {selectedDate && selectedDateAccounts.length > 0 && (
+                  <span className="ml-2 text-purple-600 font-medium">
+                    · {selectedDateAccounts.length} scheduled
+                  </span>
+                )}
               </p>
             </div>
             <button
@@ -671,6 +761,119 @@ export const CCG: React.FC<{
             </div>
           ) : (
             <div className="px-4 py-3 space-y-0">
+              {/* Scheduled Accounts Section */}
+              {selectedDateAccounts.length > 0 && (
+                <div className="mb-4 pb-4 border-b border-slate-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Scheduled Accounts ({selectedDateAccounts.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDateAccounts.slice(0, 2).map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 transition-colors"
+                      >
+                        <div>
+                          <p className="text-xs font-semibold text-slate-800 uppercase">
+                            {account.company_name}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {account.contact_person}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] rounded-none"
+                          style={{
+                            borderColor: getClusterStyle(account.type_client).color + "40",
+                            background: getClusterStyle(account.type_client).bg,
+                            color: getClusterStyle(account.type_client).textColor,
+                          }}
+                        >
+                          {account.type_client}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedDateAccounts.length > 2 && (
+                    <button
+                      onClick={() => setShowScheduledDialog(true)}
+                      className="mt-2 w-full text-center text-[10px] text-purple-600 font-medium hover:text-purple-800 hover:underline transition-colors py-1"
+                    >
+                      View {selectedDateAccounts.length - 2} more...
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Scheduled Accounts Dialog */}
+              <Dialog open={showScheduledDialog} onOpenChange={setShowScheduledDialog}>
+                <DialogContent className="w-full max-w-md rounded-none p-0 overflow-hidden gap-0">
+                  <div className="bg-purple-900 px-6 py-4">
+                    <DialogHeader>
+                      <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4" />
+                        Scheduled Accounts
+                      </DialogTitle>
+                    </DialogHeader>
+                  </div>
+                  <div className="px-6 py-4">
+                    <p className="text-xs text-slate-500 mb-3">
+                      {selectedDate?.toLocaleDateString("en-PH", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                      <span className="ml-2 text-purple-600 font-semibold">
+                        ({selectedDateAccounts.length} accounts)
+                      </span>
+                    </p>
+                    <div className="max-h-80 overflow-y-auto space-y-2">
+                      {selectedDateAccounts.map((account) => (
+                        <div
+                          key={account.id}
+                          className="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800 uppercase">
+                              {account.company_name}
+                            </p>
+                            <p className="text-[10px] text-slate-500">{account.contact_person}</p>
+                            {account.industry && (
+                              <p className="text-[9px] text-slate-400 mt-0.5">{account.industry}</p>
+                            )}
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] rounded-none"
+                            style={{
+                              borderColor: getClusterStyle(account.type_client).color + "40",
+                              background: getClusterStyle(account.type_client).bg,
+                              color: getClusterStyle(account.type_client).textColor,
+                            }}
+                          >
+                            {account.type_client}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-none text-xs"
+                      onClick={() => setShowScheduledDialog(false)}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
               {(() => {
                 const renderedMeetingIds = new Set<number>();
 

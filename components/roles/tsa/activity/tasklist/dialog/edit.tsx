@@ -47,6 +47,10 @@ interface Completed {
   delivery_date?: string;
   dr_number?: string;
   remarks?: string;
+  company_name: string;
+  contact_number: string;
+  contact_person?: string;
+  email_address?: string;
   payment_terms?: string;
 }
 
@@ -74,6 +78,10 @@ interface TaskListEditDialogProps {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const EDITABLE_FIELDS: (keyof Completed)[] = [
+  "company_name",
+  "contact_person",
+  "contact_number",
+  "email_address",
   "project_name",
   "project_type",
   "source",
@@ -111,6 +119,10 @@ const QUOTATION_STATUS_OPTIONS = [
 
 function getLabel(key: string): string {
   if (key === "call_type") return "Type";
+  if (key === "company_name") return "Company Name";
+  if (key === "contact_person") return "Contact Person";
+  if (key === "contact_number") return "Contact Number";
+  if (key === "email_address") return "Email Address";
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -120,6 +132,7 @@ function getInputType(key: string): string {
     case "quotation_amount":
     case "so_amount":
     case "actual_sales": return "number";
+    case "email_address": return "email";
     default: return "text";
   }
 }
@@ -133,11 +146,14 @@ export default function TaskListEditDialog({
 }: TaskListEditDialogProps) {
   const [saving, setSaving] = useState(false);
 
-  // FIX: initialize from item directly, only include fields with values
+  // FIX: initialize from item directly, include company fields even if empty
   const buildInitial = (src: Completed): Partial<Completed> =>
     EDITABLE_FIELDS.reduce((acc, key) => {
       const val = src[key];
-      if (val !== undefined && val !== null && String(val).trim() !== "") {
+      // Always include company_name and contact_number as they are required fields
+      if (key === "company_name" || key === "contact_number") {
+        (acc as any)[key] = val || "";
+      } else if (val !== undefined && val !== null && String(val).trim() !== "") {
         (acc as any)[key] = val;
       }
       return acc;

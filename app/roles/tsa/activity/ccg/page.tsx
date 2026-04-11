@@ -35,6 +35,7 @@ interface Account {
     industry: string;
     status?: string;
     company_group?: string;
+    next_available_date?: string;
 }
 
 interface UserDetails {
@@ -56,6 +57,7 @@ function DashboardContent() {
     });
 
     const [posts, setPosts] = useState<Account[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +99,9 @@ function DashboardContent() {
                     target_quota: data.TargetQuota || "",
                 });
 
+                // Fetch accounts with next_available_date
+                fetchAccounts(data.ReferenceID);
+
                 sileo.success({
                     title: "Success",
                     description: "User data loaded successfully!",
@@ -128,6 +133,22 @@ function DashboardContent() {
 
         fetchUserData();
     }, [userId]);
+
+    // Fetch accounts for scheduled calendar
+    const fetchAccounts = async (referenceid: string) => {
+        if (!referenceid) return;
+        setLoadingAccounts(true);
+        try {
+            const response = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`);
+            if (!response.ok) throw new Error("Failed to fetch accounts");
+            const data = await response.json();
+            setAccounts(data.data || []);
+        } catch (err) {
+            console.error("Error fetching accounts:", err);
+        } finally {
+            setLoadingAccounts(false);
+        }
+    };
 
     const loading = loadingUser || loadingAccounts;
 
@@ -170,13 +191,13 @@ function DashboardContent() {
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        <div>
-                            <CCG
-                                referenceid={userDetails.referenceid}
-                                target_quota={userDetails.target_quota}
-                                dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
-                        </div>
+                        <CCG
+                            referenceid={userDetails.referenceid}
+                            target_quota={userDetails.target_quota}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                            accounts={accounts}
+                        />
                     </main>
                 </SidebarInset>
 
