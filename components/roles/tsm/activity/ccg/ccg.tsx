@@ -30,7 +30,7 @@ interface CCGItem {
   tsm: string;
   manager: string;
   type_activity?: string;
-  date_updated: string;
+  date_created: string;
   status: string;
   company_name: string;
   remarks: string;
@@ -85,15 +85,15 @@ function groupByHour(items: CCGItem[]): Record<number, CCGItem[]> {
   const map: Record<number, CCGItem[]> = {};
   for (let i = 0; i < 24; i++) map[i] = [];
   items.forEach((it) => {
-    const d = parseDate(it.date_updated);
+    const d = parseDate(it.date_created);
     if (!d) return;
     map[d.getHours()].push(it);
   });
   for (let h = 0; h < 24; h++) {
     map[h].sort(
       (a, b) =>
-        parseDate(a.date_updated)!.getTime() -
-        parseDate(b.date_updated)!.getTime()
+        parseDate(a.date_created)!.getTime() -
+        parseDate(b.date_created)!.getTime()
     );
   }
   return map;
@@ -140,7 +140,7 @@ const EventCard: React.FC<{
   agentName?: string;
   agentPicture?: string;
 }> = ({ ev, agentName, agentPicture }) => {
-  const dt = parseDate(ev.date_updated);
+  const dt = parseDate(ev.date_created);
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
@@ -314,7 +314,7 @@ export const CCG: React.FC<{
     () =>
       [...activities].sort(
         (a, b) =>
-          new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+          new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
       ),
     [activities]
   );
@@ -380,7 +380,7 @@ export const CCG: React.FC<{
   const allEventsByDate = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of sortedActivities) {
-      const d = parseDate(item.date_updated);
+      const d = parseDate(item.date_created);
       if (!d) continue;
       const key = formatDateLocal(d);
       map[key] = (map[key] ?? 0) + 1;
@@ -393,7 +393,7 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const d = parseDate(item.date_updated);
+      const d = parseDate(item.date_created);
       return d ? formatDateLocal(d) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
