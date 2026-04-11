@@ -311,12 +311,11 @@ export const CCG: React.FC<{
 
   const sortedActivities = useMemo(
   () =>
-    [...activities].sort((a, b) => {
-      const dateB = parseDate(b.start_date || b.date_updated);
-      const dateA = parseDate(a.start_date || a.date_updated);
-
-      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
-    }),
+    [...activities].sort(
+      (a, b) =>
+        new Date(b.start_date || b.date_updated).getTime() -
+        new Date(a.start_date || a.date_updated).getTime()
+    ),
   [activities]
 );
 
