@@ -109,7 +109,7 @@ function buildHourSlots(items: CCGItem[]): {
     const endHour = endDate.getHours();
 
     const children = activities.filter((act) => {
-      const actTime = parseDate(act.date_created);
+      const actTime = parseDate(act.end_date);
       if (!actTime) return false;
       return actTime >= startDate && actTime <= endDate;
     });
@@ -124,7 +124,7 @@ function buildHourSlots(items: CCGItem[]): {
   const activitySlots: ActivitySlot[] = activities
     .filter((act) => !coveredActivityIds.has(act.id))
     .map((act) => {
-      const d = parseDate(act.date_created);
+      const d = parseDate(act.end_date);
       return { type: "activity", item: act, hour: d ? d.getHours() : 0 };
     });
 
@@ -143,7 +143,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   const isMeeting = ev.start_date && ev.end_date;
-  const startDate = parseDate(isMeeting ? ev.start_date : ev.date_created);
+  const startDate = parseDate(isMeeting ? ev.start_date : ev.end_date);
   const endDate = isMeeting ? parseDate(ev.end_date) : null;
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
@@ -312,8 +312,8 @@ export const CCG: React.FC<{
     () =>
       [...activities].sort(
         (a, b) =>
-          new Date(b.start_date || b.date_created).getTime() -
-          new Date(a.start_date || a.date_created).getTime()
+          new Date(b.start_date || b.end_date).getTime() -
+          new Date(a.start_date || a.end_date).getTime()
       ),
     [activities]
   );
@@ -366,7 +366,7 @@ export const CCG: React.FC<{
   const allEventsByDate = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of sortedActivities) {
-      const d = parseDate(item.start_date || item.date_created);
+      const d = parseDate(item.start_date || item.end_date);
       if (!d) continue;
       const key = formatDateLocal(d);
       map[key] = (map[key] ?? 0) + 1;
@@ -379,7 +379,7 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const d = parseDate(item.start_date || item.date_created);
+      const d = parseDate(item.start_date || item.end_date);
       return d ? formatDateLocal(d) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
@@ -754,12 +754,12 @@ export const CCG: React.FC<{
                                 {meetingSlot.children
                                   .sort(
                                     (a, b) =>
-                                      new Date(a.date_created).getTime() -
-                                      new Date(b.date_created).getTime()
+                                      new Date(a.end_date).getTime() -
+                                      new Date(b.end_date).getTime()
                                   )
                                   .map((child) => {
                                     const childTime = parseDate(
-                                      child.date_created
+                                      child.end_date
                                     );
                                     return (
                                       <div
