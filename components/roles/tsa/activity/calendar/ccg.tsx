@@ -309,14 +309,15 @@ export const CCG: React.FC<{
   // ── Derived Data ───────────────────────────────────────────────────────────
 
   const sortedActivities = useMemo(
-    () =>
-      [...activities].sort(
-        (a, b) =>
-          new Date(b.start_date || b.end_date).getTime() -
-          new Date(a.start_date || a.end_date).getTime()
-      ),
-    [activities]
-  );
+  () =>
+    [...activities].sort((a, b) => {
+      const dateB = parseDate(b.start_date || b.end_date);
+      const dateA = parseDate(a.start_date || a.end_date);
+
+      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
+    }),
+  [activities]
+);
 
   const statusOptions = useMemo(
     () =>
