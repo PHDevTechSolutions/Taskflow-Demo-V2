@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 import { AgentCard } from "@/components/roles/tsm/dashboard/card/agent-list";
-import { AgentActivityLogs } from "@/components/roles/tsm/dashboard/card/activity-logs";
 import { AgentMeetings } from "@/components/roles/tsm/dashboard/card/meetings";
 import { OutboundCard } from "@/components/roles/tsm/dashboard/card/outbound";
 
@@ -15,10 +13,12 @@ import { QuotationTableCard } from "@/components/roles/tsm/dashboard/table/quota
 import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sales-order";
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
 
-import { Building2, PhoneForwarded, ChevronRight } from "lucide-react";
+import { Building2, PhoneForwarded, ChevronRight, Download, X, LogIn, LogOut, Check } from "lucide-react";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, where, onSnapshot, limit } from "firebase/firestore";
+import { collection, query, orderBy, where, onSnapshot } from "firebase/firestore";
+import ExcelJS from "exceljs";
 
 interface HistoryItem {
     referenceid: string;
@@ -51,14 +51,6 @@ interface Agent {
     Role: string;
     TargetQuota: string;
     Connection: string;
-}
-
-interface AgentMeeting {
-    start_date?: string | null;
-    end_date?: string | null;
-    remarks?: string | null;
-    type_activity?: string | null;
-    date_created?: string | null;
 }
 
 interface ScheduledCompany {
@@ -94,7 +86,15 @@ export function AgentList({
     };
 
     const [agentActivityMap, setAgentActivityMap] = useState<Record<string, AgentActivity>>({});
-    const [agentMeetingMap, setAgentMeetingMap] = useState<Record<string, AgentMeeting>>({});
+    // Memoized sorted agents - online first, then offline
+    const sortedAgents = useMemo(() => {
+        const online = agents.filter((a) => a.Connection?.toLowerCase() === "online");
+        const offline = agents.filter((a) => a.Connection?.toLowerCase() !== "online");
+        return [...online, ...offline];
+    }, [agents]);
+
+    const onlineCount = useMemo(() => agents.filter((a) => a.Connection?.toLowerCase() === "online").length, [agents]);
+    const offlineCount = agents.length - onlineCount;
 
     const formatDate = (dateCreated: any) => {
         if (!dateCreated) return null;
@@ -113,6 +113,25 @@ export function AgentList({
             });
         }
         return null;
+    };
+
+    // Image error handler
+    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        e.currentTarget.src = "/Taskflow.png";
+    };
+
+    const formatDateTimeShort = (dateStr?: string | null): string => {
+        if (!dateStr) return "—";
+        const cleaned = dateStr.replace(" at ", " ").replace(/ GMT.*$/, "");
+        const date = new Date(cleaned);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleString("en-PH", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+        });
     };
 
     const [countData, setCountData] = useState<{
@@ -172,10 +191,8 @@ export function AgentList({
     /* ========================= ACTIVITY LOGS ========================= */
     useEffect(() => {
         if (!agents.length) return;
-        setAgentActivityMap({});
         const unsubscribes: (() => void)[] = [];
-        const agentsToWatch = selectedAgent === "all" ? agents : agents.filter(a => a.ReferenceID === selectedAgent);
-        agentsToWatch.forEach((agent) => {
+        agents.forEach((agent) => {
             const q = query(collection(db, "activity_logs"), where("ReferenceID", "==", agent.ReferenceID), orderBy("date_created", "desc"));
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const loginDoc = snapshot.docs.find(d => d.data().status?.toLowerCase() === "login");
@@ -191,37 +208,7 @@ export function AgentList({
             unsubscribes.push(unsubscribe);
         });
         return () => unsubscribes.forEach(u => u());
-    }, [selectedAgent, agents]);
-
-    /* ========================= MEETINGS ========================= */
-    useEffect(() => {
-        if (!agents.length) return;
-        setAgentMeetingMap({});
-        const unsubscribes: (() => void)[] = [];
-        const agentsToWatch = selectedAgent === "all" ? agents : agents.filter(a => a.ReferenceID === selectedAgent);
-        agentsToWatch.forEach((agent) => {
-            const q = query(collection(db, "meetings"), where("referenceid", "==", agent.ReferenceID), orderBy("date_created", "desc"), limit(1));
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                if (snapshot.empty) {
-                    setAgentMeetingMap(prev => ({ ...prev, [agent.ReferenceID]: { start_date: null, end_date: null, remarks: null, type_activity: null, date_created: null } }));
-                    return;
-                }
-                const data = snapshot.docs[0].data();
-                const fd = (d: any) => {
-                    if (!d) return null;
-                    if (d.toDate) return d.toDate().toLocaleString();
-                    if (typeof d === "string") return new Date(d).toLocaleString();
-                    return null;
-                };
-                setAgentMeetingMap(prev => ({
-                    ...prev,
-                    [agent.ReferenceID]: { start_date: fd(data.start_date), end_date: fd(data.end_date), remarks: data.remarks ?? "—", type_activity: data.type_activity ?? "—", date_created: data.date_created ?? "—" },
-                }));
-            });
-            unsubscribes.push(unsubscribe);
-        });
-        return () => unsubscribes.forEach(u => u());
-    }, [selectedAgent, agents]);
+    }, [agents]);
 
     /* ========================= COUNT DATABASE ========================= */
     useEffect(() => {
@@ -250,6 +237,200 @@ export function AgentList({
             .finally(() => setLoadingScheduled(false));
     }, [selectedAgent]);
 
+    // Helper to get agent name
+    const getAgentName = (refId: string) => {
+        const agent = agents.find(a => a.ReferenceID.toLowerCase() === refId.toLowerCase());
+        return agent ? `${agent.Firstname} ${agent.Lastname}` : refId;
+    };
+
+    // Helper to calculate duration in minutes
+    const getDuration = (start: string, end: string) => {
+        if (!start || !end) return 0;
+        const s = new Date(start);
+        const e = new Date(end);
+        if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+        return Math.round((e.getTime() - s.getTime()) / (1000 * 60));
+    };
+
+    // Export all data to Excel with multiple sheets
+    const exportAllData = async () => {
+        if (history.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // 1. Outbound Calls (Touchbase) - Successful calls only
+        const touchbaseCalls = history.filter(item => 
+            item.type_activity?.toLowerCase().includes('touchbase') && 
+            item.call_status?.toLowerCase() === 'successful'
+        );
+        const sheet1 = workbook.addWorksheet('Outbound Calls (Touchbase)');
+        sheet1.columns = [
+            { header: 'Agent Name', key: 'agent', width: 25 },
+            { header: 'Company', key: 'company', width: 30 },
+            { header: 'Call Status', key: 'callStatus', width: 15 },
+            { header: 'Date', key: 'date', width: 20 },
+            { header: 'Duration (mins)', key: 'duration', width: 15 },
+            { header: 'Remarks', key: 'remarks', width: 40 },
+        ];
+        touchbaseCalls.forEach(item => {
+            sheet1.addRow({
+                agent: getAgentName(item.referenceid),
+                company: item.company_name,
+                callStatus: item.call_status,
+                date: item.date_created,
+                duration: getDuration(item.start_date, item.end_date),
+                remarks: item.remarks
+            });
+        });
+
+        // 2. Quotations - Quote-Done activities
+        const quotations = history.filter(item => 
+            item.type_activity?.toLowerCase().includes('quotation') && 
+            item.status?.toLowerCase() === 'quote-done'
+        );
+        const sheet2 = workbook.addWorksheet('Quotations');
+        sheet2.columns = [
+            { header: 'Agent Name', key: 'agent', width: 25 },
+            { header: 'Company', key: 'company', width: 30 },
+            { header: 'Quotation Amount', key: 'amount', width: 18 },
+            { header: 'Quotation Number', key: 'number', width: 20 },
+            { header: 'Date', key: 'date', width: 20 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Remarks', key: 'remarks', width: 40 },
+        ];
+        quotations.forEach(item => {
+            sheet2.addRow({
+                agent: getAgentName(item.referenceid),
+                company: item.company_name,
+                amount: item.quotation_amount,
+                number: item.quotation_number,
+                date: item.date_created,
+                status: item.status,
+                remarks: item.remarks
+            });
+        });
+
+        // 3. Sales Order Summary - SO-Done and Delivered/Closed
+        const salesOrders = history.filter(item => 
+            (item.status?.toLowerCase() === 'so-done' || 
+             item.status?.toLowerCase() === 'delivered' ||
+             item.status?.toLowerCase() === 'closed transaction')
+        );
+        const sheet3 = workbook.addWorksheet('Sales Order Summary');
+        sheet3.columns = [
+            { header: 'Agent Name', key: 'agent', width: 25 },
+            { header: 'Company', key: 'company', width: 30 },
+            { header: 'SO Amount', key: 'amount', width: 18 },
+            { header: 'SO Number', key: 'number', width: 20 },
+            { header: 'Actual Sales', key: 'sales', width: 18 },
+            { header: 'DR Number', key: 'dr', width: 15 },
+            { header: 'Date', key: 'date', width: 20 },
+            { header: 'Status', key: 'status', width: 20 },
+            { header: 'Remarks', key: 'remarks', width: 40 },
+        ];
+        salesOrders.forEach(item => {
+            sheet3.addRow({
+                agent: getAgentName(item.referenceid),
+                company: item.company_name,
+                amount: item.so_amount,
+                number: item.so_number,
+                sales: item.actual_sales,
+                dr: item.dr_number,
+                date: item.date_created,
+                status: item.status,
+                remarks: item.remarks
+            });
+        });
+
+        // 4. Outbound History - Touchbase and Follow-up
+        const outboundHistory = history.filter(item => 
+            item.type_activity?.toLowerCase().includes('touchbase') || 
+            item.type_activity?.toLowerCase().includes('follow-up')
+        );
+        const sheet4 = workbook.addWorksheet('Outbound History');
+        sheet4.columns = [
+            { header: 'Agent Name', key: 'agent', width: 25 },
+            { header: 'Company', key: 'company', width: 30 },
+            { header: 'Activity Type', key: 'type', width: 20 },
+            { header: 'Call Status', key: 'callStatus', width: 15 },
+            { header: 'Date', key: 'date', width: 20 },
+            { header: 'Duration (mins)', key: 'duration', width: 15 },
+            { header: 'Source', key: 'source', width: 15 },
+            { header: 'Remarks', key: 'remarks', width: 40 },
+        ];
+        outboundHistory.forEach(item => {
+            sheet4.addRow({
+                agent: getAgentName(item.referenceid),
+                company: item.company_name,
+                type: item.type_activity,
+                callStatus: item.call_status,
+                date: item.date_created,
+                duration: getDuration(item.start_date, item.end_date),
+                source: item.source,
+                remarks: item.remarks
+            });
+        });
+
+        // 5. Other Activities Duration - Summary per agent
+        const sheet5 = workbook.addWorksheet('Other Activities Duration');
+        sheet5.columns = [
+            { header: 'Agent Name', key: 'agent', width: 25 },
+            { header: 'Activity Type', key: 'type', width: 25 },
+            { header: 'Total Duration (mins)', key: 'totalDuration', width: 20 },
+            { header: 'Activity Count', key: 'count', width: 15 },
+            { header: 'Average Duration (mins)', key: 'avgDuration', width: 22 },
+        ];
+
+        // Group by agent and activity type
+        const agentActivitySummary: Record<string, Record<string, { total: number; count: number }>> = {};
+        history.forEach(item => {
+            const agent = getAgentName(item.referenceid);
+            const type = item.type_activity || 'Unknown';
+            const duration = getDuration(item.start_date, item.end_date);
+            
+            if (!agentActivitySummary[agent]) agentActivitySummary[agent] = {};
+            if (!agentActivitySummary[agent][type]) agentActivitySummary[agent][type] = { total: 0, count: 0 };
+            
+            agentActivitySummary[agent][type].total += duration;
+            agentActivitySummary[agent][type].count += 1;
+        });
+
+        Object.entries(agentActivitySummary).forEach(([agent, types]) => {
+            Object.entries(types).forEach(([type, data]) => {
+                sheet5.addRow({
+                    agent,
+                    type,
+                    totalDuration: data.total,
+                    count: data.count,
+                    avgDuration: Math.round(data.total / data.count)
+                });
+            });
+        });
+
+        // Style all headers
+        [sheet1, sheet2, sheet3, sheet4, sheet5].forEach(sheet => {
+            sheet.getRow(1).eachCell(cell => {
+                cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '22C55E' } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            });
+        });
+
+        // Download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `agent-reports-${dateStr}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
             {loadingHistory ? (
@@ -258,33 +439,174 @@ export function AgentList({
                 <div className="text-center text-red-500 py-10 text-sm">{errorHistory}</div>
             ) : (
                 <>
-                    {/* AGENT FILTER */}
-                    <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                        <SelectTrigger className="w-[220px] text-xs">
-                            <SelectValue placeholder="Filter by Agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Agents</SelectItem>
-                            {agents.map((agent) => (
-                                <SelectItem className="capitalize" key={agent.ReferenceID} value={agent.ReferenceID}>
-                                    {agent.Firstname} {agent.Lastname}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {/* FILTERS ROW */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Selected Agent Indicator */}
+                        {selectedAgent !== "all" && (
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="text-gray-500">Filtered by:</span>
+                                <span className="font-semibold text-gray-700">
+                                    {agents.find(a => a.ReferenceID === selectedAgent)?.Firstname} {agents.find(a => a.ReferenceID === selectedAgent)?.Lastname}
+                                </span>
+                                <button
+                                    onClick={() => setSelectedAgent("all")}
+                                    className="text-red-500 hover:text-red-700"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* AGENT LOGIN ACTIVITY - Clickable Filter */}
+                    <Card className="rounded-xl border shadow-sm">
+                        <CardHeader className="px-5 pt-5 pb-3 border-b">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-sm font-semibold text-gray-800">Agent Login Activity</h2>
+                                    <p className="text-xs text-gray-400 mt-0.5">Real-time connection status of your team</p>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                                        {onlineCount} Online
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />
+                                        {offlineCount} Offline
+                                    </span>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-4">
+                            {/* All Agents Card */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 mb-3">
+                                <button
+                                    onClick={() => setSelectedAgent("all")}
+                                    className={`relative flex items-start gap-3 rounded-xl border p-3.5 transition-all text-left ${
+                                        selectedAgent === "all"
+                                            ? "border-green-500 bg-green-50 ring-1 ring-green-200"
+                                            : "border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/30"
+                                    }`}
+                                >
+                                    <div
+                                        className={`absolute left-0 top-4 bottom-4 w-[3px] rounded-full ${
+                                            selectedAgent === "all" ? "bg-green-500" : "bg-gray-300"
+                                        }`}
+                                    />
+                                    <div className="relative flex-shrink-0 ml-1.5">
+                                        <div className="h-11 w-11 rounded-full bg-green-100 flex items-center justify-center border-2 border-white shadow-sm">
+                                            <span className="text-xs font-bold text-green-700">ALL</span>
+                                        </div>
+                                        {selectedAgent === "all" && (
+                                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-green-500" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0 pt-1">
+                                        <p className="text-xs font-semibold text-gray-800">All Agents</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">{agents.length} total agents</p>
+                                        <p className="text-[10px] text-green-600 mt-1 font-medium">
+                                            {selectedAgent === "all" ? "Currently selected" : "Click to view all"}
+                                        </p>
+                                    </div>
+                                </button>
+
+                                {/* Individual Agent Cards */}
+                                {sortedAgents.map((agent) => {
+                                    const activity = agentActivityMap[agent.ReferenceID];
+                                    const online = agent.Connection?.toLowerCase() === "online";
+                                    const isSelected = selectedAgent === agent.ReferenceID;
+
+                                    return (
+                                        <button
+                                            key={agent.ReferenceID}
+                                            onClick={() => setSelectedAgent(agent.ReferenceID)}
+                                            className={`relative flex items-start gap-3 rounded-xl border p-3.5 transition-all text-left ${
+                                                isSelected
+                                                    ? "border-green-500 bg-green-50 ring-1 ring-green-200"
+                                                    : online
+                                                        ? "border-green-200 bg-green-50/40"
+                                                        : "border-gray-100 bg-white hover:border-green-200 hover:bg-green-50/30"
+                                            }`}
+                                        >
+                                            {/* Status bar on left edge */}
+                                            <div
+                                                className={`absolute left-0 top-4 bottom-4 w-[3px] rounded-full ${
+                                                    isSelected ? "bg-green-500" : online ? "bg-green-500" : "bg-gray-200"
+                                                }`}
+                                            />
+
+                                            {/* Avatar */}
+                                            <div className="relative flex-shrink-0 ml-1.5">
+                                                <img
+                                                    src={agent.profilePicture || "/Taskflow.png"}
+                                                    alt={`${agent.Firstname} ${agent.Lastname}`}
+                                                    className="h-11 w-11 rounded-full object-cover border-2 border-white shadow-sm"
+                                                    onError={handleImageError}
+                                                />
+                                                <span
+                                                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                                                        online ? "bg-green-500" : "bg-gray-300"
+                                                    }`}
+                                                />
+                                            </div>
+
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-semibold text-gray-800 capitalize truncate leading-tight">
+                                                    {agent.Firstname} {agent.Lastname}
+                                                </p>
+
+                                                <p className={`text-[10px] font-medium mt-0.5 ${online ? "text-green-600" : "text-gray-400"}`}>
+                                                    {agent.Connection || "Offline"}
+                                                </p>
+
+                                                <div className="mt-2 space-y-1">
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                                        <LogIn className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                                        <span className="truncate">Login: {formatDateTimeShort(activity?.latestLogin)}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                                        <LogOut className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                                        <span className="truncate">Logout: {formatDateTimeShort(activity?.latestLogout)}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Target Quota badge */}
+                                                {agent.TargetQuota && agent.TargetQuota !== "0" && (
+                                                    <div className="mt-2.5">
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                                            <svg className="w-2.5 h-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                            </svg>
+                                                            Target: ₱{Number(agent.TargetQuota).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Selected checkmark */}
+                                                {isSelected && (
+                                                    <div className="absolute bottom-3 right-3 text-green-500">
+                                                        <Check size={16} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     <div className="grid grid-cols-1 gap-4 mt-2">
                         {/* AGENT SUMMARY */}
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
-                            if (!agent) return <p className="text-center text-sm italic text-muted-foreground">Agent not found.</p>;
+                            if (!agent) return <p className="text-center text-sm italic text-gray-500">Agent not found.</p>;
                             const agentActivities = filteredHistory.filter(item => item.referenceid.toLowerCase() === selectedAgent.toLowerCase());
                             return <AgentCard agent={agent} agentActivities={agentActivities} referenceid={referenceid} />;
                         })()}
-
-                        {selectedAgent === "all" && (
-                            <AgentActivityLogs agents={agents} agentActivityMap={agentActivityMap} />
-                        )}
 
                         <AgentMeetings
                             agents={agents}
