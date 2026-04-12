@@ -161,13 +161,11 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
-  // For meetings: show start_date to end_date with duration
+  // For meetings: show start and end time
   // For activities: show duration between start_date and end_date if available
   let timeDisplay = null;
-  let durationDisplay = null;
 
   if (isMeeting) {
-    // Meeting: show start and end time
     const startDate = parseDate(ev.start_date!);
     const endDate = parseDate(ev.end_date!);
     if (startDate && endDate) {
@@ -177,14 +175,8 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           {formatTime(startDate)} - {formatTime(endDate)}
         </span>
       );
-      durationDisplay = (
-        <span className="text-[9px] text-purple-500 font-medium">
-          {calculateDuration(startDate, endDate)}
-        </span>
-      );
     }
   } else if (ev.start_date && ev.end_date) {
-    // Activity with both dates: show duration
     const startDate = parseDate(ev.start_date);
     const endDate = parseDate(ev.end_date);
     if (startDate && endDate) {
@@ -196,8 +188,8 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
       );
     }
   } else {
-    // Regular activity: show end_date time
-    const eventDate = parseDate(ev.end_date || ev.date_updated);
+    // Regular activity: show end_date time (no date_updated!)
+    const eventDate = parseDate(ev.end_date || ev.start_date);
     if (eventDate) {
       timeDisplay = (
         <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
@@ -209,7 +201,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   }
 
   return (
-    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm">
+    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-slate-800 truncate">
@@ -225,8 +217,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          {timeDisplay}
-          {durationDisplay}
+          {!isMeeting && timeDisplay}
           <span
             className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
           >
@@ -234,6 +225,12 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           </span>
         </div>
       </div>
+      {/* Time display for meetings shown below */}
+      {isMeeting && timeDisplay && (
+        <div className="mt-2 pt-2 border-t border-green-100">
+          {timeDisplay}
+        </div>
+      )}
     </div>
   );
 };
