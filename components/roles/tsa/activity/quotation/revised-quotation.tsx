@@ -183,6 +183,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
+  const [filterSource, setFilterSource] = useState<string>("all");
+  const [filterTypeClient, setFilterTypeClient] = useState<string>("all");
+  const [filterCallStatus, setFilterCallStatus] = useState<string>("all");
+  const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
+  const [itemsPerPage, setItemsPerPage] = useState<number>(20);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   const [editItem, setEditItem] = useState<Completed | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -433,6 +439,34 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     return Array.from(s).sort();
   }, [sortedActivities]);
 
+  const sourceOptions = useMemo(() => {
+    const s = new Set<string>();
+    sortedActivities.forEach((a) => {
+      if (a.source) s.add(a.source);
+    });
+    return Array.from(s).sort();
+  }, [sortedActivities]);
+
+  const typeClientOptions = useMemo(() => {
+    const s = new Set<string>();
+    sortedActivities.forEach((a) => {
+      if (a.type_client) s.add(a.type_client);
+    });
+    return Array.from(s).sort();
+  }, [sortedActivities]);
+
+  const callStatusOptions = useMemo(() => {
+    return [] as string[];
+  }, []);
+
+  const quotationStatusOptions = useMemo(() => {
+    const s = new Set<string>();
+    sortedActivities.forEach((a) => {
+      if (a.quotation_status) s.add(a.quotation_status);
+    });
+    return Array.from(s).sort();
+  }, [sortedActivities]);
+
   const openEditDialog = (item: Completed) => {
     setEditItem(item);
     setEditAutoAction(null);
@@ -547,10 +581,25 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}
+              filterSource={filterSource}
+              filterTypeClient={filterTypeClient}
+              filterCallStatus={filterCallStatus}
+              filterQuotationStatus={filterQuotationStatus}
               setFilterStatus={setFilterStatus}
               setFilterTypeActivity={setFilterTypeActivity}
+              setFilterSource={setFilterSource}
+              setFilterTypeClient={setFilterTypeClient}
+              setFilterCallStatus={setFilterCallStatus}
+              setFilterQuotationStatus={setFilterQuotationStatus}
               statusOptions={statusOptions}
               typeActivityOptions={typeActivityOptions}
+              sourceOptions={sourceOptions}
+              typeClientOptions={typeClientOptions}
+              callStatusOptions={callStatusOptions}
+              quotationStatusOptions={quotationStatusOptions}
+              itemsPerPage={itemsPerPage}
+              setItemsPerPage={setItemsPerPage}
+              setCurrentPage={setCurrentPage}
             />
             {selectedIds.size > 0 && (
               <Button
