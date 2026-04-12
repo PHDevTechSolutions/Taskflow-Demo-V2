@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -273,12 +273,29 @@ function AllActivitiesContent() {
 
 // ─── Wrapper with Providers ───────────────────────────────────────────────────
 
-export default function AllActivitiesPage() {
+function AllActivitiesPageContent() {
   return (
     <UserProvider>
       <FormatProvider>
         <AllActivitiesContent />
       </FormatProvider>
     </UserProvider>
+  );
+}
+
+export default function AllActivitiesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-1 items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
+          <p className="text-xs text-zinc-500 animate-pulse font-mono uppercase tracking-widest">
+            Loading...
+          </p>
+        </div>
+      </div>
+    }>
+      <AllActivitiesPageContent />
+    </Suspense>
   );
 }
