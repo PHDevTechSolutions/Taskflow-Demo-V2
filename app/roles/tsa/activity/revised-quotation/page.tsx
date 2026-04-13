@@ -104,6 +104,32 @@ function DashboardContent() {
         if (!response.ok) throw new Error("Failed to fetch user data");
         const data = await response.json();
 
+        // Check if managername is empty OR if it looks like an ID (e.g. contains dashes/numbers)
+        let finalManagerName = data.ManagerName || "";
+        const looksLikeId = (val: string) =>
+          /^[A-Z0-9-]+$/.test(val) && val.includes("-");
+
+        if (
+          (!finalManagerName || looksLikeId(finalManagerName)) &&
+          data.Manager
+        ) {
+          try {
+            const mRes = await fetch(
+              `/api/user?id=${encodeURIComponent(data.Manager)}`,
+            );
+            if (mRes.ok) {
+              const mData = await mRes.json();
+              const resolvedName =
+                `${mData.Firstname ?? ""} ${mData.Lastname ?? ""}`.trim();
+              if (resolvedName) {
+                finalManagerName = resolvedName;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to fetch manager name:", e);
+          }
+        }
+
         setUserDetails({
           referenceid: data.ReferenceID || "",
           tsm: data.TSM || "",
@@ -114,7 +140,7 @@ function DashboardContent() {
           email: data.Email || "",
           contact: data.ContactNumber || "",
           tsmname: data.TSMName || "",
-          managername: data.ManagerName || "",
+          managername: finalManagerName || "",
           signature: data.signatureImage || "",
           managerDetails: data.managerDetails || null,
           tsmDetails: data.tsmDetails || null,
@@ -178,7 +204,7 @@ function DashboardContent() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">
+                  <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
                     Quotations
                   </BreadcrumbPage>
                 </BreadcrumbItem>
@@ -217,7 +243,6 @@ function DashboardContent() {
       </SidebarInset>
 
       <SidebarRight
-        userId={userId ?? undefined}
         dateCreatedFilterRange={dateCreatedFilterRange}
         setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
       />

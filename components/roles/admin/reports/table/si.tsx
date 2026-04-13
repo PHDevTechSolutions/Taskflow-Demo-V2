@@ -1,516 +1,500 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext, } from "@/components/ui/pagination";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
-interface Company {
-    account_reference_number: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person?: string;
-    type_client?: string;
-}
-
+/* ================= TYPES ================= */
 interface SI {
-    id: number;
-    actual_sales?: number;
-    dr_number?: string;
-    remarks?: string;
-    date_created: string;
-    date_updated?: string;
-    account_reference_number?: string;
-    company_name?: string;
-    contact_number?: string;
-    type_activity: string;
-    status: string;
-    delivery_date: string;
-    si_date: string;
-    payment_terms: string;
-    referenceid: string;
+  id: number;
+  actual_sales?: number;
+  dr_number?: string;
+  remarks?: string;
+  date_created: string;
+  date_updated?: string;
+  company_name?: string;
+  contact_number?: string;
+  contact_person: string;
+  type_activity: string;
+  status: string;
+  delivery_date: string;
+  si_date: string;
+  payment_terms: string;
+  referenceid: string;
+  start_date?: string;
+  end_date?: string;
+  tsm?: string;
+  activity_reference_number?: string;
 }
 
-interface UserDetails {
-    referenceid: string;
-    tsm: string;
-    manager: string;
-    firstname: string;
-    lastname: string;
-    profilePicture: string;
+interface SORecord {
+  id: number;
+  so_number?: string;
+  type_activity: string;
+  status: string;
+  referenceid: string;
+  tsm?: string;
+  activity_reference_number?: string;
 }
 
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  Role: string;
+  TSM?: string;
+  profilePicture?: string;
+}
+
+interface UserDetails { referenceid: string; tsm: string; manager: string; firstname: string; lastname: string; profilePicture: string; }
 interface SIProps {
-    referenceid: string;
-    target_quota?: string;
-    dateCreatedFilterRange: any;
-    setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-    userDetails: UserDetails;
+  referenceid: string;
+  target_quota?: string;
+  dateCreatedFilterRange: any;
+  setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
+  userDetails: UserDetails;
 }
 
+/* ================= HELPERS ================= */
 const PAGE_SIZE = 10;
+const fmt = (v: number) => v.toLocaleString(undefined, { style: "currency", currency: "PHP" });
 
-export const SITable: React.FC<SIProps> = ({
-    referenceid,
-    target_quota,
-    dateCreatedFilterRange,
-    userDetails,
-    setDateCreatedFilterRangeAction,
-}) => {
-    const [companies, setCompanies] = useState<Company[]>([]);
-    const [activities, setActivities] = useState<SI[]>([]);
-    const [loadingCompanies, setLoadingCompanies] = useState(false);
-    const [loadingActivities, setLoadingActivities] = useState(false);
-    const [errorCompanies, setErrorCompanies] = useState<string | null>(null);
-    const [errorActivities, setErrorActivities] = useState<string | null>(null);
+function computeDuration(start?: string, end?: string): string {
+  if (!start || !end) return "—";
+  const s = new Date(start).getTime(), e = new Date(end).getTime();
+  if (isNaN(s) || isNaN(e) || e < s) return "—";
+  const m = Math.floor((e - s) / 60_000);
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
 
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
+function toPlainDate(value: Date | string): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-    // Pagination state
-    const [page, setPage] = useState(1);
+const recordDateStr = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const s = String(v).slice(0, 10);
+  return s === "1970-01-01" ? null : s;
+};
+const displayDate = (v: string | null | undefined) => recordDateStr(v) ?? "-";
 
-    const [agents, setAgents] = useState<any[]>([]);
-    const [selectedAgent, setSelectedAgent] = useState<string>("all");
+/* ================= COMPONENT ================= */
+export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange, userDetails }) => {
+  const [activities, setActivities] = useState<SI[]>([]);
+  const [soRecords, setSORecords] = useState<SORecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState("all");
+  const [expandedTsmId, setExpandedTsmId] = useState<string | null>(null);
 
-    // Fetch companies
-    useEffect(() => {
-        if (!referenceid) {
-            setCompanies([]);
-            return;
+  // ─── Fetch SI (Delivered) activities ─────────────────────────────────────────
+  const fetchActivities = useCallback(() => {
+    if (!referenceid) { setActivities([]); return; }
+    setLoading(true); setError(null);
+
+    const url = new URL("/api/reports/admin/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
+    if (dateCreatedFilterRange?.to) url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
+    url.searchParams.append("type_activity", "delivered / closed transaction");
+
+    fetch(url.toString())
+      .then(async r => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
+      .then(d => setActivities(d.activities || []))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
+
+  // ─── Fetch SO records ────────────────────────────────────────────────────────
+  const fetchSORecords = useCallback(() => {
+    if (!referenceid) { setSORecords([]); return; }
+
+    const url = new URL("/api/reports/admin/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    if (dateCreatedFilterRange?.from) url.searchParams.append("from", toPlainDate(dateCreatedFilterRange.from));
+    if (dateCreatedFilterRange?.to) url.searchParams.append("to", toPlainDate(dateCreatedFilterRange.to));
+    url.searchParams.append("type_activity", "sales order preparation");
+
+    fetch(url.toString())
+      .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setSORecords(d.activities || []))
+      .catch(() => setSORecords([]));
+  }, [referenceid, dateCreatedFilterRange]);
+
+  // ─── Realtime subscription ───────────────────────────────────────────────────
+  useEffect(() => {
+    fetchActivities();
+    fetchSORecords();
+    if (!referenceid) return;
+
+    const ch = supabase.channel(`si`)
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "history" },
+        (payload) => {
+          const n = payload.new as SI, o = payload.old as SI;
+          setActivities(c => {
+            if (payload.eventType === "INSERT") {
+              if (n.type_activity?.toLowerCase() !== "delivered / closed transaction") return c;
+              return c.some(a => a.id === n.id) ? c : [...c, n];
+            }
+            if (payload.eventType === "UPDATE") return c.map(a => a.id === n.id ? n : a);
+            if (payload.eventType === "DELETE") return c.filter(a => a.id !== o.id);
+            return c;
+          });
         }
-        setLoadingCompanies(true);
-        setErrorCompanies(null);
+      ).subscribe();
 
-        fetch(`/api/com-fetch-companies`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch companies");
-                return res.json();
-            })
-            .then((data) => setCompanies(data.data || []))
-            .catch((err) => setErrorCompanies(err.message))
-            .finally(() => setLoadingCompanies(false));
-    }, [referenceid]);
+    return () => { supabase.removeChannel(ch); };
+  }, [referenceid, fetchActivities, fetchSORecords]);
 
-    // Fetch activities
-    const fetchActivities = useCallback(() => {
-        setLoadingActivities(true);
-        setErrorActivities(null);
+  // ─── Fetch agents ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!userDetails.referenceid) return;
+    fetch(`/api/fetch-all-users-admin`)
+      .then(r => r.json())
+      .then(setAgents)
+      .catch(() => { });
+  }, [userDetails.referenceid]);
 
-        fetch(`/api/act-fetch-admin-history`)
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setErrorActivities(err.message))
-            .finally(() => setLoadingActivities(false));
-    }, []);
+  // ─── Agent lookup maps ───────────────────────────────────────────────────────
+  const agentMap = useMemo(() => {
+    const m: Record<string, Agent & { name: string }> = {};
+    agents.forEach(a => {
+      if (a.ReferenceID)
+        m[a.ReferenceID.toLowerCase()] = { ...a, name: `${a.Firstname} ${a.Lastname}` };
+    });
+    return m;
+  }, [agents]);
 
-    // Real-time subscription using Supabase
-    useEffect(() => {
-        // Initial fetch
-        fetchActivities();
+  const tsmAgents = useMemo(
+    () => agents.filter(a => a.Role === "Territory Sales Manager"),
+    [agents]
+  );
 
-        const channel = supabase
-            .channel("public:history")
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "history",
-                },
-                (payload) => {
-                    const newRecord = payload.new as SI;
-                    const oldRecord = payload.old as SI;
+  // ─── TSM Summary ─────────────────────────────────────────────────────────────
+  // soCount        = SO records per TSM
+  // deliveredCount = Delivered / Closed Transaction rows per TSM (directly from activities)
+  // totalSIAmount  = sum of actual_sales per TSM
+  const tsmSummary = useMemo(() => {
+    const summaryMap = new Map<string, {
+      tsmId: string;
+      tsmName: string;
+      soCount: number;
+      deliveredCount: number;
+      totalSIAmount: number;
+    }>();
 
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
+    tsmAgents.forEach(tsm => {
+      const tsmId = tsm.ReferenceID.toLowerCase();
+      summaryMap.set(tsmId, { tsmId, tsmName: `${tsm.Firstname} ${tsm.Lastname}`, soCount: 0, deliveredCount: 0, totalSIAmount: 0 });
+    });
 
-                            case "UPDATE":
-                                return curr.map((a) =>
-                                    a.id === newRecord.id ? newRecord : a
-                                );
+    // Count SO per TSM
+    soRecords.forEach(so => {
+      const agent = agentMap[so.referenceid?.toLowerCase() ?? ""];
+      const tsmId = (agent?.TSM ?? so.tsm ?? "").toLowerCase();
+      if (!tsmId || !summaryMap.has(tsmId)) return;
+      summaryMap.get(tsmId)!.soCount += 1;
+    });
 
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
+    // Count Delivered / Closed Transaction per TSM directly from activities
+    activities.forEach(si => {
+      const agent = agentMap[si.referenceid?.toLowerCase() ?? ""];
+      const tsmId = (agent?.TSM ?? si.tsm ?? "").toLowerCase();
+      if (!tsmId || !summaryMap.has(tsmId)) return;
+      const row = summaryMap.get(tsmId)!;
+      row.deliveredCount += 1;
+      row.totalSIAmount += si.actual_sales ?? 0;
+    });
 
-                            default:
-                                return curr;
-                        }
-                    });
-                }
-            )
-            .subscribe();
+    return Array.from(summaryMap.values()).sort((a, b) => b.soCount - a.soCount);
+  }, [activities, soRecords, agentMap, tsmAgents]);
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchActivities]);
+  // ─── Expanded TSA details ────────────────────────────────────────────────────
+  const expandedTsaGroups = useMemo(() => {
+    if (!expandedTsmId) return [];
 
-    // Merge company info into activities
-    const mergedActivities = useMemo(() => {
-        return activities
-            .map((history) => {
-                const company = companies.find(
-                    (c) => c.account_reference_number === history.account_reference_number
-                );
-                return {
-                    ...history,
-                    company_name: company?.company_name ?? "Unknown Company",
-                    contact_number: company?.contact_number ?? "-",
-                    contact_person: company?.contact_person ?? "-",
-                };
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.date_updated ?? b.date_created).getTime() -
-                    new Date(a.date_updated ?? a.date_created).getTime()
-            );
-    }, [activities, companies]);
+    const rowsForTsm = activities.filter(item => {
+      const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+      const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+      return derivedTsmId === expandedTsmId;
+    });
 
-    // Filter logic
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase();
+    const byTsa = new Map<string, { tsaName: string; rows: SI[] }>();
+    rowsForTsm.forEach(row => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown TSA";
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
 
-        return mergedActivities
-            .filter((item) => item.type_activity?.toLowerCase() === "delivered / closed transaction")
-            .filter((item) => {
-                if (!search) return true;
-                return (
-                    (item.company_name?.toLowerCase().includes(search) ?? false) ||
-                    (item.dr_number?.toLowerCase().includes(search) ?? false) ||
-                    (item.remarks?.toLowerCase().includes(search) ?? false)
-                );
-            })
-            .filter((item) => {
-                if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                return true;
-            })
-            .filter((item) => {
-                if (selectedAgent === "all") return true;
-                return item.referenceid === selectedAgent;
-            })
-            .filter((item) => {
-                if (
-                    !dateCreatedFilterRange ||
-                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-                ) {
-                    return true;
-                }
+    return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
+  }, [expandedTsmId, activities, agentMap]);
 
-                const updatedDate = item.delivery_date
-                    ? new Date(item.delivery_date)
-                    : new Date(item.delivery_date);
+  // ─── Filtered rows for detail table ─────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+    const fromStr = dateCreatedFilterRange?.from ? toPlainDate(dateCreatedFilterRange.from) : null;
+    const toStr = dateCreatedFilterRange?.to ? toPlainDate(dateCreatedFilterRange.to) : null;
 
-                if (isNaN(updatedDate.getTime())) return false;
+    return activities
+      .filter(i => !s || i.company_name?.toLowerCase().includes(s) || i.dr_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s))
+      .filter(i => selectedAgent === "all" || i.referenceid === selectedAgent)
+      .filter(i => {
+        if (!fromStr && !toStr) return true;
+        const d = recordDateStr(i.delivery_date) ?? recordDateStr(i.date_created);
+        if (!d) return false;
+        if (fromStr && d < fromStr) return false;
+        if (toStr && d > toStr) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+  }, [activities, searchTerm, selectedAgent, dateCreatedFilterRange]);
 
-                const fromDate = dateCreatedFilterRange.from
-                    ? new Date(dateCreatedFilterRange.from)
-                    : null;
-                const toDate = dateCreatedFilterRange.to
-                    ? new Date(dateCreatedFilterRange.to)
-                    : null;
+  useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
 
-                // Helper function to check if two dates are on the same day (ignoring time)
-                const isSameDay = (d1: Date, d2: Date) =>
-                    d1.getFullYear() === d2.getFullYear() &&
-                    d1.getMonth() === d2.getMonth() &&
-                    d1.getDate() === d2.getDate();
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (tsmSummary.length === 0) {
+      alert("No data to export");
+      return;
+    }
 
-                if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                    // Exact one-day filter: match any record in that day
-                    return isSameDay(updatedDate, fromDate);
-                }
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Invoice Summary");
 
-                if (fromDate && updatedDate < fromDate) return false;
-                if (toDate && updatedDate > toDate) return false;
+      // Add headers
+      worksheet.columns = [
+        { header: "TSM", key: "tsm", width: 25 },
+        { header: "Total SO", key: "soCount", width: 15 },
+        { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
+        { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
+      ];
 
-                return true;
-            });
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
 
-    }, [mergedActivities, searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [searchTerm, filterStatus, dateCreatedFilterRange, selectedAgent]);
-
-    // Calculate totals for footer (for filteredActivities, not paginated subset)
-    const totalQuotationAmount = useMemo(() => {
-        return filteredActivities.reduce((acc, item) => acc + (item.actual_sales ?? 0), 0);
-    }, [filteredActivities]);
-
-    // Count unique quotation_number (non-null)
-    const uniqueQuotationCount = useMemo(() => {
-        const uniqueSet = new Set<string>();
-        filteredActivities.forEach((item) => {
-            if (item.dr_number) uniqueSet.add(item.dr_number);
+      // Add data rows
+      tsmSummary.forEach((item) => {
+        worksheet.addRow({
+          tsm: item.tsmName,
+          soCount: item.soCount,
+          deliveredCount: item.deliveredCount,
+          totalSIAmount: item.totalSIAmount
         });
-        return uniqueSet.size;
-    }, [filteredActivities]);
+      });
 
-    // Pagination logic
-    const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-    const paginatedActivities = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredActivities.slice(start, start + PAGE_SIZE);
-    }, [filteredActivities, page]);
+      // Add totals row
+      const totalsRow = {
+        tsm: "TOTAL",
+        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
+        deliveredCount: tsmSummary.reduce((sum, t) => sum + t.deliveredCount, 0),
+        totalSIAmount: tsmSummary.reduce((sum, t) => sum + t.totalSIAmount, 0)
+      };
+      
+      const totalsRowIndex = worksheet.addRow(totalsRow);
+      totalsRowIndex.font = { bold: true };
 
-    // Reset to page 1 if filter or search changes
-    useEffect(() => {
-        setPage(1);
-    }, [searchTerm, filterStatus, dateCreatedFilterRange]);
+      // Format currency column
+      const amountCol = worksheet.getColumn('totalSIAmount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
 
-    const isLoading = loadingCompanies || loadingActivities;
-    const error = errorCompanies || errorActivities;
+      // Generate filename with date range
+      let filename = "Admin_Sales_Invoice_Summary";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
 
-    const agentMap = useMemo(() => {
-        const map: Record<string, { name: string; profilePicture: string }> = {};
-        agents.forEach((agent) => {
-            if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
-                map[agent.ReferenceID.toLowerCase()] = {
-                    name: `${agent.Firstname} ${agent.Lastname}`,
-                    profilePicture: agent.profilePicture || "", // use actual key for profile picture
-                };
-            }
-        });
-        return map;
-    }, [agents]);
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
-    useEffect(() => {
-        const fetchAgents = async () => {
-            try {
-                const response = await fetch(`/api/fetch-all-user-admin`);
-                if (!response.ok) throw new Error("Failed to fetch agents");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
 
-                const data = await response.json();
-                setAgents(data);
-            } catch (err) {
-                console.error("Error fetching agents:", err);
-                setErrorActivities("Failed to load agents.");
-            }
-        };
+  /* ================= RENDER ================= */
+  return (
+    <div className="space-y-4">
 
-        fetchAgents();
-    }, []);
-
-    return (
+      {/* ── TSM Summary Table ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+      ) : error ? (
+        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+      ) : tsmSummary.length === 0 ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">No SI records found.</div>
+      ) : (
         <>
-            {/* Search */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-                <Input
-                    type="text"
-                    placeholder="Search company or remarks..."
-                    className="max-w-md"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-
-                <Select
-                    value={selectedAgent}
-                    onValueChange={(value) => {
-                        setSelectedAgent(value);
-                        setPage(1);
-                    }}
-                >
-                    <SelectTrigger className="w-[220px] text-xs">
-                        <SelectValue placeholder="Filter by Agent" />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                        <SelectItem value="all">All Agents</SelectItem>
-
-                        {agents.map((agent) => (
-                            <SelectItem className="capitalize"
-                                key={agent.ReferenceID}
-                                value={agent.ReferenceID}
-                            >
-                                {agent.Firstname} {agent.Lastname}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Loading */}
-            {isLoading && (
-                <div className="flex justify-center items-center h-40">
-                    <Spinner className="size-8" />
-                </div>
-            )}
-
-            {/* Error */}
-            {error && (
-                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
-                    <div className="flex items-center space-x-3">
-                        <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                        <div>
-                            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                Please check your internet connection or try again later.
-                            </AlertDescription>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                        <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                        <div>
-                            <AlertTitle className="text-black">Create New Data</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                You can start by adding new entries to populate your database.
-                            </AlertDescription>
-                        </div>
-                    </div>
-                </Alert>
-            )}
-
-            {/* No Data Alert */}
-            {!isLoading && !error && filteredActivities.length === 0 && (
-                <Alert variant="destructive" className="flex items-center space-x-3 p-4 text-xs">
-                    <AlertCircleIcon className="h-6 w-6 text-red-600" />
-                    <div>
-                        <AlertTitle>No Data Found</AlertTitle>
-                        <AlertDescription>Please check your filters or try again later.</AlertDescription>
-                    </div>
-                </Alert>
-            )}
-
-
-            {/* Total info */}
-            {filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">
-                    Total Activities: {filteredActivities.length} | Unique DR Number: {uniqueQuotationCount}
-                </div>
-            )}
-
-            {/* Table */}
-            {filteredActivities.length > 0 && (
-                <div className="overflow-auto custom-scrollbar rounded-md border p-4 space-y-2 font-mono">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="text-xs">Agent</TableHead>
-                                <TableHead className="w-[120px] text-xs">Delivery Date</TableHead>
-                                <TableHead className="text-xs">SI Date</TableHead>
-                                <TableHead className="text-xs text-right">SI Amount</TableHead>
-                                <TableHead className="text-xs">DR Number</TableHead>
-                                <TableHead className="text-xs">Company Name</TableHead>
-                                <TableHead className="text-xs">Contact Person</TableHead>
-                                <TableHead className="text-xs">Contact Number</TableHead>
-                                <TableHead className="text-xs">Remarks</TableHead>
-                                <TableHead className="text-xs">Payment Terms</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {paginatedActivities.map((item) => {
-                                const agentName =
-                                    agentMap[item.referenceid?.toLowerCase() ?? ""] || "-";
-                                return (
-
-                                    <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                        <TableCell className="flex items-center gap-2 capitalize">
-                                            {agentMap[item.referenceid?.toLowerCase() ?? ""]?.profilePicture ? (
-                                                <img
-                                                    src={agentMap[item.referenceid?.toLowerCase()]!.profilePicture}
-                                                    alt={agentMap[item.referenceid?.toLowerCase()]!.name}
-                                                    className="w-6 h-6 rounded-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                                                    N/A
-                                                </div>
-                                            )}
-                                            <span>{agentMap[item.referenceid?.toLowerCase()]?.name || "-"}</span>
-                                        </TableCell>
-                                        <TableCell>{new Date(item.delivery_date).toLocaleDateString()}</TableCell>
-                                        <TableCell>{new Date(item.si_date).toLocaleDateString()}</TableCell>
-                                        <TableCell className="text-right">
-                                            {item.actual_sales !== undefined && item.actual_sales !== null
-                                                ? item.actual_sales.toLocaleString(undefined, {
-                                                    style: "currency",
-                                                    currency: "PHP",
-                                                })
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell className="uppercase">{item.dr_number || "-"}</TableCell>
-                                        <TableCell>{item.company_name}</TableCell>
-                                        <TableCell>{item.contact_person}</TableCell>
-                                        <TableCell>{item.contact_number}</TableCell>
-                                        <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
-                                        <TableCell>{item.payment_terms}</TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                        <tfoot>
-                            <TableRow className="bg-muted font-semibold text-xs">
-                                <TableCell colSpan={2} className="text-right pr-4">
-                                    Totals:
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    {totalQuotationAmount.toLocaleString(undefined, {
-                                        style: "currency",
-                                        currency: "PHP",
-                                    })}
-                                </TableCell>
-                                <TableCell colSpan={6}></TableCell>
-                            </TableRow>
-                        </tfoot>
-                    </Table>
-                </div>
-            )}
-
-            {pageCount > 1 && (
-                <Pagination>
-                    <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-                        <PaginationItem>
-                            <PaginationPrevious
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page > 1) setPage(page - 1);
-                                }}
-                                aria-disabled={page === 1}
-                                className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                            />
-                        </PaginationItem>
-
-                        {/* Current page / total pages */}
-                        <div className="px-4 font-medium select-none">
-                            {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
-                        </div>
-
-                        <PaginationItem>
-                            <PaginationNext
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    if (page < pageCount) setPage(page + 1);
-                                }}
-                                aria-disabled={page === pageCount}
-                                className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            )}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
+            <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 text-[11px]">
+                <TableHead className="text-gray-500">TSM</TableHead>
+                <TableHead className="text-gray-500 text-right">Total SO</TableHead>
+                <TableHead className="text-gray-500 text-right">Total SI / Delivered</TableHead>
+                <TableHead className="text-gray-500 text-right">Total SI Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tsmSummary.map(item => {
+                const isExpanded = expandedTsmId === item.tsmId;
+                return (
+                  <TableRow
+                    key={item.tsmId}
+                    className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                    onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                  >
+                    <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                    <TableCell className="text-right text-gray-700">
+                      {item.soCount > 0 ? item.soCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-green-600 font-semibold">
+                      {item.deliveredCount > 0 ? item.deliveredCount.toLocaleString() : <span className="text-gray-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSIAmount)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                <TableCell className="text-gray-500">Total</TableCell>
+                <TableCell className="text-right text-gray-700">
+                  {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right text-green-600">
+                  {tsmSummary.reduce((s, i) => s + i.deliveredCount, 0).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right text-gray-800">
+                  {fmt(tsmSummary.reduce((s, i) => s + i.totalSIAmount, 0))}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+          </div>
         </>
-    );
+      )}
+
+      {/* ── Expanded TSA Details ── */}
+      {expandedTsmId && (
+        <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
+          <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">TSA Details</p>
+          {expandedTsaGroups.length === 0 ? (
+            <div className="text-xs text-gray-500 italic py-2">No TSA SI records under this TSM.</div>
+          ) : (
+            expandedTsaGroups.map(group => (
+              <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-700 uppercase">
+                    {group.tsaName}{" "}
+                    <span className="text-gray-400 font-normal">({group.rows.length} deliveries)</span>
+                  </p>
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <Input
+                      placeholder="Search company, DR no., remarks..."
+                      className="max-w-xs text-xs"
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 text-[11px]">
+                        <TableHead className="text-gray-500">Delivery Date</TableHead>
+                        <TableHead className="text-gray-500">SI Date</TableHead>
+                        <TableHead className="text-gray-500 text-right">SI Amount</TableHead>
+                        <TableHead className="text-gray-500">DR Number</TableHead>
+                        <TableHead className="text-gray-500">Company</TableHead>
+                        <TableHead className="text-gray-500">Contact Person</TableHead>
+                        <TableHead className="text-gray-500">Contact No.</TableHead>
+                        <TableHead className="text-gray-500">Payment Terms</TableHead>
+                        <TableHead className="text-gray-500">Duration</TableHead>
+                        <TableHead className="text-gray-500">Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.rows.map(row => {
+                        const dur = computeDuration(row.start_date, row.end_date);
+                        return (
+                          <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
+                            <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.delivery_date)}</TableCell>
+                            <TableCell className="text-gray-500 whitespace-nowrap">{displayDate(row.si_date)}</TableCell>
+                            <TableCell className="text-right text-gray-700">{row.actual_sales != null ? fmt(row.actual_sales) : "-"}</TableCell>
+                            <TableCell className="uppercase text-gray-700">{row.dr_number || "-"}</TableCell>
+                            <TableCell className="text-gray-700">{row.company_name || "-"}</TableCell>
+                            <TableCell className="capitalize text-gray-600">{row.contact_person || "-"}</TableCell>
+                            <TableCell className="text-gray-500">{row.contact_number || "-"}</TableCell>
+                            <TableCell className="text-gray-500">{row.payment_terms || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {dur === "—"
+                                ? <span className="text-gray-300">—</span>
+                                : <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-semibold text-gray-600 tabular-nums">{dur}</span>
+                              }
+                            </TableCell>
+                            <TableCell className="capitalize text-gray-500">{row.remarks || "-"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                        <TableCell colSpan={2} className="text-gray-500">Subtotal</TableCell>
+                        <TableCell className="text-right text-gray-800">
+                          {fmt(group.rows.reduce((s, r) => s + (r.actual_sales ?? 0), 0))}
+                        </TableCell>
+                        <TableCell colSpan={7} />
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 };

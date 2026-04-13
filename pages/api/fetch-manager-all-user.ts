@@ -26,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Firstname: 1,
         Lastname: 1,
         ReferenceID: 1,
+        TSM: 1,
         profilePicture: 1,
         Position: 1,
         Status: 1,

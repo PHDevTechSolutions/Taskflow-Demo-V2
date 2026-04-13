@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -41,6 +42,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!data || data.length === 0) {
       return res.status(404).json({ error: "Activity not found" });
     }
+
+    // Log audit trail for cancellation
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "activity status",
+      id.toString(),
+      `Status: Cancelled`,
+      `Cancelled activity`,
+      { status: "Cancelled", cancellation_remarks }
+    );
 
     return res.status(200).json({ success: true, data });
   } catch (err: any) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import cloudinary from "@/lib/cloudinary";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 export async function POST(req: Request) {
   try {
@@ -10,6 +11,17 @@ export async function POST(req: Request) {
     }
 
     const result = await cloudinary.uploader.destroy(public_id);
+
+    // Log audit trail for image deletion
+    await logAuditTrailApp(
+      req,
+      "delete",
+      "cloudinary image",
+      public_id,
+      public_id,
+      `Deleted image from Cloudinary: ${public_id}`,
+      { public_id }
+    );
 
     return NextResponse.json(result);
   } catch (error) {

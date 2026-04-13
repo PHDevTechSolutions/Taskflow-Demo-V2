@@ -142,7 +142,8 @@ export function OutboundSheet(props: OutboundSheetProps) {
                     setDialogOpen(true);
                     return false;
                 }
-                if (!followUpDate) {
+                // followUpDate only required for Successful calls
+                if (callStatus === "Successful" && !followUpDate) {
                     setDialogMessage("Please enter Follow Up Date.");
                     setDialogOpen(true);
                     return false;
@@ -204,10 +205,11 @@ export function OutboundSheet(props: OutboundSheetProps) {
                             >
                                 {(isCSR
                                     ? [
+                                        
                                         {
-                                            value: "CSR Endorsement",
-                                            title: "CSR Endorsement",
-                                            desc: "Client endorsed by CSR team.",
+                                            value: "Outbound - Follow-up",
+                                            title: "Outbound - Follow-up",
+                                            desc: "Follow-up call for progress or requirements.",
                                         },
                                     ]
                                     : [
@@ -491,10 +493,13 @@ export function OutboundSheet(props: OutboundSheetProps) {
             )}
 
             {/* STEP 5 */}
+            {/* STEP 5 */}
             {step === 5 && (
                 <div>
                     <h2 className="text-sm font-semibold mb-3">Step 5 — Remarks & Status</h2>
-                    {followUpDate ? (
+
+                    {/* Follow Up Date alert — only for Successful calls */}
+                    {callStatus === "Successful" && followUpDate ? (
                         <Alert variant="default" className="mb-4 flex flex-col gap-3 border-cyan-300 border-3 bg-cyan-100">
                             <div>
                                 <AlertTitle className="font-bold">Follow Up Date:</AlertTitle>
@@ -502,7 +507,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                     {followUpDate} — This is the scheduled date to reconnect with the client.
                                 </AlertDescription>
                             </div>
-
                             <label className="flex items-center gap-2 text-sm font-medium">
                                 <Input
                                     type="checkbox"
@@ -510,12 +514,13 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                     onChange={(e) => setUseToday(e.target.checked)}
                                     className="h-4 w-4"
                                 />
-                                <span className="font-semibold">Today <span className="text-red-500 italic text-[10px]">(check if today)</span></span>
+                                <span className="font-semibold">
+                                    Today <span className="text-red-500 italic text-[10px]">(check if today)</span>
+                                </span>
                             </label>
                         </Alert>
-                    ) : (
-                        <></>
-                    )}
+                    ) : null}
+
                     <FieldGroup>
                         <FieldSet>
                             <FieldLabel className="font-bold">Remarks</FieldLabel>
@@ -536,21 +541,25 @@ export function OutboundSheet(props: OutboundSheetProps) {
                         <FieldSet>
                             <FieldLabel>Status</FieldLabel>
                             <FieldDescription>
-                                Select the final status to indicate if the client was assisted or not assisted during this call.
+                                Select the final status of this call.
                             </FieldDescription>
                             <RadioGroup value={status} onValueChange={props.setStatus} className="space-y-4">
-                                {[
-                                    {
-                                        value: "Assisted",
-                                        title: "Assisted",
-                                        desc: "Client was assisted and provided with the needed information or support.",
-                                    },
-                                    {
-                                        value: "Not Assisted",
-                                        title: "Not Assisted",
-                                        desc: "Unable to assist the client due to incomplete info, missed call, etc.",
-                                    },
-                                ].map((item) => (
+                                {(callStatus === "Successful"
+                                    ? [
+                                        {
+                                            value: "Assisted",
+                                            title: "Assisted",
+                                            desc: "Client was assisted and provided with the needed information or support.",
+                                        },
+                                    ]
+                                    : [
+                                        {
+                                            value: "Completed",
+                                            title: "Completed",
+                                            desc: "Call attempt was completed — client was not reached.",
+                                        },
+                                    ]
+                                ).map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             <FieldContent className="flex-1">
@@ -565,7 +574,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                                         <Button type="button" className="rounded-none" onClick={onSaveClick}>
                                                             <CheckCircle2Icon /> Save
                                                         </Button>
-
                                                     </div>
                                                 )}
                                             </FieldContent>

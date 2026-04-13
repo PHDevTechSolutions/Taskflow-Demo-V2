@@ -23,8 +23,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { Combobox } from "@/components/ui/combobox";
 import { supabase } from "@/utils/supabase";
 import { sileo } from "sileo";
+
+// Convert datetime-local value (local time) → UTC ISO string for PostgreSQL timestamp
+function toUTCISOString(dateStr: string) {
+  if (!dateStr) return "";
+  
+  // Parse the datetime-local string components (local time)
+  const [datePart, timePart] = dateStr.split('T');
+  if (!datePart || !timePart) return "";
+  
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hours, minutes] = timePart.split(':').map(Number);
+  
+  // Create date object assuming LOCAL time
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  
+  if (isNaN(localDate.getTime())) return "";
+  
+  // Convert to UTC by subtracting timezone offset
+  const tzOffset = localDate.getTimezoneOffset() * 60000; // offset in milliseconds
+  const utcDate = new Date(localDate.getTime() - tzOffset);
+  
+  // Return UTC ISO string
+  return utcDate.toISOString();
+}
 
 interface MeetingDialogProps {
   referenceid: string;
@@ -47,6 +72,8 @@ export function MeetingDialog({
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -54,6 +81,23 @@ export function MeetingDialog({
       setRemarks("");
       setStartDate("");
       setEndDate("");
+      setSelectedCompany(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await fetch(`/api/com-fetch-cluster-account?referenceid=${referenceid}`);
+        const data = await response.json();
+        setCompanies(data.data);
+      } catch (error) {
+        console.error("Failed to fetch companies:", error);
+      }
+    };
+
+    if (open) {
+      fetchCompanies();
     }
   }, [open]);
 
@@ -85,9 +129,10 @@ export function MeetingDialog({
             manager,
             type_activity: typeActivity,
             remarks: remarks || "No remarks",
-            start_date: startDate,
-            end_date: endDate,
+            start_date: toUTCISOString(startDate),
+            end_date: toUTCISOString(endDate),
             date_updated: new Date(),
+            company_name: selectedCompany,
           },
         ])
         .select()
@@ -144,11 +189,29 @@ export function MeetingDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Client Meeting">Client Meeting</SelectItem>
-                <SelectItem value="Group Meeting">Group Meeting</SelectItem>
-              </SelectContent>
-            </Select>
+              <SelectItem value="Client Meeting">Client Meeting</SelectItem>
+              <SelectItem value="Group Meeting">Group Meeting</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Companies */} 
+        {typeActivity === "Client Meeting" && (
+          <div className="grid gap-2">
+            <Label className="font-bold">Company</Label>
+            <Combobox
+              options={companies.map((company) => ({
+                value: company.company_name,
+                label: company.company_name,
+              }))}
+              value={selectedCompany || ""}
+              onChange={setSelectedCompany}
+              placeholder="Select company..."
+              searchPlaceholder="Search company..."
+              emptyText="No company found."
+            />
           </div>
+        )}
 
           {/* Remarks */}
           <div className="grid gap-2">

@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Spinner } from "@/components/ui/spinner";
+import { useSearchParams } from "next/navigation";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,13 +21,7 @@ import {
   PaginationPrevious,
   PaginationNext,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /* ================= TYPES ================= */
 
@@ -39,6 +35,7 @@ interface Quotation {
   account_reference_number?: string;
   company_name?: string;
   contact_number?: string;
+  contact_person?: string;
   type_activity: string;
   status: string;
   referenceid: string;
@@ -115,6 +112,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   userDetails,
   setDateCreatedFilterRangeAction,
 }) => {
+  const searchParams = useSearchParams();
+  const highlight = searchParams?.get("highlight");
+
   const [activities, setActivities] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +123,13 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   const [filterPriority, setFilterPriority] = useState<Priority>("all");
   const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
+
+  // Set search term if highlight is present
+  useEffect(() => {
+    if (highlight) {
+      setSearchTerm(highlight);
+    }
+  }, [highlight]);
 
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
@@ -250,18 +257,26 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       .filter(item => {
         if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
 
-        const updatedDate = item.date_updated ? new Date(item.date_updated) : new Date(item.date_created);
-        if (isNaN(updatedDate.getTime())) return false;
+        // Use date_created only (not date_updated) for filtering
+        const itemDate = new Date(item.date_created);
+        if (isNaN(itemDate.getTime())) return false;
 
         const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
         const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
 
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+        const normalizeToDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(updatedDate, fromDate);
-        if (fromDate && updatedDate < fromDate) return false;
-        if (toDate && updatedDate > toDate) return false;
+        const normalizedItemDate = normalizeToDate(itemDate);
+        const normalizedFrom = fromDate ? normalizeToDate(fromDate) : null;
+        const normalizedTo = toDate ? normalizeToDate(toDate) : null;
+
+        if (normalizedFrom && normalizedTo && normalizedFrom.getTime() === normalizedTo.getTime()) {
+          return normalizedItemDate.getTime() === normalizedFrom.getTime();
+        }
+
+        if (normalizedFrom && normalizedItemDate.getTime() < normalizedFrom.getTime()) return false;
+        if (normalizedTo && normalizedItemDate.getTime() > normalizedTo.getTime()) return false;
+
         return true;
       });
   }, [sortedActivities, searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
@@ -289,6 +304,87 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     const start = (page - 1) * PAGE_SIZE;
     return filteredActivities.slice(start, start + PAGE_SIZE);
   }, [filteredActivities, page]);
+
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filteredActivities.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Quotations");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Date", key: "date", width: 15 },
+        { header: "Quotation Number", key: "quotationNumber", width: 20 },
+        { header: "Amount", key: "amount", width: 15 },
+        { header: "Status", key: "status", width: 20 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Priority", key: "priority", width: 15 },
+        { header: "Remarks", key: "remarks", width: 30 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filteredActivities.forEach((item) => {
+        const agentInfo = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = agentInfo?.name ?? "-";
+        const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""] || "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          date: item.date_created ? new Date(item.date_created).toLocaleDateString() : "-",
+          quotationNumber: item.quotation_number || "-",
+          amount: item.quotation_amount ?? 0,
+          status: item.quotation_status || "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          priority: priority,
+          remarks: item.remarks || "-"
+        });
+      });
+
+      // Format amount column
+      worksheet.getColumn('amount').numFmt = '#,##0.00" ₱"';
+
+      // Generate filename with date range
+      let filename = "Quotations";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
 
   /* ---- Statuses filtered by selected priority ---- */
   const availableStatuses = useMemo(() => {
@@ -396,6 +492,16 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Export button */}
+        <button
+          onClick={exportToExcel}
+          disabled={filteredActivities.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* ── Summary bar ── */}
@@ -450,9 +556,10 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
                 const priority = PRIORITY_MAP[quotationStatus];
                 const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+                const isHighlighted = highlight === item.quotation_number;
 
                 return (
-                  <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
+                  <TableRow key={item.id} className={`text-xs hover:bg-gray-50/50 font-mono ${isHighlighted ? "bg-yellow-100/50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : ""}`}>
                     {/* Agent */}
                     <TableCell>
                       <div className="flex items-center gap-2">

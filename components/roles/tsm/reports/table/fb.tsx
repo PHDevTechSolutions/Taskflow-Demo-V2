@@ -15,6 +15,8 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -214,6 +216,82 @@ export const FBTable: React.FC<FBProps> = ({
     [filtered, page]
   );
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Facebook Marketplace");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Date", key: "date", width: 15 },
+        { header: "Amount", key: "amount", width: 15 },
+        { header: "Quotation Number", key: "quotationNumber", width: 20 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact Number", key: "contactNumber", width: 15 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filtered.forEach((item) => {
+        const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = info?.name ?? "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          date: recordDateStr(item.date_created),
+          amount: item.quotation_amount ?? 0,
+          quotationNumber: item.quotation_number || "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          contactNumber: item.contact_number || "-"
+        });
+      });
+
+      // Format amount column
+      worksheet.getColumn('amount').numFmt = '#,##0.00" ₱"';
+
+      // Generate filename with date range
+      let filename = "Facebook_Marketplace";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -239,6 +317,13 @@ export const FBTable: React.FC<FBProps> = ({
             ))}
           </SelectContent>
         </Select>
+        <button
+          onClick={exportToExcel}
+          className="ml-auto flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* Summary */}

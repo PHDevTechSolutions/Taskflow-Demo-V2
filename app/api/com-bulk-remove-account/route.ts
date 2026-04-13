@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -10,7 +11,7 @@ const Xchire_sql = neon(Xchire_databaseUrl);
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { ids, status, remarks } = body;
+    const { ids, status, remarks, referenceid } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -52,6 +53,17 @@ export async function PUT(req: Request) {
         { status: 404 }
       );
     }
+
+    // Log audit trail for bulk removal
+    await logAuditTrailApp(
+      req,
+      "update",
+      "company accounts",
+      ids.join(", "),
+      `Bulk removal of ${ids.length} accounts`,
+      `Removed ${ids.length} accounts with status: ${status}`,
+      { ids, status, remarks }
+    );
 
     return NextResponse.json(
       { success: true, updatedCount: updated.length, data: updated },

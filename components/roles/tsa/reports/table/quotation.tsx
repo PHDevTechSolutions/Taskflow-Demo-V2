@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -28,6 +27,7 @@ interface Quotation {
   type_activity: string;
   status: string;
   quotation_status?: string;
+  quotation_status_sub?: string;
 }
 
 interface QuotationProps {
@@ -37,47 +37,30 @@ interface QuotationProps {
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
-/* ================= PRIORITY MAP ================= */
-
-const PRIORITY_MAP: Record<string, "HOT" | "WARM" | "COLD" | "DONE"> = {
-  "PENDING CLIENT APPROVAL": "WARM",
-  "FOR BIDDING": "WARM",
-  "NEGO": "WARM",
-  "ORDER COMPLETE": "DONE",
-  "CONVERT TO SO": "HOT",
-  "LOSS PRICE IS TOO HIGH": "COLD",
-  "LEAD TIME ISSUE": "COLD",
-  "OUT OF STOCK": "COLD",
-  "INSUFFICIENT STOCK": "COLD",
-  "LOST BID": "COLD",
-  "CANVASS ONLY": "COLD",
-  "DID NOT MEET THE SPECS": "COLD",
-  "DECLINE / DISAPPROVED": "COLD",
-};
-
-const ALL_STATUSES = [
-  "PENDING CLIENT APPROVAL",
-  "FOR BIDDING",
-  "NEGO",
-  "ORDER COMPLETE",
-  "CONVERT TO SO",
-  "LOSS PRICE IS TOO HIGH",
-  "LEAD TIME ISSUE",
-  "OUT OF STOCK",
-  "INSUFFICIENT STOCK",
-  "LOST BID",
-  "CANVASS ONLY",
-  "DID NOT MEET THE SPECS",
-  "DECLINE / DISAPPROVED",
-];
+/* ================= PRIORITY ================= */
 
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
+// quotation_status_sub overrides quotation_status
+function getPriority(status?: string, sub?: string): "HOT" | "WARM" | "COLD" | "DONE" | null {
+  if (sub && sub.trim() !== "") {
+    const s = sub.toUpperCase();
+    if (s.includes("DECLINE")) return "COLD";
+  }
+
+  switch (status?.toUpperCase()) {
+    case "CONVERT TO SO":           return "HOT";
+    case "PENDING CLIENT APPROVAL": return "WARM";
+    case "ORDER COMPLETE":          return "DONE";
+    default:                        return null;
+  }
+}
+
 const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  HOT:  { badge: "bg-red-50 text-red-600 border border-red-200",       dot: "bg-red-500"   },
-  WARM: { badge: "bg-amber-50 text-amber-600 border border-amber-200", dot: "bg-amber-400" },
-  COLD: { badge: "bg-blue-50 text-blue-500 border border-blue-200",    dot: "bg-blue-400"  },
-  DONE: { badge: "bg-green-50 text-green-600 border border-green-200", dot: "bg-green-500" },
+  HOT:  { badge: "bg-red-50 text-red-700 border-red-100",                  dot: "bg-red-500"      },
+  WARM: { badge: "bg-amber-50 text-amber-700 border-amber-100",            dot: "bg-amber-400"    },
+  COLD: { badge: "bg-blue-50 text-blue-700 border-blue-100",               dot: "bg-blue-400"     },
+  DONE: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100",      dot: "bg-emerald-500"  },
 };
 
 const PAGE_SIZE = 10;
@@ -91,28 +74,23 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   setDateCreatedFilterRangeAction,
 }) => {
   const [activities, setActivities] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterPriority, setFilterPriority] = useState<Priority>("all");
-  const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
+  const [searchTerm,           setSearchTerm]           = useState("");
+  const [filterPriority,       setFilterPriority]       = useState<Priority>("all");
+  const [filterQuotationStatus,setFilterQuotationStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
 
-  /* ---- Fetch activities ---- */
+  /* ── Fetch ── */
   const fetchActivities = useCallback(() => {
-    if (!referenceid) {
-      setActivities([]);
-      return;
-    }
-
+    if (!referenceid) { setActivities([]); return; }
     setLoading(true);
     setError(null);
 
     const from = dateCreatedFilterRange?.from
       ? new Date(dateCreatedFilterRange.from).toISOString()
       : null;
-
     const to = dateCreatedFilterRange?.to
       ? new Date(new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999)).toISOString()
       : null;
@@ -134,7 +112,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
-  /* ---- Realtime subscription ---- */
+  /* ── Realtime ── */
   useEffect(() => {
     fetchActivities();
     if (!referenceid) return;
@@ -162,80 +140,91 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return () => { supabase.removeChannel(channel); };
   }, [referenceid, fetchActivities]);
 
-  /* ---- Base list ---- */
+  /* ── Base list: quotation preparation only, newest first ── */
   const baseActivities = useMemo(() =>
     [...activities]
       .filter(item => item.type_activity?.toLowerCase() === "quotation preparation")
-      .sort((a, b) =>
-        new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
-      ),
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime()),
     [activities]
   );
 
-  /* ---- Filtered activities ---- */
-  const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-
-    return baseActivities
-      .filter(item => {
-        if (!search) return true;
-        return (
-          (item.company_name?.toLowerCase().includes(search) ?? false) ||
-          (item.quotation_number?.toLowerCase().includes(search) ?? false) ||
-          (item.remarks?.toLowerCase().includes(search) ?? false)
-        );
-      })
-      .filter(item => {
-        if (filterQuotationStatus !== "all") {
-          return item.quotation_status?.toUpperCase() === filterQuotationStatus;
-        }
-        return true;
-      })
-      .filter(item => {
-        if (filterPriority !== "all") {
-          const priority = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
-          return priority === filterPriority;
-        }
-        return true;
-      })
-      .filter(item => {
-        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-
-        const itemDate = new Date(item.date_created);
-        if (isNaN(itemDate.getTime())) return false;
-
-        const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
-        const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
-
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
-
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(itemDate, fromDate);
-        if (fromDate && itemDate < fromDate) return false;
-        if (toDate && itemDate > toDate) return false;
-        return true;
-      });
-  }, [baseActivities, searchTerm, filterQuotationStatus, filterPriority, dateCreatedFilterRange]);
-
-  /* ---- Reset page on filter change ---- */
-  useEffect(() => { setPage(1); }, [searchTerm, filterQuotationStatus, filterPriority, dateCreatedFilterRange]);
-
-  /* ---- Reset quotation status filter when priority changes ---- */
-  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
-
-  /* ---- Priority summary counts ---- */
+  /* ── Priority counts (unfiltered) ── */
   const priorityCounts = useMemo(() => {
     const counts: Record<string, number> = { HOT: 0, WARM: 0, COLD: 0, DONE: 0 };
     baseActivities.forEach(item => {
-      const p = PRIORITY_MAP[item.quotation_status?.toUpperCase() ?? ""];
+      const p = getPriority(item.quotation_status, item.quotation_status_sub);
       if (p) counts[p]++;
     });
     return counts;
   }, [baseActivities]);
 
-  /* ---- Totals ---- */
+  /* ── Available statuses scoped to selected priority ── */
+  // Collect all unique quotation_status values from base, then filter by priority
+  const availableStatuses = useMemo(() => {
+    const all = Array.from(
+      new Set(baseActivities.map(a => a.quotation_status?.toUpperCase()).filter(Boolean) as string[])
+    ).sort();
+
+    if (filterPriority === "all") return all;
+
+    return all.filter(s => {
+      // For a status to appear under a priority pill, it must have at least one
+      // record whose resolved priority matches — respecting sub override
+      return baseActivities.some(a =>
+        a.quotation_status?.toUpperCase() === s &&
+        getPriority(a.quotation_status, a.quotation_status_sub) === filterPriority
+      );
+    });
+  }, [baseActivities, filterPriority]);
+
+  /* ── Reset status filter when priority changes ── */
+  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
+
+  /* ── Filtered list ── */
+  const filteredActivities = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+
+    return baseActivities.filter(item => {
+      // Search
+      if (search && ![item.company_name, item.quotation_number, item.remarks]
+        .some(v => v?.toLowerCase().includes(search))) return false;
+
+      // Priority filter
+      if (filterPriority !== "all") {
+        const p = getPriority(item.quotation_status, item.quotation_status_sub);
+        if (p !== filterPriority) return false;
+      }
+
+      // Status filter (applied after priority)
+      if (filterQuotationStatus !== "all") {
+        if (item.quotation_status?.toUpperCase() !== filterQuotationStatus) return false;
+      }
+
+      // Date range
+      if (dateCreatedFilterRange?.from || dateCreatedFilterRange?.to) {
+        const itemDate = new Date(item.date_created);
+        if (isNaN(itemDate.getTime())) return false;
+        const from = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
+        const to   = dateCreatedFilterRange.to   ? new Date(dateCreatedFilterRange.to)   : null;
+        const sameDay = (d1: Date, d2: Date) =>
+          d1.getFullYear() === d2.getFullYear() &&
+          d1.getMonth()    === d2.getMonth()    &&
+          d1.getDate()     === d2.getDate();
+        if (from && to && sameDay(from, to)) { if (!sameDay(itemDate, from)) return false; }
+        else {
+          if (from && itemDate < from) return false;
+          if (to   && itemDate > to)   return false;
+        }
+      }
+
+      return true;
+    });
+  }, [baseActivities, searchTerm, filterPriority, filterQuotationStatus, dateCreatedFilterRange]);
+
+  /* ── Reset page on filter change ── */
+  useEffect(() => { setPage(1); }, [searchTerm, filterPriority, filterQuotationStatus, dateCreatedFilterRange]);
+
+  /* ── Totals ── */
   const totalQuotationAmount = useMemo(() =>
     filteredActivities.reduce((acc, item) => acc + (item.quotation_amount ?? 0), 0),
     [filteredActivities]
@@ -247,13 +236,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return s.size;
   }, [filteredActivities]);
 
-  /* ---- Statuses filtered by selected priority ---- */
-  const availableStatuses = useMemo(() => {
-    if (filterPriority === "all") return ALL_STATUSES;
-    return ALL_STATUSES.filter(s => PRIORITY_MAP[s] === filterPriority);
-  }, [filterPriority]);
-
-  /* ---- Pagination ---- */
+  /* ── Pagination ── */
   const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
   const paginatedActivities = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -265,10 +248,10 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   if (!loading && !error && baseActivities.length === 0) {
     return (
       <div className="flex justify-center items-center h-40">
-        <Alert variant="destructive" className="flex flex-col items-center space-y-2 p-4 text-center text-xs">
-          <AlertTitle>No Data Found</AlertTitle>
-          <AlertDescription>Please check your date range or try again later.</AlertDescription>
-        </Alert>
+        <div className="bg-red-50 border border-red-100 p-6 text-center shadow-sm">
+          <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-1">No Data Found</p>
+          <p className="text-[10px] text-red-400 uppercase font-bold">Please check your date range or try again later.</p>
+        </div>
       </div>
     );
   }
@@ -285,20 +268,18 @@ export const QuotationTable: React.FC<QuotationProps> = ({
             <button
               key={p}
               onClick={() => setFilterPriority(p)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-none text-[10px] font-bold uppercase tracking-widest border transition-all shadow-sm
                 ${isActive
                   ? p === "all"
-                    ? "bg-gray-800 text-white border-gray-800"
-                    : style?.badge + " ring-2 ring-offset-1 ring-current"
-                  : p === "all"
-                    ? "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                    ? "bg-zinc-900 text-white border-zinc-900"
+                    : style?.badge + " ring-1 ring-zinc-900 ring-offset-0"
+                  : "bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400"
                 }`}
             >
               {p !== "all" && <span className={`w-1.5 h-1.5 rounded-full ${style?.dot}`} />}
-              {p === "all" ? "All" : p}
+              {p === "all" ? "All Records" : p}
               {p !== "all" && (
-                <span className="ml-0.5 text-[10px] font-semibold opacity-70">
+                <span className="ml-1 px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-none border border-zinc-200">
                   {priorityCounts[p]}
                 </span>
               )}
@@ -312,25 +293,28 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         <Input
           type="text"
           placeholder="Search company, quotation no., remarks..."
-          className="max-w-xs text-xs"
+          className="max-w-xs h-9 text-xs bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all font-mono"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Search quotations"
         />
 
         <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
-          <SelectTrigger className="w-[240px] text-xs">
+          <SelectTrigger className="w-[240px] h-9 text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-200 rounded-none shadow-sm">
             <SelectValue placeholder="Filter by Status" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+          <SelectContent className="rounded-none">
+            <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">
+              All Statuses
+            </SelectItem>
             {availableStatuses.map((s) => {
-              const priority = PRIORITY_MAP[s];
-              const style = PRIORITY_STYLES[priority];
+              // Show dot color based on what priority this status resolves to
+              // (use a neutral sample — sub overrides, so show status-only priority here)
+              const p = getPriority(s, undefined);
+              const style = p ? PRIORITY_STYLES[p] : null;
               return (
-                <SelectItem key={s} value={s} className="text-xs">
+                <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-widest">
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style?.dot}`} />
+                    {style && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />}
                     {s}
                   </div>
                 </SelectItem>
@@ -342,125 +326,141 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
       {/* ── Summary bar ── */}
       {filteredActivities.length > 0 && (
-        <div className="flex items-center gap-4 text-xs text-gray-500 font-mono">
-          <span>Records: <span className="font-semibold text-gray-700">{filteredActivities.length}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>Unique Quotations: <span className="font-semibold text-gray-700">{uniqueQuotationCount}</span></span>
-          <span className="text-gray-200">|</span>
-          <span>
-            Total Amount:{" "}
-            <span className="font-semibold text-gray-700">
-              {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+        <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 border border-indigo-100/50">
+          <span className="text-xs">📊</span>
+          <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+            <span>Records: <span className="text-indigo-900 font-mono">{filteredActivities.length}</span></span>
+            <span className="text-indigo-200">|</span>
+            <span>Unique Quotations: <span className="text-indigo-900 font-mono">{uniqueQuotationCount}</span></span>
+            <span className="text-indigo-200">|</span>
+            <span>
+              Total Amount:{" "}
+              <span className="text-indigo-900 font-mono underline underline-offset-2">
+                {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+              </span>
             </span>
-          </span>
+          </div>
         </div>
       )}
 
       {/* ── Table ── */}
-      {loading ? (
-        <div className="flex justify-center items-center h-40 text-xs text-gray-400">Loading...</div>
-      ) : error ? (
-        <div className="flex justify-center items-center h-40 text-xs text-red-500">{error}</div>
-      ) : filteredActivities.length === 0 ? (
-        <div className="flex justify-center items-center h-40 text-xs text-gray-400 italic">
-          No quotation records found.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-100">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-gray-500">Date Created</TableHead>
-                <TableHead className="text-gray-500">Status</TableHead>
-                <TableHead className="text-gray-500">Quotation No.</TableHead>
-                <TableHead className="text-gray-500 text-right">Amount</TableHead>
-                <TableHead className="text-gray-500">Company</TableHead>
-                <TableHead className="text-gray-500">Contact</TableHead>
-                <TableHead className="text-gray-500">Priority</TableHead>
-                <TableHead className="text-gray-500">Remarks</TableHead>
-              </TableRow>
-            </TableHeader>
+      <div className="rounded-none border border-zinc-200 bg-white overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-mono">
+            Loading records...
+          </div>
+        ) : error ? (
+          <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">
+            {error}
+          </div>
+        ) : filteredActivities.length === 0 ? (
+          <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-bold uppercase tracking-widest italic">
+            No quotation records found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
+                  {["Date Created","Status","Quotation Remarks","Quotation No.","Amount","Company","Contact","Priority","Remarks"].map((h) => (
+                    <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">
+                      {h}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
 
-            <TableBody>
-              {paginatedActivities.map((item) => {
-                const quotationStatus = item.quotation_status?.toUpperCase() ?? "";
-                const priority = PRIORITY_MAP[quotationStatus];
-                const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+              <TableBody>
+                {paginatedActivities.map((item) => {
+                  const priority = getPriority(item.quotation_status, item.quotation_status_sub);
+                  const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
 
-                return (
-                  <TableRow key={item.id} className="text-xs hover:bg-gray-50/50 font-mono">
-                    <TableCell className="text-gray-500 whitespace-nowrap">
-                      {new Date(item.date_created).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="uppercase text-gray-600 text-[10px]">
-                      {item.quotation_status || "-"}
-                    </TableCell>
-                    <TableCell className="uppercase text-gray-700">
-                      {item.quotation_number || "-"}
-                    </TableCell>
-                    <TableCell className="text-right text-gray-700">
-                      {item.quotation_amount != null
-                        ? item.quotation_amount.toLocaleString(undefined, { style: "currency", currency: "PHP" })
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
-                    <TableCell className="text-gray-500">{item.contact_number || "-"}</TableCell>
-                    <TableCell>
-                      {priority && priorityStyle ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
-                          {priority}
+                  return (
+                    <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                      <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">
+                        {new Date(item.date_created).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        <span className="inline-block px-2 py-0.5 rounded-none text-[10px] font-bold uppercase tracking-tighter bg-zinc-100 text-zinc-600 border border-zinc-200">
+                          {item.quotation_status || "-"}
                         </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="capitalize italic text-gray-500">
-                      {item.remarks || "-"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
+                      </TableCell>
+                      <TableCell className="px-3 capitalize text-zinc-500 text-[11px]">
+                        {item.quotation_status_sub || "-"}
+                      </TableCell>
+                      <TableCell className="uppercase text-zinc-700 px-3 font-bold font-mono">
+                        {item.quotation_number || "-"}
+                      </TableCell>
+                      <TableCell className="text-right text-zinc-900 px-3 font-bold">
+                        {item.quotation_amount != null
+                          ? item.quotation_amount.toLocaleString(undefined, { style: "currency", currency: "PHP" })
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-zinc-800 px-3 font-bold">{item.company_name || "-"}</TableCell>
+                      <TableCell className="text-zinc-500 px-3 font-mono text-[11px]">{item.contact_number || "-"}</TableCell>
+                      <TableCell className="px-3">
+                        {priority && priorityStyle ? (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[10px] font-bold uppercase tracking-tighter shadow-sm border ${priorityStyle.badge}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
+                            {priority}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-300">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="capitalize text-zinc-500 px-3 truncate max-w-[200px]" title={item.remarks || ""}>
+                        {item.remarks || "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
 
-            <tfoot>
-              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                <TableCell colSpan={2} className="text-gray-500">Total</TableCell>
-                <TableCell className="text-right text-gray-800">
-                  {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                </TableCell>
-                <TableCell colSpan={5} />
-              </TableRow>
-            </tfoot>
-          </Table>
-        </div>
-      )}
+              <tfoot>
+                <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+                  <TableCell colSpan={4} className="text-zinc-500 px-3 uppercase tracking-wider">Total</TableCell>
+                  <TableCell className="text-right text-zinc-900 px-3">
+                    {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                  </TableCell>
+                  <TableCell colSpan={4} />
+                </TableRow>
+              </tfoot>
+            </Table>
+          </div>
+        )}
+      </div>
 
       {/* ── Pagination ── */}
       {pageCount > 1 && (
-        <Pagination>
-          <PaginationContent className="flex items-center space-x-4 justify-center mt-2 text-xs">
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
-                aria-disabled={page === 1}
-                className={page === 1 ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-            <div className="px-4 font-medium select-none text-gray-600">
-              {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
-            </div>
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
-                aria-disabled={page === pageCount}
-                className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+        <div className="flex items-center justify-center py-4 border-t border-zinc-100 bg-zinc-50/30">
+          <Pagination>
+            <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+                  aria-disabled={page === 1}
+                  className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    page === 1 ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200 shadow-sm"
+                  }`}
+                />
+              </PaginationItem>
+              <span className="text-zinc-500 font-mono text-[11px] font-bold select-none bg-white px-3 py-1 border border-zinc-200 shadow-sm">
+                {page} / {pageCount}
+              </span>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+                  aria-disabled={page === pageCount}
+                  className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    page === pageCount ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200 shadow-sm"
+                  }`}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       )}
     </div>
   );

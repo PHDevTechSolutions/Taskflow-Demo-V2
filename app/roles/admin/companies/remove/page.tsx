@@ -274,7 +274,6 @@ function DashboardContent() {
             </SidebarInset>
 
             <SidebarRight
-                userId={userId ?? undefined}
                 dateCreatedFilterRange={dateCreatedFilterRange}
                 setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
             />

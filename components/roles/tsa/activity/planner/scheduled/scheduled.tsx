@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  checkCompanyBlocked,
-  BLOCK_SCHEDULED,
-} from "@/utils/activityBlockUtils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -105,6 +101,9 @@ function toLocalDateString(date: Date | string | null | undefined): string {
   return d.toLocaleDateString("en-CA");
 }
 
+// Only these two statuses are shown in this view
+const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+
 export const Scheduled: React.FC<ScheduledProps> = ({
   referenceid,
   tsm,
@@ -141,6 +140,51 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+
+  // Wrapper to validate date range - only allow today and future dates
+  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
+    if (!range?.from) {
+      setDateCreatedFilterRangeAction(range);
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fromDate = new Date(range.from);
+    fromDate.setHours(0, 0, 0, 0);
+
+    // Prevent selecting past dates
+    if (fromDate < today) {
+      sileo.error({
+        title: "Invalid Date",
+        description: "Cannot select past dates. Please choose today or a future date.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    // Also validate to date if present
+    if (range.to) {
+      const toDate = new Date(range.to);
+      toDate.setHours(0, 0, 0, 0);
+      if (toDate < today) {
+        sileo.error({
+          title: "Invalid Date",
+          description: "Cannot select past dates. Please choose today or a future date.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        return;
+      }
+    }
+
+    setDateCreatedFilterRangeAction(range);
+  }, [setDateCreatedFilterRangeAction]);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -226,87 +270,92 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       "Done",
       "Completed",
       "Cancelled",
-      "On-Progress",
       "Transfer",
     ].includes(status);
   }
 
-  const mergedActivities = activities
-    .filter((a) => !isDelivered(a.status))
-    .map((activity) => {
-      const relatedHistoryItems = history.filter(
-        (h) =>
-          h.activity_reference_number === activity.activity_reference_number,
-      );
-      return { ...activity, relatedHistoryItems };
-    });
+  const mergedActivities = useMemo(() => {
+    return activities
+      // Only show Assisted and Quote-Done statuses
+      .filter((a) => ALLOWED_STATUSES.includes(a.status))
+      .map((activity) => {
+        const relatedHistoryItems = history.filter(
+          (h) =>
+            h.activity_reference_number === activity.activity_reference_number,
+        );
+        return { ...activity, relatedHistoryItems };
+      });
+  }, [activities, history]);
 
-  // ─── TODAY (local) ────────────────────────────────────────────────────────
   const todayStr = toLocalDateString(new Date());
 
-  const filteredActivities = mergedActivities
-    .filter((item) => {
-      const itemScheduledDate = toLocalDateString(item.scheduled_date);
+  const filteredActivities = useMemo(() => {
+    return mergedActivities
+      .filter((item) => {
+        const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
-      // ── When there is a search term, skip ALL date filtering so the user
-      //    can find any activity regardless of scheduled_date.
-      if (searchTerm.trim() !== "") {
-        // only apply status filter, then let text search below decide
-      } else {
-        // ── No search term → apply scheduled_date filter ─────────────────
+        // ── Text search (skip date filters when searching) ─────────────────────
+        if (searchTerm.trim() !== "") {
+          const termLower = searchTerm.toLowerCase();
+
+          const activityValues = Object.values(item)
+            .map((v) => (v != null ? v.toString() : ""))
+            .join(" ")
+            .toLowerCase();
+
+          const historyValues = item.relatedHistoryItems
+            .map((h) =>
+              Object.values(h)
+                .map((v) => (v != null ? v.toString() : ""))
+                .join(" ")
+                .toLowerCase(),
+            )
+            .join(" ");
+
+          const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
+          if (!matchesSearch) return false;
+          
+          // Skip date filters when searching
+          return true;
+        }
+
+        // ── Date range filter (for scheduled_date, today and future dates only) ─────────
         if (dateCreatedFilterRange?.from) {
-          // Date-range mode: show activities whose scheduled_date is within
-          // the selected range (inclusive).
-          const fromStr = toLocalDateString(dateCreatedFilterRange.from);
-          const toStr = dateCreatedFilterRange.to
+          const fromDate = toLocalDateString(dateCreatedFilterRange.from);
+          const toDate = dateCreatedFilterRange.to
             ? toLocalDateString(dateCreatedFilterRange.to)
-            : fromStr;
+            : fromDate;
 
-          if (itemScheduledDate < fromStr || itemScheduledDate > toStr) {
+          // Only allow today and future dates
+          if (itemScheduledDate < todayStr) {
+            return false;
+          }
+
+          // Check if within selected date range
+          if (itemScheduledDate < fromDate || itemScheduledDate > toDate) {
             return false;
           }
         } else {
-          // Default mode: show only today's scheduled activities.
+          // ✅ DEFAULT: Show today only when no date range selected
           if (itemScheduledDate !== todayStr) {
             return false;
           }
         }
-      }
 
-      // ── Status filter ─────────────────────────────────────────────────────
-      if (statusFilter !== "All" && item.status !== statusFilter) return false;
+        // ── Status filter ─────────────────────────────────────────────────────
+        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
-      // ── Text search ───────────────────────────────────────────────────────
-      if (searchTerm.trim() !== "") {
-        const termLower = searchTerm.toLowerCase();
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+      );
+  }, [mergedActivities, dateCreatedFilterRange, todayStr, statusFilter, searchTerm]);
 
-        const activityValues = Object.values(item)
-          .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
-          .join(" ")
-          .toLowerCase();
-
-        if (activityValues.includes(termLower)) return true;
-
-        const historyValues = item.relatedHistoryItems
-          .map((h) =>
-            Object.values(h)
-              .map((v) => (v !== null && v !== undefined ? v.toString() : ""))
-              .join(" ")
-              .toLowerCase(),
-          )
-          .join(" ");
-
-        if (historyValues.includes(termLower)) return true;
-
-        return false;
-      }
-
-      return true;
-    })
-    .sort(
-      (a, b) =>
-        new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
-    );
+  useEffect(() => {
+    onCountChange?.(filteredActivities.length);
+  }, [filteredActivities]);
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -391,7 +440,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     | null
     | undefined;
 
-  function getBadgeProps(status: string): {
+  function getBadgeProps(status: string, isFutureDate: boolean): {
     variant: BadgeVariant;
     className?: string;
   } {
@@ -402,7 +451,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       case "SO-Done":
         return { variant: "default", className: "bg-yellow-400 text-white" };
       case "Quote-Done":
-        return { variant: "outline", className: "bg-blue-500 text-white" };
+        return { variant: "outline", className: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white" };
       case "Cancelled":
         return { variant: "destructive", className: "bg-red-600 text-white" };
       default:
@@ -410,7 +459,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }
 
-  function getStatusStyles(status: string): {
+  function getStatusStyles(status: string, isFutureDate: boolean): {
     badgeClass?: string;
     bgClass?: string;
   } {
@@ -427,7 +476,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           bgClass: "bg-yellow-100",
         };
       case "Quote-Done":
-        return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+        return { badgeClass: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white", bgClass: "bg-blue-100" };
       case "Cancelled":
         return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
       default:
@@ -450,7 +499,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDoneOpen(false);
 
       const res = await fetch("/api/act-update-status", {
         method: "POST",
@@ -474,7 +522,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
+      setDialogDoneOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       sileo.success({
         title: "Success",
@@ -504,7 +554,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
     try {
       setUpdatingId(selectedActivityId);
-      setDialogDeliveredOpen(false);
 
       const res = await fetch("/api/act-update-status-delivered", {
         method: "POST",
@@ -528,7 +577,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return;
       }
 
+      setDialogDeliveredOpen(false);
       await fetchAllData();
+      window.location.reload();
 
       sileo.success({
         title: "Success",
@@ -631,9 +682,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const selectedTicketReferenceNumber =
     selectedActivity?.ticket_reference_number || null;
 
-  useEffect(() => {
-    onCountChange?.(filteredActivities.length);
-  }, [filteredActivities.length]);
 
   if (loading) {
     return (
@@ -674,7 +722,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   // ─── Label shown beside the list to inform the user which date is active ──
   const activeDateLabel = (() => {
-    if (searchTerm.trim() !== "") return "Showing all (search active)";
     if (dateCreatedFilterRange?.from) {
       const from = toLocalDateString(dateCreatedFilterRange.from);
       const to = dateCreatedFilterRange.to
@@ -716,21 +763,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 All
               </DropdownMenuItem>
 
-              {Array.from(new Set(filteredActivities.map((a) => a.status))).map(
-                (status) => {
-                  const { badgeClass } = getStatusStyles(status);
-                  return (
-                    <DropdownMenuItem
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className="flex items-center gap-2"
-                    >
-                      <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
-                      <span className="capitalize">{status}</span>
-                    </DropdownMenuItem>
-                  );
-                },
-              )}
+              {ALLOWED_STATUSES.map((status) => {
+                const { badgeClass } = getStatusStyles(status, false);
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
+                    <span className="capitalize">{status}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -749,17 +794,10 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             </p>
           ) : (
             filteredActivities.map((item) => {
-              const badgeProps = getBadgeProps(item.status);
-              const statusStyles = getStatusStyles(item.status);
-
-              const blockCheck = checkCompanyBlocked(
-                item.account_reference_number,
-                activities,
-                history,
-                BLOCK_SCHEDULED.statuses,
-                BLOCK_SCHEDULED.checkScheduled,
-                item.id,
-              );
+              const itemDate = toLocalDateString(item.scheduled_date);
+              const isFutureDate = itemDate > todayStr;
+              const badgeProps = getBadgeProps(item.status, isFutureDate);
+              const statusStyles = getStatusStyles(item.status, isFutureDate);
 
               return (
                 <AccordionItem
@@ -774,40 +812,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
-                        {blockCheck.blocked ? (
-                          <HoverCard>
-                            <HoverCardTrigger asChild>
-                              <Button
-                                disabled
-                                variant="outline"
-                                className="rounded-none cursor-not-allowed opacity-60 text-xs"
-                              >
-                                <Lock size={13} className="mr-1" />
-                                Locked
-                              </Button>
-                            </HoverCardTrigger>
-                            <HoverCardContent
-                              side="top"
-                              align="end"
-                              className="text-xs max-w-xs leading-relaxed"
-                            >
-                              <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-                                <Lock size={12} /> Activity Locked
-                              </p>
-                              <p>{blockCheck.reason}</p>
-                              {blockCheck.daysRemaining !== undefined && (
-                                <p className="mt-1 text-muted-foreground">
-                                  Unlocks in{" "}
-                                  <strong>
-                                    {blockCheck.daysRemaining} day
-                                    {blockCheck.daysRemaining !== 1 ? "s" : ""}
-                                  </strong>{" "}
-                                  or when marked as Delivered.
-                                </p>
-                              )}
-                            </HoverCardContent>
-                          </HoverCard>
-                        ) : (
+                        
                           <CreateActivityDialog
                             firstname={firstname}
                             lastname={lastname}
@@ -840,7 +845,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             tsmDetails={tsmDetails ?? null}
                             signature={signature}
                           />
-                        )}
+                        
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -850,17 +855,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuGroup>
-                              <DropdownMenuItem
-                                disabled={updatingId === item.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openDoneDialog(item.id);
-                                }}
-                              >
-                                <Check className="mr-2 h-4 w-4 text-red-600" />
-                                Mark as Pending
-                              </DropdownMenuItem>
-
                               <DropdownMenuItem
                                 disabled={updatingId === item.id}
                                 onClick={(e) => {
@@ -1028,9 +1022,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <HoverCard>
                               <HoverCardTrigger asChild>
                                 <Badge
-                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined
-                                    ? "bg-red-600 text-white"
-                                    : "bg-blue-900 text-white"
+                                  className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined ? "bg-red-600 text-white" : "bg-blue-900 text-white"
                                     }`}
                                 >
                                   {isDeclined ? (
@@ -1087,9 +1079,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                 {Array.from(
                                   new Set(
                                     item.relatedHistoryItems
-                                      .map(
-                                        (h) => h.ticket_reference_number ?? "-",
-                                      )
+                                      .map((h) => h.ticket_reference_number ?? "-")
                                       .filter((v) => v !== "-"),
                                   ),
                                 ).join(", ")}
@@ -1171,46 +1161,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                             <p>
                               <strong>Total Quotation Amount:</strong>{" "}
                               {item.relatedHistoryItems
-                                .reduce(
-                                  (total, h) => total + (h.quotation_amount ?? 0),
-                                  0,
-                                )
-                                .toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })}
+                                .reduce((total, h) => total + (h.quotation_amount ?? 0), 0)
+                                .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                             </p>
                           )}
 
                         {item.relatedHistoryItems.some(
-                          (h) => h.so_number && h.so_number !== "-",
-                        ) && (
-                            <p>
-                              <strong>SO Number:</strong>{" "}
-                              <span className="uppercase">
-                                {item.relatedHistoryItems
-                                  .map((h) => h.so_number ?? "-")
-                                  .filter((v) => v !== "-")
-                                  .join(", ")}
-                              </span>
-                            </p>
-                          )}
-
-                        {item.relatedHistoryItems.some(
-                          (h) =>
-                            h.so_amount !== null && h.so_amount !== undefined,
+                          (h) => h.so_amount !== null && h.so_amount !== undefined,
                         ) && (
                             <p>
                               <strong>Total SO Amount:</strong>{" "}
                               {item.relatedHistoryItems
-                                .reduce(
-                                  (total, h) => total + (h.so_amount ?? 0),
-                                  0,
-                                )
-                                .toLocaleString("en-PH", {
-                                  style: "currency",
-                                  currency: "PHP",
-                                })}
+                                .reduce((total, h) => total + (h.so_amount ?? 0), 0)
+                                .toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                             </p>
                           )}
 

@@ -15,6 +15,8 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -239,6 +241,88 @@ export const SITable: React.FC<SIProps> = ({
     [filtered, page]
   );
 
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Invoices");
+
+      // Add headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 20 },
+        { header: "Delivery Date", key: "deliveryDate", width: 15 },
+        { header: "SI Date", key: "siDate", width: 15 },
+        { header: "SI Amount", key: "siAmount", width: 15 },
+        { header: "DR Number", key: "drNumber", width: 20 },
+        { header: "Company", key: "company", width: 25 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact Number", key: "contactNumber", width: 15 },
+        { header: "Payment Terms", key: "paymentTerms", width: 20 },
+        { header: "Remarks", key: "remarks", width: 30 }
+      ];
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add data rows
+      filtered.forEach((item) => {
+        const info = agentMap[item.referenceid?.toLowerCase() ?? ""];
+        const agentName = info?.name ?? "-";
+        
+        worksheet.addRow({
+          agent: agentName,
+          deliveryDate: displayDate(item.delivery_date),
+          siDate: displayDate(item.si_date),
+          siAmount: item.actual_sales ?? 0,
+          drNumber: item.dr_number || "-",
+          company: item.company_name || "-",
+          contactPerson: item.contact_person || "-",
+          contactNumber: item.contact_number || "-",
+          paymentTerms: item.payment_terms || "-",
+          remarks: item.remarks || "-"
+        });
+      });
+
+      // Format amount column
+      worksheet.getColumn('siAmount').numFmt = '#,##0.00" ₱"';
+
+      // Generate filename with date range
+      let filename = "Sales_Invoices";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
+
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -264,6 +348,16 @@ export const SITable: React.FC<SIProps> = ({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Export button */}
+        <button
+          onClick={exportToExcel}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
       </div>
 
       {/* Summary */}

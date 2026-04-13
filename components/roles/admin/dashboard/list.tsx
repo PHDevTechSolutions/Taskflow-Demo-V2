@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
-import { AgentCard } from "@/components/roles/tsm/dashboard/card/agent-list";
+import { AgentCard } from "@/components/roles/manager/dashboard/card/agent-list";
 import { AgentActivityLogs } from "../dashboard/card/activity-logs";
 import { AgentMeetings } from "@/components/roles/tsm/dashboard/card/meetings";
 import { OutboundCard } from "@/components/roles/tsm/dashboard/card/outbound";
@@ -14,7 +14,7 @@ import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sale
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
 
 import ReactSelect from "react-select";
-import { Building2, PhoneForwarded } from 'lucide-react';
+import { Building2, PhoneForwarded, X } from 'lucide-react';
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, Timestamp, onSnapshot, QuerySnapshot, DocumentData, limit } from "firebase/firestore";
 
@@ -49,6 +49,8 @@ interface Agent {
     Role: string;
     TargetQuota: string;
     Connection: string;
+    Manager: string;
+    TSM: string;
 }
 
 interface AgentMeeting {
@@ -67,6 +69,15 @@ interface AgentOption {
     value: string;
     label: string;
 }
+
+type CountData = {
+    totalCount: number;
+    top50Count: number;
+    next30Count: number;
+    balance20Count: number;
+    csrClientCount: number;
+    tsaClientCount: number;
+};
 
 interface Props {
     referenceid: string;
@@ -88,6 +99,8 @@ export function AgentList({
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const [countData, setCountData]                             = useState<CountData | null>(null);
     const [todayNextAvailableCount, setTodayNextAvailableCount] = useState<number>(0);
     const [scheduledCompanies, setScheduledCompanies] = useState<ScheduledCompany[]>([]);
     const [loadingScheduled, setLoadingScheduled] = useState(false);
@@ -182,37 +195,57 @@ export function AgentList({
             .finally(() => setLoadingHistory(false));
     }, []);
 
-    /* =========================
-       FILTER LOGIC (TODAY DEFAULT)
-    ========================= */
+    // ─── Filter history ──────────────────────────────────────────────────────
     const filteredHistory = useMemo(() => {
         if (!history.length) return [];
-
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from)
-            : new Date();
-
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to)
-            : from;
-
+        const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : new Date();
+        const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : new Date(from);
         from.setHours(0, 0, 0, 0);
         to.setHours(23, 59, 59, 999);
+
+        const selectedAgentObj = selectedAgent === "all"
+            ? null
+            : agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
+
+        // Helper to get all agent IDs under a hierarchy
+        const getAgentIdsUnder = (id: string, role: string) => {
+            const ids = new Set<string>();
+            if (role === "Manager") {
+                // Get all TSMs under this Manager
+                const tsms = agents.filter(a => a.Role === "Territory Sales Manager" && (a.Manager ?? "").toLowerCase() === id.toLowerCase());
+                tsms.forEach(tsm => {
+                    ids.add(tsm.ReferenceID.toLowerCase());
+                    // Get all TSAs under each TSM
+                    agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === tsm.ReferenceID.toLowerCase())
+                        .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
+                });
+            } else if (role === "Territory Sales Manager") {
+                // Get all TSAs under this TSM
+                agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === id.toLowerCase())
+                    .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
+            }
+            return ids;
+        };
+
+        const hierarchyAgentIds = selectedAgentObj && (selectedAgentObj.Role === "Manager" || selectedAgentObj.Role === "Territory Sales Manager")
+            ? getAgentIdsUnder(selectedAgentObj.ReferenceID, selectedAgentObj.Role)
+            : null;
 
         return history.filter((item) => {
             const createdAt = new Date(item.date_created);
             if (isNaN(createdAt.getTime())) return false;
-
             if (createdAt < from || createdAt > to) return false;
-
             if (selectedAgent === "all") return true;
 
-            return (
-                item.referenceid.toLowerCase() ===
-                selectedAgent.toLowerCase()
-            );
+            // If a Manager or TSM is selected, include their own records AND all records from agents under them.
+            if (hierarchyAgentIds) {
+                return item.referenceid.toLowerCase() === selectedAgent.toLowerCase() || hierarchyAgentIds.has(item.referenceid.toLowerCase());
+            }
+
+            // If a specific TSA is selected, include only that agent's records.
+            return item.referenceid.toLowerCase() === selectedAgent.toLowerCase();
         });
-    }, [history, selectedAgent, dateCreatedFilterRange]);
+    }, [history, selectedAgent, dateCreatedFilterRange, agents]);
 
     useEffect(() => {
         if (!agents.length) return;
@@ -260,16 +293,6 @@ export function AgentList({
 
         return () => unsubscribes.forEach(u => u());
     }, [selectedAgent, agents]);
-
-    const [countData, setCountData] = useState<{
-        totalCount: number | null;
-        top50Count: number | null;
-        next30Count: number | null;
-        balance20Count: number | null;
-        csrClientCount: number | null;
-        tsaClientCount: number | null;
-    } | null>(null);
-
 
     useEffect(() => {
         if (selectedAgent === "all") {
@@ -342,7 +365,13 @@ export function AgentList({
         })),
     ];
 
-    const selectedOption = agentOptions.find(opt => opt.value === selectedAgent);
+    // ─── Derived ─────────────────────────────────────────────────────────────
+    const selectedAgentObj = useMemo(
+        () => selectedAgent !== "all"
+            ? agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase())
+            : undefined,
+        [selectedAgent, agents]
+    );
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
@@ -352,21 +381,35 @@ export function AgentList({
                 <div className="text-center text-red-500 py-10">{errorHistory}</div>
             ) : (
                 <>
-                    {/* AGENT FILTER */}
-                    <ReactSelect
-                        options={agentOptions}
-                        value={selectedOption}
-                        onChange={(option) => setSelectedAgent(option?.value ?? "all")}
-                        placeholder="Filter by Agent"
-                        isSearchable={true}
-                        styles={{
-                            control: (base) => ({ ...base, fontSize: 12 }),
-                            menu: (base) => ({ ...base, fontSize: 12 }),
-                        }}
-                        className="capitalize"
-                    />
+                    {/* ── Active filter chip ── */}
+                    {selectedAgent !== "all" && selectedAgentObj && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Filtering by:</span>
+                            <div className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full border border-blue-200">
+                                <img
+                                    src={selectedAgentObj.profilePicture || "/Taskflow.png"}
+                                    alt=""
+                                    className="w-4 h-4 rounded-full object-cover"
+                                />
+                                {selectedAgentObj.Firstname} {selectedAgentObj.Lastname} ({selectedAgentObj.Role})
+                                <button
+                                    onClick={() => setSelectedAgent("all")}
+                                    className="ml-1 hover:text-red-500 transition-colors"
+                                    aria-label="Clear filter"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 gap-4 mt-2">
+                        <AgentActivityLogs
+                            agents={agents}
+                            selectedAgent={selectedAgent}
+                            onSelectAgent={setSelectedAgent}
+                        />
+
                         {/* CARD 1 – AGENT SUMMARY */}
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(
@@ -393,13 +436,6 @@ export function AgentList({
                             />;
                         })()}
 
-                        {selectedAgent == "all" && (
-                            <AgentActivityLogs
-                                agents={agents}
-                                agentActivityMap={agentActivityMap}
-                            />
-                        )}
-
                         {selectedAgent !== "all" && (() => {
                             const agent = agents.find(a => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
                             if (!agent) return null;
@@ -412,53 +448,46 @@ export function AgentList({
                             return (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* CARD 1 – TOTAL DATABASE */}
-                                    <div className="p-6 rounded-lg border border-gray-200 shadow-md bg-white">
-                                        <h2 className="flex items-center gap-2 text-xl font-bold mb-4 text-gray-900 border-b pb-2">
-                                            <Building2 className="w-5 h-5" />Total Database
-                                        </h2>
-
-                                        {loading && (
-                                            <p className="text-center text-gray-500 italic">Loading...</p>
-                                        )}
-
-                                        {error && (
-                                            <p className="text-center text-red-600 font-semibold">{error}</p>
-                                        )}
-
-                                        {countData && !loading && !error && countData.totalCount !== null && (
-                                            <div className="space-y-3 text-gray-700 text-sm">
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Total:</span>
-                                                    <span>{(countData.totalCount ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Top 50:</span>
-                                                    <span>{(countData.top50Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Next 30:</span>
-                                                    <span>{(countData.next30Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">Balance 20:</span>
-                                                    <span>{(countData.balance20Count ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">CSR Client:</span>
-                                                    <span>{(countData.csrClientCount ?? 0).toLocaleString()}</span>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-gray-900">TSA Client:</span>
-                                                    <span>{(countData.tsaClientCount ?? 0).toLocaleString()}</span>
-                                                </p>
+                                    <div className="rounded-xl border border-gray-200 shadow-sm bg-white overflow-hidden">
+                                        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+                                            <div className="p-2 rounded-lg bg-blue-100">
+                                                <Building2 className="w-4 h-4 text-blue-600" />
                                             </div>
-                                        )}
+                                            <h2 className="text-sm font-bold text-gray-800">Total Database</h2>
+                                        </div>
 
-                                        {!referenceid && (
-                                            <p className="mt-4 text-center text-sm text-gray-400 italic">
-                                                Select an agent to see companies count.
-                                            </p>
-                                        )}
+                                        <div className="px-5 py-3">
+                                            {loading && (
+                                                <p className="text-center text-xs text-gray-400 italic py-6">Loading...</p>
+                                            )}
+                                            {error && (
+                                                <p className="text-center text-xs text-red-500 font-semibold py-6">{error}</p>
+                                            )}
+                                            {!loading && !error && !countData && (
+                                                <p className="text-center text-xs text-gray-400 italic py-6">
+                                                    No data available for this agent.
+                                                </p>
+                                            )}
+                                            {countData && !loading && !error && (
+                                                <div className="divide-y divide-gray-100">
+                                                    {[
+                                                        { label: "Total", value: countData.totalCount, color: "text-gray-800", bg: "bg-gray-100" },
+                                                        { label: "Top 50", value: countData.top50Count, color: "text-blue-700", bg: "bg-blue-50" },
+                                                        { label: "Next 30", value: countData.next30Count, color: "text-indigo-700", bg: "bg-indigo-50" },
+                                                        { label: "Balance 20", value: countData.balance20Count, color: "text-violet-700", bg: "bg-violet-50" },
+                                                        { label: "CSR Client", value: countData.csrClientCount, color: "text-emerald-700", bg: "bg-emerald-50" },
+                                                        { label: "TSA Client", value: countData.tsaClientCount, color: "text-orange-700", bg: "bg-orange-50" },
+                                                    ].map(({ label, value, color, bg }) => (
+                                                        <div key={label} className="flex items-center justify-between py-2.5">
+                                                            <span className="text-xs text-gray-500 font-medium">{label}</span>
+                                                            <span className={`text-xs font-bold tabular-nums px-2.5 py-1 rounded-full ${color} ${bg}`}>
+                                                                {value.toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* CARD 2 – NEXT AVAILABLE TODAY */}

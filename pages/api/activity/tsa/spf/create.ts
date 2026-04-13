@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 function incrementSPF(spf: string) {
     const parts = spf.split("-");
@@ -45,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 special_instructions: data.special_instructions ?? null,
                 prepared_by: data.prepared_by ?? null,
                 approved_by: data.approved_by ?? null,
-                status: "Pending",
+                status: "Approval For TSM",
                 tin_no: data.tin_no ?? null,
                 sales_person: data.sales_person ?? null,
                 referenceid: data.referenceid,
@@ -53,7 +54,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 manager: data.manager ?? null,
                 item_description: data.item_description ?? null,
                 item_photo: data.item_photo ?? null,
-                item_code: data.item_code ?? null,
                 start_date: data.start_date ? new Date(data.start_date) : null,
                 end_date: data.end_date ? new Date(data.end_date) : null,
                 date_created: new Date().toISOString(),
@@ -65,6 +65,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 .select();
 
             if (!error) {
+                // Log audit trail for SPF creation
+                await logAuditTrailWithSession(
+                    req,
+                    "create",
+                    "SPF request",
+                    inserted[0].id,
+                    spfNumber,
+                    `Created SPF request for ${data.customer_name}`,
+                    { customer_name: data.customer_name, status: "Approval For TSM" }
+                );
+
                 return res.status(200).json({
                     message: "SPF record created successfully.",
                     record: inserted[0]

@@ -24,19 +24,22 @@ interface UserDetails {
     manager: string;
     firstname: string;
     lastname: string;
-
+    role: string;
+    department: string;
 }
 
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
 
-    const [userDetails, setUserDetails] = useState<UserDetails>({
-        referenceid: "",
-        tsm: "",
-        manager: "",
-        firstname: "",
-        lastname: "",
+    const [userDetails, setUserDetails] = useState<UserDetails>({ 
+        referenceid: "", 
+        tsm: "", 
+        manager: "", 
+        firstname: "", 
+        lastname: "", 
+        role: "", 
+        department: "",
     });
 
     const [loadingUser, setLoadingUser] = useState(true);
@@ -76,6 +79,8 @@ function DashboardContent() {
                     manager: data.Manager || "",
                     firstname: data.Firstname || "",
                     lastname: data.Lastname || "",
+                    role: data.Role || "",
+                    department: data.Department || "",
                 });
 
                 toast.success("User data loaded successfully!");
@@ -124,7 +129,6 @@ function DashboardContent() {
                 </SidebarInset>
 
                 <SidebarRight
-                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />

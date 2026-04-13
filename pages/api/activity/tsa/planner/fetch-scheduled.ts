@@ -1,0 +1,206 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { supabase } from "@/utils/supabase";
+
+const BATCH_SIZE = 1000;
+const CHUNK_SIZE = 500;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT CAUSE OF MISSING MARCH DATA:
+//
+// The previous cursor used `.gt("id", lastId)` COMBINED with a
+// `scheduled_date` range filter. This is incorrect because:
+//
+//   - Rows are ordered by `id` (globally sequential insert order)
+//   - But `scheduled_date` is independent of `id`
+//   - A row with scheduled_date = March 13 may have id = 200
+//     while another with scheduled_date = March 20 has id = 150
+//
+// So when the cursor advances past id=1000, it skips all rows whose
+// scheduled_date is in range but whose id <= 1000 was already passed.
+// Result: entire date ranges appear missing even though data exists.
+//
+// FIX: When a date range is provided, use scheduled_date as the primary
+// sort + cursor key instead of id. This ensures the cursor stays aligned
+// with the date filter and never skips rows in the target range.
+//
+// When NO date filter is provided (fetching all), use id-based cursor
+// as before — it is safe when there is no date boundary to respect.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function* fetchActivityBatches(
+  referenceid: string,
+  scheduledFrom?: string,
+  scheduledTo?: string,
+) {
+  const hasDateFilter = !!(scheduledFrom || scheduledTo);
+
+  if (hasDateFilter) {
+    // ── Date-filtered mode: cursor on (scheduled_date, id) ────────────────
+    // Sort by scheduled_date ASC, then id ASC as tiebreaker.
+    // Cursor advances using the last row's scheduled_date + id so we never
+    // skip rows within the target date range.
+    let lastScheduledDate: string | null = null;
+    let lastId: number | null = null;
+
+    while (true) {
+      let query = supabase
+        .from("activity")
+        .select("*")
+        .eq("referenceid", referenceid)
+        .order("scheduled_date", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(BATCH_SIZE);
+
+      if (scheduledFrom) query = query.gte("scheduled_date", scheduledFrom);
+      if (scheduledTo)   query = query.lte("scheduled_date", scheduledTo);
+
+      // Composite cursor: rows after (lastScheduledDate, lastId)
+      if (lastScheduledDate !== null && lastId !== null) {
+        // Supabase doesn't support composite cursors natively, so we use
+        // a manual OR condition:
+        // (scheduled_date > lastScheduledDate)
+        // OR (scheduled_date = lastScheduledDate AND id > lastId)
+        query = query.or(
+          `scheduled_date.gt.${lastScheduledDate},and(scheduled_date.eq.${lastScheduledDate},id.gt.${lastId})`
+        );
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      yield data;
+
+      if (data.length < BATCH_SIZE) break;
+
+      const last = data[data.length - 1];
+      lastScheduledDate = last.scheduled_date;
+      lastId = last.id;
+    }
+  } else {
+    // ── No date filter: safe to use id-only cursor ────────────────────────
+    let lastId: number | null = null;
+
+    while (true) {
+      let query = supabase
+        .from("activity")
+        .select("*")
+        .eq("referenceid", referenceid)
+        .order("id", { ascending: true })
+        .limit(BATCH_SIZE);
+
+      if (lastId !== null) query = query.gt("id", lastId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      yield data;
+
+      if (data.length < BATCH_SIZE) break;
+      lastId = data[data.length - 1].id;
+    }
+  }
+}
+
+// ─── History batches — cursor-based, chunked ──────────────────────────────────
+async function* fetchHistoryBatches(activityReferenceNumbers: string[]) {
+  if (!activityReferenceNumbers.length) return;
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < activityReferenceNumbers.length; i += CHUNK_SIZE) {
+    chunks.push(activityReferenceNumbers.slice(i, i + CHUNK_SIZE));
+  }
+
+  for (const chunk of chunks) {
+    let lastHistoryId: number | null = null;
+
+    while (true) {
+      let query = supabase
+        .from("history")
+        .select("*")
+        .in("activity_reference_number", chunk)
+        .order("id", { ascending: true })
+        .limit(BATCH_SIZE);
+
+      if (lastHistoryId !== null) query = query.gt("id", lastHistoryId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      yield data;
+
+      if (data.length < BATCH_SIZE) break;
+      lastHistoryId = data[data.length - 1].id;
+    }
+  }
+}
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
+  const { referenceid, from, to } = req.query;
+
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  }
+
+  // Normalize to YYYY-MM-DD
+  let scheduledFrom: string | undefined;
+  let scheduledTo: string | undefined;
+
+  if (typeof from === "string" && from) {
+    scheduledFrom = from.length > 10 ? from.slice(0, 10) : from;
+  }
+  if (typeof to === "string" && to) {
+    scheduledTo = to.length > 10 ? to.slice(0, 10) : to;
+  }
+
+  try {
+    res.setHeader("Content-Type", "application/json");
+    res.write(`{"activities":[`);
+
+    let firstActivity = true;
+    const allActivityReferenceNumbers: string[] = [];
+    let totalActivities = 0;
+
+    for await (const batch of fetchActivityBatches(referenceid, scheduledFrom, scheduledTo)) {
+      for (const row of batch) {
+        if (row.activity_reference_number) {
+          allActivityReferenceNumbers.push(row.activity_reference_number);
+        }
+        const json = JSON.stringify(row);
+        res.write(firstActivity ? json : `,${json}`);
+        firstActivity = false;
+        totalActivities++;
+      }
+    }
+
+    res.write(`],"history":[`);
+
+    let firstHistory = true;
+    let totalHistory = 0;
+
+    const uniqueRefs = [...new Set(allActivityReferenceNumbers)];
+
+    for await (const batch of fetchHistoryBatches(uniqueRefs)) {
+      for (const row of batch) {
+        const json = JSON.stringify(row);
+        res.write(firstHistory ? json : `,${json}`);
+        firstHistory = false;
+        totalHistory++;
+      }
+    }
+
+    res.write(`],"total_activities":${totalActivities},"total_history":${totalHistory}}`);
+    res.end();
+  } catch (err: any) {
+    console.error("[fetch-scheduled] Server error:", err);
+    if (!res.writableEnded) {
+      res.status(500).json({ message: err.message || "Server error" });
+    }
+  }
+}

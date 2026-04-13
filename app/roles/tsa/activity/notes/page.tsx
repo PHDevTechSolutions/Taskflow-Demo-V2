@@ -162,7 +162,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Personal Notes</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">Daily Admin Task</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
@@ -183,7 +183,6 @@ function DashboardContent() {
                 </SidebarInset>
 
                 <SidebarRight
-                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />

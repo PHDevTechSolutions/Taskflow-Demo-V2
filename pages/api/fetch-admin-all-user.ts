@@ -9,32 +9,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const db = await connectToDatabase();
+    const referenceId = req.query.id as string; // This is the TSM ReferenceID passed as query param
+    const role = req.query.role as string;
+    const department = req.query.department as string;
 
-    // Fetch all agents excluding those with Status "Resigned" or "Terminated"
-    const agents = await db
-  .collection("users")
-  .find({
-    Role: "Territory Sales Associate",             // filter role
-    Status: { $nin: ["Resigned", "Terminated"] },  // exclude these statuses
-  })
-  .project({
-    Firstname: 1,
-    Lastname: 1,
-    ReferenceID: 1,
-    profilePicture: 1,
-    Position: 1,
-    Status: 1,
-    Role: 1,
-    TargetQuota: 1,
-    _id: 0,
-  })
-  .toArray();
+    let query = {};
 
+    const isSuperAdmin = role === "Super Admin";
+    const isProcurement = department === "Procurement";
 
-    if (agents.length === 0) {
-      return res.status(404).json({ error: "No agents found" });
+    if (!isSuperAdmin && !isProcurement) {
+      if (!referenceId) {
+        return res.status(400).json({ error: "ReferenceID (TSM) is required" });
+      }
+      query = { TSM: referenceId };
     }
 
+    // Fetch all agents based on the query
+    const agents = await db
+      .collection("users")
+      .find({
+        ...query,
+        Status: { $nin: ["Resigned", "Terminated"] },
+        Department: "Sales",
+      })
+      .project({
+        Firstname: 1,
+        Lastname: 1,
+        ReferenceID: 1,
+        TSM: 1,
+        Manager: 1,
+        profilePicture: 1,
+        Position: 1,
+        Status: 1,
+        Role: 1,
+        TargetQuota: 1,
+        Connection: 1,
+        _id: 0,
+      })
+      .toArray();
+
+
+    // Return only relevant agent info, excluding sensitive data like passwords
     res.status(200).json(agents);
   } catch (error) {
     console.error("Error fetching agents:", error);

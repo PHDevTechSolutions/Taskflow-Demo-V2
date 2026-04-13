@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -37,6 +38,17 @@ export async function PUT(req: Request) {
       { status: 404 }
     );
   }
+
+  // Log audit trail for revert operation
+  await logAuditTrailApp(
+    req,
+    "update",
+    "company accounts",
+    ids.join(", "),
+    `Reverted ${updatedRows.length} accounts`,
+    `Reverted ${updatedRows.length} removed accounts to Active`,
+    { ids, status: "Active" }
+  );
 
   return NextResponse.json(
     { success: true, updatedCount: updatedRows.length },

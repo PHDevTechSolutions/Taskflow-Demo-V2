@@ -44,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           so_number,
           so_amount,
           call_type,
+          call_status,
           quotation_status
         `)
         .eq("tsm", referenceid)

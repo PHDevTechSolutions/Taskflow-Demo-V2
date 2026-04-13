@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import fs from "fs";
-import path from "path";
 
 // Decode common HTML entities
 function decodeEntities(text: string): string {
@@ -93,6 +91,10 @@ function setBorderForRow(sheet: ExcelJS.Worksheet, rowNumber: number, startCol =
 
 export async function POST(req: Request) {
   const data = await req.json();
+
+  // Dynamically import fs and path (Node.js built-ins) to avoid Turbopack bundling issues
+  const { default: fs } = await import("fs");
+  const { default: path } = await import("path");
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Quotation");

@@ -34,6 +34,8 @@ export default async function handler(
         TargetQuota: 1,
         Department: 1,
         Connection: 1,
+        Manager: 1,
+        TSM: 1,
         _id: 0,
       })
       .toArray();

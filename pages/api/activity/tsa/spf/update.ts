@@ -1,6 +1,7 @@
 // /pages/api/activity/tsa/spf/update.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== "PUT") return res.status(405).json({ error: "Method not allowed" });
@@ -65,6 +66,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .single();
 
         if (error) throw error;
+
+        // Log audit trail for SPF update
+        await logAuditTrailWithSession(
+            req,
+            "update",
+            "SPF request",
+            id,
+            spf_number,
+            `Updated SPF request for ${customer_name}`,
+            { spf_number, customer_name }
+        );
 
         return res.status(200).json({ success: true, updated: data });
     } catch (err: any) {

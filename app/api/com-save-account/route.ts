@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -139,6 +140,17 @@ export async function POST(req: Request) {
       RETURNING *;
     `;
 
+    // Log audit trail for account creation
+    await logAuditTrailApp(
+      req,
+      "create",
+      "company account",
+      inserted[0].id?.toString(),
+      account_reference_number,
+      `Created company account: ${company_name}`,
+      { company_name, type_client, region }
+    );
+
     return NextResponse.json(
       { success: true, data: inserted[0] },
       { status: 201 }
@@ -153,3 +165,8 @@ export async function POST(req: Request) {
 }
 
 export const dynamic = "force-dynamic";
+
+// PUT handler - same logic as POST (for frontend compatibility)
+export async function PUT(req: Request) {
+  return POST(req);
+}

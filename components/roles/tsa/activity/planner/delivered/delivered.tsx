@@ -173,6 +173,15 @@ export const Delivered: React.FC<CompletedProps> = ({
 
   /* ================= GROUP HISTORY ================= */
 
+  const statusPriority = [
+    "Delivered",
+    "SO-Done",
+    "Quote-Done",
+    "Assisted",
+    "Not Assisted",
+    "Cancelled",
+  ];
+
   const groupedData = useMemo(() => {
     const map = new Map<string, HistoryItem[]>();
 
@@ -187,7 +196,13 @@ export const Delivered: React.FC<CompletedProps> = ({
 
     return Array.from(map.entries())
       .map(([activity_reference_number, items]) => {
-        // Kunin ang pinaka-latest sa group by date_created
+        // FIX: only include groups that have at least one "Delivered" history item
+        const hasDelivered = items.some(
+          (h) => (h.status || "").trim().toLowerCase() === "delivered"
+        );
+        if (!hasDelivered) return null;
+
+        // Use the latest item for display fields (company name, contact, date)
         const latest = items.reduce((a, b) =>
           new Date(a.date_created) > new Date(b.date_created) ? a : b
         );
@@ -197,11 +212,14 @@ export const Delivered: React.FC<CompletedProps> = ({
           activity_reference_number,
           company_name: latest.company_name ?? "Unknown Company",
           contact_number: latest.contact_number ?? "-",
-          status: latest.status,
+          // FIX: always show "Delivered" as the group status since that's the filter criterion
+          status: "Delivered",
           date_created: latest.date_created,
           relatedHistoryItems: items,
         };
       })
+      // Remove nulls (groups with no Delivered item)
+      .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort(
         (a, b) =>
           new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
@@ -224,24 +242,9 @@ export const Delivered: React.FC<CompletedProps> = ({
     );
   });
 
-  /* ================= STATUS SORT PRIORITY ================= */
-
-  const statusPriority = [
-    "Delivered",
-    "SO-Done",
-    "Quote-Done",
-    "Assisted",
-    "Not Assisted",
-    "Cancelled",
-  ];
-
-  const deliveredData = filteredData.filter(
-    (item) => item.status === "Delivered"
-  );
-
   useEffect(() => {
-    onCountChange?.(deliveredData.length);
-  }, [deliveredData.length]);
+    onCountChange?.(filteredData.length);
+  }, [filteredData.length]);
 
   /* ================= UI ================= */
 
@@ -276,7 +279,7 @@ export const Delivered: React.FC<CompletedProps> = ({
 
       <div className="max-h-[70vh] overflow-auto space-y-4 custom-scrollbar">
         <Accordion type="single" collapsible>
-          {deliveredData.map((item) => {
+          {filteredData.map((item) => {
             const histories = item.relatedHistoryItems;
 
             // Sort histories by status priority inside each item
@@ -299,9 +302,7 @@ export const Delivered: React.FC<CompletedProps> = ({
                     {/* VIEW RECORDS BUTTON & DIALOG */}
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button
-                          variant="outline" className="rounded-none"
-                        >
+                        <Button variant="outline" className="rounded-none">
                           <FileText /> View Records
                         </Button>
                       </DialogTrigger>
@@ -328,7 +329,6 @@ export const Delivered: React.FC<CompletedProps> = ({
 
                               <Separator />
 
-                              {/* COMPANY */}
                               {h.contact_person && (
                                 <p>
                                   <strong>Contact Person:</strong> {h.contact_person}
@@ -345,15 +345,12 @@ export const Delivered: React.FC<CompletedProps> = ({
                                 </p>
                               )}
 
-                              {/* OUTBOUND */}
                               {h.call_status && (
                                 <p>
                                   <strong>Call Status:</strong> {h.call_status}
                                 </p>
                               )}
 
-
-                              {/* QUOTATION */}
                               {h.quotation_number && (
                                 <p>
                                   <strong>Quotation No:</strong> {h.quotation_number}
@@ -364,23 +361,20 @@ export const Delivered: React.FC<CompletedProps> = ({
                                   <strong>Quotation Type:</strong> {h.quotation_type}
                                 </p>
                               )}
-                              {h.quotation_amount !== null &&
-                                h.quotation_amount !== undefined && (
-                                  <p>
-                                    <strong>Quotation Amount:</strong>{" "}
-                                    {h.quotation_amount.toLocaleString("en-PH", {
-                                      style: "currency",
-                                      currency: "PHP",
-                                    })}
-                                  </p>
-                                )}
-
+                              {h.quotation_amount !== null && h.quotation_amount !== undefined && (
+                                <p>
+                                  <strong>Quotation Amount:</strong>{" "}
+                                  {h.quotation_amount.toLocaleString("en-PH", {
+                                    style: "currency",
+                                    currency: "PHP",
+                                  })}
+                                </p>
+                              )}
                               {h.product_title && (
                                 <p>
                                   <strong>Product:</strong> {h.product_title}
                                 </p>
                               )}
-
                               {h.product_sku && (
                                 <p>
                                   <strong>SKU:</strong> {h.product_sku}
@@ -393,26 +387,23 @@ export const Delivered: React.FC<CompletedProps> = ({
                                 </p>
                               )}
 
-                              {/* SO */}
                               {h.so_number && (
                                 <>
                                   <p>
                                     <strong>SO No:</strong> {h.so_number}
                                   </p>
-                                  {h.so_amount !== null &&
-                                    h.so_amount !== undefined && (
-                                      <p>
-                                        <strong>SO Amount:</strong>{" "}
-                                        {h.so_amount.toLocaleString("en-PH", {
-                                          style: "currency",
-                                          currency: "PHP",
-                                        })}
-                                      </p>
-                                    )}
+                                  {h.so_amount !== null && h.so_amount !== undefined && (
+                                    <p>
+                                      <strong>SO Amount:</strong>{" "}
+                                      {h.so_amount.toLocaleString("en-PH", {
+                                        style: "currency",
+                                        currency: "PHP",
+                                      })}
+                                    </p>
+                                  )}
                                 </>
                               )}
 
-                              {/* DELIVERY */}
                               {h.actual_sales !== null && h.actual_sales !== undefined && (
                                 <>
                                   <p>

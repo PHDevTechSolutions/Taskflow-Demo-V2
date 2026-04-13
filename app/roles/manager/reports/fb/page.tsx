@@ -137,9 +137,9 @@ function DashboardContent() {
                         <div>
                             <FBTable
                                 referenceid={userDetails.referenceid}
-                                target_quota={userDetails.target_quota}
+
                                 dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+
                                 userDetails={userDetails}
                             />
                         </div>
@@ -147,7 +147,6 @@ function DashboardContent() {
                 </SidebarInset>
 
                 <SidebarRight
-                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />

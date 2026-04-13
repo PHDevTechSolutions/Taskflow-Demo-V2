@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo, useState } from "react";
 import {
   Card, CardContent, CardHeader,
@@ -204,7 +206,7 @@ export function OutboundCallsCard({
             <TableBody>
               <TableRow className="text-xs font-mono">
                 <TableCell className="text-center">{obTarget}</TableCell>
-                <TableCell className="text-center font-semibold">{totalOBCalls.length}</TableCell>
+                <TableCell className="text-center font-semibold">{stats.totalCalls}</TableCell>
                 <TableCell className="text-center">{stats.achievement.toFixed(2)}%</TableCell>
                 <TableCell className="text-center">
                   {stats.callsToQuote} {convBadge(stats.numQuotes)}

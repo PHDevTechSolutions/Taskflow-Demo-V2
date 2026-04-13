@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/auth";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -40,6 +41,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // 🔥 delete token after use
   await db.collection("password_resets").deleteOne({ token });
+
+  // Log audit trail for password reset
+  await logAuditTrailWithSession(
+    req,
+    "update",
+    "password",
+    reset.email,
+    reset.email,
+    `Password reset for ${reset.email}`,
+    { action: "password_reset" }
+  );
 
   return res.status(200).json({ message: "Password reset successful" });
 }

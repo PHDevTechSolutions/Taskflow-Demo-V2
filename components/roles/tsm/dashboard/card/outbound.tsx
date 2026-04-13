@@ -9,14 +9,15 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info } from "lucide-react";
+import { Info, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
 interface HistoryItem {
   referenceid: string;
-  source: string;
-  call_status: string;
+  source: string; // "Outbound - Touchbase" | "Outbound - Follow-up"
+  call_status: string; // "Successful" | "Unsuccessful"
   type_activity: string;
   start_date: string;
   end_date: string;
@@ -150,6 +151,84 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return { ...t, subtotal: t.touchbaseCount + t.followupCount };
   }, [statsByAgent]);
 
+  /* ── Excel Export ── */
+  const exportToExcel = async () => {
+    if (statsByAgent.length === 0) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Outbound History");
+
+      // Headers
+      worksheet.columns = [
+        { header: "Agent", key: "agent", width: 25 },
+        { header: "Touchbase Total", key: "tbTotal", width: 15 },
+        { header: "Touchbase Success", key: "tbSuccess", width: 18 },
+        { header: "Touchbase Fail", key: "tbFail", width: 15 },
+        { header: "Follow-up Total", key: "fuTotal", width: 15 },
+        { header: "Follow-up Success", key: "fuSuccess", width: 18 },
+        { header: "Follow-up Fail", key: "fuFail", width: 15 },
+        { header: "Subtotal", key: "subtotal", width: 15 },
+      ];
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add Data
+      statsByAgent.forEach((stat) => {
+        const info = agentMap.get(stat.agentID);
+        const subtotal = stat.touchbaseCount + stat.followupCount;
+
+        worksheet.addRow({
+          agent: info?.name ?? stat.agentID,
+          tbTotal: stat.touchbaseCount,
+          tbSuccess: stat.touchbaseSuccessful,
+          tbFail: stat.touchbaseUnsuccessful,
+          fuTotal: stat.followupCount,
+          fuSuccess: stat.followupSuccessful,
+          fuFail: stat.followupUnsuccessful,
+          subtotal: subtotal,
+        });
+      });
+
+      // Add Totals Row
+      const totalRow = worksheet.addRow({
+        agent: "TOTAL",
+        tbTotal: grandTotals.touchbaseCount,
+        tbSuccess: grandTotals.touchbaseSuccessful,
+        tbFail: grandTotals.touchbaseUnsuccessful,
+        fuTotal: grandTotals.followupCount,
+        fuSuccess: grandTotals.followupSuccessful,
+        fuFail: grandTotals.followupUnsuccessful,
+        subtotal: grandTotals.subtotal,
+      });
+      totalRow.font = { bold: true };
+
+      const filename = `TSM_Outbound_History_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
   if (outboundCalls.length === 0) return null;
 
   return (
@@ -164,15 +243,27 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
               <span className="font-medium text-gray-500">Follow-up</span> outbound calls
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowComputation(!showComputation)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
-          >
-            <Info className="w-3.5 h-3.5" />
-            {showComputation ? "Hide" : "Details"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={statsByAgent.length === 0}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowComputation(!showComputation)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+            >
+              <Info className="w-3.5 h-3.5" />
+              {showComputation ? "Hide" : "Details"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
 

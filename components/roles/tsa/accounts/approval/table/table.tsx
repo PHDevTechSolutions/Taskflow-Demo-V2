@@ -26,6 +26,7 @@ interface Account {
     date_removed: string;
     industry: string;
     status?: string;
+    remarks?: string;
 }
 
 interface UserDetails {
@@ -45,6 +46,8 @@ interface RequestTableProps {
     >;
     onRefreshAccountsAction: () => Promise<void>;
 }
+
+const normalizeStatus = (status?: string) => String(status ?? "").trim().toLowerCase();
 
 export function RequestTable({
     posts = [],
@@ -94,7 +97,8 @@ export function RequestTable({
     }, [agents]);
 
     const filteredData = useMemo(() => {
-        let data = localPosts.filter((item) => item.status === "Removed");
+        // Hard filter: show only rows with Removed status.
+        let data = [...localPosts];
 
         data = data.filter((item) => {
             const matchesSearch =
@@ -109,8 +113,9 @@ export function RequestTable({
             const matchesAgent =
                 agentFilter === "all" || agentMap[item.referenceid] === agentFilter;
             const matchesIndustry = industryFilter === "all" || item.industry === industryFilter;
+            const matchesStatus = item.status?.toLowerCase() === "removed";
 
-            return matchesSearch && matchesType && matchesAgent && matchesIndustry;
+            return matchesSearch && matchesType && matchesAgent && matchesIndustry && matchesStatus;
         });
 
         // Sorting
@@ -266,6 +271,9 @@ export function RequestTable({
                                     </div>
                                     <div>
                                         <span className="text-gray-500">Address:</span> {account.address}
+                                    </div>
+                                    <div className="border border-red-300 p-2 rounded">
+                                        <span className="text-gray-500">Remarks of Deletion:</span> {account.remarks}
                                     </div>
                                 </div>
 

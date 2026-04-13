@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
@@ -97,6 +97,28 @@ export const NewTask: React.FC<NewTaskProps> = ({
         "tsa client",
         "csr client",
     ];
+
+    // Virtualization state for cluster scrolling
+    const [visibleClusterRange, setVisibleClusterRange] = useState({ start: 0, end: 5 });
+    const clusterContainerRef = useRef<HTMLDivElement>(null);
+
+    // Handle cluster container scroll for virtualization
+    const handleClusterScroll = useCallback(() => {
+        if (!clusterContainerRef.current) return;
+        
+        const container = clusterContainerRef.current;
+        const scrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        
+        // Calculate visible range based on scroll position
+        const totalClusters = clusterOrder.length;
+        const scrollPercentage = scrollTop / (scrollHeight - clientHeight);
+        const startIndex = Math.floor(scrollPercentage * (totalClusters - 5));
+        const endIndex = Math.min(startIndex + 5, totalClusters);
+        
+        setVisibleClusterRange({ start: startIndex, end: endIndex });
+    }, []);
 
     // Generate Activity Reference Number helper
     const generateActivityRef = (companyName: string, region: string) => {
@@ -446,8 +468,20 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
     useEffect(() => {
         endorsedSoundRef.current = new Audio("/ticket-endorsed.mp3");
-        endorsedSoundRef.current.volume = 0.9;
-    }, []);
+        endorsedSoundRef.current.volume = 0.6;
+        
+        // Add scroll event listener for cluster virtualization
+        const container = clusterContainerRef.current;
+        if (container) {
+            container.addEventListener('scroll', handleClusterScroll);
+        }
+        
+        return () => {
+            if (container) {
+                container.removeEventListener('scroll', handleClusterScroll);
+            }
+        };
+    }, [handleClusterScroll]);
 
     // === RENDER ===
     return (
@@ -706,10 +740,13 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                         </button>
                                     </div>
 
-                                    {/* Collapsible content */}
+                                    {/* Collapsible content with scrollable container */}
                                     {sectionOpen && (
-                                        <>
-                                            {clusterOrder.map((cluster) => {
+                                        <div 
+                                            ref={clusterContainerRef}
+                                            className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100 rounded-md border border-gray-200 p-2"
+                                        >
+                                            {clusterOrder.slice(visibleClusterRange.start, visibleClusterRange.end).map((cluster) => {
                                                 const clusterAccounts = groupedToday[cluster];
                                                 if (!clusterAccounts || clusterAccounts.length === 0) return null;
 
@@ -769,7 +806,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                                     </div>
                                                 );
                                             })}
-                                        </>
+                                        </div>
                                     )}
                                 </section>
                             )}
@@ -800,9 +837,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                         </button>
                                     </div>
 
-                                    {/* Collapsible content */}
+                                    {/* Collapsible content with scrollable container */}
                                     {sectionOpen && (
-                                        <>
+                                        <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100 rounded-md border border-gray-200 p-2">
                                             <Alert className="font-mono mb-4">
                                                 <CheckCircle2Icon />
                                                 <AlertTitle className="text-xs">
@@ -860,7 +897,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                                                     </AccordionItem>
                                                 ))}
                                             </Accordion>
-                                        </>
+                                        </div>
                                     )}
                                 </section>
                             )}

@@ -10,6 +10,9 @@ import TaskListEditDialog from "../../dialog/edit";
 import { ButtonGroup } from "@/components/ui/button-group";
 
 interface Completed {
+    quotation_subject: string;
+    quotation_vatable: string;
+    restocking_fee: string;
     id: number;
     activity_reference_number: string;
     referenceid: string;
@@ -56,6 +59,8 @@ interface Completed {
     tsm_name: string;
     tsm_approval_date: string;
     tsm_remarks: string;
+
+    manager_name: string;
 
     vat_type: string;
 }
@@ -377,7 +382,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     email={email}
                     contact={contact}
                     tsmname={tsmname}
-                    managername={managername}
                     signature={signature}
                     company={{
                         company_name: editItem.company_name,
@@ -387,11 +391,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     deliveryFee={editItem.delivery_fee}
+                    restockingFee={editItem.restocking_fee ?? ""}
+                    whtType={editItem.quotation_vatable ?? "none"}
+                    quotationSubject={editItem.quotation_subject ?? "For Quotation"}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
                     agentEmailAddress={editItem.agent_email_address}
                     tsmName={editItem.tsm_name}
+                    managerName={editItem.manager_name}
                     vatType={editItem.vat_type}
                 />
             )}

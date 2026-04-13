@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(
   req: NextApiRequest,
@@ -99,9 +100,21 @@ export default async function handler(
       return res.status(500).json({ message: signatoryUpdateError.message });
     }
 
-    // -----------------------------
-    // 5️⃣ Success
-    // -----------------------------
+    // ------------------------------
+    // Log audit trail for manager quotation approval
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "quotation approval",
+      quotation_number,
+      quotation_number,
+      `Manager ${tsm_approved_status === "Approved By Sales Head" ? "approved" : "declined"} quotation`,
+      { status: tsm_approved_status, manager_remarks }
+    );
+
+    // ------------------------------
+    // 6️⃣ Success
+    // ------------------------------
     return res.status(200).json({
       success: true,
       history: historyData[0], // status updated

@@ -24,6 +24,10 @@ interface Props {
     setStatus: (v: string) => void;
     typeClient: string;
     setTypeClient: (value: string) => void;
+    soStatus: string;
+    setSoStatus: (v: string) => void;
+    paymentStatus: string;
+    setPaymentStatus: (v: string) => void;
     handleBack: () => void;
     handleNext: () => void;
     handleSave: () => void;
@@ -119,6 +123,10 @@ export function SOSheet(props: Props) {
         setStatus,
         typeClient,
         setTypeClient,
+        soStatus,
+        setSoStatus,
+        paymentStatus,
+        setPaymentStatus,
         handleBack,
         handleNext,
         handleSave,
@@ -315,19 +323,6 @@ export function SOSheet(props: Props) {
                 <div className="space-y-2">
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel className="font-bold">Remarks</FieldLabel>
-                            <Textarea
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                                placeholder="Enter remarks"
-                                className="capitalize rounded-none"
-                                required
-                            />
-                        </FieldSet>
-                    </FieldGroup>
-
-                    <FieldGroup>
-                        <FieldSet>
                             <FieldLabel className="font-bold">Status</FieldLabel>
 
                             <RadioGroup value={status} onValueChange={props.setStatus}>
@@ -335,12 +330,7 @@ export function SOSheet(props: Props) {
                                     {
                                         value: "SO-Done",
                                         title: "SO-Done",
-                                        desc: "Client was success and provided with the needed information or support.",
-                                    },
-                                    {
-                                        value: "Cancelled",
-                                        title: "Cancelled",
-                                        desc: "Sales Order process is cancelled.",
+                                        desc: "Client was successful and provided with the needed information or support.",
                                     },
                                 ].map((item) => (
                                     <FieldLabel key={item.value}>
@@ -349,15 +339,92 @@ export function SOSheet(props: Props) {
                                                 <FieldTitle>{item.title}</FieldTitle>
                                                 <FieldDescription>{item.desc}</FieldDescription>
 
+                                                {/* SO Status dropdown — only when SO-Done is selected */}
+                                                {status === "SO-Done" && item.value === "SO-Done" && (
+                                                    <div className="mt-3 space-y-2">
+                                                        <p className="text-xs font-semibold text-gray-700">Action <span className="text-red-500">*</span></p>
+                                                        <select
+                                                            value={soStatus}
+                                                            onChange={(e) => {
+                                                                setSoStatus(e.target.value);
+                                                                setPaymentStatus(""); // reset payment status on change
+                                                                if (e.target.value !== "Cancelled") setRemarks("");
+                                                            }}
+                                                            className="w-full h-12 rounded-none border border-gray-200 bg-white px-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                                        >
+                                                            <option value="">— Select SO Status —</option>
+                                                            <option value="Waiting for Payment">Waiting for Payment</option>
+                                                            <option value="For Delivery Scheduled">For Delivery Scheduled</option>
+                                                            <option value="Convert to SI">Convert to SI</option>
+                                                            <option value="Cancelled">Cancelled</option>
+                                                        </select>
+
+                                                        {/* Payment Status — only when Convert to SI is selected */}
+                                                        {soStatus === "Convert to SI" && (
+                                                            <div className="space-y-1.5">
+                                                                <p className="text-xs font-semibold text-gray-700">
+                                                                    Payment Status <span className="text-red-500">*</span>
+                                                                </p>
+                                                                <div className="flex gap-2">
+                                                                    {["Paid", "With Terms"].map((opt) => (
+                                                                        <button
+                                                                            key={opt}
+                                                                            type="button"
+                                                                            onClick={() => setPaymentStatus(opt)}
+                                                                            className={`flex-1 h-10 text-xs font-semibold border rounded-none transition-colors ${paymentStatus === opt
+                                                                                    ? "bg-gray-900 text-white border-gray-900"
+                                                                                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                                                                                }`}
+                                                                        >
+                                                                            {opt}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                                {paymentStatus === "" && (
+                                                                    <p className="text-[10px] text-red-500">Please select a payment status.</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Remarks — required when Cancelled */}
+                                                        {soStatus === "Cancelled" && (
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-semibold text-red-600">
+                                                                    Cancellation Reason <span className="text-red-500">*</span>
+                                                                </p>
+                                                                <Textarea
+                                                                    value={remarks}
+                                                                    onChange={(e) => setRemarks(e.target.value)}
+                                                                    placeholder="Required — enter cancellation reason"
+                                                                    className="rounded-none border-red-300 focus:ring-red-300 text-xs"
+                                                                />
+                                                                {remarks.trim() === "" && (
+                                                                    <p className="text-[10px] text-red-500">Remarks are required for cancellation.</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
                                                 {status === item.value && (
                                                     <div className="mt-4 flex gap-2">
                                                         <Button type="button" variant="outline" className="rounded-none" onClick={props.handleBack}>
                                                             <ArrowLeft /> Back
                                                         </Button>
-                                                        <Button type="button" className="rounded-none" onClick={handleSave}>
+                                                        <Button
+                                                            type="button"
+                                                            className="rounded-none"
+                                                            disabled={
+                                                                item.value === "SO-Done" && (
+                                                                    soStatus.trim() === "" ||
+                                                                    (soStatus === "Cancelled" && remarks.trim() === "") ||
+                                                                    (soStatus === "Convert to SI" && paymentStatus.trim() === "")
+                                                                )
+                                                            }
+                                                            onClick={handleSave}
+                                                        >
                                                             Save <CheckCircle2Icon />
                                                         </Button>
-
                                                     </div>
                                                 )}
                                             </FieldContent>

@@ -4,19 +4,24 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
 
-function formatDate(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+// Based on overdue.tsx: only these statuses are considered overdue
+const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+
+function toLocalDateString(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA"); // YYYY-MM-DD
 }
 
 /* ------------------ Fetch overdue activities ------------------ */
-async function fetchOverdueActivities(manager: string, today: string) {
-  console.log("📌 fetchOverdueActivities:", { manager, today });
+async function fetchOverdueActivities(manager: string) {
+  console.log("📌 fetchOverdueActivities:", { manager });
 
   let allActivities: any[] = [];
   let offset = 0;
+
+  const todayStr = toLocalDateString(new Date());
 
   while (true) {
     try {
@@ -24,20 +29,30 @@ async function fetchOverdueActivities(manager: string, today: string) {
         .from("activity")
         .select("*")
         .eq("manager", manager)
-        .lt("scheduled_date", today)
+        .in("status", ALLOWED_STATUSES) // Only show statuses that can be overdue
         .range(offset, offset + BATCH_SIZE - 1);
 
       if (error) throw error;
-
       if (!data || data.length === 0) break;
 
-      const filtered = data.filter(
-        (a) => a.status !== "Cancelled" && a.status !== "Done"
-      );
+      // Only past dates, exclude today/future
+      const filtered = data.filter((a) => {
+        const itemScheduledDate = toLocalDateString(a.scheduled_date);
+        
+        // ❗ ALWAYS exclude TODAY (based on overdue.tsx)
+        if (itemScheduledDate === todayStr) {
+          return false;
+        }
 
-      const mapped = filtered.map((a) => ({ ...a, status: "Assisted" }));
+        // past only (still safe)
+        if (itemScheduledDate > todayStr) {
+          return false;
+        }
 
-      allActivities.push(...mapped);
+        return true;
+      });
+
+      allActivities.push(...filtered);
 
       if (data.length < BATCH_SIZE) break;
       offset += BATCH_SIZE;
@@ -51,68 +66,6 @@ async function fetchOverdueActivities(manager: string, today: string) {
   return allActivities;
 }
 
-/* ------------------ Fetch Unsuccessful history ------------------ */
-async function fetchUnsuccessfulHistory(activityIds: string[]) {
-  if (!activityIds.length) {
-    console.log("⚠️ No activity IDs for history fetch");
-    return [];
-  }
-
-  console.log("📌 fetchUnsuccessfulHistory:", { activityIdsLength: activityIds.length });
-
-  let allData: any[] = [];
-  let offset = 0;
-
-  while (true) {
-    try {
-      const { data, error } = await supabase
-        .from("history")
-        .select("*")
-        .in("activity_reference_number", activityIds)
-        .eq("call_status", "Unsuccessful")
-        .eq("type_activity", "Outbound Calls")
-        .order("date_created", { ascending: false })
-        .range(offset, offset + BATCH_SIZE - 1);
-
-      if (error) throw error;
-
-      if (!data || data.length === 0) break;
-
-      allData.push(...data);
-
-      if (data.length < BATCH_SIZE) break;
-      offset += BATCH_SIZE;
-    } catch (err) {
-      console.error("❌ Error fetching unsuccessful history batch:", offset, err);
-      throw err;
-    }
-  }
-
-  console.log("✅ Total unsuccessful history fetched:", allData.length);
-
-  // Fetch successful counterparts
-  try {
-    const { data: successfulData, error: errSuccess } = await supabase
-      .from("history")
-      .select("activity_reference_number")
-      .in("activity_reference_number", activityIds)
-      .eq("call_status", "Successful")
-      .eq("type_activity", "Outbound Calls");
-
-    if (errSuccess) throw errSuccess;
-
-    const successfulSet = new Set(successfulData?.map((h) => h.activity_reference_number));
-
-    const filtered = allData.filter((h) => !successfulSet.has(h.activity_reference_number));
-
-    console.log("✅ Unsuccessful history after removing successful counterparts:", filtered.length);
-    return filtered;
-  } catch (err) {
-    console.error("❌ Error fetching successful history counterparts:", err);
-    throw err;
-  }
-}
-
 /* ------------------ API Handler ------------------ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log("📥 fetch-activity called with query:", req.query);
@@ -124,27 +77,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing or invalid manager" });
   }
 
-  const today = formatDate(new Date());
-  console.log("✅ manager:", manager, "today:", today);
-
   try {
-    // 1️⃣ Fetch overdue activities
-    const activities = await fetchOverdueActivities(manager, today);
-    const activityIds = activities.map((a) => a.activity_reference_number);
-
-    // 2️⃣ Fetch filtered Unsuccessful history
-    const unsuccessfulHistory = await fetchUnsuccessfulHistory(activityIds);
-
-    // 3️⃣ Include only activities that have at least 1 Unsuccessful history
-    const overdueActivities = activities.filter((a) =>
-      unsuccessfulHistory.some((h) => h.activity_reference_number === a.activity_reference_number)
-    );
+    // 1️⃣ Fetch overdue activities (past days only)
+    const overdueActivities = await fetchOverdueActivities(manager);
 
     console.log("✅ Overdue activities to return:", overdueActivities.length);
 
     return res.status(200).json({
       activities: overdueActivities,
-      history: unsuccessfulHistory,
     });
   } catch (err: any) {
     console.error("🔥 fetch-activity handler error:", err);

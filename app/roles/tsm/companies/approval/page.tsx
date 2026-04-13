@@ -158,7 +158,7 @@ function DashboardContent() {
             setLoadingAccounts(true);
             try {
                 const response = await fetch(
-                    `/api/com-fetch-approval-account?tsm=${encodeURIComponent(
+                    `/api/com-fetch-approval-account-removal?tsm=${encodeURIComponent(
                         userDetails.referenceid
                     )}`
                 );
@@ -323,7 +323,6 @@ function DashboardContent() {
                 </SidebarInset>
 
                 <SidebarRight
-                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />

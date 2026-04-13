@@ -35,10 +35,6 @@ import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
 import { Badge } from "@/components/ui/badge";
 import { AccountDialog } from "../dialog/active";
-import {
-  checkCompanyBlocked,
-  BLOCK_NEW_TASK,
-} from "@/utils/activityBlockUtils";
 
 interface Account {
   id: string;
@@ -183,30 +179,15 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // Add Account Handler
   const handleAdd = async (account: Account) => {
-    // ─── Block check before proceeding ────────────────────────────────────
-    // Block if company is already in-progress or scheduled
-    const blockCheck = checkCompanyBlocked(
-      account.account_reference_number,
-      existingActivities,
-      existingHistory,
-      BLOCK_NEW_TASK.statuses,
-      BLOCK_NEW_TASK.checkScheduled,
+    
+    // ─── CHANGE 2: Unlock when activity status is "Completed" ─────────────
+    // If the existing activity for this company is already Completed,
+    // bypass the lock and allow a new activity to be created.
+    const hasCompletedActivity = existingActivities.some(
+      (a) =>
+        a.account_reference_number === account.account_reference_number &&
+        a.status?.toLowerCase() === "completed",
     );
-
-    if (blockCheck.blocked) {
-      sileo.error({
-        title: "Cannot Add Activity",
-        description: blockCheck.reason,
-        duration: 6000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
-      return;
-    }
 
     setLoading(true); // <-- start loading
 
@@ -471,32 +452,9 @@ export const NewTask: React.FC<NewTaskProps> = ({
       return;
     }
 
-    // ─── Block check for endorsed ticket too ────────────────────────────
-    // Block if company is already in-progress or scheduled
-    const blockCheck = checkCompanyBlocked(
-      selectedTicket.account_reference_number,
-      existingActivities,
-      existingHistory,
-      BLOCK_NEW_TASK.statuses,
-      BLOCK_NEW_TASK.checkScheduled,
-    );
-
-    if (blockCheck.blocked) {
-      sileo.error({
-        title: "Cannot Use Ticket",
-        description: blockCheck.reason,
-        duration: 6000,
-        position: "top-right",
-        fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
-      });
-      setConfirmOpen(false);
-      setSelectedTicket(null);
-      return;
-    }
+    // ─── CHANGE 1: No block check for endorsed tickets ────────────────────
+    // Endorsed tickets bypass the lock entirely — agents can always use them
+    // regardless of any existing activity status for that company.
 
     try {
       setConfirmLoading(true);
@@ -727,51 +685,14 @@ export const NewTask: React.FC<NewTaskProps> = ({
 
   // ─── Reusable "Add" button with block guard ──────────────────────────────
   const AddButton = ({ account }: { account: Account }) => {
-    // Block if company is already in-progress or scheduled
-    const blockCheck = checkCompanyBlocked(
-      account.account_reference_number,
-      existingActivities,
-      existingHistory,
-      BLOCK_NEW_TASK.statuses,
-      BLOCK_NEW_TASK.checkScheduled,
-    );
+    
 
-    if (blockCheck.blocked) {
-      return (
-        <HoverCard>
-          <HoverCardTrigger asChild>
-            <Button
-              type="button"
-              disabled
-              variant="outline"
-              className="cursor-not-allowed rounded-none opacity-60 text-xs"
-            >
-              <Lock size={13} className="mr-1" /> Locked
-            </Button>
-          </HoverCardTrigger>
-          <HoverCardContent
-            side="top"
-            align="end"
-            className="text-xs max-w-xs leading-relaxed"
-          >
-            <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-              <Lock size={12} /> Activity Locked
-            </p>
-            <p>{blockCheck.reason}</p>
-            {blockCheck.daysRemaining !== undefined && (
-              <p className="mt-1 text-muted-foreground">
-                Unlocks in{" "}
-                <strong>
-                  {blockCheck.daysRemaining} day
-                  {blockCheck.daysRemaining !== 1 ? "s" : ""}
-                </strong>{" "}
-                or when marked as Delivered.
-              </p>
-            )}
-          </HoverCardContent>
-        </HoverCard>
-      );
-    }
+    // ─── CHANGE 2: Unlock when activity status is "Completed" ─────────────
+    const hasCompletedActivity = existingActivities.some(
+      (a) =>
+        a.account_reference_number === account.account_reference_number &&
+        a.status?.toLowerCase() === "completed",
+    );
 
     return (
       <Button
@@ -830,6 +751,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
       ) : (
         <>
           {/* Endorsed Tickets */}
+          {/* CHANGE 1: Tickets are never locked — always show "Use Ticket" button */}
           {loadingEndorsed ? (
             <div className="flex justify-center items-center h-20">
               <Spinner className="size-6" />
@@ -850,109 +772,55 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 collapsible
                 className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500"
               >
-                {endorsedTickets.map((ticket) => {
-                  const ticketBlockCheck = checkCompanyBlocked(
-                    ticket.account_reference_number,
-                    existingActivities,
-                    existingHistory,
-                    BLOCK_NEW_TASK.statuses,
-                    BLOCK_NEW_TASK.checkScheduled,
-                  );
+                {endorsedTickets.map((ticket) => (
+                  <AccordionItem key={ticket.id} value={ticket.id}>
+                    <div className="flex justify-between items-center p-2 select-none">
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
+                        {ticket.company_name}
+                      </AccordionTrigger>
 
-                  return (
-                    <AccordionItem key={ticket.id} value={ticket.id}>
-                      <div className="flex justify-between items-center p-2 select-none">
-                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
-                          {ticket.company_name}
-                        </AccordionTrigger>
+                      {/* Always show Use Ticket — no lock check for endorsed tickets */}
+                      <Button
+                        type="button"
+                        className="cursor-pointer rounded-none"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openConfirmUseTicket(ticket);
+                        }}
+                      >
+                        <TicketIcon /> Use Ticket
+                      </Button>
+                    </div>
 
-                        {ticketBlockCheck.blocked ? (
-                          <HoverCard>
-                            <HoverCardTrigger asChild>
-                              <Button
-                                type="button"
-                                disabled
-                                variant="outline"
-                                className="cursor-not-allowed rounded-none opacity-60 text-xs"
-                              >
-                                <Lock size={13} className="mr-1" /> Locked
-                              </Button>
-                            </HoverCardTrigger>
-                            <HoverCardContent
-                              side="top"
-                              align="end"
-                              className="text-xs max-w-xs leading-relaxed"
-                            >
-                              <p className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-                                <Lock size={12} /> Activity Locked
-                              </p>
-                              <p>{ticketBlockCheck.reason}</p>
-                              {ticketBlockCheck.daysRemaining !== undefined && (
-                                <p className="mt-1 text-muted-foreground">
-                                  Unlocks in{" "}
-                                  <strong>
-                                    {ticketBlockCheck.daysRemaining} day
-                                    {ticketBlockCheck.daysRemaining !== 1
-                                      ? "s"
-                                      : ""}
-                                  </strong>{" "}
-                                  or when marked as Delivered.
-                                </p>
-                              )}
-                            </HoverCardContent>
-                          </HoverCard>
-                        ) : (
-                          <Button
-                            type="button"
-                            className="cursor-pointer rounded-none"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openConfirmUseTicket(ticket);
-                            }}
-                          >
-                            <TicketIcon /> Use Ticket
-                          </Button>
-                        )}
-                      </div>
-
-                      <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
-                        <p>
-                          <strong>Contact Person:</strong>{" "}
-                          {ticket.contact_person}
-                        </p>
-                        <p>
-                          <strong>Contact Number:</strong>{" "}
-                          {ticket.contact_number}
-                        </p>
-                        <p>
-                          <strong>Email Address:</strong> {ticket.email_address}
-                        </p>
-                        <p>
-                          <strong>Address:</strong> {ticket.address}
-                        </p>
-                        <p>
-                          <strong>Ticket Reference #:</strong>{" "}
-                          {ticket.ticket_reference_number}
-                        </p>
-                        <p>
-                          <strong>Wrap Up:</strong> {ticket.wrap_up}
-                        </p>
-                        <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
-                          <strong>Inquiry / Notes:</strong> {ticket.inquiry}
-                        </p>
-                        {ticketBlockCheck.blocked && (
-                          <p className="border border-orange-400 border-dashed rounded-none p-3 bg-orange-50 text-orange-700 flex items-center gap-2">
-                            <Lock size={12} />
-                            <span>
-                              <strong>Locked:</strong> {ticketBlockCheck.reason}
-                            </span>
-                          </p>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
+                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
+                      <p>
+                        <strong>Contact Person:</strong>{" "}
+                        {ticket.contact_person}
+                      </p>
+                      <p>
+                        <strong>Contact Number:</strong>{" "}
+                        {ticket.contact_number}
+                      </p>
+                      <p>
+                        <strong>Email Address:</strong> {ticket.email_address}
+                      </p>
+                      <p>
+                        <strong>Address:</strong> {ticket.address}
+                      </p>
+                      <p>
+                        <strong>Ticket Reference #:</strong>{" "}
+                        {ticket.ticket_reference_number}
+                      </p>
+                      <p>
+                        <strong>Wrap Up:</strong> {ticket.wrap_up}
+                      </p>
+                      <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
+                        <strong>Inquiry / Notes:</strong> {ticket.inquiry}
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
               </Accordion>
             </section>
           ) : null}

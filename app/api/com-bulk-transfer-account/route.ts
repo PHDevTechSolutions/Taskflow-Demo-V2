@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logAuditTrailApp } from "@/lib/auditTrail";
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -10,7 +11,7 @@ const Xchire_sql = neon(Xchire_databaseUrl);
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { ids, status, transfer_to } = body;
+    const { ids, status, transfer_to, referenceid } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -38,6 +39,17 @@ export async function PUT(req: Request) {
       SET status = ${status}, transfer_to = ${transfer_to}, date_transferred = NOW()
       WHERE id = ANY(${ids});
     `;
+
+    // Log audit trail for bulk transfer
+    await logAuditTrailApp(
+      req,
+      "update",
+      "company accounts",
+      ids.join(", "),
+      `Bulk transfer of ${ids.length} accounts`,
+      `Transferred ${ids.length} accounts to ${transfer_to}`,
+      { ids, transfer_to, status }
+    );
 
     return NextResponse.json(
       { success: true, message: "Accounts transferred successfully" },

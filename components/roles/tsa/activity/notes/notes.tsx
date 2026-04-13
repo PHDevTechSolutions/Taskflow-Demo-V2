@@ -10,8 +10,9 @@ import {
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, Trash, Pen, Plus, FileText, Loader2, Clock } from "lucide-react";
+import { Check, Trash, Pen, Plus, FileText, Loader2, Clock, Search, Filter, TrendingUp, AlertCircle } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader,
   DialogTitle, DialogDescription, DialogFooter,
@@ -20,7 +21,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface NoteItem {
-  id: number;
+  id: string;
   referenceid: string;
   tsm: string;
   manager: string;
@@ -44,7 +45,9 @@ const truncate = (text: string, len = 40) =>
   text.length > len ? text.slice(0, len) + "…" : text;
 
 const toLocalDateTimeInput = (utc: string): string => {
+  if (!utc) return "";
   const d = new Date(utc);
+  if (isNaN(d.getTime())) return "";
   const offset = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 };
@@ -94,7 +97,9 @@ const NoteDeleteDialog: React.FC<NoteDeleteDialogProps> = ({
     }
   };
 
-  useEffect(() => () => clearTimer(), []);
+  useEffect(() => {
+    return () => clearTimer();
+  }, []);
 
   // Reset progress when dialog closes
   useEffect(() => {
@@ -204,7 +209,7 @@ const NoteDeleteDialog: React.FC<NoteDeleteDialogProps> = ({
 // ─── Section label ────────────────────────────────────────────────────────────
 
 const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1.5">
+  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1.5">
     {children}
   </p>
 );
@@ -219,12 +224,21 @@ export const Notes: React.FC<NotesProps> = ({
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
   const [deleteNote, setDeleteNote] = useState<NoteItem | null>(null);
 
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+
   // Form state
   const [typeActivity, setTypeActivity] = useState("Documentation");
   const [remarks, setRemarks] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Time tracking state
+  const [totalHours, setTotalHours] = useState(0);
+  const [overlappingEntries, setOverlappingEntries] = useState<string[]>([]);
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +268,71 @@ export const Notes: React.FC<NotesProps> = ({
   }, [referenceid, dateCreatedFilterRange]);
 
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  // Calculate total hours and detect overlaps
+  useEffect(() => {
+    let total = 0;
+    const overlaps: string[] = [];
+    
+    notes.forEach((note, i) => {
+      const duration = new Date(note.end_date).getTime() - new Date(note.start_date).getTime();
+      total += duration;
+      
+      // Check for overlapping entries
+      notes.forEach((otherNote, j) => {
+        if (i !== j) {
+          const start1 = new Date(note.start_date).getTime();
+          const end1 = new Date(note.end_date).getTime();
+          const start2 = new Date(otherNote.start_date).getTime();
+          const end2 = new Date(otherNote.end_date).getTime();
+          
+          if ((start1 < end2 && end1 > start2)) {
+            overlaps.push(`${note.type_activity} overlaps with ${otherNote.type_activity}`);
+          }
+        }
+      });
+    });
+    
+    setTotalHours(total / 3600000);
+    setOverlappingEntries([...new Set(overlaps)]);
+  }, [notes]);
+
+  // Filter notes based on search and type
+  const filteredNotes = notes.filter(note => {
+    const matchesSearch = !searchQuery || 
+      note.type_activity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.remarks.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesType = filterType === "all" || note.type_activity === filterType;
+    
+    return matchesSearch && matchesType;
+  });
+
+  // Auto-suggest activity type based on remarks
+  const suggestActivityType = (remarks: string): string => {
+    return "Documentation";
+  };
+
+  // Auto-fill current time for new entries
+  const autoFillCurrentTime = () => {
+    const now = new Date();
+    const localDateTime = toLocalDateTimeInput(now.toISOString());
+    setStartDate(localDateTime);
+    
+    // Suggest end time (default 1 hour later)
+    const endTime = new Date(now.getTime() + 60 * 60 * 1000);
+    setEndDate(toLocalDateTimeInput(endTime.toISOString()));
+  };
+
+  // Suggest end time based on typical duration
+  const suggestEndTime = (activityType: string) => {
+    if (!startDate) return;
+    
+    const start = new Date(startDate);
+    const duration = 30 * 60 * 1000; // 30 minutes for Documentation
+    const endTime = new Date(start.getTime() + duration);
+    setEndDate(toLocalDateTimeInput(endTime.toISOString()));
+  };
 
   // ─── Reset form ─────────────────────────────────────────────────────────────
 
@@ -325,17 +404,21 @@ export const Notes: React.FC<NotesProps> = ({
 
   const confirmDelete = async () => {
     if (!deleteNote) return;
-    const { error } = await supabase
-      .from("documentation")
-      .delete()
-      .eq("id", deleteNote.id);
+    try {
+      const { error } = await supabase
+        .from("documentation")
+        .delete()
+        .eq("id", deleteNote.id);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    notify.success("Note deleted");
-    if (selectedNote?.id === deleteNote.id) resetForm();
-    setDeleteNote(null);
-    await fetchNotes();
+      notify.success("Note deleted");
+      if (selectedNote?.id === deleteNote.id) resetForm();
+      setDeleteNote(null);
+      await fetchNotes();
+    } catch (error) {
+      notify.error("Failed to delete note");
+    }
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -344,29 +427,109 @@ export const Notes: React.FC<NotesProps> = ({
     <div className="flex gap-5 items-start">
 
       {/* ── Left: Table ─────────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 border border-gray-200 bg-white overflow-hidden">
+      <div className="flex-1 min-w-0 border border-zinc-200 bg-white overflow-hidden shadow-sm">
 
-        {/* Table header bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-2">
-            <FileText className="w-3.5 h-3.5 text-gray-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-              Documentation
-            </span>
-            {notes.length > 0 && (
-              <span className="text-[9px] font-bold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">
-                {notes.length}
+        {/* Table header bar with search */}
+        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-zinc-400" />
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                Documentation
               </span>
-            )}
+              {notes.length > 0 && (
+                <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+                  {notes.length}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="rounded-none h-7 text-xs border-zinc-200"
+              >
+                <Filter className="w-3 h-3 mr-1" />
+                Filters
+              </Button>
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />}
+            </div>
           </div>
-          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+          
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+            <Input
+              placeholder="Search by type or remarks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-none h-8 text-xs pl-9 border-zinc-200 focus:ring-0 focus:border-zinc-400"
+            />
+          </div>
         </div>
 
-        <div className="overflow-auto max-h-[560px]">
+        {/* Filters panel */}
+        {showFilters && (
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Type:</span>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="rounded-none h-7 text-xs border-zinc-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="all" className="text-xs">All Types</SelectItem>
+                    <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="rounded-none bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                  {filteredNotes.length} results
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time tracking summary */}
+        {(totalHours > 0 || overlappingEntries.length > 0) && (
+          <div className="px-4 py-2 border-b border-zinc-100 bg-blue-50/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-[10px] font-bold text-blue-700">
+                    Total: {totalHours.toFixed(1)} hours
+                  </span>
+                </div>
+                {overlappingEntries.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-[10px] font-bold text-amber-700">
+                      {overlappingEntries.length} overlaps
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            {overlappingEntries.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {overlappingEntries.slice(0, 2).map((overlap, i) => (
+                  <p key={i} className="text-[9px] text-amber-600 truncate">{overlap}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="overflow-auto max-h-[560px] custom-scrollbar">
           {!loading && notes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-300 gap-2">
-              <FileText className="w-8 h-8 opacity-30" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <div className="flex flex-col items-center justify-center py-20 text-zinc-300 gap-2">
+              <FileText className="w-10 h-10 opacity-30" />
+              <p className="text-sm font-medium text-zinc-400 uppercase tracking-widest">
                 No records found
               </p>
             </div>
@@ -380,57 +543,57 @@ export const Notes: React.FC<NotesProps> = ({
                 <col style={{ width: "12%" }} />
                 <col style={{ width: "10%" }} />
               </colgroup>
-              <thead className="bg-gray-900 text-white sticky top-0 z-10">
+              <thead className="bg-zinc-50/50 text-zinc-500 sticky top-0 z-10 border-b border-zinc-100">
                 <tr>
                   {["Type", "Remarks", "Start", "End", "Duration", ""].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-left">
+                    <th key={h} className="px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-left">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {notes.map((n, idx) => {
+                {filteredNotes.map((n, idx) => {
                   const isSelected = selectedNote?.id === n.id;
                   return (
                     <tr
                       key={n.id}
-                      className={`border-b border-gray-100 transition-colors ${isSelected
-                          ? "bg-blue-50 border-l-2 border-l-blue-500"
+                      className={`border-b border-zinc-100 transition-colors ${isSelected
+                          ? "bg-zinc-50 border-l-4 border-l-zinc-900"
                           : idx % 2 === 0
-                            ? "bg-white hover:bg-gray-50"
-                            : "bg-gray-50/40 hover:bg-gray-100/60"
+                            ? "bg-white hover:bg-zinc-50/50"
+                            : "bg-zinc-50/30 hover:bg-zinc-50/50"
                         }`}
                     >
-                      <td className="px-3 py-2.5 font-semibold text-gray-700">{n.type_activity}</td>
-                      <td className="px-3 py-2.5 text-gray-500 italic">{truncate(n.remarks)}</td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-gray-500 whitespace-nowrap">
+                      <td className="px-3 py-3 font-bold text-zinc-800">{n.type_activity}</td>
+                      <td className="px-3 py-3 text-zinc-600 italic truncate" title={n.remarks}>{truncate(n.remarks)}</td>
+                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">
                         {fmtDateTime(n.start_date)}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-gray-500 whitespace-nowrap">
+                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">
                         {fmtDateTime(n.end_date)}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-flex items-center gap-1 font-mono text-[10px] text-gray-600">
-                          <Clock className="w-3 h-3 text-gray-400 shrink-0" />
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center gap-1 font-mono text-[10px] text-zinc-500">
+                          <Clock className="w-3 h-3 text-zinc-400 shrink-0" />
                           {getDurationHMS(n.start_date, n.end_date)}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-1">
                           <button
                             title="Edit"
                             onClick={() => loadIntoForm(n)}
-                            className="p-1.5 rounded-none border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                            className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors"
                           >
-                            <Pen className="w-3 h-3" />
+                            <Pen className="w-3.5 h-3.5" />
                           </button>
                           <button
                             title="Delete"
                             onClick={() => setDeleteNote(n)}
-                            className="p-1.5 rounded-none border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
                           >
-                            <Trash className="w-3 h-3" />
+                            <Trash className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -444,21 +607,21 @@ export const Notes: React.FC<NotesProps> = ({
       </div>
 
       {/* ── Right: Form ─────────────────────────────────────────────────── */}
-      <div className="w-72 shrink-0 border border-gray-200 bg-white overflow-hidden">
+      <div className="w-72 shrink-0 border border-zinc-200 bg-white overflow-hidden shadow-sm">
         {/* Form header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
           <div className="flex items-center gap-2">
             {selectedNote
-              ? <Pen className="w-3.5 h-3.5 text-blue-500" />
-              : <Plus className="w-3.5 h-3.5 text-gray-400" />}
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
+              ? <Pen className="w-4 h-4 text-zinc-500" />
+              : <Plus className="w-4 h-4 text-zinc-400" />}
+            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
               {selectedNote ? "Edit Record" : "New Record"}
             </span>
           </div>
           {selectedNote && (
             <button
               onClick={resetForm}
-              className="text-[9px] font-bold text-gray-400 hover:text-gray-600 uppercase tracking-wide transition-colors"
+              className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 uppercase tracking-widest transition-colors"
             >
               Clear
             </button>
@@ -467,39 +630,55 @@ export const Notes: React.FC<NotesProps> = ({
 
         <form
           onSubmit={(e) => { e.preventDefault(); saveNote(); }}
-          className="p-4 space-y-4"
+          className="p-4 space-y-5"
         >
           {/* Type of activity */}
           <div>
             <SectionLabel>Type of Activity</SectionLabel>
             <Select value={typeActivity} onValueChange={setTypeActivity}>
-              <SelectTrigger className="rounded-none h-8 text-xs">
+              <SelectTrigger className="rounded-none h-9 text-xs border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Documentation">Documentation</SelectItem>
+              <SelectContent className="rounded-none">
+                <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
               </SelectContent>
             </Select>
+            {remarks && suggestActivityType(remarks) !== typeActivity && (
+              <p className="text-[9px] text-blue-600 mt-1">
+                💡 Suggested: {suggestActivityType(remarks)}
+              </p>
+            )}
           </div>
 
           {/* Remarks */}
           <div>
             <SectionLabel>Remarks</SectionLabel>
             <Textarea
-              className="rounded-none text-xs resize-none min-h-[80px]"
+              className="rounded-none text-xs resize-none min-h-[100px] border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
               placeholder="Add notes or remarks…"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
             />
           </div>
 
-          {/* Date range */}
-          <div className="space-y-3">
+          {/* Date range with smart features */}
+          <div className="space-y-4">
             <div>
-              <SectionLabel>Start Date & Time</SectionLabel>
+              <div className="flex items-center justify-between mb-1.5">
+                <SectionLabel>Start Date & Time</SectionLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={autoFillCurrentTime}
+                  className="rounded-none h-6 text-[9px] border-zinc-200 px-2"
+                >
+                  Now
+                </Button>
+              </div>
               <Input
                 type="datetime-local"
-                className="rounded-none h-8 text-xs"
+                className="rounded-none h-9 text-xs border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -508,22 +687,27 @@ export const Notes: React.FC<NotesProps> = ({
               <SectionLabel>End Date & Time</SectionLabel>
               <Input
                 type="datetime-local"
-                className="rounded-none h-8 text-xs"
+                className="rounded-none h-9 text-xs border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate || undefined}
               />
+              {startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime()) && (
+                <p className="text-[9px] text-zinc-500 mt-1">
+                  ⏱️ Suggested duration for Documentation: 30 min
+                </p>
+              )}
             </div>
           </div>
 
           {/* Duration preview */}
-          {startDate && endDate && new Date(endDate) >= new Date(startDate) && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100">
-              <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span className="text-[11px] font-mono text-gray-600">
+          {startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime()) && new Date(endDate) >= new Date(startDate) && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50 border border-zinc-100">
+              <Clock className="w-4 h-4 text-zinc-400 shrink-0" />
+              <span className="text-[11px] font-mono font-bold text-zinc-600">
                 {getDurationHMS(new Date(startDate).toISOString(), new Date(endDate).toISOString())}
               </span>
-              <span className="text-[10px] text-gray-400">duration</span>
+              <span className="text-[10px] font-bold uppercase tracking-tighter text-zinc-400">duration</span>
             </div>
           )}
 
@@ -531,17 +715,17 @@ export const Notes: React.FC<NotesProps> = ({
           <Button
             type="submit"
             disabled={isSubmitting}
-            className={`w-full rounded-none h-9 text-[11px] font-black uppercase tracking-wider gap-1.5 ${selectedNote
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-gray-900 hover:bg-gray-800"
+            className={`w-full rounded-none h-10 text-[11px] font-bold uppercase tracking-widest gap-2 ${selectedNote
+                ? "bg-zinc-800 hover:bg-zinc-900"
+                : "bg-zinc-900 hover:bg-zinc-800"
               }`}
           >
             {isSubmitting ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+              <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
             ) : selectedNote ? (
-              <><Check className="w-3.5 h-3.5" /> Update Record</>
+              <><Check className="w-4 h-4" /> Update Record</>
             ) : (
-              <><Plus className="w-3.5 h-3.5" /> Add Record</>
+              <><Plus className="w-4 h-4" /> Add Record</>
             )}
           </Button>
         </form>

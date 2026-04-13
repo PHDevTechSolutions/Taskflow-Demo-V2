@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -54,10 +54,7 @@ function DashboardContent() {
         target_quota: "",
     });
 
-    const [posts, setPosts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
         DateRange | undefined
     >(undefined);
@@ -79,7 +76,6 @@ function DashboardContent() {
         }
 
         const fetchUserData = async () => {
-            setError(null);
             setLoadingUser(true);
             try {
                 const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
@@ -135,27 +131,6 @@ function DashboardContent() {
         fetchUserData();
     }, [userId]);
 
-    const loading = loadingUser || loadingAccounts;
-
-    // Filter accounts by created date range (optional)
-    const filteredData = useMemo(() => {
-        if (
-            !dateCreatedFilterRange ||
-            !dateCreatedFilterRange.from ||
-            !dateCreatedFilterRange.to
-        ) {
-            return posts;
-        }
-
-        const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
-        const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
-
-        return posts.filter((item) => {
-            const createdDate = new Date(item.date_created).getTime();
-            return createdDate >= fromTime && createdDate <= toTime;
-        });
-    }, [posts, dateCreatedFilterRange]);
-
     return (
         <>
             <ProtectedPageWrapper>
@@ -168,7 +143,7 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Reports - Sales Invoice Summary</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">Reports - Sales Invoice Summary</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
@@ -187,7 +162,6 @@ function DashboardContent() {
                 </SidebarInset>
 
                 <SidebarRight
-                    userId={userId ?? undefined}
                     dateCreatedFilterRange={dateCreatedFilterRange}
                     setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
                 />

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
 import redis from "../../lib/redis";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -73,6 +74,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (cacheErr) {
       console.warn("Failed to clear cache:", cacheErr);
     }
+
+    // Log audit trail for endorsed ticket creation
+    await logAuditTrailWithSession(
+      req,
+      "create",
+      "endorsed ticket",
+      ticket_reference_number,
+      ticket_reference_number,
+      `Created endorsed ticket for ${company_name || "N/A"}`,
+      { company_name, status, type_client }
+    );
 
     return res.status(200).json({ success: true, data });
   } catch (err: any) {

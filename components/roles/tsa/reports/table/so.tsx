@@ -1,443 +1,381 @@
 "use client";
+// ─── SOTable ──────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
-import { AreaChart, Area, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, SlidersHorizontal, Download } from "lucide-react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/utils/supabase";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig, } from "@/components/ui/chart";
+const PAGE_SIZE = 10;
+const fmt = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "PHP" });
+
+const isSameDay = (d1: Date, d2: Date) =>
+  d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+const inDateRange = (dateStr: string, range: any): boolean => {
+  if (!range?.from && !range?.to) return true;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return false;
+  const from = range.from ? new Date(range.from) : null;
+  const to   = range.to   ? new Date(range.to)   : null;
+  if (from && to && isSameDay(from, to)) return isSameDay(date, from);
+  if (from && date < from) return false;
+  if (to   && date > to)   return false;
+  return true;
+};
+
+const fmtDate = (s?: string | null) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d.getTime()) || d.getTime() === new Date("1970-01-01T00:00:00Z").getTime() ? "—" : d.toLocaleDateString();
+};
+
+// shared realtime handler factory
+function makeRealtimeHandler<T extends { id: number }>(setActivities: React.Dispatch<React.SetStateAction<T[]>>) {
+  return (payload: any) => {
+    const n = payload.new as T;
+    const o = payload.old as T;
+    setActivities((curr) => {
+      switch (payload.eventType) {
+        case "INSERT": return curr.some((a) => a.id === n.id) ? curr : [...curr, n];
+        case "UPDATE": return curr.map((a) => (a.id === n.id ? n : a));
+        case "DELETE": return curr.filter((a) => a.id !== o.id);
+        default: return curr;
+      }
+    });
+  };
+}
+
+function TableShell({ children, loading, error, empty, emptyIcon, emptyText }: {
+  children: React.ReactNode;
+  loading: boolean;
+  error: string | null;
+  empty: boolean;
+  emptyIcon: string;
+  emptyText: string;
+}) {
+  if (loading) return (
+    <div className="flex justify-center items-center h-40 text-xs text-zinc-400 font-mono">
+      <Search className="w-4 h-4 animate-spin mr-2" /> Loading records...
+    </div>
+  );
+  if (error) return (
+    <div className="flex justify-center items-center h-40 text-xs text-red-500 font-bold uppercase tracking-wider">{error}</div>
+  );
+  if (empty) return (
+    <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-300">
+      <span className="text-3xl grayscale opacity-30">{emptyIcon}</span>
+      <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">{emptyText}</p>
+    </div>
+  );
+  return <div className="rounded-none border border-zinc-200 bg-white overflow-hidden shadow-sm">{children}</div>;
+}
+
+function PaginationBar({ page, pageCount, setPage }: { page: number; pageCount: number; setPage: (p: number) => void }) {
+  if (pageCount <= 1) return null;
+  return (
+    <div className="flex items-center justify-center py-4 border-t border-zinc-100 bg-zinc-50/30">
+      <Pagination>
+        <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+          <PaginationItem>
+            <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+              aria-disabled={page === 1} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === 1 ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+          <span className="text-zinc-500 font-mono text-[11px] font-bold select-none bg-white px-3 py-1 border border-zinc-200 shadow-sm">
+            {page} / {pageCount}
+          </span>
+          <PaginationItem>
+            <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+              aria-disabled={page === pageCount} 
+              className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                page === pageCount ? "pointer-events-none opacity-30" : "hover:bg-zinc-100 border-zinc-200"
+              }`} 
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
+  );
+}
+
+function SearchFilterBar({
+  searchTerm, setSearchTerm, placeholder,
+  showFilters, setShowFilters,
+  count, total, children, hasActiveFilter, onClear,
+}: {
+  searchTerm: string; setSearchTerm: (v: string) => void; placeholder: string;
+  showFilters: boolean; setShowFilters: (v: boolean) => void;
+  count: number; total?: number; children?: React.ReactNode;
+  hasActiveFilter: boolean; onClear: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-sm">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <Input
+            placeholder={placeholder}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 h-9 text-[10px] bg-white border-zinc-200 rounded-none focus:ring-0 focus:border-zinc-400 transition-all"
+          />
+        </div>
+        {children && (
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-none border transition-all shadow-sm
+              ${showFilters ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"}`}
+          >
+            <SlidersHorizontal size={12} /> Filters
+          </button>
+        )}
+        {count > 0 && (
+          <div className="bg-white px-3 py-1.5 border border-zinc-200 shadow-sm flex items-center gap-3 ml-auto">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-r border-zinc-100 pr-3">
+              {count} records
+            </span>
+            {total != null && (
+              <span className="text-[11px] font-mono font-bold text-zinc-700">
+                Total: {fmt(total)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      {showFilters && (
+        <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-zinc-100 mt-2">
+          {children}
+          {hasActiveFilter && (
+            <button 
+              onClick={onClear} 
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest text-red-600 border border-red-100 hover:bg-red-50 rounded-none transition-all"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SOTable
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface SO {
-    id: number;
-    so_number?: string;
-    so_amount?: number;
-    remarks?: string;
-    date_created: string;
-    date_updated?: string;
-    company_name?: string;
-    contact_number?: string;
-    contact_person: string;
-    type_activity: string;
-    status: string;
+  id: number; so_number?: string; so_amount?: number; remarks?: string;
+  date_created: string; company_name?: string; contact_number?: string;
+  contact_person?: string; type_activity: string; status: string;
 }
 
-interface SOProps {
-    referenceid: string;
-    target_quota?: string;
-    dateCreatedFilterRange: any;
-    setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-}
-
-const PAGE_SIZE = 10;
-
-export const SOTable: React.FC<SOProps> = ({
-    referenceid,
-    target_quota,
-    dateCreatedFilterRange,
-    setDateCreatedFilterRangeAction,
+export const SOTable: React.FC<{ referenceid: string; target_quota?: string; dateCreatedFilterRange: any; setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>; }> = ({
+  referenceid, dateCreatedFilterRange,
 }) => {
-    const [activities, setActivities] = useState<SO[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [activities, setActivities] = useState<SO[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const [searchTerm, setSearchTerm]   = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
 
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
+  const fetchActivities = useCallback(() => {
+    if (!referenceid) { setActivities([]); return; }
+    setLoading(true); setError(null);
+    const url = new URL("/api/reports/tsa/fetch", window.location.origin);
+    url.searchParams.append("referenceid", referenceid);
+    const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from).toISOString() : null;
+    const to   = dateCreatedFilterRange?.to   ? new Date(new Date(dateCreatedFilterRange.to).setHours(23,59,59,999)).toISOString() : null;
+    if (from && to) { url.searchParams.append("from", from); url.searchParams.append("to", to); }
+    fetch(url.toString()).then(async (r) => { if (!r.ok) throw new Error("Failed to fetch"); return r.json(); })
+      .then((d) => setActivities(d.activities || [])).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [referenceid, dateCreatedFilterRange]);
 
-    // Pagination state
-    const [page, setPage] = useState(1);
+  useEffect(() => {
+    fetchActivities();
+    if (!referenceid) return;
+    const ch = supabase.channel(`public:history:referenceid=eq.${referenceid}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` }, makeRealtimeHandler(setActivities)).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [referenceid, fetchActivities]);
 
-    // Fetch activities
-    const fetchActivities = useCallback(() => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
+  const statusOptions = useMemo(() => Array.from(new Set(activities.map((a) => a.status).filter(Boolean))).sort(), [activities]);
 
-        setLoading(true);
-        setError(null);
+  const filtered = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+    return activities
+      .filter((i) => i.type_activity?.toLowerCase() === "sales order preparation")
+      .filter((i) => !s || [i.company_name, i.so_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
+      .filter((i) => filterStatus === "all" || i.status === filterStatus)
+      .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+  }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
-        let from: string | null = null;
-        let to: string | null = null;
+  const total     = useMemo(() => filtered.reduce((a, i) => a + (i.so_amount ?? 0), 0), [filtered]);
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+  useEffect(() => { setPage(1); }, [searchTerm, filterStatus, dateCreatedFilterRange]);
 
-        if (dateCreatedFilterRange?.from) {
-            from = new Date(dateCreatedFilterRange.from).toISOString();
-        }
+  /* ---- Excel Export ---- */
+  const exportToExcel = async () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
 
-        if (dateCreatedFilterRange?.to) {
-            // Include the entire day
-            to = new Date(new Date(dateCreatedFilterRange.to).setHours(23, 59, 59, 999)).toISOString();
-        }
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Sales Order Report");
 
-        const url = new URL("/api/reports/tsa/fetch", window.location.origin);
-        url.searchParams.append("referenceid", referenceid);
-        if (from && to) {
-            url.searchParams.append("from", from);
-            url.searchParams.append("to", to);
-        }
+      // Add headers
+      worksheet.columns = [
+        { header: "Date Created", key: "dateCreated", width: 15 },
+        { header: "Status", key: "status", width: 25 },
+        { header: "SO Number", key: "soNumber", width: 20 },
+        { header: "SO Amount", key: "amount", width: 18 },
+        { header: "Company", key: "company", width: 30 },
+        { header: "Contact Person", key: "contactPerson", width: 20 },
+        { header: "Contact No.", key: "contactNo", width: 20 },
+        { header: "Remarks", key: "remarks", width: 40 }
+      ];
 
-        fetch(url.toString())
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [referenceid, dateCreatedFilterRange]);
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
 
-    // Real-time subscription using Supabase
-    useEffect(() => {
-        fetchActivities();
-
-        if (!referenceid) return;
-
-        const channel = supabase
-            .channel(`public:history:referenceid=eq.${referenceid}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "history",
-                    filter: `referenceid=eq.${referenceid}`,
-                },
-                (payload) => {
-                    const newRecord = payload.new as SO;
-                    const oldRecord = payload.old as SO;
-
-                    setActivities((curr) => {
-                        switch (payload.eventType) {
-                            case "INSERT":
-                                if (!curr.some((a) => a.id === newRecord.id)) {
-                                    return [...curr, newRecord];
-                                }
-                                return curr;
-                            case "UPDATE":
-                                return curr.map((a) => (a.id === newRecord.id ? newRecord : a));
-                            case "DELETE":
-                                return curr.filter((a) => a.id !== oldRecord.id);
-                            default:
-                                return curr;
-                        }
-                    });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [referenceid, fetchActivities]);
-
-    // Filter logic
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase();
-
-        return activities
-            .filter((item) => item.type_activity?.toLowerCase() === "sales order preparation")
-            .filter((item) => {
-                if (!search) return true;
-                return (
-                    (item.company_name?.toLowerCase().includes(search) ?? false) ||
-                    (item.so_number?.toLowerCase().includes(search) ?? false) ||
-                    (item.remarks?.toLowerCase().includes(search) ?? false)
-                );
-            })
-            .filter((item) => {
-                if (filterStatus !== "all" && item.status !== filterStatus) return false;
-                return true;
-            })
-            .filter((item) => {
-                if (
-                    !dateCreatedFilterRange ||
-                    (!dateCreatedFilterRange.from && !dateCreatedFilterRange.to)
-                ) {
-                    return true;
-                }
-
-                const updatedDate = item.date_created
-                    ? new Date(item.date_created)
-                    : new Date(item.date_created);
-
-                if (isNaN(updatedDate.getTime())) return false;
-
-                const fromDate = dateCreatedFilterRange.from
-                    ? new Date(dateCreatedFilterRange.from)
-                    : null;
-                const toDate = dateCreatedFilterRange.to
-                    ? new Date(dateCreatedFilterRange.to)
-                    : null;
-
-                // Helper function to check if two dates are on the same day (ignoring time)
-                const isSameDay = (d1: Date, d2: Date) =>
-                    d1.getFullYear() === d2.getFullYear() &&
-                    d1.getMonth() === d2.getMonth() &&
-                    d1.getDate() === d2.getDate();
-
-                if (fromDate && toDate && isSameDay(fromDate, toDate)) {
-                    // Exact one-day filter: match any record in that day
-                    return isSameDay(updatedDate, fromDate);
-                }
-
-                if (fromDate && updatedDate < fromDate) return false;
-                if (toDate && updatedDate > toDate) return false;
-
-                return true;
-            })
-            .sort((a, b) => {
-                const dateA = new Date(a.date_created ?? a.date_created).getTime();
-                const dateB = new Date(b.date_created ?? b.date_created).getTime();
-                return dateB - dateA; // descending: newest first
-            });
-
-    }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
-
-    // Calculate totals for footer (for filteredActivities, not paginated subset)
-    const totalQuotationAmount = useMemo(() => {
-        return filteredActivities.reduce((acc, item) => acc + (item.so_amount ?? 0), 0);
-    }, [filteredActivities]);
-
-    // Pagination logic
-    const pageCount = Math.ceil(filteredActivities.length / PAGE_SIZE);
-    const paginatedActivities = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredActivities.slice(start, start + PAGE_SIZE);
-    }, [filteredActivities, page]);
-
-    // Reset to page 1 if filter or search changes
-    useEffect(() => {
-        setPage(1);
-    }, [searchTerm, filterStatus, dateCreatedFilterRange]);
-
-    const chartData = useMemo(() => {
-        const dataByDate: Record<string, { count: number; amount: number }> = {};
-
-        filteredActivities.forEach(({ date_created, so_amount }) => {
-            const date = new Date(date_created).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-            });
-            if (!dataByDate[date]) {
-                dataByDate[date] = { count: 0, amount: 0 };
-            }
-            dataByDate[date].count += 1;
-            dataByDate[date].amount += so_amount ?? 0;
+      // Add data rows
+      filtered.forEach((item) => {
+        worksheet.addRow({
+          dateCreated: fmtDate(item.date_created),
+          status: item.status || "—",
+          soNumber: item.so_number || "—",
+          amount: item.so_amount ?? 0,
+          company: item.company_name || "—",
+          contactPerson: item.contact_person || "—",
+          contactNo: item.contact_number || "—",
+          remarks: item.remarks || "—"
         });
+      });
 
-        return Object.entries(dataByDate)
-            .map(([date, { count, amount }]) => ({ date, count, amount }))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [filteredActivities]);
+      // Add totals row
+      const totalsRow = worksheet.addRow({
+        dateCreated: "TOTAL",
+        amount: total
+      });
+      totalsRow.font = { bold: true };
 
-    // Chart config for colors to feed to ChartContainer
-    const chartConfig = {
-        count: { label: "Count", color: "var(--chart-1)" },
-        amount: { label: "SO Amount", color: "var(--chart-2)" },
-    } satisfies ChartConfig;
+      // Format currency column
+      const amountCol = worksheet.getColumn('amount');
+      if (amountCol && amountCol.number > 0) {
+        amountCol.numFmt = '#,##0.00" ₱"';
+      }
 
-    return (
-        <>
-            {loading && (
-                <div className="flex justify-center items-center h-40">
-                    <Spinner className="size-8" />
-                </div>
-            )}
+      // Generate filename with date range
+      let filename = "Sales_Order_Report";
+      if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
+        const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
+        const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
+        filename += `_${fromDate}_to_${toDate}`;
+      }
+      filename += ".xlsx";
 
+      // Create buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
-            {!loading && !error && filteredActivities.length === 0 && (
-                <div className="flex justify-center items-center h-40">
-                    <Alert
-                        variant="destructive"
-                        className="flex flex-col items-center space-y-2 p-4 text-center text-xs"
-                    >
-                        <AlertTitle>No Data Found</AlertTitle>
-                        <AlertDescription>Please check your date range or try again later.</AlertDescription>
-                    </Alert>
-                </div>
-            )}
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("Failed to export data to Excel");
+    }
+  };
 
-            {!loading && !error && filteredActivities.length !== 0 && (
-                <div className={`flex flex-col md:flex-row gap-2`}>
-                    {/* Left: Area Chart */}
-                    {chartData.length > 0 && (
-                        <Card className="md:w-1/2 bg-white rounded-md shadow p-4">
-                            <CardHeader>
-                                <CardTitle>SO Activities Over Time</CardTitle>
-                                <CardDescription>{`Showing ${filteredActivities.length} records`}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {loading ? (
-                                    <div className="flex justify-center items-center h-40">
-                                        <Spinner />
-                                    </div>
-                                ) : (
-                                    <ChartContainer config={chartConfig}>
-                                        <ResponsiveContainer width="100%" height={250}>
-                                            <AreaChart
-                                                data={chartData}
-                                                margin={{ left: 12, right: 12, top: 10, bottom: 0 }}
-                                            >
-                                                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                                                <XAxis
-                                                    dataKey="date"
-                                                    tickLine={false}
-                                                    axisLine={false}
-                                                    tickMargin={8}
-                                                    tick={{ fontSize: 12 }}
-                                                />
-                                                <ChartTooltip
-                                                    cursor={false}
-                                                    content={<ChartTooltipContent indicator="line" />}
-                                                    formatter={(value: number, name: string) => {
-                                                        if (name === "amount") {
-                                                            return value.toLocaleString(undefined, {
-                                                                style: "currency",
-                                                                currency: "PHP",
-                                                            });
-                                                        }
-                                                        return value;
-                                                    }}
-                                                    labelFormatter={(label) => `Date: ${label}`}
-                                                />
-                                                <Area
-                                                    type="natural"
-                                                    dataKey="count"
-                                                    name="Count"
-                                                    fill="var(--chart-1)"
-                                                    fillOpacity={0.4}
-                                                    stroke="var(--chart-1)"
-                                                    strokeWidth={2}
-                                                />
-                                                <Area
-                                                    type="natural"
-                                                    dataKey="amount"
-                                                    name="Quotation Amount"
-                                                    fill="var(--chart-2)"
-                                                    fillOpacity={0.4}
-                                                    stroke="var(--chart-2)"
-                                                    strokeWidth={2}
-                                                />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </ChartContainer>
-                                )}
-                            </CardContent>
-                            <CardFooter>
-                                <div className="flex w-full items-center gap-2 text-sm text-muted-foreground">
-                                    <div>
-                                        Data from {chartData[0]?.date} to {chartData[chartData.length - 1]?.date}
-                                    </div>
-                                </div>
-                            </CardFooter>
-                        </Card>
-                    )}
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <SearchFilterBar
+          searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Search company, SO number, remarks..."
+          showFilters={showFilters} setShowFilters={setShowFilters}
+          count={filtered.length} total={total}
+          hasActiveFilter={filterStatus !== "all" || !!searchTerm}
+          onClear={() => { setFilterStatus("all"); setSearchTerm(""); }}
+        >
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-8 w-[180px] text-[10px] font-bold uppercase tracking-widest border-zinc-200 rounded-none shadow-sm"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+            <SelectContent className="rounded-none">
+              <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">All Statuses</SelectItem>
+              {statusOptions.map((s) => <SelectItem key={s} value={s} className="text-[10px] font-bold uppercase tracking-widest">{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </SearchFilterBar>
+        
+        {/** ── Export Excel button ── 
+         * <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white rounded-none hover:bg-zinc-800 transition-all shrink-0 shadow-sm active:scale-95"
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
+        */}
+        
+      </div>
 
-                    {/* Right: Table */}
-                    <div
-                        className={`${chartData.length > 1 ? "md:w-1/2" : "w-full"
-                            } overflow-auto bg-white rounded-md shadow p-4`}
-                    >
-                        <div className="mb-4 flex items-center justify-between gap-4">
-                            <Input
-                                type="text"
-                                placeholder="Search company, quotation number or remarks..."
-                                className="input input-bordered input-sm"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                aria-label="Search quotations"
-                            />
-                        </div>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[120px] text-xs">Date Created</TableHead>
-                                    <TableHead className="text-xs">SO Number</TableHead>
-                                    <TableHead className="text-right text-xs">SO Amount</TableHead>
-                                    <TableHead className="text-xs">Company Name</TableHead>
-                                    <TableHead className="text-xs">Contact Person</TableHead>
-                                    <TableHead className="text-xs">Contact Number</TableHead>
-                                    <TableHead className="text-xs">Remarks</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {paginatedActivities.map((item) => (
-                                    <TableRow key={item.id} className="hover:bg-muted/30 text-xs">
-                                        <TableCell>{new Date(item.date_created).toLocaleDateString()}</TableCell>
-                                        <TableCell className="uppercase">{item.status || "-"} | {item.so_number || "-"}</TableCell>
-                                        <TableCell className="text-right">
-                                            {item.so_amount !== undefined && item.so_amount !== null
-                                                ? item.so_amount.toLocaleString(undefined, {
-                                                    style: "currency",
-                                                    currency: "PHP",
-                                                })
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell>{item.company_name}</TableCell>
-                                        <TableCell>{item.contact_person}</TableCell>
-                                        <TableCell>{item.contact_number}</TableCell>
-                                        <TableCell className="capitalize">{item.remarks || "-"}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                            <tfoot>
-                                <TableRow className="bg-muted font-semibold text-xs">
-                                    <TableCell colSpan={2} className="text-right pr-4">
-                                        Totals:
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        {totalQuotationAmount.toLocaleString(undefined, {
-                                            style: "currency",
-                                            currency: "PHP",
-                                        })}
-                                    </TableCell>
-                                    <TableCell colSpan={4}></TableCell>
-                                </TableRow>
-                            </tfoot>
-                        </Table>
-
-                        {pageCount > 1 && (
-                            <Pagination>
-                                <PaginationContent className="flex items-center space-x-4 justify-center mt-4 text-xs">
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (page > 1) setPage(page - 1);
-                                            }}
-                                            aria-disabled={page === 1}
-                                            className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                                        />
-                                    </PaginationItem>
-
-                                    <div className="px-4 font-medium select-none">
-                                        {pageCount === 0 ? "0 / 0" : `${page} / ${pageCount}`}
-                                    </div>
-
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (page < pageCount) setPage(page + 1);
-                                            }}
-                                            aria-disabled={page === pageCount}
-                                            className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-                                        />
-                                    </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
-                        )}
-                    </div>
-                </div>
-            )}
-
-        </>
-    );
-};
+      <TableShell loading={loading} error={error} empty={filtered.length === 0} emptyIcon="📦" emptyText="No SO records found">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
+              {["Date Created", "Status", "SO Amount", "Company", "Contact Person", "Contact No.", "Remarks"].map((h) => (
+                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">{h}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginated.map((item) => (
+              <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.date_created)}</TableCell>
+                <TableCell className="px-3">
+                  <span className="inline-block px-2 py-0.5 rounded-none text-[10px] font-bold uppercase tracking-tighter bg-zinc-100 text-zinc-600 border border-zinc-200">
+                    {item.status || "—"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-left text-zinc-900 px-3 font-bold">{item.so_amount != null ? fmt(item.so_amount) : "—"}</TableCell>
+                <TableCell className="text-zinc-800 px-3 font-bold">{item.company_name || "—"}</TableCell>
+                <TableCell className="text-zinc-600 px-3 capitalize font-medium">{item.contact_person || "—"}</TableCell>
+                <TableCell className="text-zinc-500 px-3 font-mono text-[11px]">{item.contact_number || "—"}</TableCell>
+                <TableCell className="capitalize text-zinc-500 px-3 truncate max-w-[200px]" title={item.remarks || ""}>{item.remarks || "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <tfoot>
+            <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
+              <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">Total ({filtered.length})</TableCell>
+              <TableCell className="text-left text-zinc-900 px-3">{fmt(total)}</TableCell>
+              <TableCell colSpan={4} />
+            </TableRow>
+          </tfoot>
+        </Table>
+      </TableShell>
+      <PaginationBar page={page} pageCount={pageCount} setPage={setPage} />
+    </div>
+  );};

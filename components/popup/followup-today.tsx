@@ -63,6 +63,24 @@ const setDismissedActivities = (ids: string[]) => {
   localStorage.setItem("dismissedFollowups", JSON.stringify(ids));
 };
 
+// ─── Shown Today Tracking ───────────────────────────────────────────────────
+
+const SHOWN_KEY = "followupShownDate";
+
+const hasShownToday = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const lastShown = localStorage.getItem(SHOWN_KEY);
+  if (!lastShown) return false;
+  const today = new Date().toISOString().split('T')[0];
+  return lastShown === today;
+};
+
+const markShownToday = () => {
+  if (typeof window === "undefined") return;
+  const today = new Date().toISOString().split('T')[0];
+  localStorage.setItem(SHOWN_KEY, today);
+};
+
 /* ================= COMPONENT ================= */
 
 export function FollowUpToday() {
@@ -156,10 +174,13 @@ export function FollowUpToday() {
     .filter((a) => allowedCallTypes.includes(a.call_type ?? ""))
     .filter((a) => !dismissedIds.includes(a.id));
 
-  /* ================= AUTO OPEN ================= */
+  /* ================= AUTO OPEN (Once per day) ================= */
 
   useEffect(() => {
-    setOpen(todayFollowups.length > 0);
+    if (todayFollowups.length > 0 && !hasShownToday()) {
+      setOpen(true);
+      markShownToday();
+    }
   }, [todayFollowups.length]);
 
   /* ================= DISMISS ================= */
@@ -168,6 +189,8 @@ export function FollowUpToday() {
     setDismissedActivities([
       ...new Set([...getDismissedActivities(), ...todayFollowups.map((a) => a.id)]),
     ]);
+    // Clear shown date so dismissed items won't trigger popup again today
+    localStorage.removeItem(SHOWN_KEY);
     setConfirmDismissOpen(false);
     setOpen(false);
   };

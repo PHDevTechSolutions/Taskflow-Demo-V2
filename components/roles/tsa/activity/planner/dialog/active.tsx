@@ -1,89 +1,129 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, } from "@/components/ui/sheet";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectContent, SelectItem, } from "@/components/ui/select";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldTitle,
+} from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { sileo } from "sileo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircleIcon, PlusIcon, MinusIcon, CheckCircle2Icon, ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  AlertCircleIcon,
+  PlusIcon,
+  MinusIcon,
+  CheckCircle2Icon,
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
+import { supabase } from "@/utils/supabase";
 
-// --- Clean & normalize company name for checks ---
-function cleanCompanyName(name: string) {
+// ─── Constants ────────────────────────────────────────────────────────────────
+const TYPECLIENT_OPTIONS = ["New Client"] as const;
+const TOTAL_STEPS = 3;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Normalize company name for duplicate checking */
+function cleanCompanyName(name: string): string {
   if (!name) return "";
-  let n = name.toUpperCase();
-  n = n.replace(/[-_.@!$%]/g, ""); // remove special chars
-  n = n.replace(/\s+/g, " ").trim(); // remove extra spaces
-  n = n.replace(/\d+$/g, ""); // trailing digits removal
-  return n.trim();
+  return name
+    .toUpperCase()
+    .replace(/[-_.@!$%]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\d+$/, "")
+    .trim();
 }
 
-const INDUSTRY_OPTIONS = [
-  "ACCOMMODATION_AND_FOOD_SERVICE_ACTIVITIES",
-  "ACTIVITIES_OF_EXTRATERRITORIAL_ORGANIZATIONS_AND_BODIES",
-  "ACTIVITIES_OF_HOUSEHOLDS_AS_EMPLOYERS_UNDIFFERENTIATED_GOODS_AND_SERVICES_PRODUCING_ACTIVITIES_OF_HOUSEHOLDS_FOR_OWN_USE",
-  "ADMINISTRATIVE_AND_SUPPORT_SERVICE_ACTIVITIES",
-  "ADVERTISING_AND_MARKETING",
-  "AGRICULTURE_FORESTRY_AND_FISHING",
-  "ARTS_ENTERTAINMENT_AND_RECREATION",
-  "AUTOMOTIVE",
-  "B2C_BUSINESS_TO_CONSUMER",
-  "B2G_BUSINESS_TO_GOVERNMENT",
-  "CEMETERY_SERVICES",
-  "COMMUNITY_MANAGEMENT",
-  "CONSTRUCTION",
-  "EDUCATION",
-  "EDUCATION_AND_HUMAN_HEALTH_AND_SOCIAL_WORK_ACTIVITIES",
-  "EDUCATION_AND_TRAINING",
-  "ELECTRICITY_GAS_STEAM_AND_AIR_CONDITIONING_SUPPLY",
-  "ENGINEERING",
-  "FINANCIAL_AND_INSURANCE_ACTIVITIES",
-  "FOOD_AND_BEVERAGE",
-  "FORMATION_AND_COMMUNICATIO",
-  "FUNERAL_SERVICES",
-  "HEALTHCARE_AND_SERVICES",
-  "HUMAN_HEALTH_AND_SOCIAL_WORK_ACTIVITIES",
-  "INDIVIDUAL",
-  "INDUSTRIAL_SAFETY",
-  "INDUSTRY",
-  "INFORMATION_AND_COMMUNICATION",
-  "INSURANCE",
-  "LOGISTICS_AND_TRANSPORTATION",
-  "MANUFACTURING",
-  "MINING_AND_QUARRYING",
-  "OTHER_SERVICE_ACTIVITIES",
-  "PAINTS_USED_IN_BUILDING",
-  "PROFESSIONAL_SCIENTIFIC_AND_TECHNICAL_ACTIVITIES",
-  "PUBLIC_ADMINISTRATION_AND_DEFENSE_COMPULSORY_SOCIAL_SECURITY",
-  "REAL_ESTATE_ACTIVITIES",
-  "RENEWABLE_ENERGY_HYDROPOWER",
-  "SUPPORT_SERVICE_ACTIVITIES_OR_PROFESSIONAL_TECHNICAL_SERVICES",
-  "TECHNICAL_ACTIVITIES",
-  "TRADING",
-  "TRANSPORTATION_AND_STORAGE",
-  "WATER_SUPPLY_SEWERAGE_WASTE_MANAGEMENT_AND_REMEDIATION_ACTIVITIES",
-  "WHOLESALE_AND_RETAIL_TRADE",
-  "OTHER",
-];
-
-const TYPECLIENT_OPTIONS = ["New Client"];
-
-// Simple email validation helper
+/** Validate email — returns true if valid or explicitly N/A */
 function isValidEmail(email: string): boolean {
   if (!email) return false;
-
   const lower = email.trim().toLowerCase();
-
   if (["none", "n/a", "na"].includes(lower)) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email);
+}
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+/** Normalize PH phone number to 11-digit local format for comparison */
+function normalizePHNumber(number: string): string {
+  if (!number) return "";
+  let n = number.replace(/\D/g, "");
+  if (n.startsWith("63")) n = "0" + n.slice(2);
+  if (n.length === 10 && n.startsWith("9")) n = "0" + n;
+  return n;
+}
 
-  return emailRegex.test(email);
+/** Format local PH number → 0917-123-4567 */
+function formatPH(val: string): string {
+  val = val.replace(/\D/g, "").slice(0, 11);
+  if (val.length <= 4) return val;
+  if (val.length <= 7) return `${val.slice(0, 4)}-${val.slice(4)}`;
+  return `${val.slice(0, 4)}-${val.slice(4, 7)}-${val.slice(7)}`;
+}
+
+/** Format landline number → (02) 8123-4567 or (043) 123-4567 */
+function formatLandline(val: string): string {
+  val = val.replace(/\D/g, "").slice(0, 10); // Max 10 digits for PH landline
+  if (val.length === 0) return "";
+  
+  // Area code: 2 digits for NCR (02), 3 digits for others (043, 032, etc.)
+  let areaCodeLen = val.startsWith("2") ? 2 : 3;
+  
+  if (val.length <= areaCodeLen) {
+    return val.length === 2 && val.startsWith("2") ? `(${val})` : val;
+  }
+  
+  const areaCode = val.slice(0, areaCodeLen);
+  const rest = val.slice(areaCodeLen);
+  
+  if (rest.length <= 3) {
+    return `(${areaCode}) ${rest}`;
+  }
+  
+  return `(${areaCode}) ${rest.slice(0, 4)}-${rest.slice(4, 7)}${rest.slice(7) ? `-${rest.slice(7)}` : ""}`;
+}
+
+/** Format international number → +63 917 123 4567 */
+function formatIntl(val: string): string {
+  val = val.replace(/[^0-9+]/g, "");
+  if (val.indexOf("+") > 0) val = "+" + val.replace(/\+/g, "");
+  const digits = val.replace(/\D/g, "");
+  if (digits.length < 4) return val;
+  const country = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 3) return `+${country} ${rest}`;
+  if (rest.length <= 6) return `+${country} ${rest.slice(0, 3)} ${rest.slice(3)}`;
+  if (rest.length <= 10)
+    return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`;
+  return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6, 10)} ${rest.slice(10)}`;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface ContactEntry {
+  person: string;
+  numbers: string[];
 }
 
 interface AccountFormData {
@@ -100,6 +140,36 @@ interface AccountFormData {
   industry: string;
   date_created?: string;
   company_group: string;
+  contacts?: ContactEntry[];
+}
+
+// Helper to convert legacy flat arrays to new contacts structure
+function convertToContacts(persons: string[], numbers: string[]): ContactEntry[] {
+  const contacts: ContactEntry[] = [];
+  const maxLen = Math.max(persons.length, numbers.length);
+  for (let i = 0; i < maxLen; i++) {
+    const person = persons[i] || "";
+    const numStr = numbers[i] || "";
+    // Split by comma to get multiple numbers for this person
+    const nums = numStr ? numStr.split(", ").map(n => n.trim()).filter(n => n) : [""];
+    contacts.push({ person, numbers: nums.length > 0 ? nums : [""] });
+  }
+  return contacts.length > 0 ? contacts : [{ person: "", numbers: [""] }];
+}
+
+// Helper to convert contacts structure back to flat arrays for API
+function convertFromContacts(contacts: ContactEntry[]): { persons: string[]; numbers: string[] } {
+  const persons: string[] = [];
+  const numbers: string[] = [];
+  for (const contact of contacts) {
+    if (contact.person.trim()) {
+      persons.push(contact.person);
+      // Join multiple numbers with comma for backward compatibility
+      const validNumbers = contact.numbers.filter((n) => n.trim());
+      numbers.push(validNumbers.length > 0 ? validNumbers.join(", ") : "");
+    }
+  }
+  return { persons: persons.length > 0 ? persons : [""], numbers: numbers.length > 0 ? numbers : [""] };
 }
 
 interface Agent {
@@ -130,6 +200,22 @@ interface DuplicateCompany {
   contact_number: string[];
 }
 
+// ─── Default form values ──────────────────────────────────────────────────────
+const DEFAULT_FORM: AccountFormData = {
+  company_name: "",
+  contact_person: [""],
+  contact_number: [""],
+  email_address: [""],
+  address: "",
+  region: "",
+  status: "Active",
+  delivery_address: "",
+  type_client: "New Client",
+  industry: "OTHER",
+  company_group: "",
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export function AccountDialog({
   mode,
   initialData,
@@ -138,75 +224,172 @@ export function AccountDialog({
   open,
   onOpenChangeAction,
 }: AccountDialogProps) {
-  // --- Form state ---
+
+  // ── Form state ──────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState<AccountFormData>({
-    company_name: "",
-    contact_person: [""],
-    contact_number: [""],
-    email_address: [""],
-    address: "",
-    region: "",
-    status: "Active",
-    delivery_address: "",
-    type_client: "TSA CLIENT",
-    industry: "OTHER",
-    company_group: "",
+    ...DEFAULT_FORM,
     ...initialData,
   });
 
-  // --- Duplicate check ---
-  const [companyError, setCompanyError] = useState("");
+  const updateField = <K extends keyof AccountFormData>(
+    key: K,
+    value: AccountFormData[K],
+  ) => setFormData((prev) => ({ ...prev, [key]: value }));
+
+  // ── Stepper ─────────────────────────────────────────────────────────────────
+  const [step, setStep] = useState(0);
+
+  // ── Industry state (dynamic from Supabase) ──────────────────────────────────
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [loadingIndustries, setLoadingIndustries] = useState(false);
+  const [newIndustryInput, setNewIndustryInput] = useState("");
+  const [addingIndustry, setAddingIndustry] = useState(false);
+  const [showAddIndustry, setShowAddIndustry] = useState(false);
+
+  // ── Regions ─────────────────────────────────────────────────────────────────
+  const [regions, setRegions] = useState<string[]>([]);
+
+  // ── Agents ──────────────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [agentsError, setAgentsError] = useState<string | null>(null);
+
+  // ── Duplicate check ─────────────────────────────────────────────────────────
+  const [companyError, setCompanyError] = useState("");
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateCompany[]>([]);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [showAllDuplicates, setShowAllDuplicates] = useState(false);
-  const displayedDuplicates = showAllDuplicates ? duplicateInfo : duplicateInfo.slice(0, 2);
 
   const submitLock = useRef(false);
-  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [regions, setRegions] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [selectedRegion, setSelectedRegion] = useState("");
-  const [selectedCity, setSelectedCity] = useState(""); // Add this line
+  // ── Reset form when dialog opens/closes ────────────────────────────────────
+  useEffect(() => {
+    if (open) {
+      const initial = { ...DEFAULT_FORM, ...initialData };
+      // Initialize contacts from existing flat arrays if present
+      if (!initial.contacts && (initial.contact_person?.length || initial.contact_number?.length)) {
+        initial.contacts = convertToContacts(
+          initial.contact_person || [""],
+          initial.contact_number || [""]
+        );
+      }
+      setFormData(initial);
+      setStep(0);
+      setCompanyError("");
+      setDuplicateInfo([]);
+      setShowAllDuplicates(false);
+      setNewIndustryInput("");
+      setShowAddIndustry(false);
+    }
+  }, [open, initialData]);
 
-  // --- Fetch agents on mount ---
+  // ── Fetch regions ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch("https://psgc.gitlab.io/api/regions")
+      .then((res) => res.json())
+      .then((data) => setRegions(data.map((r: any) => r.name)))
+      .catch(console.error);
+  }, []);
+
+  // ── Fetch agents ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
-
-    async function fetchAgents() {
-      setAgentsLoading(true);
-      setAgentsError(null);
-      try {
-        const res = await fetch(`/api/fetch-all-user-transfer`);
+    fetch("/api/fetch-all-user-transfer")
+      .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch agents");
-        const data = await res.json();
-
-        const normalizedAgents = data.map((agent: any) => ({
-          referenceid: agent.ReferenceID,
-          firstname: `${agent.Firstname} ${agent.Lastname}`.trim(),
-        }));
-
-        setAgents(normalizedAgents);
-      } catch (err) {
-        setAgentsError((err as Error).message || "Failed to load agents");
-        setAgents([]);
-      } finally {
-        setAgentsLoading(false);
-      }
-    }
-
-    fetchAgents();
+        return res.json();
+      })
+      .then((data) =>
+        setAgents(
+          data.map((a: any) => ({
+            referenceid: a.ReferenceID,
+            firstname: `${a.Firstname} ${a.Lastname}`.trim(),
+          })),
+        ),
+      )
+      .catch(console.error);
   }, [userDetails.referenceid]);
 
-  // --- Duplicate check on company_name change ---
+  // ── Fetch industries from Supabase ──────────────────────────────────────────
+  const fetchIndustries = useCallback(async () => {
+    setLoadingIndustries(true);
+    try {
+      const { data, error } = await supabase
+        .from("industry")
+        .select("industry_name")
+        .order("industry_name", { ascending: true });
+
+      if (error) throw error;
+      setIndustries((data ?? []).map((row) => row.industry_name as string).filter(Boolean));
+    } catch (err) {
+      console.error("Failed to fetch industries:", err);
+    } finally {
+      setLoadingIndustries(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchIndustries();
+  }, [fetchIndustries]);
+
+  // ── Add new industry to Supabase ────────────────────────────────────────────
+  const handleAddIndustry = async () => {
+    const name = newIndustryInput.trim().toUpperCase();
+    if (!name) return;
+
+    // Prevent duplicates locally before hitting DB
+    if (industries.includes(name)) {
+      sileo.error({
+        title: "Duplicate",
+        description: `"${name}" already exists in the industry list.`,
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    setAddingIndustry(true);
+    try {
+      const { error } = await supabase
+        .from("industry")
+        .insert({ industry_name: name });
+
+      if (error) throw error;
+
+      // Optimistically update local list + select it
+      setIndustries((prev) => [...prev, name].sort());
+      updateField("industry", name);
+      setNewIndustryInput("");
+      setShowAddIndustry(false);
+
+      sileo.success({
+        title: "Industry Added",
+        description: `"${name}" has been added successfully.`,
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch (err: any) {
+      sileo.error({
+        title: "Failed",
+        description: err?.message || "Failed to add industry.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setAddingIndustry(false);
+    }
+  };
+
+  // ── Duplicate check on company name change ──────────────────────────────────
   useEffect(() => {
     if (mode === "edit") {
       setCompanyError("");
       setDuplicateInfo([]);
-      setIsCheckingDuplicate(false);
       return;
     }
 
@@ -222,7 +405,6 @@ export function AccountDialog({
       }
 
       const cleaned = cleanCompanyName(name);
-
       if (["NONE", "OTHER"].includes(cleaned)) {
         setCompanyError("Company Name Invalid.");
         setDuplicateInfo([]);
@@ -230,45 +412,34 @@ export function AccountDialog({
       }
 
       setIsCheckingDuplicate(true);
-
       const controller = new AbortController();
-      const signal = controller.signal;
 
       fetch(
-        `/api/com-check-duplicate-account?company_name=${encodeURIComponent(
-          cleaned
-        )}`,
-        { signal }
+        `/api/com-check-duplicate-account?company_name=${encodeURIComponent(cleaned)}`,
+        { signal: controller.signal },
       )
-        .then(async (res) => {
+        .then((res) => {
           if (!res.ok) throw new Error("Failed to check duplicates");
-
-          const data: {
-            exists: boolean;
-            companies: DuplicateCompany[];
-          } = await res.json();
-
-          if (data.exists && data.companies.length > 0) {
-            // Add owner_firstname from agents
-            const matchedCompanies = data.companies.map((company) => {
-              const agent = agents.find(
-                (a) => a.referenceid === company.owner_referenceid
-              );
-              return {
+          return res.json() as Promise<{ exists: boolean; companies: DuplicateCompany[] }>;
+        })
+        .then(({ exists, companies }) => {
+          if (exists && companies.length > 0) {
+            setDuplicateInfo(
+              companies.map((company) => ({
                 ...company,
-                owner_firstname: agent ? agent.firstname : company.owner_referenceid,
-              };
-            });
-
-            setDuplicateInfo(matchedCompanies);
+                owner_firstname:
+                  agents.find((a) => a.referenceid === company.owner_referenceid)
+                    ?.firstname ?? company.owner_referenceid,
+              })),
+            );
           } else {
             setDuplicateInfo([]);
           }
-          setCompanyError(""); // Clear error here, actual contact duplicate check separate
+          setCompanyError("");
         })
         .catch((err) => {
           if (err.name !== "AbortError") {
-            setCompanyError("Failed to validate company name");
+            setCompanyError("Failed to validate company name.");
             setDuplicateInfo([]);
           }
         })
@@ -280,70 +451,53 @@ export function AccountDialog({
     return () => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     };
-  }, [formData.company_name, userDetails.referenceid, mode, agents]);
+  }, [formData.company_name, mode, agents]);
 
-  function normalizePHNumber(number: string): string {
-    if (!number) return "";
-
-    // Remove non-digit characters (spaces, dashes, +, etc)
-    let n = number.replace(/\D/g, "");
-
-    // Remove country code '63' if present at start
-    if (n.startsWith("63")) {
-      n = "0" + n.slice(2);
-    }
-
-    // If starts with 9 and length is 10 digits (like 9175615230), add leading zero
-    if (n.length === 10 && n.startsWith("9")) {
-      n = "0" + n;
-    }
-
-    return n;
-  }
-
-  // --- Check duplicate contact person & number reactively ---
+  // ── Duplicate contact check ─────────────────────────────────────────────────
   useEffect(() => {
     if (!duplicateInfo.length) {
-      setCompanyError(""); // No duplicates, clear error
+      setCompanyError("");
       return;
     }
 
-    let blockCreation = false;
-    let errorMsg = "";
-
-    for (const dup of duplicateInfo) {
-      const contactPersonMatch = dup.contact_person?.some((cp) =>
+    const blocked = duplicateInfo.some((dup) => {
+      const personMatch = dup.contact_person?.some((cp) =>
         formData.contact_person.some(
-          (fcp) => fcp.trim().toUpperCase() === cp.trim().toUpperCase()
-        )
+          (fcp) => fcp.trim().toUpperCase() === cp.trim().toUpperCase(),
+        ),
       );
-
-      const contactNumberMatch = dup.contact_number?.some((cn) =>
-        formData.contact_number.some((fcn) =>
-          normalizePHNumber(fcn) === normalizePHNumber(cn)
-        )
+      const numberMatch = dup.contact_number?.some((cn) =>
+        formData.contact_number.some(
+          (fcn) => normalizePHNumber(fcn) === normalizePHNumber(cn),
+        ),
       );
+      return personMatch || numberMatch;
+    });
 
-      if (contactPersonMatch || contactNumberMatch) {
-        blockCreation = true;
-        errorMsg = `Duplicate contact person or number detected for company "${dup.company_name}".`;
-        break;
-      }
-    }
-
-
-    if (blockCreation) {
-      setCompanyError(errorMsg);
+    if (blocked) {
+      const dup = duplicateInfo.find((d) => {
+        const personMatch = d.contact_person?.some((cp) =>
+          formData.contact_person.some(
+            (fcp) => fcp.trim().toUpperCase() === cp.trim().toUpperCase(),
+          ),
+        );
+        const numberMatch = d.contact_number?.some((cn) =>
+          formData.contact_number.some(
+            (fcn) => normalizePHNumber(fcn) === normalizePHNumber(cn),
+          ),
+        );
+        return personMatch || numberMatch;
+      });
+      setCompanyError(
+        `Duplicate contact person or number detected for company "${dup?.company_name}".`,
+      );
     } else {
       setCompanyError("");
     }
-  }, [formData.contact_person, formData.contact_number, duplicateInfo, userDetails.referenceid]);
+  }, [formData.contact_person, formData.contact_number, duplicateInfo]);
 
-  // --- Stepper state ---
-  const [step, setStep] = useState(0);
-  const totalSteps = 3;
-
-  function canProceedToNext() {
+  // ── Step validation ─────────────────────────────────────────────────────────
+  const canProceedToNext = (): boolean => {
     switch (step) {
       case 0:
         return (
@@ -371,17 +525,17 @@ export function AccountDialog({
       default:
         return false;
     }
-  }
+  };
 
-  function handleNext() {
-    if (step < totalSteps - 1 && canProceedToNext()) setStep((s) => s + 1);
-  }
-  function handleBack() {
+  const handleNext = () => {
+    if (step < TOTAL_STEPS - 1 && canProceedToNext()) setStep((s) => s + 1);
+  };
+  const handleBack = () => {
     if (step > 0) setStep((s) => s - 1);
-  }
+  };
 
-  // --- Form submission ---
-  async function handleSubmit() {
+  // ── Form submission ─────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
     if (submitLock.current) return;
     submitLock.current = true;
 
@@ -392,27 +546,22 @@ export function AccountDialog({
         duration: 4000,
         position: "top-right",
         fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
+        styles: { title: "text-white!", description: "text-white" },
       });
       submitLock.current = false;
       return;
     }
 
+    // Validate all emails
     for (const em of formData.email_address) {
       if (em.trim() && em.trim().toLowerCase() !== "n/a" && !isValidEmail(em)) {
         sileo.error({
-          title: "Failed",
+          title: "Invalid Email",
           description: `Invalid email address: ${em}`,
           duration: 4000,
           position: "top-right",
           fill: "black",
-          styles: {
-            title: "text-white!",
-            description: "text-white",
-          },
+          styles: { title: "text-white!", description: "text-white" },
         });
         submitLock.current = false;
         return;
@@ -432,130 +581,98 @@ export function AccountDialog({
     };
 
     try {
-      await onSaveAction(cleanData);  // wait for save to complete
+      await onSaveAction(cleanData);
       sileo.success({
         title: "Success",
         description: "Saved successfully!",
         duration: 4000,
         position: "top-right",
         fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
+        styles: { title: "text-white!", description: "text-white" },
       });
-
       onOpenChangeAction(false);
-
-      // Reload after a short delay to let UI update
       setTimeout(() => {
         submitLock.current = false;
         window.location.reload();
       }, 500);
-
-    } catch (error) {
+    } catch {
       sileo.error({
         title: "Failed",
         description: "Save failed. Please try again.",
         duration: 4000,
         position: "top-right",
         fill: "black",
-        styles: {
-          title: "text-white!",
-          description: "text-white",
-        },
+        styles: { title: "text-white!", description: "text-white" },
       });
       submitLock.current = false;
     }
-  }
+  };
 
-  useEffect(() => {
-    // Fetch regions on mount
-    fetch("https://psgc.gitlab.io/api/regions")
-      .then(res => res.json())
-      .then(data => setRegions(data.map((r: any) => r.name)))
-      .catch(console.error);
-  }, []);
+  // MultiValueField intentionally removed — inline inputs used instead
+  // to prevent input focus loss caused by component re-mounting on every render.
 
-  useEffect(() => {
-    if (!selectedRegion) {
-      setCities([]);
-      return;
-    }
-
-    // Fetch cities/provinces based on selectedRegion
-    fetch(`https://psgc.gitlab.io/api/regions/${encodeURIComponent(selectedRegion)}/provinces`)
-      .then(res => res.json())
-      .then(data => setCities(data.map((c: any) => c.name)))
-      .catch(console.error);
-  }, [selectedRegion]);
-
-  // --- UI for each step ---
+  // ── Step content ────────────────────────────────────────────────────────────
   const renderStepContent = () => {
     switch (step) {
+      // ── Step 0: Company Info ────────────────────────────────────────────────
       case 0:
         return (
           <>
             {/* Company Name */}
-            {/* Company Name */}
-            <div>
+            <div className="mb-4">
               <FieldContent>
                 <FieldLabel className="font-bold">Company Name</FieldLabel>
                 <FieldDescription>
                   Enter the official registered name of the company.
                 </FieldDescription>
               </FieldContent>
-
-
               <Input
                 required
                 value={formData.company_name}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    company_name: e.target.value,
-                  }))
-                }
+                onChange={(e) => updateField("company_name", e.target.value)}
                 placeholder="Company Name"
                 className="uppercase rounded-none"
               />
 
               {isCheckingDuplicate && (
-                <Alert>
-                  <CheckCircle2Icon />
+                <Alert className="mt-2">
+                  <Loader2 className="animate-spin" />
                   <AlertTitle>Checking duplicates...</AlertTitle>
                 </Alert>
               )}
 
               {duplicateInfo.length > 0 && (
                 <>
-                  {displayedDuplicates.map((dup) => (
-                    <Alert
-                      key={dup.owner_referenceid + dup.company_name}
-                      variant={companyError ? "destructive" : "default"}
-                      className={`mt-2 ${!companyError ? "bg-yellow-100 text-yellow-800" : ""}`}
-                    >
-                      <AlertCircleIcon
-                        className={`mr-2 h-5 w-5 ${companyError ? "text-red-500" : "text-yellow-500"}`}
-                      />
-                      <div>
-                        <AlertTitle className="font-bold">
-                          {companyError ? companyError : "Already Taken By"}
-                        </AlertTitle>
-                        <AlertDescription className="flex items-center gap-2">
-                          <strong className="text-[10px]">{dup.company_name}</strong>
-                          <span>—</span>
-                          <span className="capitalize text-[10px]">{dup.owner_firstname}</span>
-                        </AlertDescription>
-                      </div>
-                    </Alert>
-                  ))}
-
+                  {(showAllDuplicates ? duplicateInfo : duplicateInfo.slice(0, 2)).map(
+                    (dup) => (
+                      <Alert
+                        key={dup.owner_referenceid + dup.company_name}
+                        variant={companyError ? "destructive" : "default"}
+                        className={`mt-2 ${!companyError ? "bg-yellow-100 text-yellow-800" : ""}`}
+                      >
+                        <AlertCircleIcon
+                          className={`mr-2 h-5 w-5 ${companyError ? "text-red-500" : "text-yellow-500"}`}
+                        />
+                        <div>
+                          <AlertTitle className="font-bold">
+                            {companyError ? companyError : "Already Taken By"}
+                          </AlertTitle>
+                          <AlertDescription className="flex items-center gap-2">
+                            <strong className="text-[10px]">{dup.company_name}</strong>
+                            <span>—</span>
+                            <span className="capitalize text-[10px]">
+                              {dup.owner_firstname}
+                            </span>
+                          </AlertDescription>
+                        </div>
+                      </Alert>
+                    ),
+                  )}
                   {duplicateInfo.length > 2 && (
                     <button
                       type="button"
                       className="mt-2 text-blue-600 hover:underline text-xs"
-                      onClick={() => setShowAllDuplicates((prev) => !prev)}
+                      onClick={() => setShowAllDuplicates((p) => !p)}
                     >
                       {showAllDuplicates
                         ? "View Less"
@@ -565,317 +682,216 @@ export function AccountDialog({
                 </>
               )}
             </div>
-            {/* Contact Person(s) */}
-            <div className="mt-4">
+
+            {/* Contact Information - Combined Grouped UI */}
+            <div className="mb-4">
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel className="font-bold">Contact Person(s)</FieldLabel>
+                    <FieldLabel className="font-bold">Contact Information</FieldLabel>
                     <FieldDescription>
-                      Enter the full name(s) of the primary contact person(s) for this company.
+                      Enter the contact details for each person. Contact numbers can be separated by "/" for multiple numbers per person.
                     </FieldDescription>
                   </FieldContent>
 
-                  {formData.contact_person.map((cp, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-2">
-                      <Input
-                        value={cp}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const newCP = [...formData.contact_person];
-                          newCP[i] = val;
-                          setFormData((prev) => ({ ...prev, contact_person: newCP }));
-                        }}
-                        placeholder="Contact Person"
-                        className="uppercase flex-grow rounded-none"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          if (formData.contact_person.length > 1) {
-                            const newCP = [...formData.contact_person];
-                            newCP.splice(i, 1);
-                            setFormData((prev) => ({ ...prev, contact_person: newCP }));
-                          }
-                        }}
-                        disabled={formData.contact_person.length === 1}
-                        variant="destructive"
-                        className="rounded-none"
+                  {/* Determine the number of contact entries (max of all three arrays) */}
+                  {(() => {
+                    const maxLen = Math.max(
+                      formData.contact_person.length,
+                      formData.contact_number.length,
+                      formData.email_address.length
+                    );
+                    const entries = [];
+                    for (let i = 0; i < maxLen; i++) {
+                      const person = formData.contact_person[i] || "";
+                      const number = formData.contact_number[i] || "";
+                      const email = formData.email_address[i] || "";
+                      
+                      // Number formatting logic
+                      const isIntl = number.startsWith("+");
+                      const digits = number.replace(/\D/g, "");
+                      const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
+                      const isMobile = !isIntl && digits.startsWith("09");
+                      const isCustom = number.startsWith("#");
+                      
+                      let displayVal = number;
+                      if (isCustom) displayVal = number.slice(1);
+                      else if (isIntl) displayVal = formatIntl(number);
+                      else if (isLandline) displayVal = formatLandline(number);
+                      else displayVal = formatPH(number);
 
-                      >
-                        <MinusIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            contact_person: [...prev.contact_person, ""],
-                          }))
-                        }
-                        className="flex items-center gap-1 rounded-none"
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                      const emailError = email && email !== "N/A" && !isValidEmail(email) ? "Invalid email format" : "";
 
-                </FieldSet>
-              </FieldGroup>
-            </div>
+                      entries.push(
+                        <div key={i} className="border border-gray-200 rounded-none p-4 mb-4 bg-gray-50/50">
+                          {/* Contact Person */}
+                          <div className="mb-3">
+                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
+                              Contact Person {i + 1}
+                            </label>
+                            <div className="flex gap-2">
+                              <Input
+                                value={person}
+                                onChange={(e) => {
+                                  const copy = [...formData.contact_person];
+                                  copy[i] = e.target.value;
+                                  updateField("contact_person", copy);
+                                }}
+                                placeholder="Full Name"
+                                className="uppercase rounded-none flex-1"
+                              />
+                            </div>
+                          </div>
 
-            {/* Contact Number(s) */}
-            <div className="mt-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Contact Number(s)</FieldLabel>
-                    <FieldDescription>
-                      Enter the phone number(s) of the primary contact person(s) for this company.
-                    </FieldDescription>
-                  </FieldContent>
+                          {/* Contact Number */}
+                          <div className="mb-3">
+                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
+                              Contact Number {i + 1}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
+                                onValueChange={(v) => {
+                                  const copy = [...formData.contact_number];
+                                  const currentDigits = number.replace(/\D/g, "");
+                                  
+                                  if (v === "local") {
+                                    copy[i] = currentDigits.startsWith("63")
+                                      ? "0" + currentDigits.slice(2)
+                                      : currentDigits.startsWith("0")
+                                      ? currentDigits
+                                      : "09";
+                                  } else if (v === "intl") {
+                                    copy[i] = currentDigits.startsWith("0")
+                                      ? `+63${currentDigits.slice(1)}`
+                                      : currentDigits.startsWith("63")
+                                      ? "+" + currentDigits
+                                      : "+63";
+                                  } else if (v === "landline") {
+                                    copy[i] = currentDigits.startsWith("63")
+                                      ? "0" + currentDigits.slice(2, 3)
+                                      : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
+                                      ? currentDigits.slice(0, 4)
+                                      : "02";
+                                  } else if (v === "custom") {
+                                    copy[i] = "#" + (number.startsWith("#") ? number.slice(1) : number);
+                                  }
+                                  updateField("contact_number", copy);
+                                }}
+                              >
+                                <SelectTrigger className="w-[100px] rounded-none">
+                                  {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="local">Phil</SelectItem>
+                                  <SelectItem value="landline">Landline</SelectItem>
+                                  <SelectItem value="intl">Intl</SelectItem>
+                                  <SelectItem value="custom">Custom</SelectItem>
+                                </SelectContent>
+                              </Select>
 
-                  {formData.contact_number.map((cn, i) => {
-                    const isIntl = cn.startsWith("+");
+                              <Input
+                                value={displayVal}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  const copy = [...formData.contact_number];
+                                  if (isCustom) {
+                                    copy[i] = "#" + raw;
+                                  } else {
+                                    const cleaned = isIntl
+                                      ? "+" + raw.replace(/[^0-9]/g, "")
+                                      : raw.replace(/[^0-9\/\s]/g, "");
+                                    copy[i] = cleaned;
+                                  }
+                                  updateField("contact_number", copy);
+                                }}
+                                placeholder={isCustom ? "Any format" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567 / 0922-456-7890"}
+                                className="rounded-none flex-1"
+                              />
+                            </div>
+                            {/* Number validation */}
+                            {isMobile && digits.length > 0 && digits.length !== 11 && (
+                              <p className="text-red-500 text-xs mt-1">Mobile must be 11 digits.</p>
+                            )}
+                            {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
+                              <p className="text-red-500 text-xs mt-1">Landline must be 9-10 digits.</p>
+                            )}
+                          </div>
 
-                    // --- AUTO-FORMATTERS ---
+                          {/* Email Address */}
+                          <div className="mb-3">
+                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
+                              Email Address {i + 1}
+                            </label>
+                            <div className="flex gap-2">
+                              <Input
+                                type="email"
+                                value={email}
+                                onChange={(e) => {
+                                  const copy = [...formData.email_address];
+                                  copy[i] = e.target.value;
+                                  updateField("email_address", copy);
+                                }}
+                                placeholder="email@example.com"
+                                className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
+                              />
+                            </div>
+                            {emailError && (
+                              <p className="text-red-500 text-xs mt-1">{emailError}</p>
+                            )}
+                          </div>
 
-                    // Format Philippine Number → 0917-123-4567
-                    const formatPH = (val: string) => {
-                      val = val.replace(/\D/g, "").slice(0, 11);
-                      if (val.length <= 4) return val;
-                      if (val.length <= 7) return `${val.slice(0, 4)}-${val.slice(4)}`;
-                      return `${val.slice(0, 4)}-${val.slice(4, 7)}-${val.slice(7)}`;
-                    };
-
-                    // Format International → +63 917 123 4567
-                    const formatIntl = (val: string) => {
-                      val = val.replace(/[^0-9+]/g, "");
-
-                      // Ensure one "+" at start
-                      if (val.indexOf("+") > 0) val = "+" + val.replace(/\+/g, "");
-
-                      // Remove spaces for processing
-                      const raw = val.replace(/\s+/g, "");
-                      const digits = raw.replace(/\D/g, "");
-
-                      // Return plain if too short
-                      if (digits.length < 4) return val;
-
-                      // Example formatting: +CC AAA BBB CCCC
-                      const country = digits.slice(0, 2); // "63"
-                      const rest = digits.slice(2);
-
-                      if (rest.length <= 3) return `+${country} ${rest}`;
-                      if (rest.length <= 6) return `+${country} ${rest.slice(0, 3)} ${rest.slice(3)}`;
-                      if (rest.length <= 10)
-                        return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`;
-
-                      return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6, 10)} ${rest.slice(10)}`;
-                    };
-
-                    const formattedValue = isIntl ? formatIntl(cn) : formatPH(cn);
-
-                    return (
-                      <div key={i} className="flex flex-col gap-2 mb-4">
-
-                        <div className="flex items-center gap-2">
-                          {/* Toggle Format */}
-                          <Select
-                            defaultValue={isIntl ? "intl" : "local"}
-                            onValueChange={(v) => {
-                              setFormData((prev) => {
-                                const copy = [...prev.contact_number];
-
-                                if (v === "local") {
-                                  // Convert +63 917 123 4567 → 09171234567
-                                  const digits = cn.replace(/\D/g, "");
-                                  copy[i] = digits.startsWith("63")
-                                    ? "0" + digits.slice(2)
-                                    : "";
-                                } else {
-                                  // Convert 0917-123-4567 → +63 917 123 4567
-                                  const digits = cn.replace(/\D/g, "");
-                                  copy[i] = digits.startsWith("0")
-                                    ? `+63${digits.slice(1)}`
-                                    : "+";
-                                }
-
-                                return { ...prev, contact_number: copy };
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-[140px] rounded-none">
-                              {isIntl ? "Intl" : "Phil"}
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="local">Phil</SelectItem>
-                              <SelectItem value="intl">Intl</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          {/* Input Field */}
-                          <Input
-                            value={formattedValue}
-                            onChange={(e) => {
-                              let val = e.target.value;
-
-                              // For internal storage, remove formatting
-                              const raw = val.replace(/\D/g, "");
-                              const storeVal = isIntl ? "+" + raw : raw;
-
-                              setFormData((prev) => {
-                                const copy = [...prev.contact_number];
-                                copy[i] = storeVal;
-                                return { ...prev, contact_number: copy };
-                              });
-                            }}
-                            placeholder={isIntl ? "+63 917 123 4567" : "0917-123-4567"}
-                            className="uppercase rounded-none"
-                          />
-
-                          {/* Remove */}
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() => {
-                              if (formData.contact_number.length > 1) {
-                                setFormData((prev) => {
-                                  const copy = [...prev.contact_number];
-                                  copy.splice(i, 1);
-                                  return { ...prev, contact_number: copy };
-                                });
-                              }
-                            }}
-                            disabled={formData.contact_number.length === 1}
-                            className="rounded-none"
-                          >
-                            <MinusIcon />
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                contact_number: [...prev.contact_number, ""],
-                              }))
-                            }
-                          >
-                            <PlusIcon />
-                          </Button>
+                          {/* Remove Contact Entry */}
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-none"
+                              disabled={maxLen === 1}
+                              onClick={() => {
+                                const personCopy = [...formData.contact_person];
+                                const numberCopy = [...formData.contact_number];
+                                const emailCopy = [...formData.email_address];
+                                personCopy.splice(i, 1);
+                                numberCopy.splice(i, 1);
+                                emailCopy.splice(i, 1);
+                                updateField("contact_person", personCopy.length > 0 ? personCopy : [""]);
+                                updateField("contact_number", numberCopy.length > 0 ? numberCopy : [""]);
+                                updateField("email_address", emailCopy.length > 0 ? emailCopy : [""]);
+                              }}
+                            >
+                              <MinusIcon className="h-4 w-4 mr-1" /> Remove Contact
+                            </Button>
+                          </div>
                         </div>
+                      );
+                    }
+                    return entries;
+                  })()}
 
-                        {/* Validation Text */}
-                        {!isIntl && cn.replace(/\D/g, "").length !== 11 && (
-                          <p className="text-red-500 text-xs">Local PH numbers must be exactly 11 digits.</p>
-                        )}
-                        {isIntl && !/^\+\d{5,15}$/.test(cn.replace(/\s+/g, "")) && (
-                          <p className="text-red-500 text-xs">Invalid international number format.</p>
-                        )}
-
-                      </div>
-                    );
-                  })}
-                </FieldSet>
-              </FieldGroup>
-            </div>
-            {/* Email Address(es) */}
-            <div>
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Email Address(es)</FieldLabel>
-                    <FieldDescription>
-                      Enter the email address(es) of the primary contact person(s) for this company.
-                    </FieldDescription>
-                  </FieldContent>
-                  {formData.email_address.map((em, i) => {
-                    const isNA = em === "N/A";
-                    const emailError = em && !isNA && !isValidEmail(em) ? "Invalid email format or domain" : "";
-
-                    return (
-                      <div key={i} className="flex gap-2 mb-2">
-
-                        <Input
-                          type="email"
-                          value={em}
-                          disabled={isNA}
-                          required={!isNA}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setFormData((prev) => {
-                              const copy = [...prev.email_address];
-                              copy[i] = val;
-                              return { ...prev, email_address: copy };
-                            });
-                          }}
-
-                          placeholder="Email Address"
-                          className={emailError ? "border-red-500" : "rounded-none"}
-                        />
-
-                        {!isNA && emailError && (
-                          <p className="text-red-500 text-sm">{emailError}</p>
-                        )}
-
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          onClick={() => {
-                            if (formData.email_address.length > 1) {
-                              setFormData((prev) => {
-                                const copy = [...prev.email_address];
-                                copy.splice(i, 1);
-                                return { ...prev, email_address: copy };
-                              });
-                            }
-                          }}
-                          disabled={formData.email_address.length === 1 || isNA}
-                          className="rounded-none"
-                        >
-                          <MinusIcon />
-                        </Button>
-                        <Button
-                          type="button"
-                          disabled={formData.email_address[0] === "N/A"}
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              email_address: [...prev.email_address, ""],
-                            }))
-                          }
-                          className="rounded-none"
-                        >
-                          <PlusIcon />
-                        </Button>
-                      </div>
-                    );
-                  })}
-
-                  {/* Checkbox: Check if no email */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <input
-                      type="checkbox"
-                      id="no-email-checkbox"
-                      checked={formData.email_address[0] === "N/A"}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFormData((prev) => ({
-                          ...prev,
-                          email_address: checked ? ["N/A"] : [""],
-                        }));
+                  {/* Add New Contact Entry */}
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      className="rounded-none w-full"
+                      onClick={() => {
+                        updateField("contact_person", [...formData.contact_person, ""]);
+                        updateField("contact_number", [...formData.contact_number, ""]);
+                        updateField("email_address", [...formData.email_address, ""]);
                       }}
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="no-email-checkbox" className="text-sm">
-                      Check if no email
-                    </Label>
+                    >
+                      <PlusIcon className="h-4 w-4 mr-1" /> Add Contact Person
+                    </Button>
                   </div>
                 </FieldSet>
               </FieldGroup>
             </div>
+
           </>
         );
+
+      // ── Step 1: Address ─────────────────────────────────────────────────────
       case 1:
         return (
           <>
@@ -884,33 +900,26 @@ export function AccountDialog({
                 <FieldSet>
                   <FieldContent>
                     <FieldLabel className="font-bold">Region</FieldLabel>
-                    <FieldDescription>
-                      Select the region for the company address.
-                    </FieldDescription>
+                    <FieldDescription>Select the region for the company address.</FieldDescription>
                   </FieldContent>
-
                   <Select
                     value={formData.region || ""}
-                    onValueChange={(val) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        region: val,
-                        selectedRegion: val,
-                      }));
-                    }}
+                    onValueChange={(val) => updateField("region", val)}
                   >
-                    <SelectTrigger className="w-full rounded-none">
+                    <SelectTrigger className={`w-full rounded-none ${!formData.region && formData.address ? 'border-red-500' : ''}`}>
                       <span>{formData.region || "Select Region"}</span>
                     </SelectTrigger>
                     <SelectContent>
-                      {regions.map((region) => (
-                        <SelectItem key={region} value={region}>
-                          {region}
+                      {regions.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-
+                  {!formData.region && (
+                    <p className="text-red-500 text-xs mt-1">Region is required.</p>
+                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
@@ -924,15 +933,15 @@ export function AccountDialog({
                       Enter the complete physical address of the company.
                     </FieldDescription>
                   </FieldContent>
-
                   <Textarea
                     value={formData.address}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, address: e.target.value }))
-                    }
+                    onChange={(e) => updateField("address", e.target.value)}
                     placeholder="Address"
-                    className="rounded-none"
+                    className={`rounded-none ${!formData.address.trim() && formData.region ? 'border-red-500' : ''}`}
                   />
+                  {!formData.address.trim() && (
+                    <p className="text-red-500 text-xs mt-1">Address is required.</p>
+                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
@@ -943,54 +952,51 @@ export function AccountDialog({
                   <FieldContent>
                     <FieldLabel className="font-bold">Delivery Address</FieldLabel>
                     <FieldDescription>
-                      Provide the full address where goods or services should be delivered.
+                      Provide the full address where goods/services should be delivered.
                     </FieldDescription>
                   </FieldContent>
-
                   <Textarea
                     value={formData.delivery_address}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, delivery_address: e.target.value }))
-                    }
+                    onChange={(e) => updateField("delivery_address", e.target.value)}
                     placeholder="Delivery Address"
-                    className="rounded-none"
+                    className={`rounded-none ${!(formData.delivery_address?.trim()) && formData.address ? 'border-red-500' : ''}`}
                   />
+                  {!(formData.delivery_address?.trim()) && (
+                    <p className="text-red-500 text-xs mt-1">Delivery address is required.</p>
+                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
           </>
-
         );
+
+      // ── Step 2: Classification ──────────────────────────────────────────────
       case 2:
         return (
           <>
+            {/* Type Client */}
             <div className="mb-4">
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
                     <FieldLabel className="font-bold">Type Client</FieldLabel>
-                    <FieldDescription>
-                      Select the type of client for this company.
-                    </FieldDescription>
+                    <FieldDescription>Select the type of client for this company.</FieldDescription>
                   </FieldContent>
                   <RadioGroup
                     value={formData.type_client}
-                    onValueChange={(val) =>
-                      setFormData((prev) => ({ ...prev, type_client: val }))
-                    }
+                    onValueChange={(val) => updateField("type_client", val)}
                   >
-                    {TYPECLIENT_OPTIONS.map((typeClient) => (
-                      <FieldLabel key={typeClient}>
+                    {TYPECLIENT_OPTIONS.map((tc) => (
+                      <FieldLabel key={tc}>
                         <Field orientation="horizontal">
                           <FieldContent>
-                            <FieldTitle>{typeClient}</FieldTitle>
+                            <FieldTitle>{tc}</FieldTitle>
                             <FieldDescription>
-                              {typeClient === "New Client" &&
-                                "Client is new and is receiving assistance or information for the first time."}
+                              {tc === "New Client" &&
+                                "Client is new and receiving assistance for the first time."}
                             </FieldDescription>
                           </FieldContent>
-
-                          <RadioGroupItem value={typeClient} />
+                          <RadioGroupItem value={tc} />
                         </Field>
                       </FieldLabel>
                     ))}
@@ -999,6 +1005,7 @@ export function AccountDialog({
               </FieldGroup>
             </div>
 
+            {/* Industry — dynamic from Supabase */}
             <div className="mb-4">
               <FieldGroup>
                 <FieldSet>
@@ -1008,27 +1015,87 @@ export function AccountDialog({
                       Select the industry sector related to this company.
                     </FieldDescription>
                   </FieldContent>
-                  <Select
-                    value={formData.industry}
-                    onValueChange={(val) =>
-                      setFormData((prev) => ({ ...prev, industry: val }))
-                    }
-                  >
-                    <SelectTrigger className="w-full rounded-none">
-                      <span>{formData.industry || "Select Industry"}</span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDUSTRY_OPTIONS.map((industry) => (
-                        <SelectItem key={industry} value={industry}>
-                          {industry}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                  {loadingIndustries ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                      <Loader2 className="animate-spin h-4 w-4" />
+                      Loading industries...
+                    </div>
+                  ) : (
+                    <Select
+                      value={formData.industry}
+                      onValueChange={(val) => updateField("industry", val)}
+                    >
+                      <SelectTrigger className="w-full rounded-none">
+                        <span>{formData.industry || "Select Industry"}</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {industries.map((ind) => (
+                          <SelectItem key={ind} value={ind}>
+                            {ind.replace(/_/g, " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* Add new industry inline */}
+                  <div className="mt-2">
+                    {!showAddIndustry ? (
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => setShowAddIndustry(true)}
+                      >
+                        + Add new industry
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          value={newIndustryInput}
+                          onChange={(e) =>
+                            setNewIndustryInput(e.target.value.toUpperCase())
+                          }
+                          placeholder="NEW_INDUSTRY_NAME"
+                          className="rounded-none uppercase text-xs flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddIndustry();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          className="rounded-none text-xs"
+                          disabled={!newIndustryInput.trim() || addingIndustry}
+                          onClick={handleAddIndustry}
+                        >
+                          {addingIndustry ? (
+                            <Loader2 className="animate-spin h-3 w-3" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-none text-xs"
+                          onClick={() => {
+                            setShowAddIndustry(false);
+                            setNewIndustryInput("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </FieldSet>
               </FieldGroup>
             </div>
 
+            {/* Status */}
             <div>
               <FieldGroup>
                 <FieldSet>
@@ -1040,7 +1107,7 @@ export function AccountDialog({
                   </FieldContent>
                   <RadioGroup
                     value={formData.status}
-                    onValueChange={(val) => setFormData((prev) => ({ ...prev, status: val }))}
+                    onValueChange={(val) => updateField("status", val)}
                   >
                     <FieldLabel>
                       <Field orientation="horizontal">
@@ -1065,21 +1132,25 @@ export function AccountDialog({
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Sheet open={open} onOpenChange={onOpenChangeAction}>
-      <SheetContent side="right" className="w-full sm:w-[600px] overflow-auto custom-scrollbar">
+      <SheetContent
+        side="right"
+        className="w-full sm:w-[600px] overflow-auto custom-scrollbar"
+      >
         <SheetHeader>
           <SheetTitle>
             {mode === "edit" ? "Edit Account" : "Create New Account"}
           </SheetTitle>
           <SheetDescription>
-            Step {step + 1} of {totalSteps}
+            Step {step + 1} of {TOTAL_STEPS}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 mt-4 p-4">{renderStepContent()}</div>
 
-        {/* Stepper Buttons */}
+        {/* Navigation */}
         <div className="p-4 grid gap-4">
           <Button
             variant="outline"
@@ -1091,24 +1162,25 @@ export function AccountDialog({
             <ArrowLeft /> Back
           </Button>
 
-          {step === totalSteps - 1 ? (
+          {step === TOTAL_STEPS - 1 ? (
             <Button
               onClick={handleSubmit}
               type="button"
               disabled={!canProceedToNext()}
               className="rounded-none p-10 font-bold"
             >
-              <CheckCircle2Icon /> {mode === "edit" ? "Save Changes" : "Create Account"}
+              <CheckCircle2Icon />
+              {mode === "edit" ? "Save Changes" : "Create Account"}
             </Button>
           ) : (
             <Button
               onClick={handleNext}
               disabled={!canProceedToNext()}
+              type="button"
               className="rounded-none p-6 font-bold"
             >
               Next <ArrowRight />
             </Button>
-
           )}
         </div>
       </SheetContent>

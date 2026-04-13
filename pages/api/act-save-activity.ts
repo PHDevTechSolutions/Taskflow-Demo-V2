@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../utils/supabase";
-import redis from "../../lib/redis";
+import { logAuditTrailWithSession } from "@/lib/auditTrail";
 
 const safe = (v: any) => (v === undefined || v === "" ? null : v);
 
@@ -42,6 +42,8 @@ export default async function handler(
       product_sku,
       product_title,
       item_remarks,
+      discounted_priced,
+      discounted_amount,
 
       project_type,
       project_name,
@@ -52,6 +54,8 @@ export default async function handler(
 
       so_number,
       so_amount,
+      so_status,
+      payment_status,
       si_date,
       dr_number,
       actual_sales,
@@ -111,6 +115,8 @@ export default async function handler(
       product_sku,
       product_title,
       item_remarks,
+      discounted_priced,
+      discounted_amount,
     };
 
     for (const [key, value] of Object.entries(productFields)) {
@@ -179,6 +185,8 @@ export default async function handler(
         product_sku: safe(product_sku),
         product_title: safe(product_title),
         item_remarks: safe(item_remarks),
+        discounted_priced: safe(discounted_priced),
+        discounted_amount: safe(discounted_amount),
 
         project_type: safe(project_type),
         project_name: safe(project_name),
@@ -186,10 +194,12 @@ export default async function handler(
         quotation_number: safe(quotation_number),
         quotation_amount: safe(quotation_amount),
         quotation_type: safe(quotation_type),
-        quotation_status: safe(quotation_status),
+        quotation_status: safe(quotation_status) || (status === "Quote-Done" ? "Pending Client Approval" : null),
 
         so_number: safe(so_number),
         so_amount: safe(so_amount),
+        so_status: safe(so_status),
+        payment_status: safe(payment_status),
         si_date: safe(si_date),
         dr_number: safe(dr_number),
         actual_sales: safe(actual_sales),
@@ -254,6 +264,17 @@ export default async function handler(
     }
 
     /* ================= SUCCESS ================= */
+
+    // Log audit trail for activity creation
+    await logAuditTrailWithSession(
+      req,
+      "create",
+      type_activity === "Quotation Preparation" ? "quotation" : "activity",
+      activity_reference_number,
+      quotation_number || activity_reference_number,
+      `Created ${type_activity} for ${company_name || "N/A"}`,
+      { type_activity, company_name, status }
+    );
 
     return res.status(200).json({
       success: true,

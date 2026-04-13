@@ -44,6 +44,8 @@ interface UserDetails {
   referenceid: string;
   tsm: string;
   manager: string;
+  firstname?: string;
+  lastname?: string;
 }
 
 function DashboardContent() {
@@ -90,6 +92,8 @@ function DashboardContent() {
           referenceid: data.ReferenceID || "",
           tsm: data.TSM || "",
           manager: data.Manager || "",
+          firstname: data.FirstName || "",
+          lastname: data.LastName || "",
         });
 
         sileo.success({
@@ -233,7 +237,7 @@ function DashboardContent() {
   }
 
   // Save account handler (for create & update)
-  async function handleSaveAccount(data: Account & UserDetails) {
+  async function handleSaveAccount(data: Account & UserDetails, originalData?: Account) {
     const payload = {
       ...data,
       contact_person: Array.isArray(data.contact_person)
@@ -255,13 +259,18 @@ function DashboardContent() {
 
     try {
       const isEdit = Boolean(payload.id);
+
+      // Direct save for both create and edit
       const url = isEdit ? "/api/com-edit-account" : "/api/com-save-account";
-      const method = isEdit ? "PUT" : "POST";
+      const method = "PUT";
 
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          date_updated: new Date().toISOString(),
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to save account");
@@ -320,7 +329,7 @@ function DashboardContent() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="line-clamp-1">
+                    <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
                       Customer Database
                     </BreadcrumbPage>
                   </BreadcrumbItem>
@@ -357,7 +366,7 @@ function DashboardContent() {
         </SidebarInset>
 
         <SidebarRight
-          userId={userId ?? undefined}
+
           dateCreatedFilterRange={dateCreatedFilterRange}
           setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
         />

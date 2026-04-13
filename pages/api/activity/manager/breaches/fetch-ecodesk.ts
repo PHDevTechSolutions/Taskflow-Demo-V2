@@ -55,7 +55,12 @@ export default async function handler(
   }
 
   try {
-    const { department_head } = req.query;
+    const rawAgent = req.query.department_head ?? req.query.referenceid;
+    const department_head = typeof rawAgent === "string" ? rawAgent.trim() : "";
+
+    if (!department_head) {
+      return res.status(400).json({ error: "Missing required query: department_head" });
+    }
 
     const { db } = await connectToDatabase();
 
@@ -63,17 +68,7 @@ export default async function handler(
 
     /* ================= CSR METRICS FILTER START ================= */
 
-    let filter = {};
-
-    if (department_head && typeof department_head === "string") {
-      filter = {
-        $or: [
-          { department_head: department_head },
-
-          { department_head: department_head }, // CSR MATCH HERE
-        ],
-      };
-    }
+    const filter = { department_head };
 
     /* ================= CSR METRICS FILTER END ================= */
 

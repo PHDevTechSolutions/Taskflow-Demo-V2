@@ -23,7 +23,7 @@ import { SOSheet } from "./sheet/so";
 import { DRSheet } from "./sheet/dr";
 
 interface Activity {
-    id: string;
+    id?: string;
     type_client: string;
     company_name: string;
     contact_person: string;
@@ -65,6 +65,8 @@ interface Activity {
     product_photo?: string;
     product_sku?: string;
     product_title?: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
     vat_type: string;
     delivery_fee: string;
     restocking_fee?: string;
@@ -83,6 +85,8 @@ interface Activity {
     so_number?: string;
     so_amount?: string;
     si_date?: string;
+    so_status?: string;
+    payment_status?: string;
 
     actual_sales?: string;
     dr_number?: string;
@@ -91,7 +95,7 @@ interface Activity {
 
     date_followup?: string;
     remarks: string;
-    tsm_approved_status: string;
+    tsm_approved_status?: string;
     // CSR
     agent: string;
     start_date?: string;
@@ -204,6 +208,8 @@ export function CreateActivityDialog({
     const [productPhoto, setProductPhoto] = useState("");
     const [productSku, setProductSku] = useState("");
     const [productTitle, setProductTitle] = useState("");
+    const [productDiscountedPrice, setProductDiscountedPrice] = useState("");
+    const [productDiscountedAmount, setProductDiscountedAmount] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
     const [restockingFee, setRestockingFee] = useState("");
@@ -216,9 +222,12 @@ export function CreateActivityDialog({
     const [quotationAmount, setQuotationAmount] = useState("");
     const [quotationType, setQuotationType] = useState("");
     const [quotationStatus, setQuotationStatus] = useState("");
+    const [tsmApprovalStatus, setTsmApprovalStatus] = useState("");
 
     const [soNumber, setSoNumber] = useState("");
     const [soAmount, setSoAmount] = useState("");
+    const [soStatus, setSoStatus] = useState("");
+    const [paymentStatus, setPaymentStatus] = useState("");
     const [siDate, setSiDate] = useState("");
 
     const [drNumber, setDrNumber] = useState("");
@@ -240,6 +249,7 @@ export function CreateActivityDialog({
 
     const [selectedContactPerson, setSelectedContactPerson] = useState(contact_person);
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
+    const [selectedEmailAddress, setSelectedEmailAddress] = useState(email_address);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
     const [quotationSubject, setQuotationSubject] = useState("For Quotation");
@@ -269,6 +279,7 @@ export function CreateActivityDialog({
         quotationAmount: "",
         quotationType: "",
         quotationStatus: "",
+        tsmApprovalStatus: "",
         itemRemarks: "",
         soNumber: "",
         soAmount: "",
@@ -301,6 +312,7 @@ export function CreateActivityDialog({
         setQuotationAmount(initialState.quotationAmount);
         setQuotationType(initialState.quotationType);
         setQuotationStatus(initialState.quotationStatus);
+        setTsmApprovalStatus(initialState.tsmApprovalStatus)
         setSoNumber(initialState.soNumber);
         setSoAmount(initialState.soAmount);
         setSiDate(initialState.siDate);
@@ -435,7 +447,6 @@ export function CreateActivityDialog({
         const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
 
         const newActivity: Activity = {
-            id: activityRef,
             activity_reference_number: activityRef,
             account_reference_number: accountRef,
             type_client,
@@ -473,6 +484,8 @@ export function CreateActivityDialog({
             product_photo: productPhoto || undefined,
             product_sku: productSku || undefined,
             product_title: productTitle || undefined,
+            discounted_priced: productDiscountedPrice || undefined,
+            discounted_amount: productDiscountedAmount || undefined,
             vat_type: vatType,
             delivery_fee: deliveryFee,
             restocking_fee: restockingFee,
@@ -485,11 +498,13 @@ export function CreateActivityDialog({
             quotation_number: quotationNumber || undefined,
             quotation_amount: quotationAmount || undefined,
             quotation_type: quotationType || undefined,
-            quotation_status: quotationStatus || undefined,
+            //quotation_status: quotationStatus || undefined,
 
             so_number: soNumber || undefined,
             so_amount: soAmount || undefined,
             si_date: siDate || undefined,
+            so_status: soStatus || undefined,
+            payment_status: paymentStatus || undefined,
 
             dr_number: drNumber || undefined,
             actual_sales: siAmount || undefined,
@@ -498,7 +513,7 @@ export function CreateActivityDialog({
 
             date_followup: followUpDate || undefined,
             remarks,
-            tsm_approved_status: "Pending",
+            tsm_approved_status: tsmApprovalStatus || undefined,
             start_date: startDate,
             end_date: new Date().toISOString(),
         };
@@ -599,15 +614,22 @@ export function CreateActivityDialog({
         }
     };
 
-    // Intercept sheet close request:
+    // Handle sheet open/close
     const onSheetOpenChange = (open: boolean) => {
         if (!open) {
-            // User trying to close the sheet (click outside or close button)
-            // Show confirmation dialog instead of closing immediately
+            // User trying to close - show confirmation dialog
             setShowConfirmCancel(true);
+            // Don't update sheetOpen yet, let user confirm first
         } else {
             setSheetOpen(true);
         }
+    };
+
+    // Force close sheet (for emergencies when it gets stuck)
+    const forceCloseSheet = () => {
+        setShowConfirmCancel(false);
+        setSheetOpen(false);
+        resetForm();
     };
 
     // Handle user confirmed cancel
@@ -626,6 +648,7 @@ export function CreateActivityDialog({
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
     const contactPersons = (contact_person || "").split(",").map(c => c.trim());
     const contactNumbers = (contact_number || "").split(",").map(c => c.trim());
+    const emailAddresses = (email_address || "").split(",").map(e => e.trim());
 
     return (
         <>
@@ -642,6 +665,7 @@ export function CreateActivityDialog({
                         <div className="grid grid-cols-1 gap-3">
                             {contactPersons.map((person, idx) => {
                                 const number = contactNumbers[idx] || "";
+                                const email = emailAddresses[idx] || "";
                                 const isSelected = selectedContacts.includes(person);
 
                                 return (
@@ -656,6 +680,7 @@ export function CreateActivityDialog({
                                         <div className="flex flex-col">
                                             <p className="font-semibold">{person}</p>
                                             <p className="text-sm text-gray-600">{number}</p>
+                                            <p className="text-sm text-gray-500">{email}</p>
                                         </div>
                                     </div>
                                 );
@@ -691,9 +716,11 @@ export function CreateActivityDialog({
                                 const selectedPerson = selectedContacts[0];
                                 const idx = contactPersons.indexOf(selectedPerson);
                                 const selectedNumber = contactNumbers[idx] || "";
+                                const selectedEmail = emailAddresses[idx] || "";
 
                                 setSelectedContactPerson(selectedPerson);
                                 setSelectedContactNumber(selectedNumber);
+                                setSelectedEmailAddress(selectedEmail);
 
                                 setShowContactDialog(false);
                                 handleNext(); // move to next step
@@ -986,6 +1013,10 @@ export function CreateActivityDialog({
                                     setProductSku={setProductSku}
                                     productTitle={productTitle}
                                     setProductTitle={setProductTitle}
+                                    productDiscountedPrice={productDiscountedPrice}
+                                    setProductDiscountedPrice={setProductDiscountedPrice}
+                                    productDiscountedAmount={productDiscountedAmount}
+                                    setProductDiscountedAmount={setProductDiscountedAmount}
                                     projectType={projectType}
                                     setProjectType={setProjectType}
                                     projectName={projectName}
@@ -996,8 +1027,10 @@ export function CreateActivityDialog({
                                     setQuotationAmount={setQuotationAmount}
                                     quotationType={quotationType}
                                     setQuotationType={setQuotationType}
-                                    quotationStatus={quotationStatus}
-                                    setQuotationStatus={setQuotationStatus}
+                                    //quotationStatus={quotationStatus}
+                                    //setQuotationStatus={setQuotationStatus}
+                                    tsmApprovalStatus={tsmApprovalStatus}
+                                    setTsmApprovalStatus={setTsmApprovalStatus}
                                     callType={callType}
                                     setCallType={setCallType}
                                     followUpDate={followUpDate}
@@ -1031,7 +1064,7 @@ export function CreateActivityDialog({
                                     managername={managername}
                                     company_name={company_name}
                                     address={address}
-                                    email_address={email_address}
+                                    email_address={selectedEmailAddress}
                                     contact_number={selectedContactNumber}
                                     contact_person={selectedContactPerson}
                                     managerDetails={managerDetails ?? null}
@@ -1042,6 +1075,8 @@ export function CreateActivityDialog({
 
                                     quotationSubject={quotationSubject}
                                     setQuotationSubject={setQuotationSubject}
+
+                                    referenceid={referenceid}
                                 />
                             )}
 
@@ -1059,7 +1094,10 @@ export function CreateActivityDialog({
                                     setRemarks={setRemarks}
                                     status={status}
                                     setStatus={setStatus}
-
+                                    soStatus={soStatus}
+                                    setSoStatus={setSoStatus}
+                                    paymentStatus={paymentStatus}
+                                    setPaymentStatus={setPaymentStatus}
                                     typeClient={typeClient}
                                     setTypeClient={setTypeClient}
                                     handleBack={handleBack}
@@ -1153,12 +1191,47 @@ export function CreateActivityDialog({
                         </div>
                     )}
 
-                    {showConfirmCancel && (
-                        <CancelDialog
-                            onCancel={cancelCancel}
-                            onConfirm={confirmCancel}
-                        />
-                    )}
+                    {/* Confirmation Dialog with Escape key handling */}
+                    <Dialog open={showConfirmCancel} onOpenChange={(open) => {
+                        if (!open) cancelCancel();
+                    }}>
+                        <DialogContent className="rounded-none" onEscapeKeyDown={(e) => {
+                            e.preventDefault();
+                            cancelCancel();
+                        }}>
+                            <DialogHeader>
+                                <DialogTitle>Discard Changes?</DialogTitle>
+                            </DialogHeader>
+                            <p className="text-sm text-gray-600">
+                                You have unsaved changes. Are you sure you want to close and discard them?
+                            </p>
+                            <DialogFooter className="mt-4 flex gap-2 justify-end">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-none"
+                                    onClick={cancelCancel}
+                                >
+                                    Continue Editing
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    className="rounded-none"
+                                    onClick={confirmCancel}
+                                >
+                                    Discard & Close
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Emergency close button if sheet gets stuck */}
+                    <button
+                        onClick={forceCloseSheet}
+                        className="fixed top-2 right-2 z-[9999] p-2 bg-red-500 text-white text-xs opacity-0 hover:opacity-100 transition-opacity"
+                        aria-label="Emergency close"
+                    >
+                        Force Close
+                    </button>
 
                 </SheetContent>
             </Sheet>

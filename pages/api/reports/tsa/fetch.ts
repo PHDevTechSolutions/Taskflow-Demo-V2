@@ -44,7 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           so_number,
           so_amount,
           call_type,
-          quotation_status
+          quotation_status,
+          quotation_status_sub
         `)
         .eq("referenceid", referenceid)
         .order("id", { ascending: true })
