@@ -6,12 +6,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     AlertCircleIcon, PlusCircle, PenIcon, Trash2Icon,
-<<<<<<< HEAD
-    Search, FileText, Loader2, Building2, User,
-    RefreshCw,
-=======
     Search, FileText, Loader2, Building2, User, ChevronLeft, ChevronRight,
->>>>>>> 44193bbd8b839a6649ea1302d1f290eb1f1bf1fe
+    RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -508,7 +504,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         fetchActivities();
     };
 
-<<<<<<< HEAD
     // ─── Request Revision ──────────────────────────────────────────────────────────
 
     const openRevisionDialog = (spf_number: string) => {
@@ -533,22 +528,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
         return res.json();
     };
-
-    // ─── Filtered data ───────────────────────────────────────────────────────────
-
-    const s = searchTerm.toLowerCase();
-    const filteredAccounts = accounts.filter(
-        (a) => a.company_name.toLowerCase().includes(s) || a.contact_person.toLowerCase().includes(s)
-    );
-    const filteredActivities = activities.filter(
-        (a) =>
-            a.customer_name.toLowerCase().includes(s) ||
-            a.contact_person.toLowerCase().includes(s) ||
-            a.spf_number.toLowerCase().includes(s)
-    );
-
-=======
->>>>>>> 44193bbd8b839a6649ea1302d1f290eb1f1bf1fe
     // ─── Render ──────────────────────────────────────────────────────────────────
 
     if (loading)
@@ -688,54 +667,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-<<<<<<< HEAD
-                                    {filteredActivities.map((item, idx) => (
-                                        <TableRow key={item.id}
-                                            className={`text-xs ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"} hover:bg-blue-50/40 transition-colors`}>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">
-                                                <div className="flex items-center gap-1">
-                                                    <button
-                                                        title="Edit"
-                                                        onClick={() => openEditDialog(item)}
-                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                                    >
-                                                        <PenIcon className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        title="Delete"
-                                                        onClick={() => { setDeleteTarget(item); setDeleteDialogOpen(true); }}
-                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        <Trash2Icon className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        title="Request Revision"
-                                                        onClick={() => openRevisionDialog(item.spf_number)}
-                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
-                                                    >
-                                                        <RefreshCw className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">
-                                                <StatusBadge status={item.status} />
-                                            </TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{item.spf_number}</TableCell>
-                                            <TableCell className="px-3 py-2 font-semibold whitespace-nowrap">{item.customer_name}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.contact_person}</TableCell>
-                                            <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{item.contact_number}</TableCell>
-                                            <TableCell className="px-3 py-2 max-w-[140px] truncate">{item.registered_address}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.delivery_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.billing_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 text-gray-400">{item.collection_address || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.payment_terms || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2">{item.warranty || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px]">{item.delivery_date || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.prepared_by || "—"}</TableCell>
-                                            <TableCell className="px-3 py-2 whitespace-nowrap">{item.approved_by || "—"}</TableCell>
-                                        </TableRow>
-                                    ))}
-=======
                                     {paginatedActivities.map((item, idx) => {
                                         const isHighlighted = highlight === item.spf_number;
                                         return (
@@ -756,6 +687,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                             className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
                                                         >
                                                             <Trash2Icon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            title="Request Revision"
+                                                            onClick={() => openRevisionDialog(item.spf_number)}
+                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-all"
+                                                        >
+                                                            <RefreshCw className="w-3.5 h-3.5" />
                                                         </button>
                                                     </div>
                                                 </TableCell>
@@ -778,7 +716,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             </TableRow>
                                         );
                                     })}
->>>>>>> 44193bbd8b839a6649ea1302d1f290eb1f1bf1fe
                                 </TableBody>
                             </Table>
                         )}
