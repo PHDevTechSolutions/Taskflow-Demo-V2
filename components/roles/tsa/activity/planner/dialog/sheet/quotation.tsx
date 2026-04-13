@@ -1976,9 +1976,7 @@ Procurement
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value="Pending">Endorsed to TSM</SelectItem>
-                    {Number(quotationAmount) <= 500000 && (
-                      <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
-                    )}
+                    <SelectItem value="Endorsed to Sales Head">Endorsed to Sales Head</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
