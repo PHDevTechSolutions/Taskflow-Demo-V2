@@ -10,6 +10,13 @@ import React, {
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -43,19 +50,16 @@ interface CCGItem {
   remarks: string;
 }
 
-interface MeetingSlot {
-  type: "meeting";
-  meeting: CCGItem;
-  children: CCGItem[];
-  startHour: number;
-  endHour: number;
+interface Account {
+  id: string;
+  company_name: string;
+  contact_person: string;
+  type_client: string;
+  next_available_date?: string;
+  region?: string;
+  industry?: string;
 }
 
-interface ActivitySlot {
-  type: "activity";
-  item: CCGItem;
-  hour: number;
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,9 +73,10 @@ function formatDateLocal(date: Date) {
 function formatTime(date: Date) {
   let h = date.getHours();
   const min = String(date.getMinutes()).padStart(2, "0");
+  const sec = String(date.getSeconds()).padStart(2, "0");
   const ampm = h >= 12 ? "PM" : "AM";
   h = h % 12 || 12;
-  return `${h}:${min} ${ampm}`;
+  return `${h}:${min}:${sec} ${ampm}`;
 }
 
 function formatHourLabel(h: number) {
@@ -95,41 +100,6 @@ function getFirstWeekday(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-function buildHourSlots(items: CCGItem[]): {
-  meetingSlots: MeetingSlot[];
-  activitySlots: ActivitySlot[];
-} {
-  const meetings = items.filter((it) => it.start_date && it.end_date);
-  const activities = items.filter((it) => !it.start_date || !it.end_date);
-
-  const meetingSlots: MeetingSlot[] = meetings.map((meeting) => {
-    const startDate = parseDate(meeting.start_date!)!;
-    const endDate = parseDate(meeting.end_date!)!;
-    const startHour = startDate.getHours();
-    const endHour = endDate.getHours();
-
-    const children = activities.filter((act) => {
-      const actTime = parseDate(act.date_updated);
-      if (!actTime) return false;
-      return actTime >= startDate && actTime <= endDate;
-    });
-
-    return { type: "meeting", meeting, children, startHour, endHour };
-  });
-
-  const coveredActivityIds = new Set(
-    meetingSlots.flatMap((ms) => ms.children.map((c) => c.id))
-  );
-
-  const activitySlots: ActivitySlot[] = activities
-    .filter((act) => !coveredActivityIds.has(act.id))
-    .map((act) => {
-      const d = parseDate(act.date_updated);
-      return { type: "activity", item: act, hour: d ? d.getHours() : 0 };
-    });
-
-  return { meetingSlots, activitySlots };
-}
 
 // Status badge styling
 const STATUS_STYLES: Record<string, string> = {
@@ -139,20 +109,99 @@ const STATUS_STYLES: Record<string, string> = {
   Active: "bg-blue-100   text-blue-700   border-blue-200",
 };
 
+// Cluster config for scheduled accounts
+const CLUSTER_CONFIG: Record<string, { color: string; bg: string; textColor: string }> = {
+  "top 50": { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
+  "next 30": { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
+  "balance 20": { color: "#8b5cf6", bg: "#ede9fe", textColor: "#5b21b6" },
+  "new client": { color: "#10b981", bg: "#d1fae5", textColor: "#065f46" },
+  "tsa client": { color: "#ef4444", bg: "#fee2e2", textColor: "#991b1b" },
+  "csr client": { color: "#f97316", bg: "#ffedd5", textColor: "#9a3412" },
+};
+
+function getClusterStyle(typeClient: string) {
+  return (
+    CLUSTER_CONFIG[typeClient?.toLowerCase()] ?? {
+      color: "#6b7280",
+      bg: "#f3f4f6",
+      textColor: "#374151",
+    }
+  );
+}
+
+// Helper function to calculate duration
+function calculateDuration(startDate: Date, endDate: Date): string {
+  const diffMs = endDate.getTime() - startDate.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const hours = Math.floor(diffSecs / 3600);
+  const minutes = Math.floor((diffSecs % 3600) / 60);
+  const seconds = diffSecs % 60;
+  
+  if (hours > 0) {
+    if (minutes > 0 && seconds > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (seconds > 0) {
+      return `${hours}h ${seconds}s`;
+    } else {
+      return `${hours}h`;
+    }
+  } else if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
-  const isMeeting = ev.start_date && ev.end_date;
-  const startDate = parseDate(isMeeting ? ev.start_date : ev.date_updated);
-  const endDate = isMeeting ? parseDate(ev.end_date) : null;
+  const isMeeting = ev.type_activity === "Meeting" && ev.start_date && ev.end_date;
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
+  // For meetings: show start and end time
+  // For activities: show duration between start_date and end_date if available
+  let timeDisplay = null;
+
+  if (isMeeting) {
+    const startDate = parseDate(ev.start_date!);
+    const endDate = parseDate(ev.end_date!);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(startDate)} - {formatTime(endDate)}
+        </span>
+      );
+    }
+  } else if (ev.start_date && ev.end_date) {
+    const startDate = parseDate(ev.start_date);
+    const endDate = parseDate(ev.end_date);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          Duration: {calculateDuration(startDate, endDate)}
+        </span>
+      );
+    }
+  } else {
+    // Regular activity: show end_date time (no date_updated!)
+    const eventDate = parseDate(ev.end_date || ev.start_date);
+    if (eventDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(eventDate)}
+        </span>
+      );
+    }
+  }
+
   return (
-    <div className="group relative rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div
-        className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${isMeeting ? "bg-purple-400" : "bg-green-400"}`}
-      />
+    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-slate-800 truncate">
@@ -168,13 +217,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          {startDate && (
-            <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-              <Clock size={10} />
-              {formatTime(startDate)}
-              {endDate && ` - ${formatTime(endDate)}`}
-            </span>
-          )}
+          {!isMeeting && timeDisplay}
           <span
             className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
           >
@@ -182,6 +225,12 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
           </span>
         </div>
       </div>
+      {/* Time display for meetings shown below */}
+      {isMeeting && timeDisplay && (
+        <div className="mt-2 pt-2 border-t border-green-100">
+          {timeDisplay}
+        </div>
+      )}
     </div>
   );
 };
@@ -193,7 +242,13 @@ export const CCG: React.FC<{
   target_quota?: string;
   dateCreatedFilterRange: any;
   setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
-}> = ({ referenceid, dateCreatedFilterRange, setDateCreatedFilterRangeAction }) => {
+  accounts?: Account[];
+}> = ({
+  referenceid,
+  dateCreatedFilterRange,
+  setDateCreatedFilterRangeAction,
+  accounts = [],
+}) => {
   const [activities, setActivities] = useState<CCGItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +257,7 @@ export const CCG: React.FC<{
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeActivity, setFilterTypeActivity] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [showScheduledDialog, setShowScheduledDialog] = useState(false);
 
   const today = useMemo(() => new Date(), []);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -310,11 +366,13 @@ export const CCG: React.FC<{
 
   const sortedActivities = useMemo(
     () =>
-      [...activities].sort(
-        (a, b) =>
-          new Date(b.start_date || b.date_updated).getTime() -
-          new Date(a.start_date || a.date_updated).getTime()
-      ),
+      [...activities].sort((a, b) => {
+        // Sort by end_date (or date_updated as fallback)
+        const aDate = parseDate(a.end_date || a.date_updated);
+        const bDate = parseDate(b.end_date || b.date_updated);
+        if (!aDate || !bDate) return 0;
+        return bDate.getTime() - aDate.getTime();
+      }),
     [activities]
   );
 
@@ -365,41 +423,49 @@ export const CCG: React.FC<{
 
   const allEventsByDate = useMemo(() => {
     const map: Record<string, number> = {};
+    
     for (const item of sortedActivities) {
-      const d = parseDate(item.start_date || item.date_updated);
-      if (!d) continue;
-      const key = formatDateLocal(d);
+      const eventDate = parseDate(item.end_date || item.date_updated);
+      if (!eventDate) continue;
+      
+      const key = formatDateLocal(eventDate);
       map[key] = (map[key] ?? 0) + 1;
     }
+    
     return map;
   }, [sortedActivities]);
+
+  // ── Scheduled Accounts ───────────────────────────────────────────────────────
+  const scheduledAccountsByDate = useMemo(() => {
+    const map: Record<string, Account[]> = {};
+    for (const account of accounts) {
+      if (account.next_available_date) {
+        const dateObj = new Date(account.next_available_date);
+        if (!isNaN(dateObj.getTime())) {
+          const key = formatDateLocal(dateObj);
+          if (!map[key]) map[key] = [];
+          map[key].push(account);
+        }
+      }
+    }
+    return map;
+  }, [accounts]);
+
+  const selectedDateAccounts = useMemo(() => {
+    if (!selectedDate) return [];
+    const selectedDateStr = formatDateLocal(selectedDate);
+    return scheduledAccountsByDate[selectedDateStr] || [];
+  }, [scheduledAccountsByDate, selectedDate]);
 
   const selectedDateStr = selectedDate ? formatDateLocal(selectedDate) : null;
 
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const d = parseDate(item.start_date || item.date_updated);
-      return d ? formatDateLocal(d) === selectedDateStr : false;
+      const eventDate = parseDate(item.end_date || item.date_updated);
+      return eventDate ? formatDateLocal(eventDate) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
-
-  // Build hour slots from selected day events
-  const { meetingSlots, activitySlots } = useMemo(
-    () => buildHourSlots(selectedDayEvents),
-    [selectedDayEvents]
-  );
-
-  // Map: hour → meeting slot (for spanning)
-  const hourToMeeting = useMemo(() => {
-    const map = new Map<number, MeetingSlot>();
-    meetingSlots.forEach((ms) => {
-      for (let h = ms.startHour; h <= ms.endHour; h++) {
-        map.set(h, ms);
-      }
-    });
-    return map;
-  }, [meetingSlots]);
 
   // ── Calendar helpers ───────────────────────────────────────────────────────
 
@@ -446,14 +512,14 @@ export const CCG: React.FC<{
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white min-h-[680px]">
+    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-green-400 shadow-lg bg-white min-h-[680px]">
       {/* ── LEFT: Calendar panel ── */}
-      <div className="lg:w-[320px] shrink-0 border-r border-slate-100 bg-slate-50 flex flex-col">
+      <div className="lg:w-[320px] shrink-0 border-r border-green-200 bg-white flex flex-col">
         {/* Month nav */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <button
             onClick={prevMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronLeft size={16} />
           </button>
@@ -467,7 +533,7 @@ export const CCG: React.FC<{
           </div>
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronRight size={16} />
           </button>
@@ -502,6 +568,9 @@ export const CCG: React.FC<{
               currentMonth === today.getMonth() &&
               currentYear === today.getFullYear();
             const eventCount = allEventsByDate[dateKey] ?? 0;
+            const scheduledCount = scheduledAccountsByDate[dateKey]?.length ?? 0;
+            const hasEvents = eventCount > 0;
+            const hasScheduled = scheduledCount > 0;
 
             return (
               <button
@@ -516,22 +585,26 @@ export const CCG: React.FC<{
                       ? "bg-green-600 text-white shadow-md shadow-green-200"
                       : isTodayCell
                         ? "bg-green-50 text-green-700 ring-1 ring-green-300"
-                        : "text-slate-700 hover:bg-slate-200"
+                        : "text-slate-700 hover:bg-green-50"
                   }`}
               >
                 {day}
-                {eventCount > 0 && (
-                  <span
-                    className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-white/70" : "bg-green-400"}`}
-                  />
-                )}
+                {/* Event dots */}
+                <div className="absolute bottom-1 flex gap-0.5">
+                  {hasEvents && (
+                    <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-white/70" : "bg-green-400"}`} />
+                  )}
+                  {hasScheduled && (
+                    <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-purple-300" : "bg-purple-500"}`} />
+                  )}
+                </div>
               </button>
             );
           })}
         </div>
 
         {/* Month summary */}
-        <div className="mt-auto border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+        <div className="mt-auto border-t border-green-200 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-slate-500">
             <CalendarDays size={13} />
             <span className="text-xs">
@@ -541,23 +614,35 @@ export const CCG: React.FC<{
               total
             </span>
           </div>
-          <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
-            {Object.entries(allEventsByDate)
-              .filter(([k]) =>
-                k.startsWith(
-                  `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
+              {Object.entries(allEventsByDate)
+                .filter(([k]) =>
+                  k.startsWith(
+                    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+                  )
                 )
-              )
-              .reduce((acc, [, v]) => acc + v, 0)}{" "}
-            events
-          </Badge>
+                .reduce((acc, [, v]) => acc + v, 0)}{" "}
+              events
+            </Badge>
+            <Badge variant="outline" className="text-[11px] px-2 py-0.5 border-purple-200 text-purple-600">
+              {Object.entries(scheduledAccountsByDate)
+                .filter(([k]) =>
+                  k.startsWith(
+                    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+                  )
+                )
+                .reduce((acc, [, v]) => acc + v.length, 0)}{" "}
+              scheduled
+            </Badge>
+          </div>
         </div>
       </div>
 
       {/* ── RIGHT: Timeline panel ── */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Panel header */}
-        <div className="border-b border-slate-100 px-5 pt-4 pb-3 flex flex-col gap-3">
+        <div className="border-b border-green-200 px-5 pt-4 pb-3 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-slate-800">
@@ -574,6 +659,11 @@ export const CCG: React.FC<{
                 {selectedDate
                   ? `${selectedDayEvents.length} event${selectedDayEvents.length !== 1 ? "s" : ""}`
                   : "No date selected"}
+                {selectedDate && selectedDateAccounts.length > 0 && (
+                  <span className="ml-2 text-purple-600 font-medium">
+                    · {selectedDateAccounts.length} scheduled
+                  </span>
+                )}
               </p>
             </div>
             <button
@@ -599,14 +689,14 @@ export const CCG: React.FC<{
               placeholder="Search company, activity, remarks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white focus:border-green-300"
+              className="pl-8 h-8 text-xs bg-slate-50 border-green-200 focus:bg-white focus:border-green-400"
             />
           </div>
 
           {showFilters && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[150px] text-xs border-green-200">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -623,7 +713,7 @@ export const CCG: React.FC<{
                 value={filterTypeActivity}
                 onValueChange={setFilterTypeActivity}
               >
-                <SelectTrigger className="h-7 w-[170px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[170px] text-xs border-green-200">
                   <SelectValue placeholder="All Activity Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -671,169 +761,166 @@ export const CCG: React.FC<{
             </div>
           ) : (
             <div className="px-4 py-3 space-y-0">
-              {(() => {
-                const renderedMeetingIds = new Set<number>();
-
-                return Array.from({ length: 24 }, (_, h) => h).map((hour) => {
-                  const isCurrentHour = !!isToday && hour === currentHour;
-                  const meetingSlot = hourToMeeting.get(hour);
-
-                  // Skip hours inside a meeting that's already been rendered
-                  if (
-                    meetingSlot &&
-                    renderedMeetingIds.has(meetingSlot.meeting.id)
-                  ) {
-                    return null;
-                  }
-
-                  // Render spanning meeting block at its START hour
-                  if (meetingSlot) {
-                    renderedMeetingIds.add(meetingSlot.meeting.id);
-                    const startDate = parseDate(meetingSlot.meeting.start_date!)!;
-                    const endDate = parseDate(meetingSlot.meeting.end_date!)!;
-                    const spanHours =
-                      meetingSlot.endHour - meetingSlot.startHour + 1;
-
-                    return (
+              {/* Scheduled Accounts Section */}
+              {selectedDateAccounts.length > 0 && (
+                <div className="mb-4 pb-4 border-b border-green-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Scheduled Accounts ({selectedDateAccounts.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDateAccounts.slice(0, 2).map((account) => (
                       <div
-                        key={`meeting-${meetingSlot.meeting.id}`}
-                        ref={isCurrentHour ? currentHourRef : null}
-                        className="flex gap-3"
-                        style={{ minHeight: `${spanHours * 48}px` }}
+                        key={account.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-green-100 bg-white hover:bg-green-50 transition-colors"
                       >
-                        {/* Hour label + vertical line */}
-                        <div className="flex flex-col items-center w-14 shrink-0 pt-1">
-                          <span className="text-[10px] font-bold leading-none select-none text-purple-500">
-                            {formatHourLabel(hour)}
-                          </span>
-                          <div className="flex-1 w-px mt-1.5 bg-purple-300" />
+                        <div>
+                          <p className="text-xs font-semibold text-slate-800 uppercase">
+                            {account.company_name}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {account.contact_person}
+                          </p>
                         </div>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] rounded-none"
+                          style={{
+                            borderColor: getClusterStyle(account.type_client).color + "40",
+                            background: getClusterStyle(account.type_client).bg,
+                            color: getClusterStyle(account.type_client).textColor,
+                          }}
+                        >
+                          {account.type_client}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedDateAccounts.length > 2 && (
+                    <button
+                      onClick={() => setShowScheduledDialog(true)}
+                      className="mt-2 w-full text-center text-[10px] text-purple-600 font-medium hover:text-purple-800 hover:underline transition-colors py-1"
+                    >
+                      View {selectedDateAccounts.length - 2} more...
+                    </button>
+                  )}
+                </div>
+              )}
 
-                        {/* Spanning meeting block */}
-                        <div className="flex-1 pb-2 pt-0.5">
-                          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden h-full flex flex-col">
-                            {/* Meeting header */}
-                            <div className="px-4 pt-3 pb-2 border-b border-purple-200 bg-purple-100/60 shrink-0">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-bold text-purple-900 truncate">
-                                    {meetingSlot.meeting.company_name || "—"}
-                                  </p>
-                                  <p className="text-[11px] text-purple-600 mt-0.5 truncate">
-                                    {meetingSlot.meeting.type_activity ??
-                                      meetingSlot.meeting
-                                        .activity_reference_number}
-                                  </p>
-                                  {meetingSlot.meeting.remarks && (
-                                    <p className="text-[11px] text-purple-500 mt-1 line-clamp-2 capitalize">
-                                      {meetingSlot.meeting.remarks}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <span className="flex items-center gap-1 text-[10px] text-purple-500 font-medium">
-                                    <Clock size={10} />
-                                    {formatTime(startDate)} –{" "}
-                                    {formatTime(endDate)}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${STATUS_STYLES[meetingSlot.meeting.status] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}
-                                  >
-                                    {meetingSlot.meeting.status || "—"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Children activities */}
-                            {meetingSlot.children.length > 0 ? (
-                              <div className="px-3 py-2 space-y-1.5 flex-1">
-                                <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1.5">
-                                  Activities during this meeting
-                                </p>
-                                {meetingSlot.children
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(a.date_updated).getTime() -
-                                      new Date(b.date_updated).getTime()
-                                  )
-                                  .map((child) => {
-                                    const childTime = parseDate(
-                                      child.date_updated
-                                    );
-                                    return (
-                                      <div
-                                        key={child.id}
-                                        className="flex gap-2 items-start"
-                                      >
-                                        <span className="text-[9px] text-purple-400 font-bold pt-[14px] w-12 shrink-0 text-right">
-                                          {childTime
-                                            ? formatTime(childTime)
-                                            : "—"}
-                                        </span>
-                                        <div className="flex-1">
-                                          <EventCard ev={child} />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            ) : (
-                              <div className="px-4 py-3 text-[11px] text-purple-300 italic flex-1">
-                                No activities logged during this meeting
-                              </div>
+              {/* Scheduled Accounts Dialog */}
+              <Dialog open={showScheduledDialog} onOpenChange={setShowScheduledDialog}>
+                <DialogContent className="w-full max-w-md rounded-none p-0 overflow-hidden gap-0">
+                  <div className="bg-purple-900 px-6 py-4">
+                    <DialogHeader>
+                      <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4" />
+                        Scheduled Accounts
+                      </DialogTitle>
+                    </DialogHeader>
+                  </div>
+                  <div className="px-6 py-4">
+                    <p className="text-xs text-slate-500 mb-3">
+                      {selectedDate?.toLocaleDateString("en-PH", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                      <span className="ml-2 text-purple-600 font-semibold">
+                        ({selectedDateAccounts.length} accounts)
+                      </span>
+                    </p>
+                    <div className="max-h-80 overflow-y-auto space-y-2">
+                      {selectedDateAccounts.map((account) => (
+                        <div
+                          key={account.id}
+                          className="flex items-center justify-between p-3 border border-green-100 rounded-lg hover:bg-green-50 transition-colors"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800 uppercase">
+                              {account.company_name}
+                            </p>
+                            <p className="text-[10px] text-slate-500">{account.contact_person}</p>
+                            {account.industry && (
+                              <p className="text-[9px] text-slate-400 mt-0.5">{account.industry}</p>
                             )}
                           </div>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] rounded-none"
+                            style={{
+                              borderColor: getClusterStyle(account.type_client).color + "40",
+                              background: getClusterStyle(account.type_client).bg,
+                              color: getClusterStyle(account.type_client).textColor,
+                            }}
+                          >
+                            {account.type_client}
+                          </Badge>
                         </div>
-                      </div>
-                    );
-                  }
-
-                  // Normal hour row
-                  const hourActivities = activitySlots.filter(
-                    (s) => s.hour === hour
-                  );
-                  const hasEvents = hourActivities.length > 0;
-
-                  return (
-                    <div
-                      key={hour}
-                      ref={isCurrentHour ? currentHourRef : null}
-                      className={`flex gap-3 min-h-[48px] group ${isCurrentHour ? "relative" : ""}`}
-                    >
-                      <div className="flex flex-col items-center w-14 shrink-0 pt-1">
-                        <span
-                          className={`text-[10px] font-bold leading-none select-none ${isCurrentHour ? "text-green-600" : "text-slate-400"}`}
-                        >
-                          {formatHourLabel(hour)}
-                        </span>
-                        <div
-                          className={`flex-1 w-px mt-1.5 ${isCurrentHour ? "bg-green-400" : hasEvents ? "bg-slate-300" : "bg-slate-100"}`}
-                        />
-                      </div>
-                      <div className="flex-1 pb-2 pt-0.5 space-y-1.5">
-                        {isCurrentHour && (
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className="w-2 h-2 rounded-full bg-green-500 shadow-md shadow-green-300 animate-pulse" />
-                            <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase">
-                              Now · {formatTime(nowDate)}
-                            </span>
-                          </div>
-                        )}
-                        {hasEvents ? (
-                          hourActivities.map(({ item }) => (
-                            <EventCard key={item.id} ev={item} />
-                          ))
-                        ) : (
-                          <div className="text-[11px] text-slate-200 pt-1 select-none">
-                            —
-                          </div>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  );
+                  </div>
+                  <div className="px-6 py-3 border-t border-green-100 bg-green-50 flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-none text-xs"
+                      onClick={() => setShowScheduledDialog(false)}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              {/* Simple timeline with all events */}
+              {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
+                const isCurrentHour = !!isToday && hour === currentHour;
+                const hourEvents = selectedDayEvents.filter((event) => {
+                  const eventDate = parseDate(event.end_date || event.date_updated);
+                  return eventDate ? eventDate.getHours() === hour : false;
                 });
-              })()}
+                const hasEvents = hourEvents.length > 0;
+
+                return (
+                  <div
+                    key={hour}
+                    ref={isCurrentHour ? currentHourRef : null}
+                    className={`flex gap-3 min-h-[48px] group ${isCurrentHour ? "relative" : ""}`}
+                  >
+                    <div className="flex flex-col items-center w-14 shrink-0 pt-1">
+                      <span
+                        className={`text-[10px] font-bold leading-none select-none ${isCurrentHour ? "text-green-600" : "text-slate-400"}`}
+                      >
+                        {formatHourLabel(hour)}
+                      </span>
+                      <div
+                        className={`flex-1 w-px mt-1.5 ${isCurrentHour ? "bg-green-400" : hasEvents ? "bg-green-300" : "bg-green-100"}`}
+                      />
+                    </div>
+                    <div className="flex-1 pb-2 pt-0.5 space-y-1.5">
+                      {isCurrentHour && (
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="w-2 h-2 rounded-full bg-green-500 shadow-md shadow-green-300 animate-pulse" />
+                          <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase">
+                            Now · {formatTime(nowDate)}
+                          </span>
+                        </div>
+                      )}
+                      {hasEvents ? (
+                        hourEvents.map((event) => (
+                          <EventCard key={event.id} ev={event} />
+                        ))
+                      ) : (
+                        <div className="text-[11px] text-slate-200 pt-1 select-none">
+                          â
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

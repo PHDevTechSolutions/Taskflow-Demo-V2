@@ -37,8 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from("history")
       .update({
         start_date:   start.toISOString(),
-        end_date:     end.toISOString(),
-        date_updated: new Date().toISOString(),
+        end_date:     end.toISOString()
       })
       .eq("id", parsedId)
       .select("id");

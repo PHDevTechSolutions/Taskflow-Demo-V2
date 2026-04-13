@@ -67,25 +67,25 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
   // MongoDB dates are ISO strings with UTC offset (e.g. 2026-03-17T02:48:29.951+00:00)
   // dateRange.from/to are local midnight — extend `to` to end of day so the full day is included
   const filteredVisits = siteVisits.filter((visit) => {
-  if (!dateRange || !dateRange.from || !dateRange.to) return true;
-  if (!visit.date_created) return false;
+    if (!dateRange || !dateRange.from || !dateRange.to) return true;
+    if (!visit.date_created) return false;
 
-  // Convert visit date to PH local date string for comparison
-  const visitDateStr = new Date(visit.date_created).toLocaleDateString("en-CA", {
-    timeZone: "Asia/Manila",
+    // Convert visit date to PH local date string for comparison
+    const visitDateStr = new Date(visit.date_created).toLocaleDateString("en-CA", {
+      timeZone: "Asia/Manila",
+    });
+
+    const fromStr = toLocalDateString(dateRange.from);
+    const toStr = toLocalDateString(dateRange.to);
+
+    return visitDateStr >= fromStr && visitDateStr <= toStr;
   });
-
-  const fromStr = toLocalDateString(dateRange.from);
-  const toStr = toLocalDateString(dateRange.to);
-
-  return visitDateStr >= fromStr && visitDateStr <= toStr;
-});
 
   // Today's visits only (Login or Logout status)
   const todayStr = toLocalDateString(new Date());
   const todayVisits = filteredVisits.filter((visit) => {
     if (!visit.date_created) return false;
-    const visitDateStr = toLocalDateString(visit.date_created);
+    const visitDateStr = toLocalDateString(new Date(visit.date_created));
     const isToday = visitDateStr === todayStr;
     const isLoginOrLogout =
       visit.Status === "Login" || visit.Status === "Logout";

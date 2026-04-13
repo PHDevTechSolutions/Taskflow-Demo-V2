@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 /* ================= TYPES ================= */
 interface SI {
@@ -108,9 +109,9 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     url.searchParams.append("type_activity", "delivered / closed transaction");
 
     fetch(url.toString())
-      .then(async r => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
-      .then(d => setActivities(d.activities || []))
-      .catch(e => setError(e.message))
+      .then(async (r: Response) => { if (!r.ok) throw new Error("Failed to fetch activities"); return r.json(); })
+      .then((d: { activities: SI[] }) => setActivities(d.activities || []))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [referenceid, dateCreatedFilterRange]);
 
@@ -125,8 +126,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     url.searchParams.append("type_activity", "sales order preparation");
 
     fetch(url.toString())
-      .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(d => setSORecords(d.activities || []))
+      .then(async (r: Response) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d: { activities: SORecord[] }) => setSORecords(d.activities || []))
       .catch(() => setSORecords([]));
   }, [referenceid, dateCreatedFilterRange]);
 
@@ -137,17 +138,18 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     if (!referenceid) return;
 
     const ch = supabase.channel(`si:${referenceid}`)
-      .on("postgres_changes",
+      // @ts-expect-error - Supabase realtime types issue
+      .on("postgres_changes" as "postgres_changes",
         { event: "*", schema: "public", table: "history", filter: `manager=eq.${referenceid}` },
-        (payload) => {
-          const n = payload.new as SI, o = payload.old as SI;
-          setActivities(c => {
+        (payload: { new: SI; old: SI; eventType: "INSERT" | "UPDATE" | "DELETE" }) => {
+          const n = payload.new, o = payload.old;
+          setActivities((c: SI[]) => {
             if (payload.eventType === "INSERT") {
               if (n.type_activity?.toLowerCase() !== "delivered / closed transaction") return c;
-              return c.some(a => a.id === n.id) ? c : [...c, n];
+              return c.some((a: SI) => a.id === n.id) ? c : [...c, n];
             }
-            if (payload.eventType === "UPDATE") return c.map(a => a.id === n.id ? n : a);
-            if (payload.eventType === "DELETE") return c.filter(a => a.id !== o.id);
+            if (payload.eventType === "UPDATE") return c.map((a: SI) => a.id === n.id ? n : a);
+            if (payload.eventType === "DELETE") return c.filter((a: SI) => a.id !== o.id);
             return c;
           });
         }
@@ -160,15 +162,15 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
   useEffect(() => {
     if (!userDetails.referenceid) return;
     fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(userDetails.referenceid)}`)
-      .then(r => r.json())
-      .then(setAgents)
+      .then((r: Response) => r.json())
+      .then((data: Agent[]) => setAgents(data))
       .catch(() => { });
   }, [userDetails.referenceid]);
 
   // ─── Agent lookup maps ───────────────────────────────────────────────────────
   const agentMap = useMemo(() => {
     const m: Record<string, Agent & { name: string }> = {};
-    agents.forEach(a => {
+    agents.forEach((a: Agent) => {
       if (a.ReferenceID)
         m[a.ReferenceID.toLowerCase()] = { ...a, name: `${a.Firstname} ${a.Lastname}` };
     });
@@ -176,7 +178,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
   }, [agents]);
 
   const tsmAgents = useMemo(
-    () => agents.filter(a => a.Role === "Territory Sales Manager"),
+    () => agents.filter((a: Agent) => a.Role === "Territory Sales Manager"),
     [agents]
   );
 
@@ -193,13 +195,13 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       totalSIAmount: number;
     }>();
 
-    tsmAgents.forEach(tsm => {
+    tsmAgents.forEach((tsm: Agent) => {
       const tsmId = tsm.ReferenceID.toLowerCase();
       summaryMap.set(tsmId, { tsmId, tsmName: `${tsm.Firstname} ${tsm.Lastname}`, soCount: 0, deliveredCount: 0, totalSIAmount: 0 });
     });
 
     // Count SO per TSM
-    soRecords.forEach(so => {
+    soRecords.forEach((so: SORecord) => {
       const agent = agentMap[so.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? so.tsm ?? "").toLowerCase();
       if (!tsmId || !summaryMap.has(tsmId)) return;
@@ -207,7 +209,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     });
 
     // Count Delivered / Closed Transaction per TSM directly from activities
-    activities.forEach(si => {
+    activities.forEach((si: SI) => {
       const agent = agentMap[si.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? si.tsm ?? "").toLowerCase();
       if (!tsmId || !summaryMap.has(tsmId)) return;
@@ -216,21 +218,21 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       row.totalSIAmount += si.actual_sales ?? 0;
     });
 
-    return Array.from(summaryMap.values()).sort((a, b) => b.soCount - a.soCount);
+    return Array.from(summaryMap.values()).sort((a: { soCount: number }, b: { soCount: number }) => b.soCount - a.soCount);
   }, [activities, soRecords, agentMap, tsmAgents]);
 
   // ─── Expanded TSA details ────────────────────────────────────────────────────
   const expandedTsaGroups = useMemo(() => {
     if (!expandedTsmId) return [];
 
-    const rowsForTsm = activities.filter(item => {
+    const rowsForTsm = activities.filter((item: SI) => {
       const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
       const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
       return derivedTsmId === expandedTsmId;
     });
 
     const byTsa = new Map<string, { tsaName: string; rows: SI[] }>();
-    rowsForTsm.forEach(row => {
+    rowsForTsm.forEach((row: SI) => {
       const tsaId = (row.referenceid || "unknown").toLowerCase();
       const tsaAgent = agentMap[tsaId];
       const tsaName = tsaAgent?.name || row.referenceid || "Unknown TSA";
@@ -238,7 +240,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       byTsa.get(tsaId)!.rows.push(row);
     });
 
-    return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
+    return Array.from(byTsa.values()).sort((a: { rows: SI[] }, b: { rows: SI[] }) => b.rows.length - a.rows.length);
   }, [expandedTsmId, activities, agentMap]);
 
   // ─── Filtered rows for detail table ─────────────────────────────────────────
@@ -248,9 +250,9 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     const toStr = dateCreatedFilterRange?.to ? toPlainDate(dateCreatedFilterRange.to) : null;
 
     return activities
-      .filter(i => !s || i.company_name?.toLowerCase().includes(s) || i.dr_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s))
-      .filter(i => selectedAgent === "all" || i.referenceid === selectedAgent)
-      .filter(i => {
+      .filter((i: SI) => !s || i.company_name?.toLowerCase().includes(s) || i.dr_number?.toLowerCase().includes(s) || i.remarks?.toLowerCase().includes(s))
+      .filter((i: SI) => selectedAgent === "all" || i.referenceid === selectedAgent)
+      .filter((i: SI) => {
         if (!fromStr && !toStr) return true;
         const d = recordDateStr(i.delivery_date) ?? recordDateStr(i.date_created);
         if (!d) return false;
@@ -258,12 +260,125 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
         if (toStr && d > toStr) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+      .sort((a: SI, b: SI) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
   }, [activities, searchTerm, selectedAgent, dateCreatedFilterRange]);
 
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange]);
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Sales Invoice Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "Total SO", key: "soCount", width: 15 },
+      { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
+      { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item: { tsmId: string; tsmName: string; soCount: number; deliveredCount: number; totalSIAmount: number }) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item: { tsmId: string; tsmName: string; soCount: number; deliveredCount: number; totalSIAmount: number }) => {
+      worksheet.addRow({
+        tsm: item.tsmName,
+        soCount: item.soCount,
+        deliveredCount: item.deliveredCount,
+        totalSIAmount: item.totalSIAmount
+      });
+    });
+
+    const totalsRow = {
+      tsm: "TOTAL",
+      soCount: filteredSummary.reduce((sum: number, t: { soCount: number }) => sum + t.soCount, 0),
+      deliveredCount: filteredSummary.reduce((sum: number, t: { deliveredCount: number }) => sum + t.deliveredCount, 0),
+      totalSIAmount: filteredSummary.reduce((sum: number, t: { totalSIAmount: number }) => sum + t.totalSIAmount, 0)
+    };
+
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Delivery Date", key: "deliveryDate", width: 15 },
+      { header: "SI Date", key: "siDate", width: 15 },
+      { header: "SI Amount", key: "siAmount", width: 18 },
+      { header: "DR Number", key: "drNumber", width: 20 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Contact Person", key: "contactPerson", width: 20 },
+      { header: "Contact Number", key: "contactNumber", width: 18 },
+      { header: "Payment Terms", key: "paymentTerms", width: 15 },
+      { header: "Duration", key: "duration", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? activities.filter((item: SI) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : activities;
+
+    const byTsa = new Map<string, { tsaName: string; rows: SI[] }>();
+    filteredActivities.forEach((row: SI) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a: [string, { tsaName: string; rows: SI[] }], b: [string, { tsaName: string; rows: SI[] }]) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]: [string, { tsaName: string; rows: SI[] }]) => {
+      rows.forEach((row: SI) => {
+        const duration = computeDuration(row.start_date, row.end_date);
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          deliveryDate: recordDateStr(row.delivery_date) ?? "-",
+          siDate: recordDateStr(row.si_date) ?? "-",
+          siAmount: row.actual_sales ?? 0,
+          drNumber: row.dr_number || "-",
+          company: row.company_name || "-",
+          contactPerson: row.contact_person || "-",
+          contactNumber: row.contact_number || "-",
+          paymentTerms: row.payment_terms || "-",
+          duration: duration,
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    worksheet.getColumn('siAmount').numFmt = '#,##0.00" ₱"';
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -271,72 +386,47 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Sales Invoice Summary");
+      const zip = new JSZip();
+      const folderName = "sales_invoice_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "Total SO", key: "soCount", width: 15 },
-        { header: "Total SI / Delivered", key: "deliveredCount", width: 20 },
-        { header: "Total SI Amount", key: "totalSIAmount", width: 18 }
-      ];
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        worksheet.addRow({
-          tsm: item.tsmName,
-          soCount: item.soCount,
-          deliveredCount: item.deliveredCount,
-          totalSIAmount: item.totalSIAmount
-        });
-      });
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add totals row
-      const totalsRow = {
-        tsm: "TOTAL",
-        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
-        deliveredCount: tsmSummary.reduce((sum, t) => sum + t.deliveredCount, 0),
-        totalSIAmount: tsmSummary.reduce((sum, t) => sum + t.totalSIAmount, 0)
-      };
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Format currency column
-      worksheet.getColumn('totalSIAmount').numFmt = '#,##0.00" ₱"';
-
-      // Generate filename with date range
-      let filename = "Sales_Invoice_Summary";
+      let zipFilename = "Sales_Invoice_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
+      }
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 
@@ -356,10 +446,11 @@ return (
         <div className="flex justify-end mb-4">
           <button
             onClick={exportToExcel}
+            title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
             className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             <Download size={14} />
-            Export Excel
+            {expandedTsmId ? "Export Selected TSM" : "Export All"}
           </button>
         </div>
         <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
@@ -373,7 +464,7 @@ return (
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tsmSummary.map(item => {
+            {tsmSummary.map((item: { tsmId: string; tsmName: string; soCount: number; deliveredCount: number; totalSIAmount: number }) => {
               const isExpanded = expandedTsmId === item.tsmId;
               return (
                 <TableRow
@@ -397,13 +488,13 @@ return (
             <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
               <TableCell className="text-gray-500">Total</TableCell>
               <TableCell className="text-right text-gray-700">
-                {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
+                {tsmSummary.reduce((s: number, i: { soCount: number }) => s + i.soCount, 0).toLocaleString()}
               </TableCell>
               <TableCell className="text-right text-green-600">
-                {tsmSummary.reduce((s, i) => s + i.deliveredCount, 0).toLocaleString()}
+                {tsmSummary.reduce((s: number, i: { deliveredCount: number }) => s + i.deliveredCount, 0).toLocaleString()}
               </TableCell>
               <TableCell className="text-right text-gray-800">
-                {fmt(tsmSummary.reduce((s, i) => s + i.totalSIAmount, 0))}
+                {fmt(tsmSummary.reduce((s: number, i: { totalSIAmount: number }) => s + i.totalSIAmount, 0))}
               </TableCell>
             </TableRow>
           </TableFooter>
@@ -419,7 +510,7 @@ return (
         {expandedTsaGroups.length === 0 ? (
           <div className="text-xs text-gray-500 italic py-2">No TSA SI records under this TSM.</div>
         ) : (
-          expandedTsaGroups.map(group => (
+          expandedTsaGroups.map((group: { tsaName: string; rows: SI[] }) => (
             <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
               <div className="px-4 py-2.5 border-b bg-gray-50">
                 <p className="text-xs font-semibold text-gray-700 uppercase">
@@ -431,7 +522,7 @@ return (
                     placeholder="Search company, DR no., remarks..."
                     className="max-w-xs text-xs"
                     value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
@@ -452,7 +543,7 @@ return (
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {group.rows.map(row => {
+                    {group.rows.map((row: SI) => {
                       const dur = computeDuration(row.start_date, row.end_date);
                       return (
                         <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
@@ -479,7 +570,7 @@ return (
                     <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                       <TableCell colSpan={2} className="text-gray-500">Subtotal</TableCell>
                       <TableCell className="text-right text-gray-800">
-                        {fmt(group.rows.reduce((s, r) => s + (r.actual_sales ?? 0), 0))}
+                        {fmt(group.rows.reduce((s: number, r: SI) => s + (r.actual_sales ?? 0), 0))}
                       </TableCell>
                       <TableCell colSpan={7} />
                     </TableRow>

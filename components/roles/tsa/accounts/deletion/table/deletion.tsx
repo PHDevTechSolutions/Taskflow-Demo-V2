@@ -63,11 +63,11 @@ export function AccountsTable({
   const [isFiltering, setIsFiltering] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [industryFilter, setIndustryFilter] = useState<string>("all");
-  const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(
-    null
-  );
+  const [industryFilter, setIndustryFilter] = useState<string[]>([]);
+  const [alphabeticalFilter, setAlphabeticalFilter] = useState<string | null>(null);
+  const [regionFilter, setRegionFilter] = useState<string>("all");
   const [dateCreatedFilter, setDateCreatedFilter] = useState<string | null>(null);
+  const [nextAvailableDateRange, setNextAvailableDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isReverting, setIsReverting] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
@@ -143,7 +143,7 @@ export function AccountsTable({
         statusFilter === "all" || item.status === statusFilter;
 
       const matchesIndustry =
-        industryFilter === "all" || item.industry === industryFilter;
+        industryFilter.length === 0 || industryFilter.includes(item.industry);
 
       return matchesSearch && matchesType && matchesStatus && matchesIndustry;
     });
@@ -267,6 +267,13 @@ export function AccountsTable({
           setDateCreatedFilterAction={setDateCreatedFilter}
           alphabeticalFilter={alphabeticalFilter}
           setAlphabeticalFilterAction={setAlphabeticalFilter}
+          regionFilter={regionFilter}
+          setRegionFilterAction={setRegionFilter}
+          industryFilter={industryFilter}
+          setIndustryFilterAction={setIndustryFilter}
+          nextAvailableDateRange={nextAvailableDateRange}
+          setNextAvailableDateRangeAction={setNextAvailableDateRange}
+          posts={posts}
         />
       </div>
 

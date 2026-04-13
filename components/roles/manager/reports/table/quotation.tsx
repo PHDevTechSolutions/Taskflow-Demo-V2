@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 /* ================= TYPES ================= */
 
@@ -301,7 +302,126 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
   }, [expandedTsmId, sortedActivities, agentMap]);
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("TSM Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "Quote Count", key: "quoteCount", width: 12 },
+      { header: "Quotation Amount", key: "quotationAmount", width: 18 },
+      ...ALL_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
+      const rowData: any = {
+        tsm: item.tsmName,
+        quoteCount: item.quoteCount,
+        quotationAmount: item.quotationAmount
+      };
+      ALL_STATUSES.forEach(status => { rowData[status] = item.statusCounts[status] ?? 0; });
+      worksheet.addRow(rowData);
+    });
+
+    const totalsRow: any = {
+      tsm: "TOTAL",
+      quoteCount: filteredSummary.reduce((sum, t) => sum + t.quoteCount, 0),
+      quotationAmount: filteredSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
+    };
+    ALL_STATUSES.forEach(status => {
+      totalsRow[status] = filteredSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+    });
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    const amountCol = worksheet.getColumn('quotationAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Quotation Number", key: "quotationNumber", width: 20 },
+      { header: "Quotation Amount", key: "quotationAmount", width: 18 },
+      { header: "Quotation Status", key: "quotationStatus", width: 25 },
+      { header: "Company Name", key: "companyName", width: 25 },
+      { header: "Contact Number", key: "contactNumber", width: 18 },
+      { header: "Priority", key: "priority", width: 12 },
+      { header: "Duration", key: "duration", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? sortedActivities.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : sortedActivities;
+
+    const byTsa = new Map<string, { tsaName: string; rows: Quotation[] }>();
+    filteredActivities.forEach((row) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a, b) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]) => {
+      rows.forEach((row) => {
+        const quotationStatus = row.quotation_status?.toUpperCase() ?? "";
+        const priority = PRIORITY_MAP[quotationStatus] ?? "-";
+        const duration = computeDuration(row.start_date, row.end_date);
+
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          quotationNumber: row.quotation_number || "-",
+          quotationAmount: row.quotation_amount ?? 0,
+          quotationStatus: row.quotation_status || "-",
+          companyName: row.company_name || "-",
+          contactNumber: row.contact_number || "-",
+          priority: priority,
+          duration: duration,
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    const amountCol = worksheet.getColumn('quotationAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only: TSM Summary + Agent Summary) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -309,76 +429,39 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Quotation Summary");
+      const zip = new JSZip();
+      const folderName = "quotation_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "Quote Count", key: "quoteCount", width: 12 },
-        { header: "Quotation Amount", key: "quotationAmount", width: 18 },
-        ...ALL_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
-      ];
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        const rowData: any = {
-          tsm: item.tsmName,
-          quoteCount: item.quoteCount,
-          quotationAmount: item.quotationAmount
-        };
-        
-        ALL_STATUSES.forEach(status => {
-          rowData[status] = item.statusCounts[status] ?? 0;
-        });
-        
-        worksheet.addRow(rowData);
-      });
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add totals row
-      const totalsRow: any = {
-        tsm: "TOTAL",
-        quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
-        quotationAmount: tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
-      };
-      
-      ALL_STATUSES.forEach(status => {
-        totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
-      });
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Format currency column
-      const amountCol = worksheet.getColumn('quotationAmount');
-      if (amountCol && amountCol.number > 0) {
-        amountCol.numFmt = '#,##0.00" ₱"';
+      let zipFilename = "Quotation_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
       }
-
-      // Generate filename with date range
-      let filename = "Quotation_Summary";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -386,7 +469,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 
@@ -408,170 +491,174 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           <div className="flex justify-end mb-4">
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
+              className={`flex items-center gap-2 px-3 py-2 text-xs rounded-md transition-colors ${
+                expandedTsmId
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
             >
               <Download size={14} />
-              Export Excel
+              {expandedTsmId ? "Export Selected TSM" : "Export All"}
             </button>
           </div>
-          
           <div className="overflow-x-auto rounded-xl border p-4 border-gray-100 bg-white">
             <Table>
               <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-gray-500">TSM</TableHead>
-                <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
-                <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-                <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
-                <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
-                <TableHead className="text-gray-500 text-right">Nego</TableHead>
-                <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
-                <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
-                <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
-                <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
-                <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
-                <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
-                <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
-                <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
-                <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
-                <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
-              </TableRow>
-            </TableHeader>
+                <TableRow className="bg-gray-50 text-[11px]">
+                  <TableHead className="text-gray-500">TSM</TableHead>
+                  <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
+                  <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
+                  <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
+                  <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
+                  <TableHead className="text-gray-500 text-right">Nego</TableHead>
+                  <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
+                  <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
+                  <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
+                  <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
+                  <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
+                  <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
+                  <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
+                  <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
+                  <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
+                  <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
+                </TableRow>
+              </TableHeader>
 
-            <TableBody>
-              {tsmSummary.map((item) => {
-                const isExpanded = expandedTsmId === item.tsmId;
-                return (
-                  <React.Fragment key={item.tsmId}>
-                    <TableRow
-                      className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
-                      onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
-                    >
-                      <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
-                      <TableCell className="text-right">{item.quoteCount.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                      </TableCell>
-                      {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
-                      {ALL_STATUSES.map((status) => {
-                        const count = item.statusCounts[status] ?? 0;
-                        const priority = PRIORITY_MAP[status];
-                        const colorClass =
-                          priority === "HOT" ? "text-red-600 font-semibold" :
-                            priority === "WARM" ? "text-amber-600 font-semibold" :
-                              priority === "DONE" ? "text-green-600 font-semibold" :
-                                priority === "COLD" ? "text-blue-500 font-semibold" :
-                                  "text-gray-700";
-                        return (
-                          <TableCell
-                            key={status}
-                            className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
-                          >
-                            {count > 0 ? count : "—"}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-            <tfoot>
-              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                <TableCell>Total</TableCell>
-                <TableCell className="text-right">
-                  {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right">
-                  {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                </TableCell>
-                {ALL_STATUSES.map((status) => (
-                  <TableCell key={status} className="text-right">
-                    {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </tfoot>
-          </Table>
-        </div>
-      </>
-      )}
-
-      {/* ── Expanded TSA Details ── */}
-      {expandedTsmId && (
-        <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
-          <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
-            TSA Details
-          </p>
-
-          {expandedTsaGroups.length === 0 ? (
-            <div className="text-xs text-gray-500 italic py-2">No TSA quotation records under this TSM.</div>
-          ) : (
-            expandedTsaGroups.map((group) => (
-              <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
-                <div className="px-4 py-2.5 border-b bg-gray-50">
-                  <p className="text-xs font-semibold text-gray-700">
-                    {group.tsaName} <span className="text-gray-400 font-normal">({group.rows.length} quotations)</span>
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50 text-[11px]">
-                        <TableHead className="text-gray-500">Date</TableHead>
-                        <TableHead className="text-gray-500">Quotation Number</TableHead>
-                        <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-                        <TableHead className="text-gray-500">Quotation Status</TableHead>
-                        <TableHead className="text-gray-500">Company Name</TableHead>
-                        <TableHead className="text-gray-500">Contact Number</TableHead>
-                        <TableHead className="text-gray-500">Priority</TableHead>
-                        <TableHead className="text-gray-500">Duration</TableHead>
-                        <TableHead className="text-gray-500">Remarks</TableHead>
+              <TableBody>
+                {tsmSummary.map((item) => {
+                  const isExpanded = expandedTsmId === item.tsmId;
+                  return (
+                    <React.Fragment key={item.tsmId}>
+                      <TableRow
+                        className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                        onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                      >
+                        <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                        <TableCell className="text-right">{item.quoteCount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                        </TableCell>
+                        {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
+                        {ALL_STATUSES.map((status) => {
+                          const count = item.statusCounts[status] ?? 0;
+                          const priority = PRIORITY_MAP[status];
+                          const colorClass =
+                            priority === "HOT" ? "text-red-600 font-semibold" :
+                              priority === "WARM" ? "text-amber-600 font-semibold" :
+                                priority === "DONE" ? "text-green-600 font-semibold" :
+                                  priority === "COLD" ? "text-blue-500 font-semibold" :
+                                    "text-gray-700";
+                          return (
+                            <TableCell
+                              key={status}
+                              className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
+                            >
+                              {count > 0 ? count : "—"}
+                            </TableCell>
+                          );
+                        })}
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.rows.map((row) => {
-                        const quotationStatus = row.quotation_status?.toUpperCase() ?? "";
-                        const priority = PRIORITY_MAP[quotationStatus];
-                        const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
-                        const duration = computeDuration(row.start_date, row.end_date);
-
-                        return (
-                          <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
-                            <TableCell className="whitespace-nowrap">
-                              {new Date(row.date_created).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>{row.quotation_number || "-"}</TableCell>
-                            <TableCell className="text-right">
-                              {(row.quotation_amount ?? 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                            </TableCell>
-                            <TableCell className="uppercase font-semibold">{row.quotation_status || "-"}</TableCell>
-                            <TableCell>{row.company_name || "-"}</TableCell>
-                            <TableCell>{row.contact_number || "-"}</TableCell>
-                            <TableCell>
-                              {priority && priorityStyle ? (
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
-                                  {priority}
-                                </span>
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">{duration}</TableCell>
-                            <TableCell className="italic text-gray-500">{row.remarks || "-"}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+              <tfoot>
+                <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right">
+                    {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                  </TableCell>
+                  {ALL_STATUSES.map((status) => (
+                    <TableCell key={status} className="text-right">
+                      {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </tfoot>
+            </Table>
+          </div>
+        </>
       )}
-    </div>
-  );
+
+    {/* ── Expanded TSA Details ── */}
+    {expandedTsmId && (
+      <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
+        <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
+          TSA Details
+        </p>
+
+        {expandedTsaGroups.length === 0 ? (
+          <div className="text-xs text-gray-500 italic py-2">No TSA quotation records under this TSM.</div>
+        ) : (
+          expandedTsaGroups.map((group) => (
+            <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+              <div className="px-4 py-2.5 border-b bg-gray-50">
+                <p className="text-xs font-semibold text-gray-700">
+                  {group.tsaName} <span className="text-gray-400 font-normal">({group.rows.length} quotations)</span>
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 text-[11px]">
+                      <TableHead className="text-gray-500">Date</TableHead>
+                      <TableHead className="text-gray-500">Quotation Number</TableHead>
+                      <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
+                      <TableHead className="text-gray-500">Quotation Status</TableHead>
+                      <TableHead className="text-gray-500">Company Name</TableHead>
+                      <TableHead className="text-gray-500">Contact Number</TableHead>
+                      <TableHead className="text-gray-500">Priority</TableHead>
+                      <TableHead className="text-gray-500">Duration</TableHead>
+                      <TableHead className="text-gray-500">Remarks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {group.rows.map((row) => {
+                      const quotationStatus = row.quotation_status?.toUpperCase() ?? "";
+                      const priority = PRIORITY_MAP[quotationStatus];
+                      const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+                      const duration = computeDuration(row.start_date, row.end_date);
+
+                      return (
+                        <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(row.date_created).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>{row.quotation_number || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            {(row.quotation_amount ?? 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                          </TableCell>
+                          <TableCell className="uppercase font-semibold">{row.quotation_status || "-"}</TableCell>
+                          <TableCell>{row.company_name || "-"}</TableCell>
+                          <TableCell>{row.contact_number || "-"}</TableCell>
+                          <TableCell>
+                            {priority && priorityStyle ? (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
+                                {priority}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{duration}</TableCell>
+                          <TableCell className="italic text-gray-500">{row.remarks || "-"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    )}
+  </div>
+);
 };

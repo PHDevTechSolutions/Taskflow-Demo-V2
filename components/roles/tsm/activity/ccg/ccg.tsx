@@ -31,9 +31,13 @@ interface CCGItem {
   manager: string;
   type_activity?: string;
   date_updated: string;
+  start_date?: string;
+  end_date?: string;
   status: string;
   company_name: string;
   remarks: string;
+  call_status?: string;
+  source?: string;
 }
 
 interface Agent {
@@ -66,6 +70,31 @@ function formatHourLabel(h: number) {
   return `${h12}:00 ${ampm}`;
 }
 
+// Helper function to calculate duration
+function calculateDuration(startDate: Date, endDate: Date): string {
+  const diffMs = endDate.getTime() - startDate.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const hours = Math.floor(diffSecs / 3600);
+  const minutes = Math.floor((diffSecs % 3600) / 60);
+  const seconds = diffSecs % 60;
+  
+  if (hours > 0) {
+    if (minutes > 0 && seconds > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (seconds > 0) {
+      return `${hours}h ${seconds}s`;
+    } else {
+      return `${hours}h`;
+    }
+  } else if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
 function parseDate(value?: string): Date | null {
   if (!value) return null;
   const normalized = value.includes("T") ? value : value.replace(" ", "T");
@@ -84,16 +113,40 @@ function getFirstWeekday(year: number, month: number) {
 function groupByHour(items: CCGItem[]): Record<number, CCGItem[]> {
   const map: Record<number, CCGItem[]> = {};
   for (let i = 0; i < 24; i++) map[i] = [];
+  
   items.forEach((it) => {
-    const d = parseDate(it.date_updated);
-    if (!d) return;
-    map[d.getHours()].push(it);
+    const start = parseDate(it.start_date);
+    const end = parseDate(it.end_date);
+    
+    if (!start && !end) return;
+    
+    // For meetings with both start and end, show in all hours they span
+    if (start && end && it.type_activity === "Meeting") {
+      const startHour = start.getHours();
+      const endHour = end.getHours();
+      
+      // Add to all hours the meeting spans
+      for (let h = startHour; h <= endHour; h++) {
+        if (h >= 0 && h < 24) {
+          map[h].push(it);
+        }
+      }
+    } else {
+      // For regular activities, use end_date (or start_date if no end_date)
+      const d = end || start;
+      if (d) {
+        map[d.getHours()].push(it);
+      }
+    }
   });
+  
   for (let h = 0; h < 24; h++) {
     map[h].sort(
-      (a, b) =>
-        parseDate(a.date_updated)!.getTime() -
-        parseDate(b.date_updated)!.getTime()
+      (a, b) => {
+        const aStart = parseDate(a.start_date)?.getTime() || 0;
+        const bStart = parseDate(b.start_date)?.getTime() || 0;
+        return aStart - bStart;
+      }
     );
   }
   return map;
@@ -140,15 +193,52 @@ const EventCard: React.FC<{
   agentName?: string;
   agentPicture?: string;
 }> = ({ ev, agentName, agentPicture }) => {
-  const dt = parseDate(ev.date_updated);
+  const isMeeting = ev.type_activity === "Meeting" && ev.start_date && ev.end_date;
   const statusClass =
     STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
-  return (
-    <div className="group relative rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-150">
-      {/* Left accent bar */}
-      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+  // For meetings: show start and end time
+  // For activities: show duration between start_date and end_date if available
+  let timeDisplay = null;
+  let durationDisplay = null;
 
+  if (isMeeting) {
+    const startDate = parseDate(ev.start_date!);
+    const endDate = parseDate(ev.end_date!);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(startDate)} - {formatTime(endDate)}
+        </span>
+      );
+    }
+  } else if (ev.start_date && ev.end_date) {
+    const startDate = parseDate(ev.start_date);
+    const endDate = parseDate(ev.end_date);
+    if (startDate && endDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          Duration: {calculateDuration(startDate, endDate)}
+        </span>
+      );
+    }
+  } else {
+    // Regular activity: show end_date time (no date_updated!)
+    const eventDate = parseDate(ev.end_date || ev.start_date);
+    if (eventDate) {
+      timeDisplay = (
+        <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+          <Clock size={10} />
+          {formatTime(eventDate)}
+        </span>
+      );
+    }
+  }
+
+  return (
+    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-slate-800 truncate">
@@ -175,12 +265,8 @@ const EventCard: React.FC<{
         </div>
 
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          {dt && (
-            <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-              <Clock size={10} />
-              {formatTime(dt)}
-            </span>
-          )}
+          {timeDisplay}
+          {durationDisplay}
           <span
             className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
           >
@@ -281,41 +367,58 @@ export const CCG: React.FC<{
     fetchActivities();
     if (!referenceid) return;
 
-    const chan = supabase
+    const handlePostgresChanges = (payload: any) => {
+      const newRec = payload.new as CCGItem;
+      const oldRec = payload.old as CCGItem;
+      setActivities((curr) => {
+        switch (payload.eventType) {
+          case "INSERT":
+            return curr.some((a) => a.id === newRec.id) ? curr : [...curr, newRec];
+          case "UPDATE":
+            return curr.map((a) => (a.id === newRec.id ? newRec : a));
+          case "DELETE":
+            return curr.filter((a) => a.id !== oldRec.id);
+          default:
+            return curr;
+        }
+      });
+    };
+
+    const historyChannel = supabase
       .channel(`public:history:tsm=eq.${referenceid}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "history", filter: `tsm=eq.${referenceid}` },
-        (payload) => {
-          const newRec = payload.new as CCGItem;
-          const oldRec = payload.old as CCGItem;
-          setActivities((curr) => {
-            switch (payload.eventType) {
-              case "INSERT":
-                return curr.some((a) => a.id === newRec.id) ? curr : [...curr, newRec];
-              case "UPDATE":
-                return curr.map((a) => (a.id === newRec.id ? newRec : a));
-              case "DELETE":
-                return curr.filter((a) => a.id !== oldRec.id);
-              default:
-                return curr;
-            }
-          });
-        }
+        handlePostgresChanges
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(chan); };
+    const meetingsChannel = supabase
+      .channel(`public:meetings:tsm=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meetings", filter: `tsm=eq.${referenceid}` },
+        handlePostgresChanges
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(historyChannel);
+      supabase.removeChannel(meetingsChannel);
+    };
   }, [referenceid, fetchActivities]);
 
   // ── Derived Data ───────────────────────────────────────────────────────────
 
   const sortedActivities = useMemo(
     () =>
-      [...activities].sort(
-        (a, b) =>
-          new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
-      ),
+      [...activities].sort((a, b) => {
+        // Sort by end_date (or start_date as fallback for meetings)
+        const aDate = parseDate(a.end_date || a.start_date);
+        const bDate = parseDate(b.end_date || b.start_date);
+        if (!aDate || !bDate) return 0;
+        return bDate.getTime() - aDate.getTime();
+      }),
     [activities]
   );
 
@@ -380,9 +483,10 @@ export const CCG: React.FC<{
   const allEventsByDate = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of sortedActivities) {
-      const d = parseDate(item.date_updated);
-      if (!d) continue;
-      const key = formatDateLocal(d);
+      // For calendar dots, use end_date (or start_date if no end_date)
+      const eventDate = parseDate(item.end_date || item.start_date);
+      if (!eventDate) continue;
+      const key = formatDateLocal(eventDate);
       map[key] = (map[key] ?? 0) + 1;
     }
     return map;
@@ -393,8 +497,9 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const d = parseDate(item.date_updated);
-      return d ? formatDateLocal(d) === selectedDateStr : false;
+      // Use end_date for filtering by date (or start_date for meetings)
+      const eventDate = parseDate(item.end_date || item.start_date);
+      return eventDate ? formatDateLocal(eventDate) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
 
@@ -442,16 +547,16 @@ export const CCG: React.FC<{
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white min-h-[680px]">
+    <div className="flex flex-col lg:flex-row gap-0 rounded-2xl overflow-hidden border border-green-400 shadow-lg bg-white min-h-[680px]">
 
       {/* ── LEFT: Calendar panel ── */}
-      <div className="lg:w-[320px] shrink-0 border-r border-slate-100 bg-slate-50 flex flex-col">
+      <div className="lg:w-[320px] shrink-0 border-r border-green-200 bg-white flex flex-col">
 
         {/* Month nav */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <button
             onClick={prevMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronLeft size={16} />
           </button>
@@ -465,7 +570,7 @@ export const CCG: React.FC<{
           </div>
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-slate-500 hover:text-slate-800"
+            className="p-1.5 rounded-lg hover:bg-green-50 transition-colors text-slate-500 hover:text-green-600"
           >
             <ChevronRight size={16} />
           </button>
@@ -514,7 +619,7 @@ export const CCG: React.FC<{
                       ? "bg-green-600 text-white shadow-md shadow-green-200"
                       : isTodayCell
                       ? "bg-green-50 text-green-700 ring-1 ring-green-300"
-                      : "text-slate-700 hover:bg-slate-200"
+                      : "text-slate-700 hover:bg-green-50"
                   }`}
               >
                 {day}
@@ -531,7 +636,7 @@ export const CCG: React.FC<{
         </div>
 
         {/* Month summary */}
-        <div className="mt-auto border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+        <div className="mt-auto border-t border-green-200 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-slate-500">
             <CalendarDays size={13} />
             <span className="text-xs">
@@ -558,7 +663,7 @@ export const CCG: React.FC<{
       <div className="flex-1 flex flex-col min-h-0">
 
         {/* Panel header */}
-        <div className="border-b border-slate-100 px-5 pt-4 pb-3 flex flex-col gap-3">
+        <div className="border-b border-green-200 px-5 pt-4 pb-3 flex flex-col gap-3">
 
           {/* Title row */}
           <div className="flex items-center justify-between gap-3">
@@ -606,7 +711,7 @@ export const CCG: React.FC<{
               placeholder="Search company, agent, activity, remarks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs bg-slate-50 border-slate-200 focus:bg-white focus:border-green-300"
+              className="pl-8 h-8 text-xs bg-slate-50 border-green-200 focus:bg-white focus:border-green-400"
             />
           </div>
 
@@ -616,7 +721,7 @@ export const CCG: React.FC<{
 
               {/* Status filter */}
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-7 w-[150px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[150px] text-xs border-green-200">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -629,7 +734,7 @@ export const CCG: React.FC<{
 
               {/* Activity type filter */}
               <Select value={filterTypeActivity} onValueChange={setFilterTypeActivity}>
-                <SelectTrigger className="h-7 w-[170px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[170px] text-xs border-green-200">
                   <SelectValue placeholder="All Activity Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -642,7 +747,7 @@ export const CCG: React.FC<{
 
               {/* Agent filter */}
               <Select value={filterAgent} onValueChange={setFilterAgent}>
-                <SelectTrigger className="h-7 w-[180px] text-xs border-slate-200">
+                <SelectTrigger className="h-7 w-[180px] text-xs border-green-200">
                   <SelectValue placeholder="All Agents" />
                 </SelectTrigger>
                 <SelectContent>

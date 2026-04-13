@@ -257,18 +257,26 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       .filter(item => {
         if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
 
-        const updatedDate = item.date_updated ? new Date(item.date_updated) : new Date(item.date_created);
-        if (isNaN(updatedDate.getTime())) return false;
+        // Use date_created only (not date_updated) for filtering
+        const itemDate = new Date(item.date_created);
+        if (isNaN(itemDate.getTime())) return false;
 
         const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
         const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
 
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+        const normalizeToDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(updatedDate, fromDate);
-        if (fromDate && updatedDate < fromDate) return false;
-        if (toDate && updatedDate > toDate) return false;
+        const normalizedItemDate = normalizeToDate(itemDate);
+        const normalizedFrom = fromDate ? normalizeToDate(fromDate) : null;
+        const normalizedTo = toDate ? normalizeToDate(toDate) : null;
+
+        if (normalizedFrom && normalizedTo && normalizedFrom.getTime() === normalizedTo.getTime()) {
+          return normalizedItemDate.getTime() === normalizedFrom.getTime();
+        }
+
+        if (normalizedFrom && normalizedItemDate.getTime() < normalizedFrom.getTime()) return false;
+        if (normalizedTo && normalizedItemDate.getTime() > normalizedTo.getTime()) return false;
+
         return true;
       });
   }, [sortedActivities, searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);

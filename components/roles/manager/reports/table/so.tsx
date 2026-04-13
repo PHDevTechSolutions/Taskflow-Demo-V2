@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 /* ================= TYPES ================= */
 interface SO {
@@ -238,28 +239,26 @@ export const SOTable: React.FC<SOProps> = ({
       });
     });
 
-    // Count SO rows per TSM
-    activities
-      .filter((i) => i.type_activity?.toLowerCase() === "sales order preparation")
-      .forEach((item) => {
-        const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
-        const tsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
-        if (!tsmId || !summaryMap.has(tsmId)) return;
+    // Count SO rows per TSM (use filtered data to match table)
+    filtered.forEach((item) => {
+      const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+      const tsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+      if (!tsmId || !summaryMap.has(tsmId)) return;
 
-        const row = summaryMap.get(tsmId)!;
-        row.soCount += 1;
-        row.totalSOAmount += item.so_amount ?? 0;
+      const row = summaryMap.get(tsmId)!;
+      row.soCount += 1;
+      row.totalSOAmount += item.so_amount ?? 0;
 
-        const ct = (item.call_type ?? "").toLowerCase().trim();
-        if (ct === "regular so")                 row.regularSO++;
-        else if (ct === "willing to wait")        row.willingToWait++;
-        else if (ct === "spf - special project")  row.spfSpecial++;
-        else if (ct === "spf - local")            row.spfLocal++;
-        else if (ct === "spf - foreign")          row.spfForeign++;
-        else if (ct === "promo")                  row.promo++;
-        else if (ct === "fb marketplace")         row.fbMarketplace++;
-        else if (ct === "internal order")         row.internalOrder++;
-      });
+      const ct = (item.call_type ?? "").toLowerCase().trim();
+      if (ct === "regular so") row.regularSO++;
+      else if (ct === "willing to wait") row.willingToWait++;
+      else if (ct === "spf - special project") row.spfSpecial++;
+      else if (ct === "spf - local") row.spfLocal++;
+      else if (ct === "spf - foreign") row.spfForeign++;
+      else if (ct === "promo") row.promo++;
+      else if (ct === "fb marketplace") row.fbMarketplace++;
+      else if (ct === "internal order") row.internalOrder++;
+    });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.soCount - a.soCount);
   }, [activities, agentMap, tsmAgents]);
@@ -292,7 +291,142 @@ export const SOTable: React.FC<SOProps> = ({
     "fbMarketplace", "internalOrder",
   ] as const;
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Sales Order Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "SO Count", key: "soCount", width: 12 },
+      { header: "Total SO Amount", key: "totalSOAmount", width: 18 },
+      { header: "Regular SO", key: "regularSO", width: 15 },
+      { header: "Willing to Wait", key: "willingToWait", width: 15 },
+      { header: "SPF - Special Project", key: "spfSpecial", width: 20 },
+      { header: "SPF - Local", key: "spfLocal", width: 15 },
+      { header: "SPF - Foreign", key: "spfForeign", width: 15 },
+      { header: "Promo", key: "promo", width: 12 },
+      { header: "FB Marketplace", key: "fbMarketplace", width: 15 },
+      { header: "Internal Order", key: "internalOrder", width: 15 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
+      worksheet.addRow({
+        tsm: item.tsmName,
+        soCount: item.soCount,
+        totalSOAmount: item.totalSOAmount,
+        regularSO: item.regularSO,
+        willingToWait: item.willingToWait,
+        spfSpecial: item.spfSpecial,
+        spfLocal: item.spfLocal,
+        spfForeign: item.spfForeign,
+        promo: item.promo,
+        fbMarketplace: item.fbMarketplace,
+        internalOrder: item.internalOrder
+      });
+    });
+
+    const totalsRow = {
+      tsm: "TOTAL",
+      soCount: filteredSummary.reduce((sum, t) => sum + t.soCount, 0),
+      totalSOAmount: filteredSummary.reduce((sum, t) => sum + t.totalSOAmount, 0),
+      regularSO: filteredSummary.reduce((sum, t) => sum + t.regularSO, 0),
+      willingToWait: filteredSummary.reduce((sum, t) => sum + t.willingToWait, 0),
+      spfSpecial: filteredSummary.reduce((sum, t) => sum + t.spfSpecial, 0),
+      spfLocal: filteredSummary.reduce((sum, t) => sum + t.spfLocal, 0),
+      spfForeign: filteredSummary.reduce((sum, t) => sum + t.spfForeign, 0),
+      promo: filteredSummary.reduce((sum, t) => sum + t.promo, 0),
+      fbMarketplace: filteredSummary.reduce((sum, t) => sum + t.fbMarketplace, 0),
+      internalOrder: filteredSummary.reduce((sum, t) => sum + t.internalOrder, 0)
+    };
+    
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    const amountCol = worksheet.getColumn('totalSOAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "SO Number", key: "soNumber", width: 20 },
+      { header: "SO Amount", key: "soAmount", width: 18 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Contact Person", key: "contactPerson", width: 20 },
+      { header: "Contact Number", key: "contactNumber", width: 18 },
+      { header: "Call Type", key: "callType", width: 20 },
+      { header: "Status", key: "status", width: 15 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? filtered.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : filtered;
+
+    const byTsa = new Map<string, { tsaName: string; rows: SO[] }>();
+    filteredActivities.forEach((row) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a, b) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]) => {
+      rows.forEach((row) => {
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          soNumber: row.activity_reference_number || row.so_number || "-",
+          soAmount: row.so_amount ?? 0,
+          company: row.company_name || "-",
+          contactPerson: row.contact_person || "-",
+          contactNumber: row.contact_number || "-",
+          callType: row.call_type || "-",
+          status: row.status || "-",
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    const amountCol = worksheet.getColumn('soAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -300,89 +434,39 @@ export const SOTable: React.FC<SOProps> = ({
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Sales Order Summary");
+      const zip = new JSZip();
+      const folderName = "sales_order_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "SO Count", key: "soCount", width: 12 },
-        { header: "Total SO Amount", key: "totalSOAmount", width: 18 },
-        { header: "Regular SO", key: "regularSO", width: 15 },
-        { header: "Willing to Wait", key: "willingToWait", width: 15 },
-        { header: "SPF - Special Project", key: "spfSpecial", width: 20 },
-        { header: "SPF - Local", key: "spfLocal", width: 15 },
-        { header: "SPF - Foreign", key: "spfForeign", width: 15 },
-        { header: "Promo", key: "promo", width: 12 },
-        { header: "FB Marketplace", key: "fbMarketplace", width: 15 },
-        { header: "Internal Order", key: "internalOrder", width: 15 }
-      ];
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        worksheet.addRow({
-          tsm: item.tsmName,
-          soCount: item.soCount,
-          totalSOAmount: item.totalSOAmount,
-          regularSO: item.regularSO,
-          willingToWait: item.willingToWait,
-          spfSpecial: item.spfSpecial,
-          spfLocal: item.spfLocal,
-          spfForeign: item.spfForeign,
-          promo: item.promo,
-          fbMarketplace: item.fbMarketplace,
-          internalOrder: item.internalOrder
-        });
-      });
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add totals row
-      const totalsRow = {
-        tsm: "TOTAL",
-        soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
-        totalSOAmount: tsmSummary.reduce((sum, t) => sum + t.totalSOAmount, 0),
-        regularSO: tsmSummary.reduce((sum, t) => sum + t.regularSO, 0),
-        willingToWait: tsmSummary.reduce((sum, t) => sum + t.willingToWait, 0),
-        spfSpecial: tsmSummary.reduce((sum, t) => sum + t.spfSpecial, 0),
-        spfLocal: tsmSummary.reduce((sum, t) => sum + t.spfLocal, 0),
-        spfForeign: tsmSummary.reduce((sum, t) => sum + t.spfForeign, 0),
-        promo: tsmSummary.reduce((sum, t) => sum + t.promo, 0),
-        fbMarketplace: tsmSummary.reduce((sum, t) => sum + t.fbMarketplace, 0),
-        internalOrder: tsmSummary.reduce((sum, t) => sum + t.internalOrder, 0)
-      };
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Format currency column
-      const amountCol = worksheet.getColumn('totalSOAmount');
-      if (amountCol && amountCol.number > 0) {
-        amountCol.numFmt = '#,##0.00" ₱"';
+      let zipFilename = "Sales_Order_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
       }
-
-      // Generate filename with date range
-      let filename = "Sales_Order_Summary";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -390,7 +474,7 @@ export const SOTable: React.FC<SOProps> = ({
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 
@@ -404,80 +488,79 @@ export const SOTable: React.FC<SOProps> = ({
       ) : error ? (
         <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
       ) : tsmSummary.length === 0 ? (
-        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
-          No sales order records found.
-        </div>
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400">No data available</div>
       ) : (
         <>
           <div className="flex justify-end mb-4">
             <button
               onClick={exportToExcel}
+              title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
               className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               <Download size={14} />
-              Export Excel
+              {expandedTsmId ? "Export Selected TSM" : "Export All"}
             </button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">
             <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-gray-500">TSM</TableHead>
-                <TableHead className="text-gray-500 text-left">SO Count</TableHead>
-                <TableHead className="text-gray-500 text-right">Total SO Amount</TableHead>
-                <TableHead className="text-gray-500 text-left">Regular SO</TableHead>
-                <TableHead className="text-gray-500 text-left">Willing to Wait</TableHead>
-                <TableHead className="text-gray-500 text-left">SPF - Special Project</TableHead>
-                <TableHead className="text-gray-500 text-left">SPF - Local</TableHead>
-                <TableHead className="text-gray-500 text-left">SPF - Foreign</TableHead>
-                <TableHead className="text-gray-500 text-left">Promo</TableHead>
-                <TableHead className="text-gray-500 text-left">FB Marketplace</TableHead>
-                <TableHead className="text-gray-500 text-left">Internal Order</TableHead>
-              </TableRow>
-            </TableHeader>
+              <TableHeader>
+                <TableRow className="bg-gray-50 text-[11px]">
+                  <TableHead className="text-gray-500">TSM</TableHead>
+                  <TableHead className="text-gray-500 text-left">SO Count</TableHead>
+                  <TableHead className="text-gray-500 text-right">Total SO Amount</TableHead>
+                  <TableHead className="text-gray-500 text-left">Regular SO</TableHead>
+                  <TableHead className="text-gray-500 text-left">Willing to Wait</TableHead>
+                  <TableHead className="text-gray-500 text-left">SPF - Special Project</TableHead>
+                  <TableHead className="text-gray-500 text-left">SPF - Local</TableHead>
+                  <TableHead className="text-gray-500 text-left">SPF - Foreign</TableHead>
+                  <TableHead className="text-gray-500 text-left">Promo</TableHead>
+                  <TableHead className="text-gray-500 text-left">FB Marketplace</TableHead>
+                  <TableHead className="text-gray-500 text-left">Internal Order</TableHead>
+                </TableRow>
+              </TableHeader>
 
-            <TableBody>
-              {tsmSummary.map((item) => {
-                const isExpanded = expandedTsmId === item.tsmId;
-                return (
-                  <TableRow
-                    key={item.tsmId}
-                    className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
-                    onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
-                  >
-                    <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
-                    <TableCell className="text-left">{item.soCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSOAmount)}</TableCell>
-                    {callTypeKeys.map((key) => (
-                      <TableCell key={key} className="text-left">
-                        {item[key] > 0
-                          ? <span className="font-semibold text-gray-700">{item[key]}</span>
-                          : <span className="text-gray-300">—</span>
-                        }
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
+              <TableBody>
+                {tsmSummary.map((item) => {
+                  const isExpanded = expandedTsmId === item.tsmId;
+                  return (
+                    <TableRow
+                      key={item.tsmId}
+                      className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                      onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                    >
+                      <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                      <TableCell className="text-left">{item.soCount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-gray-700 font-semibold">{fmt(item.totalSOAmount)}</TableCell>
+                      {callTypeKeys.map((key) => (
+                        <TableCell key={key} className="text-left">
+                          {item[key] > 0
+                            ? <span className="font-semibold text-gray-700">{item[key]}</span>
+                            : <span className="text-gray-300">—</span>
+                          }
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
 
-            <TableFooter>
-              <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-                <TableCell className="text-gray-500">Total</TableCell>
-                <TableCell className="text-left text-gray-700">
-                  {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right text-gray-800">
-                  {fmt(tsmSummary.reduce((s, i) => s + i.totalSOAmount, 0))}
-                </TableCell>
-                {callTypeKeys.map((key) => (
-                  <TableCell key={key} className="text-left text-gray-700">
-                    {tsmSummary.reduce((s, i) => s + i[key], 0).toLocaleString()}
+              <TableFooter>
+                <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                  <TableCell className="text-gray-500">Total</TableCell>
+                  <TableCell className="text-left text-gray-700">
+                    {tsmSummary.reduce((s, i) => s + i.soCount, 0).toLocaleString()}
                   </TableCell>
-                ))}
-              </TableRow>
-            </TableFooter>
-          </Table>
+                  <TableCell className="text-right text-gray-800">
+                    {fmt(tsmSummary.reduce((s, i) => s + i.totalSOAmount, 0))}
+                  </TableCell>
+                  {callTypeKeys.map((key) => (
+                    <TableCell key={key} className="text-left text-gray-700">
+                      {tsmSummary.reduce((s, i) => s + i[key], 0).toLocaleString()}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
         </>
       )}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Calendar, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -74,7 +76,7 @@ interface HistoryItem {
   status?: string;
 }
 
-interface ScheduledProps {
+interface AllActivitiesProps {
   referenceid: string;
   target_quota?: string;
   firstname: string;
@@ -95,16 +97,27 @@ interface ScheduledProps {
 }
 
 function toLocalDateString(date: Date | string | null | undefined): string {
-  if (!date) return ""; // ← dito nasosolve — kung null o undefined, ibalik na lang ""
+  if (!date) return "";
   const d = typeof date === "string" ? new Date(date) : date;
-  if (isNaN(d.getTime())) return ""; // ← pati invalid date strings
+  if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-CA");
 }
 
-// Only these two statuses are shown in this view
-const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+// All statuses allowed in this view
+const ALL_STATUSES = [
+  "Assisted",
+  "Quote-Done",
+  "SO-Done",
+  "On-Progress",
+  "Delivered",
+  "Done",
+  "Completed",
+  "Cancelled",
+  "Transfer",
+  "Pending",
+];
 
-export const Scheduled: React.FC<ScheduledProps> = ({
+export const AllActivities: React.FC<AllActivitiesProps> = ({
   referenceid,
   tsm,
   target_quota,
@@ -134,57 +147,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [dialogDoneOpen, setDialogDoneOpen] = useState(false);
   const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
   const [dialogTransferOpen, setDialogTransferOpen] = useState(false);
+  const [dialogRescheduleOpen, setDialogRescheduleOpen] = useState(false);
 
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
-    null,
-  );
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-
-  // Wrapper to validate date range - only allow today and future dates
-  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
-    if (!range?.from) {
-      setDateCreatedFilterRangeAction(range);
-      return;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const fromDate = new Date(range.from);
-    fromDate.setHours(0, 0, 0, 0);
-
-    // Prevent selecting past dates
-    if (fromDate < today) {
-      sileo.error({
-        title: "Invalid Date",
-        description: "Cannot select past dates. Please choose today or a future date.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-      return;
-    }
-
-    // Also validate to date if present
-    if (range.to) {
-      const toDate = new Date(range.to);
-      toDate.setHours(0, 0, 0, 0);
-      if (toDate < today) {
-        sileo.error({
-          title: "Invalid Date",
-          description: "Cannot select past dates. Please choose today or a future date.",
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
-        return;
-      }
-    }
-
-    setDateCreatedFilterRangeAction(range);
-  }, [setDateCreatedFilterRangeAction]);
+  const [rescheduleDate, setRescheduleDate] = useState<string>("");
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -197,9 +165,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setHistoryLoading(true);
     setError(null);
 
-    // NOTE: We intentionally do NOT send the date range to the API here so
-    // that we always get the full dataset and apply scheduled_date filtering
-    // on the client side (see filteredActivities below).
     const url = new URL(
       "/api/activity/tsa/planner/fetch",
       window.location.origin,
@@ -264,20 +229,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     };
   }, [referenceid, fetchAllData]);
 
-  function isDelivered(status: string) {
-    return [
-      "Delivered",
-      "Done",
-      "Completed",
-      "Cancelled",
-      "Transfer",
-    ].includes(status);
-  }
-
   const mergedActivities = useMemo(() => {
     return activities
-      // Only show Assisted and Quote-Done statuses
-      .filter((a) => ALLOWED_STATUSES.includes(a.status))
       .map((activity) => {
         const relatedHistoryItems = history.filter(
           (h) =>
@@ -287,14 +240,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       });
   }, [activities, history]);
 
-  const todayStr = toLocalDateString(new Date());
-
   const filteredActivities = useMemo(() => {
     return mergedActivities
       .filter((item) => {
-        const itemScheduledDate = toLocalDateString(item.scheduled_date);
+        // ── Status filter ─────────────────────────────────────────────────────
+        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
-        // ── Text search (skip date filters when searching) ─────────────────────
+        // ── Text search ───────────────────────────────────────────────────────
         if (searchTerm.trim() !== "") {
           const termLower = searchTerm.toLowerCase();
 
@@ -314,36 +266,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
           const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
           if (!matchesSearch) return false;
-          
-          // Skip date filters when searching
-          return true;
         }
-
-        // ── Date range filter (for scheduled_date, today and future dates only) ─────────
-        if (dateCreatedFilterRange?.from) {
-          const fromDate = toLocalDateString(dateCreatedFilterRange.from);
-          const toDate = dateCreatedFilterRange.to
-            ? toLocalDateString(dateCreatedFilterRange.to)
-            : fromDate;
-
-          // Only allow today and future dates
-          if (itemScheduledDate < todayStr) {
-            return false;
-          }
-
-          // Check if within selected date range
-          if (itemScheduledDate < fromDate || itemScheduledDate > toDate) {
-            return false;
-          }
-        } else {
-          // ✅ DEFAULT: Show today only when no date range selected
-          if (itemScheduledDate !== todayStr) {
-            return false;
-          }
-        }
-
-        // ── Status filter ─────────────────────────────────────────────────────
-        if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
         return true;
       })
@@ -351,11 +274,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         (a, b) =>
           new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
       );
-  }, [mergedActivities, dateCreatedFilterRange, todayStr, statusFilter, searchTerm]);
+  }, [mergedActivities, statusFilter, searchTerm]);
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
-  }, [filteredActivities]);
+  }, [filteredActivities, onCountChange]);
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -440,45 +363,53 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     | null
     | undefined;
 
-  function getBadgeProps(status: string, isFutureDate: boolean): {
+  function getBadgeProps(status: string): {
     variant: BadgeVariant;
     className?: string;
   } {
     switch (status) {
       case "Assisted":
       case "On-Progress":
+      case "Pending":
         return { variant: "secondary", className: "bg-orange-500 text-white" };
       case "SO-Done":
         return { variant: "default", className: "bg-yellow-400 text-white" };
       case "Quote-Done":
-        return { variant: "outline", className: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white" };
+        return { variant: "outline", className: "bg-blue-500 text-white" };
+      case "Delivered":
+      case "Done":
+      case "Completed":
+        return { variant: "default", className: "bg-green-600 text-white" };
       case "Cancelled":
         return { variant: "destructive", className: "bg-red-600 text-white" };
+      case "Transfer":
+        return { variant: "outline", className: "bg-purple-500 text-white" };
       default:
         return { variant: "default" };
     }
   }
 
-  function getStatusStyles(status: string, isFutureDate: boolean): {
+  function getStatusStyles(status: string): {
     badgeClass?: string;
     bgClass?: string;
   } {
     switch (status) {
       case "Assisted":
       case "On-Progress":
-        return {
-          badgeClass: "bg-orange-500 text-white",
-          bgClass: "bg-orange-100",
-        };
+      case "Pending":
+        return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
       case "SO-Done":
-        return {
-          badgeClass: "bg-yellow-400 text-white",
-          bgClass: "bg-yellow-100",
-        };
+        return { badgeClass: "bg-yellow-400 text-white", bgClass: "bg-yellow-100" };
       case "Quote-Done":
-        return { badgeClass: isFutureDate ? "bg-blue-800 text-white" : "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+        return { badgeClass: "bg-blue-500 text-white", bgClass: "bg-blue-100" };
+      case "Delivered":
+      case "Done":
+      case "Completed":
+        return { badgeClass: "bg-green-600 text-white", bgClass: "bg-green-100" };
       case "Cancelled":
         return { badgeClass: "bg-red-600 text-white", bgClass: "bg-red-100" };
+      case "Transfer":
+        return { badgeClass: "bg-purple-500 text-white", bgClass: "bg-purple-100" };
       default:
         return { badgeClass: "", bgClass: "bg-white" };
     }
@@ -492,6 +423,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const openDeliveredDialog = (id: string) => {
     setSelectedActivityId(id);
     setDialogDeliveredOpen(true);
+  };
+
+  const openRescheduleDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setRescheduleDate("");
+    setDialogRescheduleOpen(true);
   };
 
   const handleConfirmDone = async () => {
@@ -583,7 +520,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
       sileo.success({
         title: "Success",
-        description: "Transaction marked as Done.",
+        description: "Transaction marked as Completed.",
         duration: 4000,
         position: "top-right",
         fill: "black",
@@ -678,10 +615,85 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   };
 
+  const handleConfirmReschedule = async () => {
+    if (!selectedActivityId || !rescheduleDate) return;
+
+    const selectedDate = new Date(rescheduleDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      sileo.error({
+        title: "Invalid Date",
+        description: "Cannot reschedule to a past date.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    try {
+      setUpdatingId(selectedActivityId);
+
+      const res = await fetch("/api/act-reschedule-activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedActivityId,
+          newScheduledDate: rescheduleDate,
+        }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        sileo.error({
+          title: "Failed",
+          description: `Failed to reschedule: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        setUpdatingId(null);
+        return;
+      }
+
+      setDialogRescheduleOpen(false);
+      await fetchAllData();
+      window.location.reload();
+
+      sileo.success({
+        title: "Success",
+        description: "Activity rescheduled successfully.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while rescheduling.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+      setRescheduleDate("");
+    }
+  };
+
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
   const selectedTicketReferenceNumber =
     selectedActivity?.ticket_reference_number || null;
-
 
   if (loading) {
     return (
@@ -720,18 +732,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     );
   }
 
-  // ─── Label shown beside the list to inform the user which date is active ──
   const activeDateLabel = (() => {
-    if (dateCreatedFilterRange?.from) {
-      const from = toLocalDateString(dateCreatedFilterRange.from);
-      const to = dateCreatedFilterRange.to
-        ? toLocalDateString(dateCreatedFilterRange.to)
-        : from;
-      return from === to
-        ? `Scheduled: ${from}`
-        : `Scheduled: ${from} → ${to}`;
-    }
-    return `Scheduled today: ${todayStr}`;
+    if (searchTerm.trim() !== "") return `Showing all matching "${searchTerm}"`;
+    return `All Activities (${filteredActivities.length} items)`;
   })();
 
   return (
@@ -740,11 +743,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         <div className="flex items-center gap-2 w-full">
           <Input
             type="search"
-            placeholder="Search..."
+            placeholder="Search all activities..."
             className="text-xs grow rounded-none mb-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search accounts"
+            aria-label="Search all activities"
           />
 
           <DropdownMenu>
@@ -763,8 +766,8 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 All
               </DropdownMenuItem>
 
-              {ALLOWED_STATUSES.map((status) => {
-                const { badgeClass } = getStatusStyles(status, false);
+              {ALL_STATUSES.map((status) => {
+                const { badgeClass } = getStatusStyles(status);
                 return (
                   <DropdownMenuItem
                     key={status}
@@ -781,7 +784,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         </div>
       </div>
 
-      {/* Active date indicator */}
       <p className="text-[10px] text-muted-foreground mb-1 px-1">
         {activeDateLabel}
       </p>
@@ -790,14 +792,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         <Accordion type="single" collapsible className="w-full">
           {filteredActivities.length === 0 ? (
             <p className="text-muted-foreground text-xs px-2">
-              No scheduled activities found.
+              No activities found.
             </p>
           ) : (
             filteredActivities.map((item) => {
-              const itemDate = toLocalDateString(item.scheduled_date);
-              const isFutureDate = itemDate > todayStr;
-              const badgeProps = getBadgeProps(item.status, isFutureDate);
-              const statusStyles = getStatusStyles(item.status, isFutureDate);
+              const badgeProps = getBadgeProps(item.status);
+              const statusStyles = getStatusStyles(item.status);
 
               return (
                 <AccordionItem
@@ -812,40 +812,32 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                       </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
-                        
-                          <CreateActivityDialog
-                            firstname={firstname}
-                            lastname={lastname}
-                            target_quota={target_quota}
-                            email={email}
-                            contact={contact}
-                            tsmname={tsmname}
-                            managername={managername}
-                            referenceid={item.referenceid}
-                            tsm={item.tsm}
-                            manager={item.manager}
-                            type_client={item.type_client}
-                            contact_number={item.contact_number}
-                            email_address={item.email_address}
-                            activityReferenceNumber={
-                              item.activity_reference_number
-                            }
-                            ticket_reference_number={
-                              item.ticket_reference_number
-                            }
-                            agent={item.agent}
-                            company_name={item.company_name}
-                            contact_person={item.contact_person}
-                            address={item.address}
-                            accountReferenceNumber={
-                              item.account_reference_number
-                            }
-                            onCreated={() => fetchAllData()}
-                            managerDetails={managerDetails ?? null}
-                            tsmDetails={tsmDetails ?? null}
-                            signature={signature}
-                          />
-                        
+                        <CreateActivityDialog
+                          firstname={firstname}
+                          lastname={lastname}
+                          target_quota={target_quota}
+                          email={email}
+                          contact={contact}
+                          tsmname={tsmname}
+                          managername={managername}
+                          referenceid={item.referenceid}
+                          tsm={item.tsm}
+                          manager={item.manager}
+                          type_client={item.type_client}
+                          contact_number={item.contact_number}
+                          email_address={item.email_address}
+                          activityReferenceNumber={item.activity_reference_number}
+                          ticket_reference_number={item.ticket_reference_number}
+                          agent={item.agent}
+                          company_name={item.company_name}
+                          contact_person={item.contact_person}
+                          address={item.address}
+                          accountReferenceNumber={item.account_reference_number}
+                          onCreated={() => fetchAllData()}
+                          managerDetails={managerDetails ?? null}
+                          tsmDetails={tsmDetails ?? null}
+                          signature={signature}
+                        />
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -864,6 +856,17 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                               >
                                 <Check className="mr-2 h-4 w-4 text-green-600" />
                                 Mark as Completed
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                disabled={updatingId === item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openRescheduleDialog(item.id);
+                                }}
+                              >
+                                <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+                                Mark as Rescheduled
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -933,31 +936,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         Array.from(
                           new Set(
                             item.relatedHistoryItems
-                              .map(
-                                (h: HistoryItem) =>
-                                  h.type_activity?.trim() ?? "",
-                              )
+                              .map((h: HistoryItem) => h.type_activity?.trim() ?? "")
                               .filter((v) => v && v !== "-"),
                           ),
                         ).map((activity) => {
                           const getIcon = (act: string) => {
                             const lowerAct = act.toLowerCase();
-                            if (
-                              lowerAct.includes("outbound") ||
-                              lowerAct.includes("call")
-                            ) {
+                            if (lowerAct.includes("outbound") || lowerAct.includes("call")) {
                               return <PhoneOutgoing size={14} />;
                             }
-                            if (
-                              lowerAct.includes("sales order") ||
-                              lowerAct.includes("so prep")
-                            ) {
+                            if (lowerAct.includes("sales order") || lowerAct.includes("so prep")) {
                               return <PackageCheck size={14} />;
                             }
-                            if (
-                              lowerAct.includes("quotation") ||
-                              lowerAct.includes("quote")
-                            ) {
+                            if (lowerAct.includes("quotation") || lowerAct.includes("quote")) {
                               return <ReceiptText size={14} />;
                             }
                             return <Activity size={14} />;
@@ -996,27 +987,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           const statuses = Array.from(
                             new Set(
                               item.relatedHistoryItems
-                                .map(
-                                  (h) =>
-                                    h.tsm_approved_status
-                                      ?.trim()
-                                      .toLowerCase() ?? "",
-                                )
-                                .filter(
-                                  (v) => v && v !== "-" && v !== "pending",
-                                ),
+                                .map((h) => h.tsm_approved_status?.trim().toLowerCase() ?? "")
+                                .filter((v) => v && v !== "-" && v !== "pending"),
                             ),
                           );
 
                           if (statuses.length === 0) return null;
 
-                          const isDeclined = statuses.some(
-                            (status) => status === "decline",
-                          );
-
-                          const hoverText = isDeclined
-                            ? "Declined by TSM"
-                            : "Approved by TSM";
+                          const isDeclined = statuses.some((s) => s === "decline");
+                          const hoverText = isDeclined ? "Declined by TSM" : "Approved by TSM";
 
                           return (
                             <HoverCard>
@@ -1025,11 +1004,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                   className={`cursor-default font-mono text-[10px] flex items-center gap-1 ${isDeclined ? "bg-red-600 text-white" : "bg-blue-900 text-white"
                                     }`}
                                 >
-                                  {isDeclined ? (
-                                    <ThumbsDown size={12} />
-                                  ) : (
-                                    <ThumbsUp size={12} />
-                                  )}
+                                  {isDeclined ? <ThumbsDown size={12} /> : <ThumbsUp size={12} />}
                                 </Badge>
                               </HoverCardTrigger>
 
@@ -1048,30 +1023,26 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
                   <AccordionContent className="text-xs px-4 py-2 uppercase">
                     <p>
-                      <strong>Contact Number:</strong>{" "}
-                      {item.contact_number || "-"}
+                      <strong>Contact Number:</strong> {item.contact_number || "-"}
                     </p>
                     <p>
-                      <strong>Contact Person:</strong>{" "}
-                      {item.contact_person || "-"}
+                      <strong>Contact Person:</strong> {item.contact_person || "-"}
                     </p>
                     <p>
-                      <strong>Email Address:</strong>{" "}
-                      {item.email_address || "-"}
+                      <strong>Email Address:</strong> {item.email_address || "-"}
                     </p>
                     <p>
                       <strong>Address:</strong> {item.address || "-"}
                     </p>
 
                     <Separator className="mb-2 mt-2" />
+
                     {item.relatedHistoryItems.length === 0 ? (
                       <p>No quotation or SO history available.</p>
                     ) : (
                       <>
                         {item.relatedHistoryItems.some(
-                          (h) =>
-                            h.ticket_reference_number &&
-                            h.ticket_reference_number !== "-",
+                          (h) => h.ticket_reference_number && h.ticket_reference_number !== "-",
                         ) && (
                             <p>
                               <strong>Ticket Reference Number:</strong>{" "}
@@ -1105,8 +1076,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           )}
 
                         {item.relatedHistoryItems.some(
-                          (h) =>
-                            h.quotation_number && h.quotation_number !== "-",
+                          (h) => h.quotation_number && h.quotation_number !== "-",
                         ) && (
                             <p>
                               <strong>Quotation Number:</strong>{" "}
@@ -1154,9 +1124,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           )}
 
                         {item.relatedHistoryItems.some(
-                          (h) =>
-                            h.quotation_amount !== null &&
-                            h.quotation_amount !== undefined,
+                          (h) => h.quotation_amount !== null && h.quotation_amount !== undefined,
                         ) && (
                             <p>
                               <strong>Total Quotation Amount:</strong>{" "}
@@ -1178,10 +1146,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                           )}
 
                         <Separator className="mb-2 mt-2" />
+
                         {item.relatedHistoryItems.some(
-                          (h) =>
-                            h.tsm_approved_status &&
-                            h.tsm_approved_status !== "-",
+                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-",
                         ) && (
                             <p>
                               <strong>TSM Feedback:</strong>{" "}
@@ -1202,9 +1169,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     </p>
                     <div className="flex items-center gap-1 text-xs font-semibold">
                       <Dot />
-                      <span className="text-[10px]">
-                        {item.activity_reference_number}
-                      </span>
+                      <span className="text-[10px]">{item.activity_reference_number}</span>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -1221,7 +1186,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         loading={updatingId !== null}
       />
 
-      {/* ✅ FIXED: was incorrectly using dialogDoneOpen instead of dialogDeliveredOpen */}
       <DeliveredDialog
         open={dialogDeliveredOpen}
         onOpenChange={setDialogDeliveredOpen}
@@ -1248,6 +1212,51 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         onConfirm={handleConfirmCancelled}
         loading={updatingId !== null}
       />
+
+      <Dialog open={dialogRescheduleOpen} onOpenChange={setDialogRescheduleOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Reschedule Activity</DialogTitle>
+            <DialogDescription>
+              Select a new date to reschedule this activity. Past dates are not allowed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="reschedule-date" className="text-right">
+                New Date
+              </Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                min={toLocalDateString(new Date())}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogRescheduleOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmReschedule}
+              disabled={!rescheduleDate || updatingId !== null}
+            >
+              {updatingId !== null ? (
+                <Spinner className="size-4 mr-2" />
+              ) : null}
+              Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Map, MapMarker, MapTileLayer } from "@/components/ui/map";
 import type { LatLngExpression } from "leaflet";
 import { useMap } from "react-leaflet";
@@ -216,6 +215,7 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                   src={agent.profilePicture}
                   alt={`${agent.Firstname} ${agent.Lastname}`}
                   className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm"
+                  onError={(e) => { e.currentTarget.src = "/Taskflow.png"; }}
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-xl text-gray-400 border-2 border-white shadow-sm">
@@ -350,7 +350,12 @@ export function AgentCard({ agent, agentActivities, referenceid }: Props) {
                             </p>
                           )}
                           {visit.PhotoURL && (
-                            <img src={visit.PhotoURL} alt="Site" className="mt-1.5 w-full max-h-24 rounded-md object-cover" />
+                            <img 
+                              src={visit.PhotoURL} 
+                              alt="Site" 
+                              className="mt-1.5 w-full max-h-24 rounded-md object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
                           )}
                         </li>
                       );

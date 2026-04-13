@@ -47,6 +47,8 @@ interface Completed {
     date_updated?: string;
     account_reference_number?: string;
     quotation_type: string;
+    company_name: string;
+    contact_number: string;
 }
 
 interface CompletedProps {
@@ -85,6 +87,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
     const [filterTypeActivity, setFilterTypeActivity] = useState<string>("all");
+    const [filterSource, setFilterSource] = useState<string>("all");
+    const [filterTypeClient, setFilterTypeClient] = useState<string>("all");
+    const [filterCallStatus, setFilterCallStatus] = useState<string>("all");
+    const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
+    const [itemsPerPage, setItemsPerPage] = useState<number>(20);
+    const [currentPage, setCurrentPage] = useState<number>(1);
 
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editOpen, setEditOpen] = useState(false);
@@ -279,6 +287,30 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         return Array.from(setType).sort();
     }, [mergedActivities]);
 
+    const sourceOptions = useMemo(() => {
+        const setSource = new Set<string>();
+        mergedActivities.forEach((a) => {
+            if (a.source) setSource.add(a.source);
+        });
+        return Array.from(setSource).sort();
+    }, [mergedActivities]);
+
+    const typeClientOptions = useMemo(() => {
+        const setType = new Set<string>();
+        mergedActivities.forEach((a) => {
+            if (a.type_client) setType.add(a.type_client);
+        });
+        return Array.from(setType).sort();
+    }, [mergedActivities]);
+
+    const callStatusOptions = useMemo(() => {
+        return [] as string[];
+    }, [mergedActivities]);
+
+    const quotationStatusOptions = useMemo(() => {
+        return [] as string[];
+    }, [mergedActivities]);
+
     const openEditDialog = (item: Completed) => {
         setEditItem(item);
         setEditOpen(true);
@@ -357,10 +389,25 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                     <TaskListDialog
                         filterStatus={filterStatus}
                         filterTypeActivity={filterTypeActivity}
+                        filterSource={filterSource}
+                        filterTypeClient={filterTypeClient}
+                        filterCallStatus={filterCallStatus}
+                        filterQuotationStatus={filterQuotationStatus}
                         setFilterStatus={setFilterStatus}
                         setFilterTypeActivity={setFilterTypeActivity}
+                        setFilterSource={setFilterSource}
+                        setFilterTypeClient={setFilterTypeClient}
+                        setFilterCallStatus={setFilterCallStatus}
+                        setFilterQuotationStatus={setFilterQuotationStatus}
                         statusOptions={statusOptions}
                         typeActivityOptions={typeActivityOptions}
+                        sourceOptions={sourceOptions}
+                        typeClientOptions={typeClientOptions}
+                        callStatusOptions={callStatusOptions}
+                        quotationStatusOptions={quotationStatusOptions}
+                        itemsPerPage={itemsPerPage}
+                        setItemsPerPage={setItemsPerPage}
+                        setCurrentPage={setCurrentPage}
                     />
 
                     {/* Delete button */}

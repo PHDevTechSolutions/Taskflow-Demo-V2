@@ -75,6 +75,8 @@ interface Completed {
   restocking_fee?: string;
   quotation_vatable?: string;
   quotation_subject?: string;
+  discounted_priced?: string;
+  discounted_amount?: string;
 }
 
 interface ProductItem {
@@ -476,6 +478,7 @@ export default function TaskListEditDialog({
     const photos = splitAndTrim(item.product_photo);
     const sku = splitAndTrim(item.product_sku);
     const remarks = splitAndTrim(item.item_remarks);
+    const discountedPrices = splitAndTrim(item.discounted_priced);
 
     const maxLen = Math.max(
       quantities.length,
@@ -485,6 +488,7 @@ export default function TaskListEditDialog({
       photos.length,
       sku.length,
       remarks.length,
+      discountedPrices.length,
     );
 
     // Parse lead time out of saved description HTML
@@ -498,12 +502,18 @@ export default function TaskListEditDialog({
       desc.includes("Project lead time") || desc.includes(">Procurement<");
 
     const arr: ProductItem[] = [];
+    const newCheckedRows: Record<number, boolean> = {};
     for (let i = 0; i < maxLen; i++) {
       const desc = descriptions[i] ?? "";
       const qty = quantities[i] ?? "";
       const amt = amounts[i] ?? "";
       const leadTime = parseLeadTime(desc);
       const isSpf1 = isSpf1Desc(desc);
+      const discountValue = parseFloat(discountedPrices[i] ?? "0") || 0;
+      const isDiscounted = discountValue > 0;
+      if (isDiscounted) {
+        newCheckedRows[i] = true;
+      }
 
       arr.push({
         product_quantity: qty,
@@ -518,7 +528,8 @@ export default function TaskListEditDialog({
         skus: sku[i] ? [sku[i]] : undefined,
         title: titles[i] ?? "",
         images: photos[i] ? [{ src: photos[i] }] : undefined,
-        isDiscounted: false,
+        isDiscounted: isDiscounted,
+        discount: discountValue,
         price: parseFloat(amt) || 0,
         procurementLeadTime: leadTime || undefined,
         procurementMinQty: isSpf1 ? (parseFloat(qty) || undefined) : undefined,
@@ -527,6 +538,7 @@ export default function TaskListEditDialog({
       });
     }
     setProducts(arr);
+    setCheckedRows(newCheckedRows);
   }, [item]);
 
   useEffect(() => {
@@ -651,6 +663,30 @@ export default function TaskListEditDialog({
       const product_sku = serializeArrayFixed(
         products.map((p) => p.product_sku),
       );
+
+      // Serialize discount percentages for each product
+      const discounted_priced = serializeArrayFixed(
+        products.map((p, idx) => {
+          const isChecked = checkedRows[idx] ?? false;
+          if (!isChecked) return "0";
+          return String(p.discount ?? 0);
+        }),
+      );
+
+      // Serialize calculated discount amounts for each product
+      const discounted_amount = serializeArrayFixed(
+        products.map((p, idx) => {
+          const isChecked = checkedRows[idx] ?? false;
+          if (!isChecked) return "0";
+          const qty = parseFloat(p.product_quantity ?? "0") || 0;
+          const amt = parseFloat(p.product_amount ?? "0") || 0;
+          const baseAmount = qty * amt;
+          const discountPercent = p.discount ?? 0;
+          const discountValue = (baseAmount * discountPercent) / 100;
+          return discountValue.toFixed(2);
+        }),
+      );
+
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
       const restockingFeeNum = parseFloat(restockingFeeState) || 0;
       const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
@@ -666,6 +702,8 @@ export default function TaskListEditDialog({
         product_photo,
         product_sku,
         item_remarks,
+        discounted_priced,
+        discounted_amount,
         quotation_amount: totalQuotationAmount,
         quotation_type: item.quotation_type,
         quotation_number: item.quotation_number,

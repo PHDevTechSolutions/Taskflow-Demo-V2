@@ -8,6 +8,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, Pagi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download } from "lucide-react";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 /* ================= TYPES ================= */
 
@@ -272,7 +273,120 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
 
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange, expandedTsmId]);
 
-  /* ---- Excel Export ---- */
+  /* ---- Helper: Create TSM Summary Workbook ---- */
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("CSR Summary");
+
+    worksheet.columns = [
+      { header: "TSM", key: "tsm", width: 25 },
+      { header: "Tickets Endorsed", key: "ticketCount", width: 18 },
+      { header: "Quote Done", key: "quoteDoneCount", width: 15 },
+      ...QUOTATION_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
+      const rowData: any = {
+        tsm: item.tsmName,
+        ticketCount: item.ticketCount,
+        quoteDoneCount: item.quoteDoneCount
+      };
+      
+      QUOTATION_STATUSES.forEach(status => {
+        rowData[status] = item.statusCounts[status] ?? 0;
+      });
+      
+      worksheet.addRow(rowData);
+    });
+
+    const totalsRow: any = {
+      tsm: "TOTAL",
+      ticketCount: filteredSummary.reduce((sum, t) => sum + t.ticketCount, 0),
+      quoteDoneCount: filteredSummary.reduce((sum, t) => sum + t.quoteDoneCount, 0)
+    };
+    
+    QUOTATION_STATUSES.forEach(status => {
+      totalsRow[status] = filteredSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+    });
+    
+    const totalsRowIndex = worksheet.addRow(totalsRow);
+    totalsRowIndex.font = { bold: true };
+
+    return workbook;
+  };
+
+  /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Agent Summary");
+
+    worksheet.columns = [
+      { header: "Agent Name", key: "agentName", width: 25 },
+      { header: "Date", key: "date", width: 15 },
+      { header: "Ticket Number", key: "ticketNumber", width: 20 },
+      { header: "Company", key: "company", width: 25 },
+      { header: "Quotation Number", key: "quotationNumber", width: 20 },
+      { header: "Quotation Amount", key: "quotationAmount", width: 18 },
+      { header: "Quotation Status", key: "quotationStatus", width: 20 },
+      { header: "Remarks", key: "remarks", width: 30 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? activities.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : activities;
+
+    const byTsa = new Map<string, { tsaName: string; rows: CSR[] }>();
+    filteredActivities.forEach((row) => {
+      const tsaId = (row.referenceid || "unknown").toLowerCase();
+      const tsaAgent = agentMap[tsaId];
+      const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
+
+      if (!byTsa.has(tsaId)) byTsa.set(tsaId, { tsaName, rows: [] });
+      byTsa.get(tsaId)!.rows.push(row);
+    });
+
+    const sortedAgents = Array.from(byTsa.entries()).sort((a, b) => b[1].rows.length - a[1].rows.length);
+
+    sortedAgents.forEach(([_, { tsaName, rows }]) => {
+      rows.forEach((row) => {
+        worksheet.addRow({
+          agentName: tsaName,
+          date: new Date(row.date_created).toLocaleDateString(),
+          ticketNumber: row.ticket_reference_number || "-",
+          company: row.company_name || "-",
+          quotationNumber: row.quotation_number || "-",
+          quotationAmount: row.quotation_amount ?? 0,
+          quotationStatus: row.quotation_status || "-",
+          remarks: row.remarks || "-",
+        });
+      });
+    });
+
+    const amountCol = worksheet.getColumn('quotationAmount');
+    if (amountCol && amountCol.number > 0) {
+      amountCol.numFmt = '#,##0.00" ₱"';
+    }
+
+    return workbook;
+  };
+
+  /* ---- Excel Export to ZIP (2 Files Only) ---- */
   const exportToExcel = async () => {
     if (tsmSummary.length === 0) {
       alert("No data to export");
@@ -280,70 +394,39 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("CSR Summary");
+      const zip = new JSZip();
+      const folderName = "csr_reports";
+      const zipFolder = zip.folder(folderName);
+      if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      // Add headers
-      worksheet.columns = [
-        { header: "TSM", key: "tsm", width: 25 },
-        { header: "Tickets Endorsed", key: "ticketCount", width: 18 },
-        { header: "Quote Done", key: "quoteDoneCount", width: 15 },
-        ...QUOTATION_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
-      ];
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
 
-      // Style headers
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
+      const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
+      zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      // Add data rows
-      tsmSummary.forEach((item) => {
-        const rowData: any = {
-          tsm: item.tsmName,
-          ticketCount: item.ticketCount,
-          quoteDoneCount: item.quoteDoneCount
-        };
-        
-        QUOTATION_STATUSES.forEach(status => {
-          rowData[status] = item.statusCounts[status] ?? 0;
-        });
-        
-        worksheet.addRow(rowData);
-      });
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
+      const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
+      zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
-      // Add totals row
-      const totalsRow: any = {
-        tsm: "TOTAL",
-        ticketCount: tsmSummary.reduce((sum, t) => sum + t.ticketCount, 0),
-        quoteDoneCount: tsmSummary.reduce((sum, t) => sum + t.quoteDoneCount, 0)
-      };
-      
-      QUOTATION_STATUSES.forEach(status => {
-        totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
-      });
-      
-      const totalsRowIndex = worksheet.addRow(totalsRow);
-      totalsRowIndex.font = { bold: true };
-
-      // Generate filename with date range
-      let filename = "CSR_Summary";
+      let zipFilename = "CSR_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
+      }
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
-        filename += `_${fromDate}_to_${toDate}`;
+        zipFilename += `_${fromDate}_to_${toDate}`;
       }
-      filename += ".xlsx";
+      zipFilename += ".zip";
 
-      // Create buffer and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = zipFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -351,7 +434,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
 
     } catch (error) {
       console.error("Error exporting to Excel:", error);
-      alert("Failed to export data to Excel");
+      alert("Failed to export data to Excel ZIP");
     }
   };
 
@@ -402,10 +485,11 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
           <div className="flex justify-end mb-4">
             <button
               onClick={exportToExcel}
+              title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
               className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               <Download size={14} />
-              Export Excel
+              {expandedTsmId ? "Export Selected TSM" : "Export All"}
             </button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">

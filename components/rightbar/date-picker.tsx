@@ -13,6 +13,7 @@ type DatePickerProps = {
   selectedDateRange: DateRange | undefined;
   onDateSelectAction: (range: DateRange | undefined) => void;
   disableFuture?: boolean;
+  disablePast?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,7 +42,8 @@ const fmtISO = (d: Date): string => d.toISOString().slice(0, 10);
 export function DatePicker({
   selectedDateRange,
   onDateSelectAction,
-  disableFuture = true,
+  disableFuture = false,
+  disablePast = false,
 }: DatePickerProps) {
   const hasRange = !!selectedDateRange?.from;
   const isSingleDay =
@@ -106,7 +108,13 @@ export function DatePicker({
             mode="range"
             selected={selectedDateRange}
             numberOfMonths={1}
-            disabled={disableFuture ? { after: new Date() } : undefined}
+            disabled={
+              disableFuture
+                ? { after: new Date() }
+                : disablePast
+                  ? { before: new Date() }
+                  : undefined
+            }
             onSelect={handleSelect}
             classNames={{
               months: "flex flex-col",

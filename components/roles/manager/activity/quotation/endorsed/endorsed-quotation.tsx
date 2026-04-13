@@ -179,8 +179,6 @@ export const EndorsedQuotation: React.FC<ScheduledProps> = ({
 
         fetchActivities();
 
-        // FIX: Was filtering by "tsm=eq.${referenceid}" (wrong role).
-        // Corrected to "manager=eq.${referenceid}" to match manager role
         const channel = supabase
             .channel(`history-manager-endorsed-${referenceid}`)
             .on(
@@ -216,7 +214,7 @@ export const EndorsedQuotation: React.FC<ScheduledProps> = ({
                 const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
                 return (
                     String(item.type_activity ?? "").trim().toLowerCase() === "quotation preparation" &&
-                    (status === "endorsed to sales head" || status === "endorsed to saleshead")
+                    (status === "endorsed to sales head")
                 );
             })
             .filter((item) => {

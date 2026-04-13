@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Select,
   SelectTrigger,
@@ -9,6 +9,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Filter,
   ArrowUpAZ,
   ArrowDownAZ,
@@ -24,7 +39,14 @@ import {
   CalendarArrowDown,
   X,
   CheckCircle2,
+  Check,
+  CalendarDays,
+  MapPin,
+  Factory,
+  ChevronDown,
 } from "lucide-react";
+import { type DateRange } from "react-day-picker";
+import { format } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AccountsActiveFilterProps {
@@ -34,6 +56,13 @@ interface AccountsActiveFilterProps {
   setDateCreatedFilterAction: (value: string | null) => void;
   alphabeticalFilter: string | null;
   setAlphabeticalFilterAction: (value: string | null) => void;
+  regionFilter: string;
+  setRegionFilterAction: (value: string) => void;
+  industryFilter: string[];
+  setIndustryFilterAction: (value: string[]) => void;
+  nextAvailableDateRange: DateRange | undefined;
+  setNextAvailableDateRangeAction: (value: DateRange | undefined) => void;
+  posts: Array<{ region?: string; industry?: string }>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,16 +76,38 @@ const TYPE_OPTIONS = [
   { value: "NEW CLIENT", label: "New Client" },
 ];
 
+const REGION_OPTIONS = [
+  { value: "all", label: "All Regions" },
+  { value: "North", label: "North" },
+  { value: "South", label: "South" },
+  { value: "East", label: "East" },
+  { value: "West", label: "West" },
+];
+
+const INDUSTRY_OPTIONS = [
+  { value: "all", label: "All Industries" },
+  { value: "Technology", label: "Technology" },
+  { value: "Finance", label: "Finance" },
+  { value: "Healthcare", label: "Healthcare" },
+  { value: "Manufacturing", label: "Manufacturing" },
+];
+
 /** Count how many filters are currently active */
 function countActiveFilters(
   typeFilter: string,
   dateCreatedFilter: string | null,
   alphabeticalFilter: string | null,
+  regionFilter: string,
+  industryFilter: string[],
+  nextAvailableDateRange: DateRange | undefined,
 ): number {
   let count = 0;
   if (typeFilter && typeFilter !== "all") count++;
   if (dateCreatedFilter) count++;
   if (alphabeticalFilter) count++;
+  if (regionFilter && regionFilter !== "all") count++;
+  if (industryFilter.length > 0) count++;
+  if (nextAvailableDateRange?.from || nextAvailableDateRange?.to) count++;
   return count;
 }
 
@@ -68,16 +119,70 @@ export function AccountsActiveFilter({
   setDateCreatedFilterAction,
   alphabeticalFilter,
   setAlphabeticalFilterAction,
+  regionFilter,
+  setRegionFilterAction,
+  industryFilter,
+  setIndustryFilterAction,
+  nextAvailableDateRange,
+  setNextAvailableDateRangeAction,
+  posts,
 }: AccountsActiveFilterProps) {
   const [open, setOpen] = useState(false);
+  const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
-  const activeCount = countActiveFilters(typeFilter, dateCreatedFilter, alphabeticalFilter);
+  // Dynamic options from posts data
+  const regionOptions = useMemo(() => {
+    const regions = new Set<string>();
+    posts.forEach((p) => { if (p.region) regions.add(p.region); });
+    return ["all", ...Array.from(regions).sort()];
+  }, [posts]);
+
+  const industryOptions = useMemo(() => {
+    const industries = new Set<string>();
+    posts.forEach((p) => { if (p.industry) industries.add(p.industry); });
+    return Array.from(industries).sort();
+  }, [posts]);
+
+  const activeCount = countActiveFilters(
+    typeFilter,
+    dateCreatedFilter,
+    alphabeticalFilter,
+    regionFilter,
+    industryFilter,
+    nextAvailableDateRange
+  );
   const hasActiveFilters = activeCount > 0;
 
   const handleClearAll = () => {
     setTypeFilterAction("all");
     setDateCreatedFilterAction(null);
     setAlphabeticalFilterAction(null);
+    setRegionFilterAction("all");
+    setIndustryFilterAction([]);
+    setNextAvailableDateRangeAction(undefined);
+  };
+
+  const toggleIndustry = (industry: string) => {
+    if (industryFilter.includes(industry)) {
+      setIndustryFilterAction(industryFilter.filter((i) => i !== industry));
+    } else {
+      setIndustryFilterAction([...industryFilter, industry]);
+    }
+  };
+
+  const handleDateRangeSelect = (range: DateRange | undefined) => {
+    setNextAvailableDateRangeAction(range);
+    if (range?.from && range?.to) {
+      setDatePopoverOpen(false);
+    }
+  };
+
+  const formatDateRange = () => {
+    if (!nextAvailableDateRange?.from) return "Select date range";
+    const from = format(nextAvailableDateRange.from, "MMM d");
+    const to = nextAvailableDateRange.to ? format(nextAvailableDateRange.to, "MMM d") : "...";
+    return `${from} - ${to}`;
   };
 
   // FIX: toggle date filter — cycling asc → desc → null instead of only asc/desc
@@ -95,9 +200,10 @@ export function AccountsActiveFilter({
           variant="outline"
           onClick={() => setOpen(true)}
           aria-label="Open filters"
-          className="relative flex items-center justify-center cursor-pointer rounded-none h-9 w-9 p-0"
+          className="relative flex items-center gap-1.5 cursor-pointer rounded-none h-9 px-3 text-xs font-semibold"
         >
-          <Filter className="h-4 w-4" />
+          <Filter className="h-3.5 w-3.5" />
+          Advanced Filter
         </Button>
 
         {/* Active filter badge */}
@@ -151,6 +257,156 @@ export function AccountsActiveFilter({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Region Filter */}
+            <div>
+              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest block mb-2">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-3 w-3" /> Region
+                </span>
+              </label>
+              <Select value={regionFilter} onValueChange={setRegionFilterAction}>
+                <SelectTrigger className="w-full rounded-none text-xs">
+                  <SelectValue placeholder="Select region" />
+                </SelectTrigger>
+                <SelectContent>
+                  {regionOptions.map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs">
+                      {opt === "all" ? "All Regions" : opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Industry Multi-Select */}
+            <div>
+              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest block mb-2">
+                <span className="flex items-center gap-1.5">
+                  <Factory className="h-3 w-3" /> Industry
+                </span>
+              </label>
+              <Popover open={industryPopoverOpen} onOpenChange={setIndustryPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-none text-xs justify-between h-9"
+                  >
+                    <span className={industryFilter.length > 0 ? "text-zinc-900" : "text-zinc-400"}>
+                      {industryFilter.length > 0
+                        ? `${industryFilter.length} selected`
+                        : "All Industries"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 text-zinc-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 rounded-none" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search industries..." className="text-xs" />
+                    <CommandList className="max-h-48">
+                      <CommandEmpty className="text-xs py-2 px-3">No industries found.</CommandEmpty>
+                      <CommandGroup>
+                        {industryOptions.map((industry) => (
+                          <CommandItem
+                            key={industry}
+                            onSelect={() => toggleIndustry(industry)}
+                            className="text-xs cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <div
+                                className={`h-4 w-4 border rounded flex items-center justify-center ${
+                                  industryFilter.includes(industry)
+                                    ? "bg-zinc-900 border-zinc-900"
+                                    : "border-zinc-300"
+                                }`}
+                              >
+                                {industryFilter.includes(industry) && (
+                                  <Check className="h-3 w-3 text-white" />
+                                )}
+                              </div>
+                              <span className="flex-1">{industry.replace(/_/g, " ")}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                  {industryFilter.length > 0 && (
+                    <div className="border-t border-zinc-100 p-2">
+                      <button
+                        type="button"
+                        onClick={() => setIndustryFilterAction([])}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-900 underline"
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+              {industryFilter.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {industryFilter.map((ind) => (
+                    <Badge
+                      key={ind}
+                      variant="outline"
+                      className="rounded-none text-[10px] py-0 px-1.5 cursor-pointer hover:bg-zinc-100"
+                      onClick={() => toggleIndustry(ind)}
+                    >
+                      {ind.replace(/_/g, " ")} ×
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Next Available Date Range */}
+            <div>
+              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest block mb-2">
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3 w-3" /> Next Available Date
+                </span>
+              </label>
+              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={`w-full rounded-none text-xs justify-between h-9 ${
+                      nextAvailableDateRange?.from ? "text-zinc-900" : "text-zinc-400"
+                    }`}
+                  >
+                    <span>{formatDateRange()}</span>
+                    <CalendarDays className="h-3 w-3 text-zinc-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-none" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={nextAvailableDateRange?.from}
+                    selected={nextAvailableDateRange}
+                    onSelect={handleDateRangeSelect}
+                    numberOfMonths={2}
+                  />
+                  {nextAvailableDateRange?.from && (
+                    <div className="border-t border-zinc-100 p-2 flex justify-between items-center">
+                      <span className="text-[10px] text-zinc-500">
+                        {nextAvailableDateRange.to
+                          ? `${format(nextAvailableDateRange.from, "MMM d, yyyy")} - ${format(nextAvailableDateRange.to, "MMM d, yyyy")}`
+                          : `From ${format(nextAvailableDateRange.from, "MMM d, yyyy")}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setNextAvailableDateRangeAction(undefined)}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-900 underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Divider */}
