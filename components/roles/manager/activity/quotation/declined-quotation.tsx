@@ -64,6 +64,8 @@ interface Completed {
 
     // Signatories — Manager
     manager_name: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
 }
 
 interface CompletedProps {

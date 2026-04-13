@@ -57,6 +57,8 @@ interface Completed {
     tsm_approval_date: string;
     tsm_remarks: string;
     manager_name: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
 }
 
 interface CompletedProps {

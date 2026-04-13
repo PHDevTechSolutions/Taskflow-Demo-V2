@@ -35,6 +35,8 @@ interface Completed {
     restocking_fee?: string;
     quotation_vatable?: string;
     quotation_subject?: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
 }
 
 interface ProductItem {
@@ -209,6 +211,7 @@ export default function TaskListEditDialog({
         const photos = splitAndTrim(item.product_photo);
         const skus = splitAndTrim(item.product_sku);
         const remarks = splitAndTrim(item.item_remarks);
+        const discountedPrices = splitAndTrim(item.discounted_priced);
 
         const maxLen = Math.max(
             quantities.length,
@@ -218,48 +221,60 @@ export default function TaskListEditDialog({
             photos.length,
             skus.length,
             remarks.length,
+            discountedPrices.length,
             1 // ensure at least one empty row if all empty
         );
 
-        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => ({
-            product_quantity: quantities[i] ?? "",
-            product_amount: amounts[i] ?? "",
-            product_title: titles[i] ?? "",
-            product_description: descriptions[i] ?? "",
-            product_photo: photos[i] ?? "",
-            product_sku: skus[i] ?? "",
-            item_remarks: remarks[i] ?? "",
-            quantity: 0,
-            description: descriptions[i] ?? "",
-            skus: undefined,
-            title: titles[i] ?? "",
-            images: undefined,
-            isDiscounted: false,
-            price: 0,
-        }));
+        const newCheckedRows: Record<number, boolean> = {};
+        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => {
+            const discountValue = parseFloat(discountedPrices[i] ?? "0") || 0;
+            const isDiscounted = discountValue > 0;
+            if (isDiscounted) {
+                newCheckedRows[i] = true;
+            }
+            return {
+                product_quantity: quantities[i] ?? "",
+                product_amount: amounts[i] ?? "",
+                product_title: titles[i] ?? "",
+                product_description: descriptions[i] ?? "",
+                product_photo: photos[i] ?? "",
+                product_sku: skus[i] ?? "",
+                item_remarks: remarks[i] ?? "",
+                quantity: parseFloat(quantities[i] ?? "0") || 0,
+                description: descriptions[i] ?? "",
+                skus: skus[i] ? [skus[i]] : undefined,
+                title: titles[i] ?? "",
+                images: photos[i] ? [{ src: photos[i] }] : undefined,
+                isDiscounted: isDiscounted,
+                discount: discountValue,
+                price: parseFloat(amounts[i] ?? "0") || 0,
+            };
+        });
 
         setProducts(arr);
+        setCheckedRows(newCheckedRows);
     }, [item]);
 
-    // ✅ Update the quotationAmount calculation to include delivery fee
+    // ✅ Update the quotationAmount calculation to use per-row discount
     useEffect(() => {
         let total = 0;
         products.forEach((p, idx) => {
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const amt = parseFloat(p.product_amount ?? "0") || 0;
-            let lineTotal = qty * amt;
-
-            if (checkedRows[idx] && vatType === "vat_inc") {
-                lineTotal = lineTotal * ((100 - discount) / 100);
-            }
-
+            const baseAmount = qty * amt;
+            const isChecked = checkedRows[idx] ?? false;
+            const rowDiscount = isChecked
+                ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+                : 0;
+            const discountedAmount = (baseAmount * rowDiscount) / 100;
+            const lineTotal = baseAmount - discountedAmount;
             total += lineTotal;
         });
 
         // NOTE: deliveryFee is shown separately in the PDF/preview, NOT added here
         // to avoid double-counting (the payload passes it as a separate field).
         setQuotationAmount(total);
-    }, [products, checkedRows, discount, vatType]);
+    }, [products, checkedRows, vatTypeState]);
 
     // Download handler with your given logic integrated
     const getQuotationPayload = () => {
@@ -282,8 +297,9 @@ export default function TaskListEditDialog({
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
             const isDiscounted = checkedRows[index] ?? false;
+            const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
             const baseAmount = qty * unitPrice;
-            const discountedAmount = isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
+            const discountedAmount = isDiscounted && rowDiscount > 0 ? (baseAmount * rowDiscount) / 100 : 0;
             const totalAmount = baseAmount - discountedAmount;
 
             return {
@@ -293,9 +309,11 @@ export default function TaskListEditDialog({
                 title: p.product_title ?? "",
                 sku: p.product_sku ?? "",
                 remarks: p.item_remarks ?? "",
+                itemRemarks: p.item_remarks ?? "",
                 product_description:
                     p.description?.trim() ? p.description : p.product_description || "",
                 unitPrice,
+                discount: rowDiscount,
                 totalAmount,
                 isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
                     const rawD = p.product_description || p.description || "";
@@ -312,7 +330,6 @@ export default function TaskListEditDialog({
 
         const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
         const restockingFeeNum = parseFloat(restockingFeeState) || 0;
-        const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
         const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
         return {
@@ -323,7 +340,7 @@ export default function TaskListEditDialog({
             telNo: contact_number ?? "",
             email: email_address ?? "",
             attention: contact_person ?? "",
-            subject: "For Quotation",
+            subject: quotationSubjectState || "For Quotation",
             items,
             vatTypeLabel:
                 vatType === "vat_inc"

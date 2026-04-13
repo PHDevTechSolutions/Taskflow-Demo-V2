@@ -1776,7 +1776,7 @@ ${payload.whtType && payload.whtType !== "none"
               <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
                 <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
                   {/* Source Switcher with SPF + SPF 1 */}
-                  <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {[
                       { source: "shopify", label: "Shopify", icon: "🛍️" },
                       // { source: "firebase_shopify", label: "CMS", icon: "📦" },
@@ -1795,14 +1795,14 @@ ${payload.whtType && payload.whtType !== "none"
                       className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
                       <span className="text-sm mb-0.5">📋</span>
-                      <span>SPF</span>
+                      <span>Services</span>
                     </button>
                     <button type="button"
                       onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
                       className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
                       <span className="text-sm mb-0.5">🧾</span>
-                      <span>SPF 1</span>
+                      <span>SPF</span>
                     </button>
                   </div>
 
@@ -1810,51 +1810,15 @@ ${payload.whtType && payload.whtType !== "none"
                   {isSpfMode ? (
                     <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
-                        <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SRF</span>
+                        <span className="text-[9px] text-red-400 italic">— Service Request Form</span>
                       </div>
-                      {/* Cloudinary Image Upload */}
+                      
                       <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Image (optional)</label>
-                        <div className="flex items-center gap-2">
-                          <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
-                            <ImagePlus className="w-4 h-4 text-red-400" />
-                            <span className="text-[10px] font-bold uppercase text-red-500">
-                              {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change" : "Upload"}
-                            </span>
-                            <input type="file" accept="image/*" className="hidden" disabled={spfUploading}
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                setSpfUploading(true);
-                                try {
-                                  if (spfManualProduct.cloudinaryPublicId) await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
-                                  const formData = new FormData();
-                                  formData.append("file", file);
-                                  const res = await fetch("/api/cloudinary/upload", { method: "POST", body: formData });
-                                  const data = await res.json();
-                                  if (data.url) setSpfManualProduct(prev => ({ ...prev, imageUrl: data.url, cloudinaryPublicId: data.publicId || "" }));
-                                } catch (err) { console.error("Upload failed:", err); }
-                                finally { setSpfUploading(false); }
-                              }}
-                            />
-                          </label>
-                          {spfManualProduct.imageUrl && (
-                            <button type="button" onClick={async () => { await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId); setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" })); }} className="p-1 text-red-500 hover:text-red-700">
-                              <Trash className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                        {spfManualProduct.imageUrl && <img src={spfManualProduct.imageUrl} alt="preview" className="w-16 h-16 object-cover border border-gray-200 mt-1 rounded-sm" />}
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Service Name *</label>
                         <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
                       </div>
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
-                        <Input type="text" placeholder="Enter item code..." value={spfManualProduct.sku} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))} className="rounded-none text-xs uppercase" />
-                      </div>
+                      
                       <div className="grid grid-cols-2 gap-1.5">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
@@ -1894,7 +1858,7 @@ ${payload.whtType && payload.whtType !== "none"
                         }}
                         className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
                       >
-                        <Plus className="w-4 h-4" /> Add SPF Product
+                        <Plus className="w-4 h-4" /> Submit Request
                       </Button>
                     </div>
                   ) : isSpf1Mode ? (

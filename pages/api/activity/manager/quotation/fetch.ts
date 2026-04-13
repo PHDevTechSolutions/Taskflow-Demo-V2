@@ -43,6 +43,8 @@ const HISTORY_SELECT_COLUMNS = [
   "quotation_vatable",
   "restocking_fee",
   "item_remarks",
+  "discounted_priced",
+  "discounted_amount",
 ].join(",");
 
 const SIGNATORIES_SELECT_COLUMNS = [

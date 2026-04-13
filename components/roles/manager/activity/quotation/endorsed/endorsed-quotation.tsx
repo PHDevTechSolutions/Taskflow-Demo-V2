@@ -70,6 +70,8 @@ interface Completed {
     manager_name?: string;           // FIX: Added missing field
 
     vat_type: string;
+    discounted_priced?: string;       // FIX: Added discount field
+    discounted_amount?: string;       // FIX: Added discount field
 }
 
 interface ScheduledProps {
