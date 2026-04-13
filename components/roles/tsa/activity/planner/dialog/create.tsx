@@ -65,6 +65,8 @@ interface Activity {
     product_photo?: string;
     product_sku?: string;
     product_title?: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
     vat_type: string;
     delivery_fee: string;
     restocking_fee?: string;
@@ -206,6 +208,8 @@ export function CreateActivityDialog({
     const [productPhoto, setProductPhoto] = useState("");
     const [productSku, setProductSku] = useState("");
     const [productTitle, setProductTitle] = useState("");
+    const [productDiscountedPrice, setProductDiscountedPrice] = useState("");
+    const [productDiscountedAmount, setProductDiscountedAmount] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
     const [restockingFee, setRestockingFee] = useState("");
@@ -480,6 +484,8 @@ export function CreateActivityDialog({
             product_photo: productPhoto || undefined,
             product_sku: productSku || undefined,
             product_title: productTitle || undefined,
+            discounted_priced: productDiscountedPrice || undefined,
+            discounted_amount: productDiscountedAmount || undefined,
             vat_type: vatType,
             delivery_fee: deliveryFee,
             restocking_fee: restockingFee,
@@ -1007,6 +1013,10 @@ export function CreateActivityDialog({
                                     setProductSku={setProductSku}
                                     productTitle={productTitle}
                                     setProductTitle={setProductTitle}
+                                    productDiscountedPrice={productDiscountedPrice}
+                                    setProductDiscountedPrice={setProductDiscountedPrice}
+                                    productDiscountedAmount={productDiscountedAmount}
+                                    setProductDiscountedAmount={setProductDiscountedAmount}
                                     projectType={projectType}
                                     setProjectType={setProjectType}
                                     projectName={projectName}

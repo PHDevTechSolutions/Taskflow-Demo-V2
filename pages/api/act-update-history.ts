@@ -80,7 +80,9 @@ export default async function handler(
     "restocking_fee",
     "wht_type",
     "quotation_subject",
-    "item_remarks"
+    "item_remarks",
+    "discounted_priced",
+    "discounted_amount"
   ];
 
   // Filter out empty/null fields

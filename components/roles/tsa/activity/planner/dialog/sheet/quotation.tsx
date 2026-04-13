@@ -45,6 +45,10 @@ interface Props {
   setProductSku: (v: string) => void;
   productTitle: string; // comma separated titles
   setProductTitle: (v: string) => void;
+  productDiscountedPrice: string; // comma separated discount percentages
+  setProductDiscountedPrice: (v: string) => void;
+  productDiscountedAmount: string; // comma separated calculated discount amounts
+  setProductDiscountedAmount: (v: string) => void;
   projectType: string;
   setProjectType: (v: string) => void;
   projectName: string;
@@ -137,6 +141,7 @@ interface Product {
     src: string;
   }>;
   skus?: string[];
+  price?: number;
   regPrice?: number;
 }
 
@@ -213,13 +218,20 @@ export function QuotationSheet(props: Props) {
     productPhoto, setProductPhoto,
     productSku, setProductSku,
     productTitle, setProductTitle,
+    productDiscountedPrice, setProductDiscountedPrice,
+    productDiscountedAmount, setProductDiscountedAmount,
     projectType, setProjectType,
     projectName, setProjectName,
     quotationNumber, setQuotationNumber,
     quotationAmount, setQuotationAmount,
     quotationType, setQuotationType,
     //quotationStatus, setQuotationStatus,
-    tsmApprovalStatus, setTsmApprovalStatus,
+    callType, setCallType,
+    followUpDate, setFollowUpDate,
+    remarks, setRemarks,
+    status, setStatus,
+    tsm, setTSM,
+    typeClient, setTypeClient,
 
     // --- TAX & FINANCIALS ---
     vatType, setVatType,
@@ -230,12 +242,7 @@ export function QuotationSheet(props: Props) {
     quotationSubject, setQuotationSubject,
 
     // --- CRM & STATUS ---
-    callType, setCallType,
-    followUpDate, setFollowUpDate,
-    remarks, setRemarks,
-    status, setStatus,
-    tsm, setTSM,
-    typeClient, setTypeClient,
+    tsmApprovalStatus, setTsmApprovalStatus,
 
     // --- ACTIONS ---
     handleBack,
@@ -668,6 +675,22 @@ Procurement
     const titles = selectedProducts.map((p) => p.title);
     const remarks = selectedProducts.map((p) => p.itemRemarks || "");
 
+    // Save discount percentage for each product
+    const discountedPrices = selectedProducts.map((p) => {
+      const isDiscounted = p.isDiscounted ?? false;
+      if (!isDiscounted) return "0";
+      return String(p.discount ?? 0);
+    });
+
+    // Save calculated discount amount for each product
+    const discountedAmounts = selectedProducts.map((p) => {
+      const isDiscounted = p.isDiscounted ?? false;
+      if (!isDiscounted) return "0";
+      const baseAmount = p.price * p.quantity;
+      const discountAmount = (baseAmount * (p.discount ?? 0)) / 100;
+      return discountAmount.toFixed(2);
+    });
+
     setProductCat(ids.join(","));
     setProductQuantity(quantities.join(","));
     setProductAmount(amounts.join(","));
@@ -676,6 +699,8 @@ Procurement
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
     setItemRemarks(remarks.join(","));
+    setProductDiscountedPrice(discountedPrices.join(","));
+    setProductDiscountedAmount(discountedAmounts.join(","));
   }, [
     selectedProducts,
     setProductCat,
@@ -686,6 +711,8 @@ Procurement
     setProductSku,
     setProductTitle,
     setItemRemarks,
+    setProductDiscountedPrice,
+    setProductDiscountedAmount,
   ]);
 
   // Save handler with validation
@@ -2593,7 +2620,7 @@ ${spec.value}
                                     return {
                                       id: doc.id,
                                       title: data.name || "No Name",
-                                      price: data.salePrice || data.regularPrice || 0,
+                                      price: data.regularPrice || 0,
                                       regPrice: data.regularPrice || 0,
                                       description: specsHtml,
                                       images: data.mainImage ? [{ src: data.mainImage }] : [],
@@ -2650,13 +2677,14 @@ ${spec.value}
                             <label className="flex items-center gap-2 cursor-pointer flex-1">
                               <Button
                                 onClick={() => {
+                                  const { price: _, ...itemWithoutPrice } = item;
                                   setSelectedProducts((prev) => [
                                     ...prev,
                                     {
-                                      ...item,
+                                      ...itemWithoutPrice,
                                       uid: crypto.randomUUID(),
                                       quantity: 1,
-                                      price: 0,
+                                      price: item.price ?? 0,
                                       discount: 0,
                                       description: item.description || "",
                                       regPrice: item.regPrice || 0,
@@ -2757,13 +2785,14 @@ ${spec.value}
                     const raw = e.dataTransfer.getData("application/json");
                     if (!raw) return;
                     const item = JSON.parse(raw) as Product;
+                    const { price: _p, ...itemWithoutPrice } = item;
                     setSelectedProducts((prev) => [
                       ...prev,
                       {
-                        ...item,
+                        ...itemWithoutPrice,
                         uid: crypto.randomUUID(),
                         quantity: 1,
-                        price: 0,
+                        price: item.price ?? 0,
                         discount: 0,
                         description: item.description || "",
                       },

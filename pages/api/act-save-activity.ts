@@ -42,6 +42,8 @@ export default async function handler(
       product_sku,
       product_title,
       item_remarks,
+      discounted_priced,
+      discounted_amount,
 
       project_type,
       project_name,
@@ -113,6 +115,8 @@ export default async function handler(
       product_sku,
       product_title,
       item_remarks,
+      discounted_priced,
+      discounted_amount,
     };
 
     for (const [key, value] of Object.entries(productFields)) {
@@ -181,6 +185,8 @@ export default async function handler(
         product_sku: safe(product_sku),
         product_title: safe(product_title),
         item_remarks: safe(item_remarks),
+        discounted_priced: safe(discounted_priced),
+        discounted_amount: safe(discounted_amount),
 
         project_type: safe(project_type),
         project_name: safe(project_name),
