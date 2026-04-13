@@ -137,6 +137,7 @@ interface Product {
     src: string;
   }>;
   skus?: string[];
+  regPrice?: number;
 }
 
 interface SelectedProduct extends Product {
@@ -151,6 +152,7 @@ interface SelectedProduct extends Product {
   procurementLeadTime?: string;
   procurementLockedPrice?: boolean;
   procurementItemCode?: string;
+  regPrice?: number;
 }
 
 type SpfCreationRow = {
@@ -653,8 +655,13 @@ Procurement
     const quantities = selectedProducts.map((p) => p.quantity.toString());
     const amounts = selectedProducts.map((p) => p.price.toString());
 
-    // Dito: I-save ang buong description, hindi lang table
-    const descriptions = selectedProducts.map((p) => p.description || "");
+    // Dito: I-save ang buong description with regPrice, hindi lang table
+    const descriptions = selectedProducts.map((p) => {
+      const regPriceHtml = p.regPrice
+        ? `<div style="background:#facc15;color:#121212;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-bottom:8px">Regular Price: ₱${p.regPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>`
+        : "";
+      return regPriceHtml + (p.description || "");
+    });
 
     const photos = selectedProducts.map((p) => p.images?.[0]?.src || "");
     const skus = selectedProducts.map((p) => (p.skus && p.skus.length > 0 ? p.skus[0] : ""));
@@ -942,6 +949,7 @@ Procurement
         totalAmount,
         isSpf1: typeof p.id === "string" && p.id.startsWith("spf1-"),
         procurementLeadTime: p.procurementLeadTime ?? "",
+        regPrice: p.regPrice ?? 0,
       };
     });
 
@@ -1296,7 +1304,7 @@ Procurement
       // B. TABLE HEADER BLOCK
       const headerBlock = await renderBlock(`
         <div class="content-area">
-        <div class="table-container" style="border-bottom: 1.5px solid black;">
+        <div class="table-container">
         <table class="main-table">
         <thead>
         <tr>
@@ -1394,7 +1402,6 @@ Procurement
         <p>Orders Within Metro Manila: Free delivery for a minimum sales transaction of ₱5,000.</p>
         <p>Orders outside Metro Manila Free delivery is available for a minimum sales transaction of ₱10,000 in Rizal, ₱15,000 in Bulacan and Cavite, and ₱25,000 in Laguna, Pampanga, and Batangas.</p>
         </div>
-        </div>
         
         <div class="logistics-row">
         <div class="logistics-label bg-yellow-header">Excluded:</div>
@@ -1421,7 +1428,7 @@ Procurement
         <div class="terms-label">Availability:</div>
         <div class="terms-val terms-highlight">
         <p>*5-7 days if on stock upon receipt of approved PO.</p>
-        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+        <p>*For items not on stock/indent and order/special items are subject to a lead time of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
         <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
         </div>
         
@@ -1574,7 +1581,7 @@ Procurement
     } catch (error) {
       console.error("Critical Export Error:", error);
     }
-  }
+  };
 
   const toggleRow = (uid: string) => {
     setExpandedRows((prev) => ({ ...prev, [uid]: !prev[uid] }));
@@ -1642,11 +1649,26 @@ Procurement
                   },
                 ].map(({ label, description }) => (
                   <FieldLabel key={label}>
-                    <Field orientation="horizontal">
-                      <FieldContent>
+                    <Field orientation="horizontal" className="w-full items-start">
+                      {/* LEFT */}
+                      <FieldContent className="flex-1">
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
+
+                        {/* Buttons only show if selected */}
+                        {callType === label && (
+                          <div className="mt-4 flex gap-2">
+                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
+                              <ArrowLeft /> Back
+                            </Button>
+                            <Button type="button" className="rounded-none" onClick={handleNext}>
+                              Next <ArrowRight />
+                            </Button>
+                          </div>
+                        )}
                       </FieldContent>
+
+                      {/* RIGHT */}
                       <RadioGroupItem value={label} />
                     </Field>
                   </FieldLabel>
@@ -2321,6 +2343,7 @@ Procurement
                               discount: 0,
                               isDiscounted: false,
                               cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
+                              regPrice: 0,
                             }
                           ]);
                           setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
@@ -2386,7 +2409,7 @@ Procurement
                                 }}
                                 className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
                               >
-                                <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
+                                <div className="font-black text-[11px] uppercase tracking-wider text-gray-800 truncate">
                                   {r.spf_number || `SPF #${r.id}`}
                                 </div>
                                 <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
@@ -2469,6 +2492,7 @@ Procurement
                                                     procurementLeadTime: p.leadTime,
                                                     procurementLockedPrice: true,
                                                     procurementItemCode: p.sku || "",
+                                                    regPrice: 0,
                                                   },
                                                 ]);
                                                 setMobilePanelTab("products");
@@ -2570,6 +2594,7 @@ ${spec.value}
                                       id: doc.id,
                                       title: data.name || "No Name",
                                       price: data.salePrice || data.regularPrice || 0,
+                                      regPrice: data.regularPrice || 0,
                                       description: specsHtml,
                                       images: data.mainImage ? [{ src: data.mainImage }] : [],
                                       skus: data.itemCode ? [data.itemCode] : [],
@@ -2634,6 +2659,7 @@ ${spec.value}
                                       price: 0,
                                       discount: 0,
                                       description: item.description || "",
+                                      regPrice: item.regPrice || 0,
                                     },
                                   ]);
                                   setMobilePanelTab("products"); // auto-switch to products view on mobile
@@ -2984,27 +3010,35 @@ ${spec.value}
                                           className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
                                         />
 
-                                        {/* Product Title (Editable) */}
-                                        <div
-                                          contentEditable
-                                          suppressContentEditableWarning
-                                          className="flex-1 outline-none text-[10px] sm:text-xs min-w-0 break-words"
-                                          onBlur={(e) => {
-                                            const html = e.currentTarget.innerHTML; // keep HTML
-                                            setSelectedProducts((prev) => {
-                                              const copy = [...prev];
-                                              copy[idx] = { ...copy[idx], description: html };
-                                              return copy;
-                                            });
-                                          }}
-                                        >
-                                          {p.title}
-                                        </div>
-                                        {p.procurementLeadTime && (
-                                          <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
-                                            Lead Time: {p.procurementLeadTime}
+                                        <div className="flex-1 min-w-0">
+                                          {/* Product Title (Editable) */}
+                                          <div
+                                            contentEditable
+                                            suppressContentEditableWarning
+                                            className="outline-none text-[10px] sm:text-xs break-words"
+                                            onBlur={(e) => {
+                                              const html = e.currentTarget.innerHTML; // keep HTML
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[idx] = { ...copy[idx], description: html };
+                                                return copy;
+                                              });
+                                            }}
+                                          >
+                                            {p.title}
                                           </div>
-                                        )}
+                                          {/* Regular Price Display */}
+                                          {p.regPrice && p.regPrice > 0 && (
+                                            <div className="text-[9px] text-yellow-700 font-bold mt-0.5">
+                                              Reg Price: ₱{p.regPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                            </div>
+                                          )}
+                                          {p.procurementLeadTime && (
+                                            <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wide">
+                                              Lead Time: {p.procurementLeadTime}
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                     </td>
 
@@ -3062,27 +3096,6 @@ ${spec.value}
                                         ? `₱${discountedAmount.toFixed(2)}`
                                         : "₱0.00"}
                                     </td>
-
-                                    {/* <td className="border border-gray-300 p-2 text-right">
-                                <div className="flex items-center gap-1 justify-end">
-                                  <span className="text-gray-400 text-xs">₱</span>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    value={p.discount || 0}
-                                    onChange={(e) => {
-                                      const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                      setSelectedProducts((prev) => {
-                                        const copy = [...prev];
-                                        copy[idx] = { ...copy[idx], discount: val };
-                                        return copy;
-                                      });
-                                    }}
-                                    className="border-none shadow-none w-full p-2"
-                                  />
-                                </div>
-                              </td> */}
 
                                     <td className="border border-gray-300 p-2 font-semibold text-center">
                                       ₱{totalAfterDiscount.toFixed(2)}
@@ -3417,7 +3430,16 @@ ${spec.value}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
+                              <p className="text-[9px] text-blue-600 font-bold mb-1 tracking-tighter">{item.sku}</p>
+                              {/* Regular Price in Preview */}
+                              {item.regPrice && item.regPrice > 0 && (
+                                <div className="mb-2 flex items-center gap-1.5">
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Reg Price:</span>
+                                  <span className="text-[9px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded">
+                                    ₱{item.regPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              )}
                               {item.isSpf1 && item.procurementLeadTime && (
                                 <div className="mb-2 flex items-center gap-1.5">
                                   <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Lead Time:</span>

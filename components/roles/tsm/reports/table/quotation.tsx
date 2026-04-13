@@ -263,12 +263,19 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         const fromDate = dateCreatedFilterRange.from ? new Date(dateCreatedFilterRange.from) : null;
         const toDate = dateCreatedFilterRange.to ? new Date(dateCreatedFilterRange.to) : null;
 
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+        const normalizeToDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-        if (fromDate && toDate && isSameDay(fromDate, toDate)) return isSameDay(updatedDate, fromDate);
-        if (fromDate && updatedDate < fromDate) return false;
-        if (toDate && updatedDate > toDate) return false;
+        const normalizedUpdated = normalizeToDate(updatedDate);
+        const normalizedFrom = fromDate ? normalizeToDate(fromDate) : null;
+        const normalizedTo = toDate ? normalizeToDate(toDate) : null;
+
+        if (normalizedFrom && normalizedTo && normalizedFrom.getTime() === normalizedTo.getTime()) {
+          return normalizedUpdated.getTime() === normalizedFrom.getTime();
+        }
+
+        if (normalizedFrom && normalizedUpdated.getTime() < normalizedFrom.getTime()) return false;
+        if (normalizedTo && normalizedUpdated.getTime() > normalizedTo.getTime()) return false;
+
         return true;
       });
   }, [sortedActivities, searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);

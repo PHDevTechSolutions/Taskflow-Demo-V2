@@ -274,7 +274,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   useEffect(() => { setPage(1); }, [searchTerm, selectedAgent, dateCreatedFilterRange, expandedTsmId]);
 
   /* ---- Helper: Create TSM Summary Workbook ---- */
-  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("CSR Summary");
 
@@ -288,7 +288,12 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-    tsmSummary.forEach((item) => {
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
       const rowData: any = {
         tsm: item.tsmName,
         ticketCount: item.ticketCount,
@@ -304,12 +309,12 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
 
     const totalsRow: any = {
       tsm: "TOTAL",
-      ticketCount: tsmSummary.reduce((sum, t) => sum + t.ticketCount, 0),
-      quoteDoneCount: tsmSummary.reduce((sum, t) => sum + t.quoteDoneCount, 0)
+      ticketCount: filteredSummary.reduce((sum, t) => sum + t.ticketCount, 0),
+      quoteDoneCount: filteredSummary.reduce((sum, t) => sum + t.quoteDoneCount, 0)
     };
     
     QUOTATION_STATUSES.forEach(status => {
-      totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+      totalsRow[status] = filteredSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
     });
     
     const totalsRowIndex = worksheet.addRow(totalsRow);
@@ -319,7 +324,7 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
   };
 
   /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
-  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Agent Summary");
 
@@ -337,8 +342,17 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? activities.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : activities;
+
     const byTsa = new Map<string, { tsaName: string; rows: CSR[] }>();
-    activities.forEach((row) => {
+    filteredActivities.forEach((row) => {
       const tsaId = (row.referenceid || "unknown").toLowerCase();
       const tsaAgent = agentMap[tsaId];
       const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
@@ -385,15 +399,22 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
       const zipFolder = zip.folder(folderName);
       if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      const tsmWorkbook = await createTsmSummaryWorkbook();
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
+
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
       const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
       zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
       const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
       zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
       let zipFilename = "CSR_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
+      }
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
@@ -464,10 +485,11 @@ export const CSRTable: React.FC<CSRProps> = ({ referenceid, dateCreatedFilterRan
           <div className="flex justify-end mb-4">
             <button
               onClick={exportToExcel}
+              title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
               className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               <Download size={14} />
-              Export Excel
+              {expandedTsmId ? "Export Selected TSM" : "Export All"}
             </button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">

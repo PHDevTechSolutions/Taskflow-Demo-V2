@@ -138,7 +138,7 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
   }, [selectedTsm, companySearch, activities, agentMap]);
 
   /* ---- Helper: Create TSM Summary Workbook ---- */
-  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("FB Summary");
 
@@ -152,7 +152,12 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-    tsmSummary.forEach((item) => {
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
       worksheet.addRow({
         tsm: item.tsmName,
         quoteCount: item.quoteCount,
@@ -163,9 +168,9 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
 
     const totalsRow = {
       tsm: "TOTAL",
-      quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
-      soCount: tsmSummary.reduce((sum, t) => sum + t.soCount, 0),
-      totalSales: tsmSummary.reduce((sum, t) => sum + t.totalSales, 0)
+      quoteCount: filteredSummary.reduce((sum, t) => sum + t.quoteCount, 0),
+      soCount: filteredSummary.reduce((sum, t) => sum + t.soCount, 0),
+      totalSales: filteredSummary.reduce((sum, t) => sum + t.totalSales, 0)
     };
     
     const totalsRowIndex = worksheet.addRow(totalsRow);
@@ -177,7 +182,7 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
   };
 
   /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
-  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Agent Summary");
 
@@ -192,8 +197,17 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? activities.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : activities;
+
     const byTsa = new Map<string, { tsaName: string; rows: FB[] }>();
-    activities.forEach((row) => {
+    filteredActivities.forEach((row) => {
       const tsaId = (row.referenceid || "unknown").toLowerCase();
       const tsaAgent = agentMap[tsaId];
       const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
@@ -232,15 +246,22 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
       const zipFolder = zip.folder(folderName);
       if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      const tsmWorkbook = await createTsmSummaryWorkbook();
+      // If a specific TSM is selected, export only that TSM's data
+      const filterTsmId = selectedTsm || undefined;
+
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
       const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
       zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
       const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
       zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
       let zipFilename = "FB_Reports";
+      if (selectedTsm) {
+        const tsmName = tsmSummary.find(t => t.tsmId === selectedTsm)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
+      }
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
@@ -275,10 +296,11 @@ export const FBTable: React.FC<FBProps> = ({ referenceid, dateCreatedFilterRange
           <div className="flex justify-end mb-4">
             <button
               onClick={exportToExcel}
+              title={selectedTsm ? "Export selected TSM team data only" : "Export all TSM data"}
               className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               <Download size={14} />
-              Export Excel
+              {selectedTsm ? "Export Selected TSM" : "Export All"}
             </button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-4">

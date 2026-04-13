@@ -303,7 +303,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   }, [expandedTsmId, sortedActivities, agentMap]);
 
   /* ---- Helper: Create TSM Summary Workbook ---- */
-  const createTsmSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("TSM Summary");
 
@@ -317,7 +317,12 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-    tsmSummary.forEach((item) => {
+    // Filter by specific TSM if provided
+    const filteredSummary = filterTsmId
+      ? tsmSummary.filter((item) => item.tsmId === filterTsmId.toLowerCase())
+      : tsmSummary;
+
+    filteredSummary.forEach((item) => {
       const rowData: any = {
         tsm: item.tsmName,
         quoteCount: item.quoteCount,
@@ -329,11 +334,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
     const totalsRow: any = {
       tsm: "TOTAL",
-      quoteCount: tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0),
-      quotationAmount: tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
+      quoteCount: filteredSummary.reduce((sum, t) => sum + t.quoteCount, 0),
+      quotationAmount: filteredSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
     };
     ALL_STATUSES.forEach(status => {
-      totalsRow[status] = tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+      totalsRow[status] = filteredSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
     });
     const totalsRowIndex = worksheet.addRow(totalsRow);
     totalsRowIndex.font = { bold: true };
@@ -346,7 +351,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   };
 
   /* ---- Helper: Create Agent Summary Workbook (All Agents in One File) ---- */
-  const createAgentSummaryWorkbook = async (): Promise<ExcelJS.Workbook> => {
+  const createAgentSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Agent Summary");
 
@@ -366,8 +371,17 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
+    // Filter activities by TSM if provided
+    const filteredActivities = filterTsmId
+      ? sortedActivities.filter((item) => {
+          const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
+          const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
+          return derivedTsmId === filterTsmId.toLowerCase();
+        })
+      : sortedActivities;
+
     const byTsa = new Map<string, { tsaName: string; rows: Quotation[] }>();
-    sortedActivities.forEach((row) => {
+    filteredActivities.forEach((row) => {
       const tsaId = (row.referenceid || "unknown").toLowerCase();
       const tsaAgent = agentMap[tsaId];
       const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";
@@ -420,15 +434,22 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       const zipFolder = zip.folder(folderName);
       if (!zipFolder) throw new Error("Failed to create ZIP folder");
 
-      const tsmWorkbook = await createTsmSummaryWorkbook();
+      // If a specific TSM is expanded, export only that TSM's data
+      const filterTsmId = expandedTsmId || undefined;
+
+      const tsmWorkbook = await createTsmSummaryWorkbook(filterTsmId);
       const tsmBuffer = await tsmWorkbook.xlsx.writeBuffer();
       zipFolder.file("01_TSM_Summary.xlsx", tsmBuffer);
 
-      const agentWorkbook = await createAgentSummaryWorkbook();
+      const agentWorkbook = await createAgentSummaryWorkbook(filterTsmId);
       const agentBuffer = await agentWorkbook.xlsx.writeBuffer();
       zipFolder.file("02_Agent_Summary.xlsx", agentBuffer);
 
       let zipFilename = "Quotation_Reports";
+      if (expandedTsmId) {
+        const tsmName = tsmSummary.find(t => t.tsmId === expandedTsmId)?.tsmName || "Selected_TSM";
+        zipFilename += `_${tsmName.replace(/\s+/g, '_')}`;
+      }
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
         const fromDate = new Date(dateCreatedFilterRange.from).toLocaleDateString().replace(/\//g, '-');
         const toDate = new Date(dateCreatedFilterRange.to).toLocaleDateString().replace(/\//g, '-');
@@ -452,112 +473,116 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     }
   };
 
-/* ================= RENDER ================= */
+  /* ================= RENDER ================= */
 
-return (
-  <div className="space-y-4">
-    {/* ── TSM Summary Table ── */}
-    {loading ? (
-      <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
-    ) : error ? (
-      <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
-    ) : tsmSummary.length === 0 ? (
-      <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
-        No quotation records found.
-      </div>
-    ) : (
-      <>
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <Download size={14} />
-            Export Excel
-          </button>
+  return (
+    <div className="space-y-4">
+      {/* ── TSM Summary Table ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400">Loading...</div>
+      ) : error ? (
+        <div className="flex items-center justify-center py-10 text-xs text-red-500">{error}</div>
+      ) : tsmSummary.length === 0 ? (
+        <div className="flex items-center justify-center py-10 text-xs text-gray-400 italic">
+          No quotation records found.
         </div>
-        
-        <div className="overflow-x-auto rounded-xl border p-4 border-gray-100 bg-white">
-          <Table>
-            <TableHeader>
-            <TableRow className="bg-gray-50 text-[11px]">
-              <TableHead className="text-gray-500">TSM</TableHead>
-              <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
-              <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-              <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
-              <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
-              <TableHead className="text-gray-500 text-right">Nego</TableHead>
-              <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
-              <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
-              <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
-              <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
-              <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
-              <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
-              <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
-              <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
-              <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
-              <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
-            </TableRow>
-          </TableHeader>
+      ) : (
+        <>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={exportToExcel}
+              title={expandedTsmId ? "Export selected TSM team data only" : "Export all TSM data"}
+              className={`flex items-center gap-2 px-3 py-2 text-xs rounded-md transition-colors ${
+                expandedTsmId
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              <Download size={14} />
+              {expandedTsmId ? "Export Selected TSM" : "Export All"}
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border p-4 border-gray-100 bg-white">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 text-[11px]">
+                  <TableHead className="text-gray-500">TSM</TableHead>
+                  <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
+                  <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
+                  <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
+                  <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
+                  <TableHead className="text-gray-500 text-right">Nego</TableHead>
+                  <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
+                  <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
+                  <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
+                  <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
+                  <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
+                  <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
+                  <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
+                  <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
+                  <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
+                  <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
+                </TableRow>
+              </TableHeader>
 
-          <TableBody>
-            {tsmSummary.map((item) => {
-              const isExpanded = expandedTsmId === item.tsmId;
-              return (
-                <React.Fragment key={item.tsmId}>
-                  <TableRow
-                    className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
-                    onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
-                  >
-                    <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
-                    <TableCell className="text-right">{item.quoteCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">
-                      {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                    </TableCell>
-                    {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
-                    {ALL_STATUSES.map((status) => {
-                      const count = item.statusCounts[status] ?? 0;
-                      const priority = PRIORITY_MAP[status];
-                      const colorClass =
-                        priority === "HOT" ? "text-red-600 font-semibold" :
-                          priority === "WARM" ? "text-amber-600 font-semibold" :
-                            priority === "DONE" ? "text-green-600 font-semibold" :
-                              priority === "COLD" ? "text-blue-500 font-semibold" :
-                                "text-gray-700";
-                      return (
-                        <TableCell
-                          key={status}
-                          className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
-                        >
-                          {count > 0 ? count : "—"}
+              <TableBody>
+                {tsmSummary.map((item) => {
+                  const isExpanded = expandedTsmId === item.tsmId;
+                  return (
+                    <React.Fragment key={item.tsmId}>
+                      <TableRow
+                        className={`text-xs font-mono cursor-pointer ${isExpanded ? "bg-blue-50/70" : "hover:bg-gray-50/60"}`}
+                        onClick={() => setExpandedTsmId(isExpanded ? null : item.tsmId)}
+                      >
+                        <TableCell className="font-semibold text-gray-700 uppercase">{item.tsmName}</TableCell>
+                        <TableCell className="text-right">{item.quoteCount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                         </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                </React.Fragment>
-              );
-            })}
-          </TableBody>
-          <tfoot>
-            <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
-              <TableCell>Total</TableCell>
-              <TableCell className="text-right">
-                {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
-              </TableCell>
-              <TableCell className="text-right">
-                {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-              </TableCell>
-              {ALL_STATUSES.map((status) => (
-                <TableCell key={status} className="text-right">
-                  {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
-                </TableCell>
-              ))}
-            </TableRow>
-          </tfoot>
-        </Table>
-      </div>
-    </>
-    )}
+                        {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
+                        {ALL_STATUSES.map((status) => {
+                          const count = item.statusCounts[status] ?? 0;
+                          const priority = PRIORITY_MAP[status];
+                          const colorClass =
+                            priority === "HOT" ? "text-red-600 font-semibold" :
+                              priority === "WARM" ? "text-amber-600 font-semibold" :
+                                priority === "DONE" ? "text-green-600 font-semibold" :
+                                  priority === "COLD" ? "text-blue-500 font-semibold" :
+                                    "text-gray-700";
+                          return (
+                            <TableCell
+                              key={status}
+                              className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
+                            >
+                              {count > 0 ? count : "—"}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+              <tfoot>
+                <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right">
+                    {tsmSummary.reduce((sum, t) => sum + t.quoteCount, 0).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                  </TableCell>
+                  {ALL_STATUSES.map((status) => (
+                    <TableCell key={status} className="text-right">
+                      {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </tfoot>
+            </Table>
+          </div>
+        </>
+      )}
 
     {/* ── Expanded TSA Details ── */}
     {expandedTsmId && (
