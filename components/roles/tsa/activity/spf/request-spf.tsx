@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     AlertCircleIcon, PlusCircle, PenIcon, Trash2Icon,
     Search, FileText, Loader2, Building2, User,
+    RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -22,6 +23,7 @@ import {
     DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
+import { RevisionDialog } from "../../activity/spf/dialog/revision-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,6 +180,10 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<SPFRecord | null>(null);
     const [loadingSPF, setLoadingSPF] = useState(false);
+
+    // Revision dialog state
+    const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+    const [revisionTargetSpfNumber, setRevisionTargetSpfNumber] = useState<string | null>(null);
 
     const endTimerRef = useRef<number | null>(null);
 
@@ -368,6 +374,31 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         fetchActivities();
     };
 
+    // ─── Request Revision ──────────────────────────────────────────────────────────
+
+    const openRevisionDialog = (spf_number: string) => {
+        setRevisionTargetSpfNumber(spf_number);
+        setRevisionDialogOpen(true);
+    };
+
+    const closeRevisionDialog = () => {
+        setRevisionDialogOpen(false);
+        setRevisionTargetSpfNumber(null);
+    };
+
+    const handleRequestRevision = async (spf_number: string, revision_type: string, revision_remarks: string) => {
+        const res = await fetch("/api/activity/tsa/spf/request-revision", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ spf_number, revision_type, revision_remarks }),
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.message || "Failed to request revision");
+        }
+        return res.json();
+    };
+
     // ─── Filtered data ───────────────────────────────────────────────────────────
 
     const s = searchTerm.toLowerCase();
@@ -545,6 +576,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                     >
                                                         <Trash2Icon className="w-3 h-3" />
                                                     </button>
+                                                    <button
+                                                        title="Request Revision"
+                                                        onClick={() => openRevisionDialog(item.spf_number)}
+                                                        className="p-1.5 border border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                                                    >
+                                                        <RefreshCw className="w-3 h-3" />
+                                                    </button>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap">
@@ -628,6 +666,14 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) setDeleteTarget(null); }}
                 onConfirm={confirmDelete}
                 label={deleteTarget ? `${deleteTarget.spf_number} — ${deleteTarget.customer_name}` : undefined}
+            />
+
+            {/* ── Revision dialog ────────────────────────────────────────────────── */}
+            <RevisionDialog
+                open={revisionDialogOpen}
+                onClose={closeRevisionDialog}
+                spf_number={revisionTargetSpfNumber}
+                onRequestRevision={handleRequestRevision}
             />
         </div>
     );
