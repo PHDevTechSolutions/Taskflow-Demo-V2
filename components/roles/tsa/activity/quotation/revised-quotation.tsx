@@ -100,6 +100,8 @@ interface Completed {
   tsm_remarks: string;
   manager_remarks: string;
   quotation_status: string;
+  discounted_priced?: string;
+  discounted_amount?: string;
 }
 
 interface CompletedProps {

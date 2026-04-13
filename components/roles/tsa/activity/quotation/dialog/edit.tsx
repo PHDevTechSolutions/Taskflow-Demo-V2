@@ -570,14 +570,17 @@ export default function TaskListEditDialog({
     products.forEach((p, idx) => {
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
       const amt = parseFloat(p.product_amount ?? "0") || 0;
-      let lineTotal = qty * amt;
-      if (checkedRows[idx] && vatType === "vat_inc") {
-        lineTotal = lineTotal * ((100 - discount) / 100);
-      }
+      const baseAmount = qty * amt;
+      const isChecked = checkedRows[idx] ?? false;
+      const rowDiscount = isChecked
+        ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+        : 0;
+      const discountedAmount = (baseAmount * rowDiscount) / 100;
+      const lineTotal = baseAmount - discountedAmount;
       total += lineTotal;
     });
     setQuotationAmount(total);
-  }, [products, checkedRows, discount, vatType]);
+  }, [products, checkedRows, vatTypeState]);
 
   const handleProductChange = (
     index: number,
@@ -728,9 +731,13 @@ export default function TaskListEditDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bodyData),
       });
-      if (!res.ok) throw new Error("Failed to update activity");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error || "Failed to update activity");
+      }
       sileo.success({
-        title: "Succeess",
+        title: "Successful",
         description: "Activity updated successfully!",
         duration: 4000,
         position: "top-right",
