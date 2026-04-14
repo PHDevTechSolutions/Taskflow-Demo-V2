@@ -506,9 +506,7 @@ export function AccountDialog({
           formData.contact_person.every((v) => v.trim() !== "") &&
           formData.contact_number.length > 0 &&
           formData.contact_number.every((v) => v.trim() !== "") &&
-          !companyError &&
-          formData.email_address.length > 0 &&
-          formData.email_address.every((em) => em === "N/A" || isValidEmail(em))
+          !companyError 
         );
       case 1:
         return (
