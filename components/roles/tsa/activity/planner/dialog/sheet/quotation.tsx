@@ -1682,16 +1682,7 @@ Procurement
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
 
-                        {/* Buttons only show if selected *{callType === label && (
-                          <div className="mt-4 flex gap-2">
-                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
-                              <ArrowLeft /> Back
-                            </Button>
-                            <Button type="button" className="rounded-none" onClick={handleNext}>
-                              Next <ArrowRight />
-                            </Button>
-                          </div>
-                        )}/}
+                        {/* Buttons only show if selected */}
                         
                       </FieldContent>
 
