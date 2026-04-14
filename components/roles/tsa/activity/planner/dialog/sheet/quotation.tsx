@@ -1682,8 +1682,7 @@ Procurement
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
 
-                        {/* Buttons only show if selected */}
-                        {callType === label && (
+                        {/* Buttons only show if selected *{callType === label && (
                           <div className="mt-4 flex gap-2">
                             <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
                               <ArrowLeft /> Back
@@ -1692,7 +1691,8 @@ Procurement
                               Next <ArrowRight />
                             </Button>
                           </div>
-                        )}
+                        )}/}
+                        
                       </FieldContent>
 
                       {/* RIGHT */}
