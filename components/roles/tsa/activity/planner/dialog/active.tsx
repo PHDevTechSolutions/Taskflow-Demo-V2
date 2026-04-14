@@ -121,11 +121,6 @@ function formatIntl(val: string): string {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface ContactEntry {
-  person: string;
-  numbers: string[];
-}
-
 interface AccountFormData {
   id?: string;
   company_name: string;
@@ -140,36 +135,6 @@ interface AccountFormData {
   industry: string;
   date_created?: string;
   company_group: string;
-  contacts?: ContactEntry[];
-}
-
-// Helper to convert legacy flat arrays to new contacts structure
-function convertToContacts(persons: string[], numbers: string[]): ContactEntry[] {
-  const contacts: ContactEntry[] = [];
-  const maxLen = Math.max(persons.length, numbers.length);
-  for (let i = 0; i < maxLen; i++) {
-    const person = persons[i] || "";
-    const numStr = numbers[i] || "";
-    // Split by comma to get multiple numbers for this person
-    const nums = numStr ? numStr.split(", ").map(n => n.trim()).filter(n => n) : [""];
-    contacts.push({ person, numbers: nums.length > 0 ? nums : [""] });
-  }
-  return contacts.length > 0 ? contacts : [{ person: "", numbers: [""] }];
-}
-
-// Helper to convert contacts structure back to flat arrays for API
-function convertFromContacts(contacts: ContactEntry[]): { persons: string[]; numbers: string[] } {
-  const persons: string[] = [];
-  const numbers: string[] = [];
-  for (const contact of contacts) {
-    if (contact.person.trim()) {
-      persons.push(contact.person);
-      // Join multiple numbers with comma for backward compatibility
-      const validNumbers = contact.numbers.filter((n) => n.trim());
-      numbers.push(validNumbers.length > 0 ? validNumbers.join(", ") : "");
-    }
-  }
-  return { persons: persons.length > 0 ? persons : [""], numbers: numbers.length > 0 ? numbers : [""] };
 }
 
 interface Agent {
@@ -264,15 +229,7 @@ export function AccountDialog({
   // ── Reset form when dialog opens/closes ────────────────────────────────────
   useEffect(() => {
     if (open) {
-      const initial = { ...DEFAULT_FORM, ...initialData };
-      // Initialize contacts from existing flat arrays if present
-      if (!initial.contacts && (initial.contact_person?.length || initial.contact_number?.length)) {
-        initial.contacts = convertToContacts(
-          initial.contact_person || [""],
-          initial.contact_number || [""]
-        );
-      }
-      setFormData(initial);
+      setFormData({ ...DEFAULT_FORM, ...initialData });
       setStep(0);
       setCompanyError("");
       setDuplicateInfo([]);
@@ -507,7 +464,8 @@ export function AccountDialog({
           formData.contact_number.length > 0 &&
           formData.contact_number.every((v) => v.trim() !== "") &&
           !companyError &&
-          formData.email_address.every((em) => em === "N/A" || isValidEmail(em) || !em.trim())
+          formData.email_address.length > 0 &&
+          formData.email_address.every((em) => em === "N/A" || isValidEmail(em))
         );
       case 1:
         return (
@@ -682,229 +640,286 @@ export function AccountDialog({
               )}
             </div>
 
-            {/* Contact Information - Combined Grouped UI */}
+            {/* Contact Person(s) */}
             <div className="mb-4">
               <FieldGroup>
                 <FieldSet>
                   <FieldContent>
-                    <FieldLabel className="font-bold">Contact Information</FieldLabel>
+                    <FieldLabel className="font-bold">Contact Person(s)</FieldLabel>
                     <FieldDescription>
-                      Enter the contact details for each person. Contact numbers can be separated by "/" for multiple numbers per person.
+                      Enter the full name(s) of the primary contact person(s).
                     </FieldDescription>
                   </FieldContent>
-
-                  {/* Determine the number of contact entries (max of all three arrays) */}
-                  {(() => {
-                    const maxLen = Math.max(
-                      formData.contact_person.length,
-                      formData.contact_number.length,
-                      formData.email_address.length
-                    );
-                    const entries = [];
-                    for (let i = 0; i < maxLen; i++) {
-                      const person = formData.contact_person[i] || "";
-                      const number = formData.contact_number[i] || "";
-                      const email = formData.email_address[i] || "";
-                      
-                      // Number formatting logic
-                      const isIntl = number.startsWith("+");
-                      const digits = number.replace(/\D/g, "");
-                      const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
-                      const isMobile = !isIntl && digits.startsWith("09");
-                      const isCustom = number.startsWith("#");
-                      
-                      let displayVal = number;
-                      if (isCustom) displayVal = number.slice(1);
-                      else if (isIntl) displayVal = formatIntl(number);
-                      else if (isLandline) displayVal = formatLandline(number);
-                      else displayVal = formatPH(number);
-
-                      const emailError = email && email !== "N/A" && !isValidEmail(email) ? "Invalid email format" : "";
-
-                      entries.push(
-                        <div key={i} className="border border-gray-200 rounded-none p-4 mb-4 bg-gray-50/50">
-                          {/* Contact Person */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Contact Person {i + 1}
-                            </label>
-                            <div className="flex gap-2">
-                              <Input
-                                value={person}
-                                onChange={(e) => {
-                                  const copy = [...formData.contact_person];
-                                  copy[i] = e.target.value;
-                                  updateField("contact_person", copy);
-                                }}
-                                placeholder="Full Name"
-                                className="uppercase rounded-none flex-1"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Contact Number */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Contact Number {i + 1}
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
-                                onValueChange={(v) => {
-                                  const copy = [...formData.contact_number];
-                                  const currentDigits = number.replace(/\D/g, "");
-                                  
-                                  if (v === "local") {
-                                    copy[i] = currentDigits.startsWith("63")
-                                      ? "0" + currentDigits.slice(2)
-                                      : currentDigits.startsWith("0")
-                                      ? currentDigits
-                                      : "09";
-                                  } else if (v === "intl") {
-                                    copy[i] = currentDigits.startsWith("0")
-                                      ? `+63${currentDigits.slice(1)}`
-                                      : currentDigits.startsWith("63")
-                                      ? "+" + currentDigits
-                                      : "+63";
-                                  } else if (v === "landline") {
-                                    copy[i] = currentDigits.startsWith("63")
-                                      ? "0" + currentDigits.slice(2, 3)
-                                      : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
-                                      ? currentDigits.slice(0, 4)
-                                      : "02";
-                                  } else if (v === "custom") {
-                                    copy[i] = "#" + (number.startsWith("#") ? number.slice(1) : number);
-                                  }
-                                  updateField("contact_number", copy);
-                                }}
-                              >
-                                <SelectTrigger className="w-[100px] rounded-none">
-                                  {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="local">Phil</SelectItem>
-                                  <SelectItem value="landline">Landline</SelectItem>
-                                  <SelectItem value="intl">Intl</SelectItem>
-                                  <SelectItem value="custom">Custom</SelectItem>
-                                </SelectContent>
-                              </Select>
-
-                              <Input
-                                value={displayVal}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  const copy = [...formData.contact_number];
-                                  if (isCustom) {
-                                    copy[i] = "#" + raw;
-                                  } else {
-                                    const cleaned = isIntl
-                                      ? "+" + raw.replace(/[^0-9]/g, "")
-                                      : raw.replace(/[^0-9\/\s]/g, "");
-                                    copy[i] = cleaned;
-                                  }
-                                  updateField("contact_number", copy);
-                                }}
-                                placeholder={isCustom ? "Any format" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567 / 0922-456-7890"}
-                                className="rounded-none flex-1"
-                              />
-                            </div>
-                            {/* Number validation */}
-                            {isMobile && digits.length > 0 && digits.length !== 11 && (
-                              <p className="text-red-500 text-xs mt-1">Mobile must be 11 digits.</p>
-                            )}
-                            {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
-                              <p className="text-red-500 text-xs mt-1">Landline must be 9-10 digits.</p>
-                            )}
-                          </div>
-
-                          {/* Email Address */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Email Address {i + 1}
-                            </label>
-                            <div className="flex gap-2">
-                              <Input
-                                type="email"
-                                value={email}
-                                disabled={email === "N/A"}
-                                onChange={(e) => {
-                                  const copy = [...formData.email_address];
-                                  copy[i] = e.target.value;
-                                  updateField("email_address", copy);
-                                }}
-                                placeholder={email === "N/A" ? "No email provided" : "email@example.com"}
-                                className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
-                              />
-                            </div>
-                            {/* No Email Checkbox */}
-                            <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
-                              <input
-                                type="checkbox"
-                                id={`noEmail-${i}`}
-                                checked={email === "N/A"}
-                                onChange={(e) => {
-                                  const copy = [...formData.email_address];
-                                  copy[i] = e.target.checked ? "N/A" : "";
-                                  updateField("email_address", copy);
-                                }}
-                                className="w-4 h-4 cursor-pointer"
-                              />
-                              <label htmlFor={`noEmail-${i}`} className="text-xs text-amber-800 cursor-pointer select-none">
-                                No email address provided
-                              </label>
-                            </div>
-                            {emailError && (
-                              <p className="text-red-500 text-xs mt-1">{emailError}</p>
-                            )}
-                          </div>
-
-                          {/* Remove Contact Entry */}
-                          <div className="flex justify-end">
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="rounded-none"
-                              disabled={maxLen === 1}
-                              onClick={() => {
-                                const personCopy = [...formData.contact_person];
-                                const numberCopy = [...formData.contact_number];
-                                const emailCopy = [...formData.email_address];
-                                personCopy.splice(i, 1);
-                                numberCopy.splice(i, 1);
-                                emailCopy.splice(i, 1);
-                                updateField("contact_person", personCopy.length > 0 ? personCopy : [""]);
-                                updateField("contact_number", numberCopy.length > 0 ? numberCopy : [""]);
-                                updateField("email_address", emailCopy.length > 0 ? emailCopy : [""]);
-                              }}
-                            >
-                              <MinusIcon className="h-4 w-4 mr-1" /> Remove Contact
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return entries;
-                  })()}
-
-                  {/* Add New Contact Entry */}
-                  <div className="mt-2">
-                    <Button
-                      type="button"
-                      className="rounded-none w-full"
-                      onClick={() => {
-                        updateField("contact_person", [...formData.contact_person, ""]);
-                        updateField("contact_number", [...formData.contact_number, ""]);
-                        updateField("email_address", [...formData.email_address, ""]);
-                      }}
-                    >
-                      <PlusIcon className="h-4 w-4 mr-1" /> Add Contact Person
-                    </Button>
-                  </div>
+                  {formData.contact_person.map((val, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <Input
+                        value={val}
+                        onChange={(e) => {
+                          const copy = [...formData.contact_person];
+                          copy[i] = e.target.value;
+                          updateField("contact_person", copy);
+                        }}
+                        placeholder="Contact Person"
+                        className="uppercase rounded-none flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="rounded-none"
+                        disabled={formData.contact_person.length === 1}
+                        onClick={() => {
+                          const copy = [...formData.contact_person];
+                          copy.splice(i, 1);
+                          updateField("contact_person", copy);
+                        }}
+                      >
+                        <MinusIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        className="rounded-none"
+                        onClick={() =>
+                          updateField("contact_person", [...formData.contact_person, ""])
+                        }
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </FieldSet>
               </FieldGroup>
             </div>
 
+            {/* Contact Number(s) */}
+            <div className="mb-4">
+              <FieldGroup>
+                <FieldSet>
+                  <FieldContent>
+                    <FieldLabel className="font-bold">Contact Number(s)</FieldLabel>
+                    <FieldDescription>
+                      Enter the phone number(s) of the primary contact person(s).
+                    </FieldDescription>
+                  </FieldContent>
+
+                  {formData.contact_number.map((cn, i) => {
+                    // Determine type: custom, intl (+), landline (starts with 0 but not 09), or mobile (starts with 09)
+                    const isIntl = cn.startsWith("+");
+                    const digits = cn.replace(/\D/g, "");
+                    const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
+                    const isMobile = !isIntl && digits.startsWith("09");
+                    const isCustom = cn.startsWith("#"); // Custom numbers start with #
+                    
+                    let displayVal = cn;
+                    if (isCustom) displayVal = cn.slice(1); // Remove # prefix for display
+                    else if (isIntl) displayVal = formatIntl(cn);
+                    else if (isLandline) displayVal = formatLandline(cn);
+                    else displayVal = formatPH(cn);
+
+                    return (
+                      <div key={i} className="flex flex-col gap-1 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
+                            onValueChange={(v) => {
+                              const copy = [...formData.contact_number];
+                              const currentDigits = cn.replace(/\D/g, "");
+                              
+                              if (v === "local") {
+                                // Convert to mobile format
+                                copy[i] = currentDigits.startsWith("63")
+                                  ? "0" + currentDigits.slice(2)
+                                  : currentDigits.startsWith("0")
+                                  ? currentDigits
+                                  : "09";
+                              } else if (v === "intl") {
+                                // Convert to international
+                                copy[i] = currentDigits.startsWith("0")
+                                  ? `+63${currentDigits.slice(1)}`
+                                  : currentDigits.startsWith("63")
+                                  ? "+" + currentDigits
+                                  : "+63";
+                              } else if (v === "landline") {
+                                // Convert to landline (start with 0 and area code)
+                                copy[i] = currentDigits.startsWith("63")
+                                  ? "0" + currentDigits.slice(2, 3) // Take first digit after 63 for area code
+                                  : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
+                                  ? currentDigits.slice(0, 4) // Keep first 4 digits (0 + area code)
+                                  : "02"; // Default to NCR area code
+                              } else if (v === "custom") {
+                                // Convert to custom - add # prefix, keep original
+                                copy[i] = "#" + (cn.startsWith("#") ? cn.slice(1) : cn);
+                              }
+                              updateField("contact_number", copy);
+                            }}
+                          >
+                            <SelectTrigger className="w-[100px] rounded-none">
+                              {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="local">Phil</SelectItem>
+                              <SelectItem value="landline">Landline</SelectItem>
+                              <SelectItem value="intl">Intl</SelectItem>
+                              <SelectItem value="custom">Custom</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Input
+                            value={displayVal}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const copy = [...formData.contact_number];
+                              if (isCustom) {
+                                // For custom, keep as-is but preserve # prefix
+                                copy[i] = "#" + raw;
+                              } else {
+                                const digitsOnly = raw.replace(/\D/g, "");
+                                copy[i] = isIntl ? "+" + digitsOnly : digitsOnly;
+                              }
+                              updateField("contact_number", copy);
+                            }}
+                            placeholder={isCustom ? "Any format (e.g. ext. 123)" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567"}
+                            className="rounded-none flex-1"
+                          />
+
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="rounded-none"
+                            disabled={formData.contact_number.length === 1}
+                            onClick={() => {
+                              const copy = [...formData.contact_number];
+                              copy.splice(i, 1);
+                              updateField("contact_number", copy);
+                            }}
+                          >
+                            <MinusIcon />
+                          </Button>
+                          <Button
+                            type="button"
+                            className="rounded-none"
+                            onClick={() =>
+                              updateField("contact_number", [
+                                ...formData.contact_number,
+                                "",
+                              ])
+                            }
+                          >
+                            <PlusIcon />
+                          </Button>
+                        </div>
+
+                        {/* Inline validation */}
+                        {isMobile && digits.length > 0 && digits.length !== 11 && (
+                          <p className="text-red-500 text-xs">
+                            Mobile numbers must be exactly 11 digits.
+                          </p>
+                        )}
+                        {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
+                          <p className="text-red-500 text-xs">
+                            Landline numbers must be 9-10 digits (including area code).
+                          </p>
+                        )}
+                        {isIntl && cn.length > 1 && !/^\+\d{5,15}$/.test(cn.replace(/\s+/g, "")) && (
+                          <p className="text-red-500 text-xs">
+                            Invalid international number format.
+                          </p>
+                        )}
+                        {isCustom && (
+                          <p className="text-blue-500 text-xs">
+                            Custom format - no validation applied
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </FieldSet>
+              </FieldGroup>
+            </div>
+
+            {/* Email Address(es) */}
+            <div className="mb-4">
+              <FieldGroup>
+                <FieldSet>
+                  <FieldContent>
+                    <FieldLabel className="font-bold">Email Address(es)</FieldLabel>
+                    <FieldDescription>
+                      Enter the email address(es) of the primary contact person(s).
+                    </FieldDescription>
+                  </FieldContent>
+
+                  {formData.email_address.map((em, i) => {
+                    const isNA = em === "N/A";
+                    const emailError =
+                      em && !isNA && !isValidEmail(em)
+                        ? "Invalid email format"
+                        : "";
+
+                    return (
+                      <div key={i} className="mb-2">
+                        <div className="flex gap-2">
+                          <Input
+                            type="email"
+                            value={em}
+                            disabled={isNA}
+                            onChange={(e) => {
+                              const copy = [...formData.email_address];
+                              copy[i] = e.target.value;
+                              updateField("email_address", copy);
+                            }}
+                            placeholder="Email Address"
+                            className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="rounded-none"
+                            disabled={formData.email_address.length === 1 || isNA}
+                            onClick={() => {
+                              const copy = [...formData.email_address];
+                              copy.splice(i, 1);
+                              updateField("email_address", copy);
+                            }}
+                          >
+                            <MinusIcon />
+                          </Button>
+                          <Button
+                            type="button"
+                            className="rounded-none"
+                            disabled={formData.email_address[0] === "N/A"}
+                            onClick={() =>
+                              updateField("email_address", [
+                                ...formData.email_address,
+                                "",
+                              ])
+                            }
+                          >
+                            <PlusIcon />
+                          </Button>
+                        </div>
+                        {emailError && (
+                          <p className="text-red-500 text-xs mt-1">{emailError}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      id="no-email-checkbox"
+                      checked={formData.email_address[0] === "N/A"}
+                      onChange={(e) =>
+                        updateField("email_address", e.target.checked ? ["N/A"] : [""])
+                      }
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="no-email-checkbox" className="text-sm">
+                      No email address
+                    </Label>
+                  </div>
+                </FieldSet>
+              </FieldGroup>
+            </div>
           </>
         );
 
@@ -923,7 +938,7 @@ export function AccountDialog({
                     value={formData.region || ""}
                     onValueChange={(val) => updateField("region", val)}
                   >
-                    <SelectTrigger className={`w-full rounded-none ${!formData.region && formData.address ? 'border-red-500' : ''}`}>
+                    <SelectTrigger className="w-full rounded-none">
                       <span>{formData.region || "Select Region"}</span>
                     </SelectTrigger>
                     <SelectContent>
@@ -934,9 +949,6 @@ export function AccountDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  {!formData.region && (
-                    <p className="text-red-500 text-xs mt-1">Region is required.</p>
-                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
@@ -954,11 +966,8 @@ export function AccountDialog({
                     value={formData.address}
                     onChange={(e) => updateField("address", e.target.value)}
                     placeholder="Address"
-                    className={`rounded-none ${!formData.address.trim() && formData.region ? 'border-red-500' : ''}`}
+                    className="rounded-none"
                   />
-                  {!formData.address.trim() && (
-                    <p className="text-red-500 text-xs mt-1">Address is required.</p>
-                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
@@ -976,11 +985,8 @@ export function AccountDialog({
                     value={formData.delivery_address}
                     onChange={(e) => updateField("delivery_address", e.target.value)}
                     placeholder="Delivery Address"
-                    className={`rounded-none ${!(formData.delivery_address?.trim()) && formData.address ? 'border-red-500' : ''}`}
+                    className="rounded-none"
                   />
-                  {!(formData.delivery_address?.trim()) && (
-                    <p className="text-red-500 text-xs mt-1">Delivery address is required.</p>
-                  )}
                 </FieldSet>
               </FieldGroup>
             </div>
