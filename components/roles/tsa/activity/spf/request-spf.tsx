@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
 import { RevisionDialog } from "../../activity/spf/dialog/revision-dialog";
+import { CollaborationHubRowTrigger } from "@/components/collaboration-row-trigger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -695,6 +696,15 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         >
                                                             <RefreshCw className="w-3.5 h-3.5" />
                                                         </button>
+                                                        <CollaborationHubRowTrigger
+                                                            requestId={String(item.id)}
+                                                            spfNumber={item.spf_number}
+                                                            status={item.status}
+                                                            collectionName="spf_creations"
+                                                            title={item.spf_number}
+                                                            variant="icon"
+                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all h-auto w-auto"
+                                                        />
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-3 py-2 whitespace-nowrap">
