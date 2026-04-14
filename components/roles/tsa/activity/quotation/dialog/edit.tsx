@@ -1790,14 +1790,14 @@ ${payload.whtType && payload.whtType !== "none"
                       className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
                       <span className="text-sm mb-0.5">📋</span>
-                      <span>SPF</span>
+                      <span>Services</span>
                     </button>
                     <button type="button"
                       onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
                       className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
                     >
                       <span className="text-sm mb-0.5">🧾</span>
-                      <span>SPF 1</span>
+                      <span>SPF</span>
                     </button>
                   </div>
 
