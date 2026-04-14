@@ -469,6 +469,25 @@ export function AccountsTable({
         },
       },
       {
+        accessorKey: "next_available_date",
+        header: "Next Call",
+        cell: ({ row }) => {
+          const dateValue = row.original.next_available_date;
+          if (!dateValue || dateValue === "—") return <span className="text-[11px] text-slate-400">—</span>;
+          try {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return <span className="text-[11px] text-slate-400">—</span>;
+            return (
+              <p className="text-[11px] text-slate-500 uppercase font-medium">
+                {format(date, "MMM dd, yyyy")}
+              </p>
+            );
+          } catch {
+            return <span className="text-[11px] text-slate-400">—</span>;
+          }
+        },
+      },
+      {
         accessorKey: "industry",
         header: "Industry",
         cell: ({ row }) => (
