@@ -10,6 +10,8 @@ import React, {
 } from "react";
 import { supabase } from "@/utils/supabase";
 import { useUser } from "@/contexts/UserContext";
+import { dbCollab } from "@/lib/firebase";
+import { collection, onSnapshot, query, where, QuerySnapshot, DocumentData } from "firebase/firestore";
 
 /** Raw `spf_creation.status` values that map to actionable badges on the requests list. */
 const CREATION_NOTIFICATION_STATUSES = new Set([
@@ -70,6 +72,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Chat notification tracking
   const chatUnreadMapRef = useRef<Map<string, number>>(new Map());
   const chatLastReadMapRef = useRef<Map<string, string>>(new Map());
+  const chatLastSeenMessageIdRef = useRef<Map<string, string>>(new Map()); // Track last seen message ID per chat
+  const firebaseUnsubscribeRef = useRef<(() => void) | null>(null);
+  const chatNotifSoundRef = useRef<HTMLAudioElement | null>(null);
 
   const getStorageKey = useCallback((uid: string) => `spf-notif-read-map:${uid}`, []);
   const getInitKey = useCallback((uid: string) => `spf-notif-init:${uid}`, []);
@@ -80,6 +85,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Chat storage keys
   const getChatUnreadKey = useCallback((uid: string) => `chat-notif-unread-map:${uid}`, []);
   const getChatLastReadKey = useCallback((uid: string) => `chat-notif-last-read:${uid}`, []);
+  const getChatLastSeenMsgIdKey = useCallback((uid: string) => `chat-notif-last-seen-msg:${uid}`, []);
   const normalizeSPFNumber = useCallback((value: unknown) => {
     if (typeof value !== "string") return "";
     return value.trim().replace(/\s+/g, "").toUpperCase();
@@ -109,6 +115,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const payload = Object.fromEntries(map.entries());
     localStorage.setItem(getChatUnreadKey(uid), JSON.stringify(payload));
   }, [getChatUnreadKey]);
+
+  const persistChatLastSeenMsgIdMap = useCallback((uid: string, map: Map<string, string>) => {
+    const payload = Object.fromEntries(map.entries());
+    localStorage.setItem(getChatLastSeenMsgIdKey(uid), JSON.stringify(payload));
+  }, [getChatLastSeenMsgIdKey]);
 
   const applyEffectiveUnreadAggregates = useCallback(() => {
     const unreadSet = new Set<string>();
@@ -453,6 +464,142 @@ currentSignatureMap.set(
     applyEffectiveUnreadAggregates,
   ]);
 
+  // Chat notification helper - defined before Firebase useEffect
+  const recalcChatUnreadTotal = useCallback(() => {
+    let total = 0;
+    chatUnreadMapRef.current.forEach((count) => {
+      total += count;
+    });
+    setUnreadChatCount(total);
+  }, []);
+
+  // Firebase real-time listener for chat messages
+  useEffect(() => {
+    if (!userId) {
+      // Clear chat notification state when user logs out
+      chatUnreadMapRef.current = new Map();
+      chatLastReadMapRef.current = new Map();
+      chatLastSeenMessageIdRef.current = new Map();
+      setUnreadChatCount(0);
+      if (firebaseUnsubscribeRef.current) {
+        firebaseUnsubscribeRef.current();
+        firebaseUnsubscribeRef.current = null;
+      }
+      return;
+    }
+
+    // Initialize chat notification sound
+    if (!chatNotifSoundRef.current) {
+      chatNotifSoundRef.current = new Audio("/musics/notif-messege-sound.mp3");
+      chatNotifSoundRef.current.preload = "auto";
+    }
+
+    // Load persisted chat unread state from localStorage
+    const loadPersistedChatState = () => {
+      try {
+        const unreadKey = getChatUnreadKey(userId);
+        const lastSeenMsgKey = getChatLastSeenMsgIdKey(userId);
+        
+        const rawUnread = localStorage.getItem(unreadKey);
+        const rawLastSeenMsg = localStorage.getItem(lastSeenMsgKey);
+        
+        if (rawUnread) {
+          const parsed = JSON.parse(rawUnread);
+          if (parsed && typeof parsed === "object") {
+            Object.entries(parsed).forEach(([docId, count]) => {
+              if (typeof count === "number" && count > 0) {
+                chatUnreadMapRef.current.set(docId, count);
+              }
+            });
+          }
+        }
+        
+        if (rawLastSeenMsg) {
+          const parsed = JSON.parse(rawLastSeenMsg);
+          if (parsed && typeof parsed === "object") {
+            Object.entries(parsed).forEach(([docId, msgId]) => {
+              if (typeof msgId === "string") {
+                chatLastSeenMessageIdRef.current.set(docId, msgId);
+              }
+            });
+          }
+        }
+        
+        recalcChatUnreadTotal();
+      } catch (e) {
+        console.error("Failed to load persisted chat state:", e);
+      }
+    };
+    
+    loadPersistedChatState();
+
+    // Listen to spf_creations collection for chat messages
+    const collRef = collection(dbCollab, "spf_creations");
+    const unsubscribe = onSnapshot(collRef, (snapshot: QuerySnapshot<DocumentData>) => {
+      let hasNewUnread = false;
+      
+      snapshot.forEach((docSnapshot) => {
+        const docId = docSnapshot.id;
+        const data = docSnapshot.data();
+        const messages = data.messages || [];
+        
+        // Calculate unread messages for this chat
+        const unreadMessages = messages.filter((msg: any) => {
+          // Message is unread if:
+          // 1. It's not from the current user
+          // 2. Current user is NOT in the seenBy array
+          const isFromOthers = msg.senderId !== userId;
+          const notSeen = !msg.seenBy?.includes(userId);
+          return isFromOthers && notSeen;
+        });
+        
+        const unreadCount = unreadMessages.length;
+        const previousCount = chatUnreadMapRef.current.get(docId) || 0;
+        
+        // Check if there are new unread messages
+        if (unreadCount > previousCount) {
+          hasNewUnread = true;
+        }
+        
+        // Update the unread count for this chat
+        if (unreadCount > 0) {
+          chatUnreadMapRef.current.set(docId, unreadCount);
+        } else {
+          chatUnreadMapRef.current.delete(docId);
+        }
+      });
+      
+      // Recalculate total unread count
+      recalcChatUnreadTotal();
+      
+      // Persist to localStorage
+      persistChatUnreadMap(userId, chatUnreadMapRef.current);
+      
+      // Play notification sound if there are new unread messages
+      if (hasNewUnread && chatNotifSoundRef.current) {
+        chatNotifSoundRef.current.currentTime = 0;
+        chatNotifSoundRef.current.play().catch(() => {});
+      }
+    }, (error) => {
+      console.error("Error listening to chat messages:", error);
+    });
+    
+    firebaseUnsubscribeRef.current = unsubscribe;
+    
+    return () => {
+      if (firebaseUnsubscribeRef.current) {
+        firebaseUnsubscribeRef.current();
+        firebaseUnsubscribeRef.current = null;
+      }
+    };
+  }, [
+    userId,
+    getChatUnreadKey,
+    getChatLastSeenMsgIdKey,
+    persistChatUnreadMap,
+    recalcChatUnreadTotal,
+  ]);
+
   const markSPFRequestAsRead = useCallback((spfNumber: string) => {
     if (!userId) return;
     const normalizedSPF = normalizeSPFNumber(spfNumber);
@@ -502,15 +649,6 @@ currentSignatureMap.set(
       normalizeCreationStatusForCompare(creation) !== normalizeCreationStatusForCompare(lastSeen);
     return Math.max(delta, alertUnread ? 1 : 0);
   }, [normalizeSPFNumber]);
-
-  // Chat notification functions
-  const recalcChatUnreadTotal = useCallback(() => {
-    let total = 0;
-    chatUnreadMapRef.current.forEach((count) => {
-      total += count;
-    });
-    setUnreadChatCount(total);
-  }, []);
 
   const markChatAsRead = useCallback((requestId: string) => {
     if (!userId || !requestId) return;

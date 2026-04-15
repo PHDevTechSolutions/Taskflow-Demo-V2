@@ -16,6 +16,8 @@ interface CollaborationHubRowTriggerProps {
   title?: string;
   variant?: "icon" | "button";
   className?: string;
+  // Optional: allow passing numeric id for chat document
+  chatDocId?: string | number;
 }
 
 export function CollaborationHubRowTrigger({
@@ -26,6 +28,7 @@ export function CollaborationHubRowTrigger({
   title,
   variant = "icon",
   className,
+  chatDocId,
 }: CollaborationHubRowTriggerProps) {
   const [open, setOpen] = useState(false);
   const { userId } = useUser();
@@ -36,8 +39,8 @@ export function CollaborationHubRowTrigger({
     userRole: string;
   } | null>(null);
 
-  // Always use spfNumber as document ID for chat
-  const effectiveDocId = spfNumber;
+  // Use chatDocId if provided, otherwise use spfNumber as document ID for chat
+  const effectiveDocId = chatDocId ? String(chatDocId) : spfNumber;
 
   const unreadCount = effectiveDocId ? getChatUnreadCount(effectiveDocId) : 0;
   const hasUnread = unreadCount > 0;
@@ -113,6 +116,7 @@ export function CollaborationHubRowTrigger({
           userRole={userData?.userRole || "User"}
           status={status}
           title={title || spfNumber}
+          chatDocId={chatDocId}
         />
       </>
     );
@@ -150,6 +154,7 @@ export function CollaborationHubRowTrigger({
         userRole={userData?.userRole || "User"}
         status={status}
         title={title || spfNumber}
+        chatDocId={chatDocId}
       />
     </>
   );

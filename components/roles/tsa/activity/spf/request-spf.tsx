@@ -699,6 +699,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         <CollaborationHubRowTrigger
                                                             requestId={String(item.id)}
                                                             spfNumber={item.spf_number}
+                                                            chatDocId={item.id}
                                                             status={item.status}
                                                             collectionName="spf_creations"
                                                             title={item.spf_number}
