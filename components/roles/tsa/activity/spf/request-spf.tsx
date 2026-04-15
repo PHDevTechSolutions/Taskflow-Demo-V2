@@ -56,6 +56,7 @@ interface SPFRecord {
     status?: string;
     item_description?: string;
     item_photo?: string;
+    spf_creation_id?: number;
 }
 
 interface SPFProps {
@@ -699,7 +700,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         <CollaborationHubRowTrigger
                                                             requestId={String(item.id)}
                                                             spfNumber={item.spf_number}
-                                                            chatDocId={item.id}
+                                                            chatDocId={item.spf_creation_id}
                                                             status={item.status}
                                                             collectionName="spf_creations"
                                                             title={item.spf_number}
