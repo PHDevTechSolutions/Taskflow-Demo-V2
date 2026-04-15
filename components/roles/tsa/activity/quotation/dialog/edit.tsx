@@ -794,6 +794,7 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
+        discountedAmount,
         totalAmount,
         isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
           const rawD = p.product_description || p.description || "";
@@ -1402,7 +1403,7 @@ export default function TaskListEditDialog({
       currentY += clientBlock.h;
 
       const headerBlock = await renderBlock(
-        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:35px;text-align:center;">NO</th><th style="width:35px;text-align:center;">QTY</th><th style="width:105px;text-align:center;">REF. PHOTO</th><th style="text-align:left;">PRODUCT DESCRIPTION</th><th style="width:90px;text-align:right;">UNIT PRICE</th><th style="width:90px;text-align:right;">TOTAL AMOUNT</th></tr></thead></table></div></div>`,
+        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:35px;text-align:center;">NO</th><th style="width:35px;text-align:center;">QTY</th><th style="width:105px;text-align:center;">REF. PHOTO</th><th style="text-align:left;">PRODUCT DESCRIPTION</th><th style="width:60px;text-align:center;">UNIT PRICE</th><th style="width:40px;text-align:center;">DISC</th><th style="width:60px;text-align:center;">NET PRICE</th><th style="width:60px;text-align:center;">TOTAL</th></tr></thead></table></div></div>`,
       );
       pdf.addImage(
         headerBlock.img,
@@ -1415,8 +1416,11 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
+        const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
+          ? (item.unitPrice - (item.discountedAmount / (Number(item.qty) || 1)))
+          : item.unitPrice;
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td><td style="width:60px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:60px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           finalizeCurrentPage();

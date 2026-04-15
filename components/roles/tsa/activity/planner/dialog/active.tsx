@@ -507,8 +507,7 @@ export function AccountDialog({
           formData.contact_number.length > 0 &&
           formData.contact_number.every((v) => v.trim() !== "") &&
           !companyError &&
-          formData.email_address.length > 0 &&
-          formData.email_address.every((em) => em === "N/A" || isValidEmail(em))
+          formData.email_address.every((em) => em === "N/A" || isValidEmail(em) || !em.trim())
         );
       case 1:
         return (
@@ -796,7 +795,8 @@ export function AccountDialog({
                                   const raw = e.target.value;
                                   const copy = [...formData.contact_number];
                                   if (isCustom) {
-                                    copy[i] = "#" + raw;
+                                    // For custom: allow any characters except comma (use slash for multiple numbers)
+                                    copy[i] = "#" + raw.replace(/,/g, "");
                                   } else {
                                     const cleaned = isIntl
                                       ? "+" + raw.replace(/[^0-9]/g, "")
@@ -805,7 +805,7 @@ export function AccountDialog({
                                   }
                                   updateField("contact_number", copy);
                                 }}
-                                placeholder={isCustom ? "Any format" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567 / 0922-456-7890"}
+                                placeholder={isCustom ? "Any format (use / for multiple)" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567 / 0922-456-7890"}
                                 className="rounded-none flex-1"
                               />
                             </div>
@@ -827,14 +827,32 @@ export function AccountDialog({
                               <Input
                                 type="email"
                                 value={email}
+                                disabled={email === "N/A"}
                                 onChange={(e) => {
                                   const copy = [...formData.email_address];
                                   copy[i] = e.target.value;
                                   updateField("email_address", copy);
                                 }}
-                                placeholder="email@example.com"
+                                placeholder={email === "N/A" ? "No email provided" : "email@example.com"}
                                 className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
                               />
+                            </div>
+                            {/* No Email Checkbox */}
+                            <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                              <input
+                                type="checkbox"
+                                id={`noEmail-${i}`}
+                                checked={email === "N/A"}
+                                onChange={(e) => {
+                                  const copy = [...formData.email_address];
+                                  copy[i] = e.target.checked ? "N/A" : "";
+                                  updateField("email_address", copy);
+                                }}
+                                className="w-4 h-4 cursor-pointer"
+                              />
+                              <label htmlFor={`noEmail-${i}`} className="text-xs text-amber-800 cursor-pointer select-none">
+                                No email address provided
+                              </label>
                             </div>
                             {emailError && (
                               <p className="text-red-500 text-xs mt-1">{emailError}</p>

@@ -12,6 +12,8 @@ type Item = {
     sku: string;
     product_description: string;
     unitPrice: number;
+    discount?: number;
+    discountedAmount?: number;
     totalAmount: number;
     remarks: string;
     /** True when this item originates from an SPF 1 (procurement-approved) record */
@@ -254,8 +256,10 @@ export const Preview: React.FC<PreviewProps> = ({
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
-                                <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
+                                <th className="p-3 border-r border-black w-20 text-center">UNIT PRICE</th>
+                                <th className="p-3 border-r border-black w-14 text-center">DISC</th>
+                                <th className="p-3 border-r border-black w-20 text-center">NET UNIT PRICE</th>
+                                <th className="p-3 w-20 text-center">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black">
@@ -297,7 +301,21 @@ export const Preview: React.FC<PreviewProps> = ({
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
                                         ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-4 text-right font-black align-top text-[#121212]">
+                                    <td className="p-4 text-center border-r border-black align-top">
+                                        {item.discount && item.discount > 0 ? (
+                                            <span className="font-bold text-[#121212]">{item.discount}%</span>
+                                        ) : (
+                                            <span className="text-gray-400">-</span>
+                                        )}
+                                    </td>
+                                    <td className="p-4 text-center border-r border-black align-top font-medium">
+                                        {item.discount && item.discount > 0 && item.discountedAmount !== undefined ? (
+                                            <span>₱{(item.unitPrice - (item.discountedAmount / (Number(item.qty) || 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        ) : (
+                                            <span>₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        )}
+                                    </td>
+                                    <td className="p-4 text-center font-black align-top text-[#121212]">
                                         ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
@@ -329,7 +347,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                     </div>
                                 </td>
 
-                                <td colSpan={2} className="p-0 align-top">
+                                <td colSpan={4} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
 

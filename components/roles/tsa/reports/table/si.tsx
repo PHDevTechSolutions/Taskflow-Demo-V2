@@ -130,8 +130,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i) => i.type_activity?.toLowerCase() === "delivered / closed transaction")
       .filter((i) => !s || [i.company_name, i.dr_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
       .filter((i) => filterStatus === "all" || i.status === filterStatus)
-      .filter((i) => inDateRange(i.delivery_date || i.date_created, dateCreatedFilterRange))
-      .sort((a, b) => new Date(b.delivery_date || b.date_created).getTime() - new Date(a.delivery_date || a.date_created).getTime());
+      .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
+      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
   const totalSales  = useMemo(() => filteredActivities.reduce((a, i) => a + (i.actual_sales ?? 0), 0), [filteredActivities]);

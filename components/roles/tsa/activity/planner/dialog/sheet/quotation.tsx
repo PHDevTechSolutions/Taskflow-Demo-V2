@@ -641,10 +641,21 @@ Procurement
 
     const deliveryFeeNumber = parseFloat(deliveryFee) || 0;
     const restockingFeeNumber = parseFloat(restockingFee) || 0;
-    const totalWithDelivery = productTotal + deliveryFeeNumber + restockingFeeNumber;
+    const subtotalWithFees = productTotal + deliveryFeeNumber + restockingFeeNumber;
 
-    setQuotationAmount(totalWithDelivery.toFixed(2));
-  }, [selectedProducts, deliveryFee, restockingFee, discount]);
+    // Calculate EWT deduction
+    const whtBase = vatType === "vat_inc"
+      ? subtotalWithFees / 1.12
+      : subtotalWithFees;
+    const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
+    const whtAmount = Math.round((whtBase * whtRate) * 100) / 100;
+
+    // Quotation amount should be the NET amount (after EWT deduction)
+    // This is what gets saved to the database
+    const finalAmount = Math.round((subtotalWithFees - whtAmount) * 100) / 100;
+
+    setQuotationAmount(finalAmount.toFixed(2));
+  }, [selectedProducts, deliveryFee, restockingFee, discount, vatType, whtType]);
 
   useEffect(() => {
     setLocalQuotationNumber(quotationNumber);
@@ -973,6 +984,7 @@ Procurement
         itemRemarks: p.itemRemarks ?? "",
         unitPrice,
         discount,
+        discountedAmount,
         totalAmount,
         isSpf1: typeof p.id === "string" && p.id.startsWith("spf1-"),
         procurementLeadTime: p.procurementLeadTime ?? "",
@@ -981,22 +993,40 @@ Procurement
     });
 
     // --- CALCULATION LOGIC ---
-    const totalInvoiceAmount = Number(quotationAmount ?? 0);
-
-    // Define the Taxable Base for Withholding
-    // If VAT Inc, base = Total / 1.12. Otherwise, base = Total.
-    const whtBase = vatType === "vat_inc"
-      ? totalInvoiceAmount / 1.12
-      : totalInvoiceAmount;
+    // quotationAmount is now the NET amount (after EWT deduction)
+    const netAmountToCollect = Math.round((Number(quotationAmount ?? 0)) * 100) / 100;
+    const totalDiscount = items.reduce((acc, item) => acc + (item.discountedAmount || 0), 0);
 
     // Define the Withholding Rate
     const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
 
-    // Calculate final EWT Amount
-    const whtAmount = whtBase * whtRate;
+    // Calculate EWT Amount by working backwards from net amount
+    // netAmount = grossAmount - (grossAmount * whtRate) for non-VAT
+    // netAmount = grossAmount - ((grossAmount/1.12) * whtRate) for VAT Inc
+    // We need to solve for grossAmount
+    let totalInvoiceAmount: number;
+    if (whtRate === 0) {
+      totalInvoiceAmount = netAmountToCollect;
+    } else if (vatType === "vat_inc") {
+      // net = gross - ((gross/1.12) * whtRate)
+      // net = gross * (1 - (whtRate/1.12))
+      // gross = net / (1 - (whtRate/1.12))
+      totalInvoiceAmount = netAmountToCollect / (1 - (whtRate / 1.12));
+    } else {
+      // net = gross - (gross * whtRate)
+      // net = gross * (1 - whtRate)
+      // gross = net / (1 - whtRate)
+      totalInvoiceAmount = netAmountToCollect / (1 - whtRate);
+    }
+    totalInvoiceAmount = Math.round(totalInvoiceAmount * 100) / 100;
 
-    // Actual cash to be collected from the client
-    const netAmountToCollect = totalInvoiceAmount - whtAmount;
+    // Define the Taxable Base for Withholding
+    const whtBase = vatType === "vat_inc"
+      ? totalInvoiceAmount / 1.12
+      : totalInvoiceAmount;
+
+    // Calculate final EWT Amount
+    const whtAmount = Math.round((whtBase * whtRate) * 100) / 100;
 
     return {
       referenceNo: quotationNumber ?? "DRAFT-XXXX",
@@ -1021,6 +1051,7 @@ Procurement
 
       // --- TOTALS ---
       totalPrice: totalInvoiceAmount,
+      totalDiscount,
       deliveryFee: Number(deliveryFee ?? 0),
       netAmountToCollect,
 
@@ -1681,18 +1712,6 @@ Procurement
                       <FieldContent className="flex-1">
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
-
-                        {/* Buttons only show if selected */}
-                        {callType === label && (
-                          <div className="mt-4 flex gap-2">
-                            <Button type="button" variant="outline" className="rounded-none" onClick={handleBack}>
-                              <ArrowLeft /> Back
-                            </Button>
-                            <Button type="button" className="rounded-none" onClick={handleNext}>
-                              Next <ArrowRight />
-                            </Button>
-                          </div>
-                        )}
                       </FieldContent>
 
                       {/* RIGHT */}
@@ -2566,16 +2585,17 @@ Procurement
                                 productSource === "firebase_taskflow"
                               ) {
                                 const searchUpper = rawValue.toUpperCase();
+                                // Normalize search term (remove hyphens, spaces for flexible matching)
+                                const searchNormalized = searchUpper.replace(/[-\s]/g, "");
 
-                                const websiteFilter =
-                                  productSource === "firebase_shopify"
-                                    ? "Shopify"
-                                    : "Taskflow";
-
-                                const q = query(
-                                  collection(db, "products"),
-                                  where("websites", "array-contains", websiteFilter)
-                                );
+                                // firebase_taskflow: search ALL products (no restriction)
+                                // firebase_shopify: filter by "Shopify" in websites array
+                                const q = productSource === "firebase_taskflow"
+                                  ? query(collection(db, "products"))
+                                  : query(
+                                      collection(db, "products"),
+                                      where("websites", "array-contains", "Shopify")
+                                    );
 
                                 const querySnapshot = await getDocs(q);
 
@@ -2630,10 +2650,19 @@ ${spec.value}
                                         (data.itemCode || "") +
                                         " " +
                                         rawSpecsText
-                                      ).toUpperCase()
+                                      ).toUpperCase(),
+                                      // Normalized version for flexible matching (remove hyphens, spaces)
+                                      tempSearchMetadataNormalized: (
+                                        data.name +
+                                        (data.itemCode || "") +
+                                        rawSpecsText
+                                      ).toUpperCase().replace(/[-\s]/g, "")
                                     };
                                   })
-                                  .filter(p => p.tempSearchMetadata.includes(searchUpper));
+                                  .filter(p => 
+                                    p.tempSearchMetadata.includes(searchUpper) ||
+                                    p.tempSearchMetadataNormalized?.includes(searchNormalized)
+                                  );
 
                                 setSearchResults(firebaseResults);
                               }
@@ -2827,19 +2856,19 @@ ${spec.value}
                       {/* Subject + VAT + WHT — single compact toolbar */}
                       <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
                         {/* Subject */}
-                        <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
+                        <div className="flex items-center gap-2 px-3 py-6 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-red-600 tracking-widest shrink-0">Subject *</span>
                           <input
                             type="text"
                             value={quotationSubject}
                             onChange={(e) => setQuotationSubject(e.target.value)}
                             placeholder="For Quotation"
-                            className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                            className="border-0 bg-transparent px-0 py-0 text-[12px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
                           />
                         </div>
 
                         {/* VAT */}
-                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                        <div className="flex items-center gap-2 px-3 py-6 border-b lg:border-b-0 lg:border-r border-gray-200">
                           <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
                           <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-2">
                             {[{ v: "vat_inc", l: "Inc" }, { v: "vat_exe", l: "Exe" }, { v: "zero_rated", l: "0%" }].map(({ v, l }) => (
@@ -2852,7 +2881,7 @@ ${spec.value}
                         </div>
 
                         {/* EWT */}
-                        <div className="flex items-center gap-2 px-3 py-2">
+                        <div className="flex items-center gap-2 px-3 py-6">
                           <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
                           <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-2">
                             {[{ v: "none", l: "None" }, { v: "wht_1", l: "1%" }, { v: "wht_2", l: "2%" }].map(({ v, l }) => (
@@ -2901,7 +2930,7 @@ ${spec.value}
                               <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
                               <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
                               <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
-                              <th className="border border-gray-700 p-2 text-center hidden sm:table-cell font-bold">Discount</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold">Discount</th>
                               <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
                               <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
                             </tr>
@@ -3432,8 +3461,10 @@ ${spec.value}
                           <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                           <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                           <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                          <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
-                          <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
+                          <th className="p-3 border-r border-black w-20 text-center">UNIT PRICE</th>
+                          <th className="p-3 border-r border-black w-5 text-center">DISC</th>
+                          <th className="p-3 border-r border-black w-20 text-center">NET UNIT PRICE</th>
+                          <th className="p-3 w-20 text-center">TOTAL AMOUNT</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black">
@@ -3483,7 +3514,26 @@ ${spec.value}
                             </td>
                             <td className="p-4 text-right border-r border-black align-top font-medium">
                               ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-
+                            </td>
+                            <td className="p-4 text-right border-r border-black align-top">
+                              {item.discount > 0 ? (
+                                <div>
+                                  <span className="font-bold">{item.discount}%</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right border-r border-black align-top">
+                              {item.discount > 0 ? (
+                                <div>
+                                  <div className="font-medium">
+                                    ₱{item.discountedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">-</span>
+                              )}
                             </td>
                             <td className="p-4 text-right font-black align-top text-[#121212]">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -3594,7 +3644,7 @@ ${spec.value}
                             </div>
                           </td>
 
-                          <td colSpan={2} className="p-0">
+                          <td colSpan={4} className="p-0">
                             <table className="w-full border-collapse">
                               <tbody className="text-[10px]">
 
@@ -3604,7 +3654,7 @@ ${spec.value}
                                     Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{(payload.totalPrice - payload.deliveryFee).toLocaleString(undefined, {
+                                    ₱{(payload.totalPrice - payload.deliveryFee - (Number(restockingFee) || 0)).toLocaleString(undefined, {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: 2
                                     })}
