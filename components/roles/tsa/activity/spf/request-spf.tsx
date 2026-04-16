@@ -7,7 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     AlertCircleIcon, PlusCircle, PenIcon, Trash2Icon,
     Search, FileText, Loader2, Building2, User, ChevronLeft, ChevronRight,
-    RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -21,8 +20,6 @@ import {
     DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
-import { RevisionDialog } from "../../activity/spf/dialog/revision-dialog";
-import { CollaborationHubRowTrigger } from "@/components/collaboration-row-trigger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -273,10 +270,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [deleteTarget, setDeleteTarget] = useState<SPFRecord | null>(null);
     const [loadingSPF, setLoadingSPF] = useState(false);
 
-    // Revision dialog state
-    const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
-    const [revisionTargetSpfNumber, setRevisionTargetSpfNumber] = useState<string | null>(null);
-
     const endTimerRef = useRef<number | null>(null);
 
     // ─── Fetch accounts (all, not paginated on API level) ────────────────────────
@@ -505,30 +498,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         fetchActivities();
     };
 
-    // ─── Request Revision ──────────────────────────────────────────────────────────
-
-    const openRevisionDialog = (spf_number: string) => {
-        setRevisionTargetSpfNumber(spf_number);
-        setRevisionDialogOpen(true);
-    };
-
-    const closeRevisionDialog = () => {
-        setRevisionDialogOpen(false);
-        setRevisionTargetSpfNumber(null);
-    };
-
-    const handleRequestRevision = async (spf_number: string, revision_type: string, revision_remarks: string) => {
-        const res = await fetch("/api/activity/tsa/spf/request-revision", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ spf_number, revision_type, revision_remarks }),
-        });
-        if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.message || "Failed to request revision");
-        }
-        return res.json();
-    };
     // ─── Render ──────────────────────────────────────────────────────────────────
 
     if (loading)
@@ -689,22 +658,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         >
                                                             <Trash2Icon className="w-3.5 h-3.5" />
                                                         </button>
-                                                        <button
-                                                            title="Request Revision"
-                                                            onClick={() => openRevisionDialog(item.spf_number)}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-all"
-                                                        >
-                                                            <RefreshCw className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <CollaborationHubRowTrigger
-                                                            requestId={String(item.id)}
-                                                            spfNumber={item.spf_number}
-                                                            status={item.status}
-                                                            collectionName="spf_creations"
-                                                            title={item.spf_number}
-                                                            variant="icon"
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all h-auto w-auto"
-                                                        />
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-3 py-2 whitespace-nowrap">
@@ -798,14 +751,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) setDeleteTarget(null); }}
                 onConfirm={confirmDelete}
                 label={deleteTarget ? `${deleteTarget.spf_number} — ${deleteTarget.customer_name}` : undefined}
-            />
-
-            {/* ── Revision dialog ────────────────────────────────────────────────── */}
-            <RevisionDialog
-                open={revisionDialogOpen}
-                onClose={closeRevisionDialog}
-                spf_number={revisionTargetSpfNumber}
-                onRequestRevision={handleRequestRevision}
             />
         </div>
     );
