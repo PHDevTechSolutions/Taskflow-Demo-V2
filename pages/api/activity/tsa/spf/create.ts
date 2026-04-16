@@ -6,7 +6,7 @@ function incrementSPF(spf: string) {
     const parts = spf.split("-");
     const num = parseInt(parts[parts.length - 1], 10) || 0;
     const next = num + 1;
-    parts[parts.length - 1] = String(next).padStart(3, "0");
+    parts[parts.length - 1] = String(next).padStart(4, "0");
     return parts.join("-");
 }
 

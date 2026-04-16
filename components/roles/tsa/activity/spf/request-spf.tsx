@@ -56,6 +56,7 @@ interface SPFRecord {
     status?: string;
     item_description?: string;
     item_photo?: string;
+    spf_creation_id?: number;
 }
 
 interface SPFProps {
@@ -346,7 +347,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 .map((s) => parseInt(s.replace(`${prefix}${year}-`, ""), 10))
                 .filter((n) => !isNaN(n));
             const next = (nums.length ? Math.max(...nums) : 0) + 1;
-            return `${prefix}${year}-${String(next).padStart(3, "0")}`;
+            return `${prefix}${year}-${String(next).padStart(4, "0")}`;
         } catch (err) {
             console.error("SPF generate error:", err);
             return `SPF-DSI-${Date.now()}`;
@@ -699,6 +700,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         <CollaborationHubRowTrigger
                                                             requestId={String(item.id)}
                                                             spfNumber={item.spf_number}
+                                                            chatDocId={item.spf_creation_id}
                                                             status={item.status}
                                                             collectionName="spf_creations"
                                                             title={item.spf_number}

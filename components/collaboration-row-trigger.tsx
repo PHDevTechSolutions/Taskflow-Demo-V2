@@ -16,6 +16,7 @@ interface CollaborationHubRowTriggerProps {
   title?: string;
   variant?: "icon" | "button";
   className?: string;
+  chatDocId?: string | number;
 }
 
 export function CollaborationHubRowTrigger({
@@ -26,6 +27,7 @@ export function CollaborationHubRowTrigger({
   title,
   variant = "icon",
   className,
+  chatDocId,
 }: CollaborationHubRowTriggerProps) {
   const [open, setOpen] = useState(false);
   const { userId } = useUser();
@@ -36,15 +38,15 @@ export function CollaborationHubRowTrigger({
     userRole: string;
   } | null>(null);
 
-  // Always use spfNumber as document ID for chat
-  const effectiveDocId = spfNumber;
+  // The Firestore document ID used for this chat
+  const effectiveDocId = chatDocId ? String(chatDocId) : spfNumber;
 
+  // Re-read from context on every render — context state changes will re-render this
   const unreadCount = effectiveDocId ? getChatUnreadCount(effectiveDocId) : 0;
   const hasUnread = unreadCount > 0;
 
   useEffect(() => {
     if (!userId) return;
-    
     const fetchUser = async () => {
       try {
         const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`);
@@ -60,25 +62,37 @@ export function CollaborationHubRowTrigger({
         console.error("Failed to fetch user:", e);
       }
     };
-
     fetchUser();
   }, [userId]);
 
   const handleOpen = () => {
     setOpen(true);
-    // Mark chat as read when opening
-    if (effectiveDocId) {
-      markChatAsRead(effectiveDocId);
-    }
+    // Immediately clear badge when user clicks to open — persists to localStorage
+    if (effectiveDocId) markChatAsRead(effectiveDocId);
   };
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
-    if (!isOpen && effectiveDocId) {
-      // Mark chat as read when closing too
-      markChatAsRead(effectiveDocId);
-    }
+    // Also clear on close, in case new messages arrived while dialog was open
+    if (!isOpen && effectiveDocId) markChatAsRead(effectiveDocId);
   };
+
+  const dialogNode = (
+    <CollaborationHubDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      requestId={requestId}
+      spfNumber={spfNumber}
+      collectionName={collectionName}
+      currentUserId={userId || ""}
+      userName={userData?.userName || "User"}
+      profilePicture={userData?.profilePicture}
+      userRole={userData?.userRole || "User"}
+      status={status}
+      title={title || spfNumber}
+      chatDocId={chatDocId}
+    />
+  );
 
   if (variant === "button") {
     return (
@@ -101,56 +115,48 @@ export function CollaborationHubRowTrigger({
             </span>
           )}
         </Button>
-        <CollaborationHubDialog
-          open={open}
-          onOpenChange={handleOpenChange}
-          requestId={requestId}
-          spfNumber={spfNumber}
-          collectionName={collectionName}
-          currentUserId={userId || ""}
-          userName={userData?.userName || "User"}
-          profilePicture={userData?.profilePicture}
-          userRole={userData?.userRole || "User"}
-          status={status}
-          title={title || spfNumber}
-        />
+        {dialogNode}
       </>
     );
   }
 
+  // ── icon variant (default) ────────────────────────────────────────────────────
   return (
     <>
-      <Button
-        size="icon"
-        variant="ghost"
+      <button
         onClick={handleOpen}
+        title={hasUnread ? `${unreadCount} unread message${unreadCount > 1 ? "s" : ""}` : "Open collaboration chat"}
         className={cn(
-          "h-8 w-8 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors relative",
-          hasUnread && "text-red-500 hover:bg-red-50 hover:text-red-600",
+          // Base styles matching the edit/delete/revision buttons in the table
+          "relative p-1.5 border border-zinc-200 rounded-none transition-all",
+          // Default state
+          "text-zinc-400 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10",
+          // Unread state — red tint so it stands out in the row
+          hasUnread && "text-red-600 border-red-300 bg-red-50 hover:border-red-400 hover:bg-red-100",
           className
         )}
-        title="Open collaboration chat"
       >
-        <MessageSquare size={16} />
+        {/* Chat icon */}
+        <MessageSquare className="w-3.5 h-3.5" />
+
+        {/* Unread badge — overlaid on the upper-right of the icon */}
         {hasUnread && (
-          <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center text-[9px] rounded-full bg-red-600 text-white font-bold shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse">
+          <span
+            className={cn(
+              "absolute -top-1.5 -right-1.5 z-10",
+              "flex items-center justify-center",
+              "min-w-[16px] h-4 px-1",
+              "rounded-full text-[9px] font-bold leading-none text-white",
+              "bg-red-600 border border-white shadow-md",
+              // Pulse only when count is fresh (always animate; user can dismiss by opening)
+              "animate-pulse"
+            )}
+          >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
-      </Button>
-      <CollaborationHubDialog
-        open={open}
-        onOpenChange={handleOpenChange}
-        requestId={requestId}
-        spfNumber={spfNumber}
-        collectionName={collectionName}
-        currentUserId={userId || ""}
-        userName={userData?.userName || "User"}
-        profilePicture={userData?.profilePicture}
-        userRole={userData?.userRole || "User"}
-        status={status}
-        title={title || spfNumber}
-      />
+      </button>
+      {dialogNode}
     </>
   );
 }
