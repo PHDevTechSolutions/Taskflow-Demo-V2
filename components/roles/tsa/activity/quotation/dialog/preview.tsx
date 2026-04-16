@@ -310,13 +310,13 @@ export const Preview: React.FC<PreviewProps> = ({
                                     </td>
                                     <td className="p-4 text-center border-r border-black align-top font-medium">
                                         {item.discount && item.discount > 0 && item.discountedAmount !== undefined ? (
-                                            <span>₱{(item.unitPrice - (item.discountedAmount / (Number(item.qty) || 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                            <span>₱{Number(item.discountedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         ) : (
-                                            <span>₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                            <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         )}
                                     </td>
                                     <td className="p-4 text-center font-black align-top text-[#121212]">
-                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ₱{(item.totalAmount !== undefined ? Number(item.totalAmount) : Number(item.qty) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
@@ -357,7 +357,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                     Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{((Number(payload.totalPrice) - (Number(payload.deliveryFee) || 0) - (Number(payload.restockingFee) || 0)))
+                                                    ₱{((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0))
                                                         .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>

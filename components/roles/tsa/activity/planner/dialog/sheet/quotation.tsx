@@ -631,17 +631,20 @@ Procurement
     // Calculate total quotation amount considering discount per product
     const productTotal = selectedProducts.reduce((acc, p) => {
       const isDiscounted = p.isDiscounted ?? false;
-      const baseAmount = p.price * p.quantity;
       const rowDiscount = isDiscounted ? (p.discount ?? 0) : 0; // per-product discount
-      const discountedAmount = (baseAmount * rowDiscount) / 100;
-      const totalAfterDiscount = baseAmount - discountedAmount;
+      const unitDiscountAmount = (p.price * rowDiscount) / 100;
+      const netUnitPrice = p.price - unitDiscountAmount;
+      const totalAfterDiscount = netUnitPrice * p.quantity;
 
       return acc + totalAfterDiscount;
     }, 0);
 
+    // Round productTotal to 2 decimals to prevent floating-point precision issues
+    const roundedProductTotal = Math.round(productTotal * 100) / 100;
+
     const deliveryFeeNumber = parseFloat(deliveryFee) || 0;
     const restockingFeeNumber = parseFloat(restockingFee) || 0;
-    const subtotalWithFees = productTotal + deliveryFeeNumber + restockingFeeNumber;
+    const subtotalWithFees = roundedProductTotal + deliveryFeeNumber + restockingFeeNumber;
 
     // Calculate EWT deduction
     const whtBase = vatType === "vat_inc"
@@ -697,9 +700,9 @@ Procurement
     const discountedAmounts = selectedProducts.map((p) => {
       const isDiscounted = p.isDiscounted ?? false;
       if (!isDiscounted) return "0";
-      const baseAmount = p.price * p.quantity;
-      const discountAmount = (baseAmount * (p.discount ?? 0)) / 100;
-      return discountAmount.toFixed(2);
+      const unitDiscountAmount = (p.price * (p.discount ?? 0)) / 100;
+      const totalDiscountAmount = unitDiscountAmount * p.quantity;
+      return totalDiscountAmount.toFixed(2);
     });
 
     setProductCat(ids.join(","));
@@ -818,11 +821,10 @@ Procurement
         const unitPrice = p.price ?? 0;
         const isDiscounted = p.isDiscounted ?? false;
 
-        const baseAmount = qty * unitPrice;
-        const discountedAmount =
-          isDiscounted && discount > 0 ? (baseAmount * discount) / 100 : 0;
-
-        const totalAmount = baseAmount - discountedAmount;
+        const rowDiscount = isDiscounted ? (p.discount ?? 0) : 0;
+        const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
+        const netUnitPrice = unitPrice - unitDiscountAmount;
+        const totalAmount = netUnitPrice * qty;
 
         const title = p.title ?? "";
         const sku = p.skus?.join(", ") ?? "";
@@ -971,8 +973,9 @@ Procurement
       const discount = isDiscounted ? (p.discount ?? 0) : 0;
 
       const baseAmount = qty * unitPrice;
-      const discountedAmount = isDiscounted && discount > 0 ? (baseAmount * discount) / 100 : 0;
-      const totalAmount = baseAmount - discountedAmount;
+      const unitDiscountAmount = isDiscounted && discount > 0 ? (unitPrice * discount) / 100 : 0;
+      const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount
+      const totalAmount = discountedAmount * qty; // Total amount after discount
 
       return {
         itemNo: index + 1,
@@ -984,6 +987,7 @@ Procurement
         itemRemarks: p.itemRemarks ?? "",
         unitPrice,
         discount,
+        discountAmount: unitDiscountAmount, // Amount of discount per unit
         discountedAmount,
         totalAmount,
         isSpf1: typeof p.id === "string" && p.id.startsWith("spf1-"),
@@ -995,7 +999,8 @@ Procurement
     // --- CALCULATION LOGIC ---
     // quotationAmount is now the NET amount (after EWT deduction)
     const netAmountToCollect = Math.round((Number(quotationAmount ?? 0)) * 100) / 100;
-    const totalDiscount = items.reduce((acc, item) => acc + (item.discountedAmount || 0), 0);
+    const totalDiscount = items.reduce((acc, item) => acc + (item.discountAmount || 0), 0);
+    const totalGross = items.reduce((acc, item) => acc + (item.totalAmount || 0), 0); // Total amount after discounts
 
     // Define the Withholding Rate
     const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
@@ -1051,6 +1056,7 @@ Procurement
 
       // --- TOTALS ---
       totalPrice: totalInvoiceAmount,
+      totalGross, // Full amount before discounts (for Net Sales)
       totalDiscount,
       deliveryFee: Number(deliveryFee ?? 0),
       netAmountToCollect,
@@ -1395,7 +1401,9 @@ Procurement
           <div class="sku-text">${item.sku}</div>
           <div class="desc-text">${item.description}</div>
           </td>
-          <td style="width: 80px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
+          <td style="width: 70px; text-align:right;">₱${item.unitPrice.toLocaleString()}</td>
+          <td style="width: 40px; text-align:center;">${item.discount > 0 ? item.discount + '%' : '-'}</td>
+          <td style="width: 70px; text-align:right;">₱${item.discount > 0 ? item.discountedAmount.toLocaleString() : item.unitPrice.toLocaleString()}</td>
           <td style="width: 80px; text-align:right; font-weight:900;">₱${item.totalAmount.toLocaleString()}</td>
           </tr>
           </table>
@@ -2585,17 +2593,16 @@ Procurement
                                 productSource === "firebase_taskflow"
                               ) {
                                 const searchUpper = rawValue.toUpperCase();
-                                // Normalize search term (remove hyphens, spaces for flexible matching)
-                                const searchNormalized = searchUpper.replace(/[-\s]/g, "");
 
-                                // firebase_taskflow: search ALL products (no restriction)
-                                // firebase_shopify: filter by "Shopify" in websites array
-                                const q = productSource === "firebase_taskflow"
-                                  ? query(collection(db, "products"))
-                                  : query(
-                                      collection(db, "products"),
-                                      where("websites", "array-contains", "Shopify")
-                                    );
+                                const websiteFilter =
+                                  productSource === "firebase_shopify"
+                                    ? "Shopify"
+                                    : "Taskflow";
+
+                                const q = query(
+                                  collection(db, "products"),
+                                  where("websites", "array-contains", websiteFilter)
+                                );
 
                                 const querySnapshot = await getDocs(q);
 
@@ -2650,19 +2657,10 @@ ${spec.value}
                                         (data.itemCode || "") +
                                         " " +
                                         rawSpecsText
-                                      ).toUpperCase(),
-                                      // Normalized version for flexible matching (remove hyphens, spaces)
-                                      tempSearchMetadataNormalized: (
-                                        data.name +
-                                        (data.itemCode || "") +
-                                        rawSpecsText
-                                      ).toUpperCase().replace(/[-\s]/g, "")
+                                      ).toUpperCase()
                                     };
                                   })
-                                  .filter(p => 
-                                    p.tempSearchMetadata.includes(searchUpper) ||
-                                    p.tempSearchMetadataNormalized?.includes(searchNormalized)
-                                  );
+                                  .filter(p => p.tempSearchMetadata.includes(searchUpper));
 
                                 setSearchResults(firebaseResults);
                               }
@@ -3258,15 +3256,16 @@ ${spec.value}
                               <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
                                 ₱{selectedProducts.reduce((acc, p) => {
                                   const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                  const baseAmount = p.price * p.quantity;
-                                  return acc + (baseAmount * discount) / 100;
+                                  const unitDiscountAmount = (p.price * discount) / 100;
+                                  return acc + (unitDiscountAmount * p.quantity);
                                 }, 0).toFixed(2)}
                               </td>
                               <td className="border border-gray-300 p-2 text-center font-black">
                                 ₱{selectedProducts.reduce((acc, p) => {
                                   const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                  const baseAmount = p.price * p.quantity;
-                                  return acc + baseAmount - (baseAmount * discount) / 100;
+                                  const unitDiscountAmount = (p.price * discount) / 100;
+                                  const netUnitPrice = p.price - unitDiscountAmount;
+                                  return acc + (netUnitPrice * p.quantity);
                                 }, 0).toFixed(2)}
                               </td>
                               <td className="border border-gray-300 p-2"></td>
@@ -3532,7 +3531,7 @@ ${spec.value}
                                   </div>
                                 </div>
                               ) : (
-                                <span className="text-[10px] text-gray-400">-</span>
+                                <span className="font-medium">₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                               )}
                             </td>
                             <td className="p-4 text-right font-black align-top text-[#121212]">
@@ -3654,7 +3653,7 @@ ${spec.value}
                                     Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-black text-gray-900">
-                                    ₱{(payload.totalPrice - payload.deliveryFee - (Number(restockingFee) || 0)).toLocaleString(undefined, {
+                                    ₱{(payload.totalGross || payload.totalPrice - payload.deliveryFee - (Number(restockingFee) || 0)).toLocaleString(undefined, {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: 2
                                     })}

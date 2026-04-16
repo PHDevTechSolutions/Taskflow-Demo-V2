@@ -281,8 +281,6 @@ export const Progress: React.FC<NewTaskProps> = ({
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
-    .filter((a) => !isToday(a.scheduled_date))
-    
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) =>

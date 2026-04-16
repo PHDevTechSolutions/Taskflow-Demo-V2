@@ -1,0 +1,156 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CollaborationHubDialog } from "@/components/collaboration-hub-dialog";
+import { useUser } from "@/contexts/UserContext";
+import { useNotifications } from "@/contexts/NotificationContext";
+import { cn } from "@/lib/utils";
+
+interface CollaborationHubRowTriggerProps {
+  requestId: string;
+  spfNumber: string;
+  status?: string;
+  collectionName?: string;
+  title?: string;
+  variant?: "icon" | "button";
+  className?: string;
+}
+
+export function CollaborationHubRowTrigger({
+  requestId,
+  spfNumber,
+  status = "PENDING",
+  collectionName = "spf_creations",
+  title,
+  variant = "icon",
+  className,
+}: CollaborationHubRowTriggerProps) {
+  const [open, setOpen] = useState(false);
+  const { userId } = useUser();
+  const { getChatUnreadCount, markChatAsRead } = useNotifications();
+  const [userData, setUserData] = useState<{
+    userName: string;
+    profilePicture?: string;
+    userRole: string;
+  } | null>(null);
+
+  // Always use spfNumber as document ID for chat
+  const effectiveDocId = spfNumber;
+
+  const unreadCount = effectiveDocId ? getChatUnreadCount(effectiveDocId) : 0;
+  const hasUnread = unreadCount > 0;
+
+  useEffect(() => {
+    if (!userId) return;
+    
+    const fetchUser = async () => {
+      try {
+        const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUserData({
+            userName: `${data.Firstname || ""} ${data.Lastname || ""}`.trim(),
+            profilePicture: data.profilePicture || "",
+            userRole: data.Role || "User",
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch user:", e);
+      }
+    };
+
+    fetchUser();
+  }, [userId]);
+
+  const handleOpen = () => {
+    setOpen(true);
+    // Mark chat as read when opening
+    if (effectiveDocId) {
+      markChatAsRead(effectiveDocId);
+    }
+  };
+
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen && effectiveDocId) {
+      // Mark chat as read when closing too
+      markChatAsRead(effectiveDocId);
+    }
+  };
+
+  if (variant === "button") {
+    return (
+      <>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleOpen}
+          className={cn(
+            "h-9 px-3 rounded-xl flex items-center gap-1.5 border-blue-200 hover:bg-blue-50 hover:border-blue-300 relative",
+            hasUnread && "border-red-300 bg-red-50 hover:bg-red-100 hover:border-red-400",
+            className
+          )}
+        >
+          <MessageSquare size={14} className={cn("text-blue-600", hasUnread && "text-red-600")} />
+          <span className="text-xs font-medium">Chat</span>
+          {hasUnread && (
+            <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 flex items-center justify-center text-[10px] rounded-full bg-red-600 text-white font-bold shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+        <CollaborationHubDialog
+          open={open}
+          onOpenChange={handleOpenChange}
+          requestId={requestId}
+          spfNumber={spfNumber}
+          collectionName={collectionName}
+          currentUserId={userId || ""}
+          userName={userData?.userName || "User"}
+          profilePicture={userData?.profilePicture}
+          userRole={userData?.userRole || "User"}
+          status={status}
+          title={title || spfNumber}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={handleOpen}
+        className={cn(
+          "h-8 w-8 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors relative",
+          hasUnread && "text-red-500 hover:bg-red-50 hover:text-red-600",
+          className
+        )}
+        title="Open collaboration chat"
+      >
+        <MessageSquare size={16} />
+        {hasUnread && (
+          <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center text-[9px] rounded-full bg-red-600 text-white font-bold shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Button>
+      <CollaborationHubDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        requestId={requestId}
+        spfNumber={spfNumber}
+        collectionName={collectionName}
+        currentUserId={userId || ""}
+        userName={userData?.userName || "User"}
+        profilePicture={userData?.profilePicture}
+        userRole={userData?.userRole || "User"}
+        status={status}
+        title={title || spfNumber}
+      />
+    </>
+  );
+}

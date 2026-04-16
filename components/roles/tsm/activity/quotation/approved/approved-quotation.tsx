@@ -8,7 +8,7 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import TaskListEditDialog from "../../dialog/edit";
+import TaskListEditDialog from "./dialog/edit";
 
 interface SupervisorDetails {
     firstname: string;
@@ -54,6 +54,8 @@ interface Completed {
     tsm_approval_date: string;
     manager_approval_date: string;
     delivery_fee: string;
+    restocking_fee?: string;
+    quotation_vatable?: string;
 
     // Signatories
     agent_signature: string;
@@ -192,12 +194,12 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
         const search = searchTerm.toLowerCase();
 
         return sortedActivities
-            // 🔴 EXCLUDE declined quotations
+            // 
             .filter((item) =>
                 ["Approved", "Approved By Sales Head"].includes(item.tsm_approved_status)
             )
 
-            // 🔍 search filter
+            // 
             .filter((item) => {
                 if (!search) return true;
                 return Object.values(item).some(
@@ -205,13 +207,13 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                 );
             })
 
-            // 📄 quotation only
+            // 
             .filter((item) => item.type_activity === "Quotation Preparation")
 
-            // 🧹 meaningful data only
+            // 
             .filter(hasMeaningfulData)
 
-            // 📅 date range filter
+            // 
             .filter((item) => {
                 if (!dateCreatedFilterRange) return true;
 
@@ -529,6 +531,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     deliveryFee={editItem.delivery_fee}
+                    restockingFee={editItem.restocking_fee}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
                     agentContactNumber={editItem.agent_contact_number}
@@ -536,6 +539,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                     tsmName={editItem.tsm_name}
                     managerName={editItem.manager_name}
                     vatType={editItem.vat_type}
+                    whtType={editItem.quotation_vatable}
                 />
             )}
         </>

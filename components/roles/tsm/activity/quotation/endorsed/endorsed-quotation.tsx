@@ -6,7 +6,7 @@ import { AlertCircleIcon, CheckCircle2Icon, Eye, Search, Loader2, FileX } from "
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import TaskListEditDialog from "../../dialog/edit";
+import TaskListEditDialog from "../approved/dialog/edit";
 import { ButtonGroup } from "@/components/ui/button-group";
 
 interface Completed {

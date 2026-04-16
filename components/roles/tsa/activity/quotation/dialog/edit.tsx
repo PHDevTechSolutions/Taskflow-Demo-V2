@@ -570,13 +570,13 @@ export default function TaskListEditDialog({
     products.forEach((p, idx) => {
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
       const amt = parseFloat(p.product_amount ?? "0") || 0;
-      const baseAmount = qty * amt;
       const isChecked = checkedRows[idx] ?? false;
       const rowDiscount = isChecked
         ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
         : 0;
-      const discountedAmount = (baseAmount * rowDiscount) / 100;
-      const lineTotal = baseAmount - discountedAmount;
+      const unitDiscountAmount = (amt * rowDiscount) / 100;
+      const discountedUnitPrice = amt - unitDiscountAmount;
+      const lineTotal = discountedUnitPrice * qty;
       total += lineTotal;
     });
     setQuotationAmount(total);
@@ -690,7 +690,12 @@ export default function TaskListEditDialog({
 
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
       const restockingFeeNum = parseFloat(restockingFeeState) || 0;
-      const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+      const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+      // Calculate EWT deduction if applicable
+      const whtAmount = whtTypeState !== "none"
+        ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+        : 0;
+      const totalQuotationAmount = totalPriceWithDelivery - whtAmount;
 
       const bodyData: Completed & {
         vat_type?: "vat_inc" | "vat_exe" | "zero_rated";
@@ -779,8 +784,9 @@ export default function TaskListEditDialog({
       const isDiscounted = checkedRows[index] ?? false;
       const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
       const baseAmount = qty * unitPrice;
-      const discountedAmount = isDiscounted && rowDiscount > 0 ? (baseAmount * rowDiscount) / 100 : 0;
-      const totalAmount = baseAmount - discountedAmount;
+      const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
+      const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount
+      const totalAmount = discountedAmount * qty; // Total amount after discount
 
       return {
         itemNo: index + 1,
@@ -794,6 +800,7 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
+        discountAmount: unitDiscountAmount, // Amount of discount per unit
         discountedAmount,
         totalAmount,
         isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
@@ -1072,17 +1079,17 @@ export default function TaskListEditDialog({
   }, [selectedRevisedQuotation]);
 
   useEffect(() => {
-    if (!activityReferenceNumber) return;
+    if (!item.quotation_number) return;
     const fetch_ = async () => {
       const { data, error } = await supabase
         .from("revised_quotations")
         .select("*")
-        .eq("activity_reference_number", activityReferenceNumber)
+        .eq("quotation_number", item.quotation_number)
         .order("id", { ascending: false });
       if (!error) setRevisedQuotations(data || []);
     };
     fetch_();
-  }, [activityReferenceNumber]);
+  }, [item.quotation_number]);
 
   const payload = getQuotationPayload();
   const isEcoshift = quotation_type === "Ecoshift Corporation";
@@ -1403,7 +1410,24 @@ export default function TaskListEditDialog({
       currentY += clientBlock.h;
 
       const headerBlock = await renderBlock(
-        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:35px;text-align:center;">NO</th><th style="width:35px;text-align:center;">QTY</th><th style="width:105px;text-align:center;">REF. PHOTO</th><th style="text-align:left;">PRODUCT DESCRIPTION</th><th style="width:60px;text-align:center;">UNIT PRICE</th><th style="width:40px;text-align:center;">DISC</th><th style="width:60px;text-align:center;">NET PRICE</th><th style="width:60px;text-align:center;">TOTAL</th></tr></thead></table></div></div>`,
+        `<div class="content-area">
+        <div class="table-container" style="border-bottom:1.5px solid black;">
+        <table class="main-table">
+        <thead>
+        <tr>
+        <th style="width:35px;text-align:center;">NO</th>
+        <th style="width:35px;text-align:center;">QTY</th>
+        <th style="width:105px;text-align:center;">REF. PHOTO</th>
+        <th style="text-align:left;">PRODUCT DESCRIPTION</th>
+        <th style="width:60px;text-align:center;">UNIT PRICE</th>
+        <th style="width:40px;text-align:center;">DISC</th>
+        <th style="width:70px;text-align:center;">DISCOUNT PRICE</th>
+        <th style="width:60px;text-align:center;">TOTAL</th>
+        </tr>
+        </thead>
+        </table>
+        </div>
+        </div>`,
       );
       pdf.addImage(
         headerBlock.img,
@@ -1417,10 +1441,31 @@ export default function TaskListEditDialog({
 
       for (const [index, item] of payload.items.entries()) {
         const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
-          ? (item.unitPrice - (item.discountedAmount / (Number(item.qty) || 1)))
+          ? item.discountedAmount
           : item.unitPrice;
         const rowBlock = await renderBlock(
-          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td><td style="width:60px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:60px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
+          `<div class="content-area">
+          <table class="main-table" style="border:1.5px solid black;border-top:none;">
+          <tr>
+          <td style="width:35px;" class="item-no">${index + 1}</td>
+          <td style="width:35px;" class="qty-col">${item.qty}</td>
+          <td style="width:105px;padding:8px;text-align:center;vertical-align:middle;">
+          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
+          </td>
+          <td style="padding:8px 10px;">
+          <p class="product-title">${item.title}</p>
+          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
+          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
+          <div class="desc-text">${item.product_description}</div>
+          ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
+          </td>
+          <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td>
+          <td style="width:70px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="width:60px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          </table>
+          </div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           finalizeCurrentPage();
@@ -1458,7 +1503,7 @@ export default function TaskListEditDialog({
       const _total = Number(payload.totalPrice) || 0;
 
       // ✅ Calculations (rounded properly)
-      const _netSales = round2(_total - _deliveryNum - _restockingNum);
+      const _netSales = round2((payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * item.unitPrice), 0));
       const _vatAmount = round2(_total * (12 / 112));
       const _netOfVat = round2(_total / 1.12);
       const _whtAmount = round2(payload.whtAmount || 0);
@@ -2158,8 +2203,11 @@ ${payload.whtType && payload.whtType !== "none"
                 )}
 
                 <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
-                  <h3 className="text-sm font-semibold mb-2">
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                     Revised Quotations History
+                    <span className="bg-[#121212] text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                      {revisedQuotations.length}
+                    </span>
                   </h3>
                   {revisedQuotations.length === 0 ? (
                     <p>No revised quotations found.</p>
@@ -2310,8 +2358,9 @@ ${payload.whtType && payload.whtType !== "none"
                         const rowDiscount = isChecked
                           ? (product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
                           : 0;
-                        const discountedAmount = isChecked ? (baseAmount * rowDiscount) / 100 : 0;
-                        const totalAfterDiscount = baseAmount - discountedAmount;
+                        const unitDiscountAmount = isChecked ? (amt * rowDiscount) / 100 : 0;
+                        const discountedAmount = amt - unitDiscountAmount; // Unit price after discount
+                        const totalAfterDiscount = discountedAmount * qty; // Total after discount
                         return (
                           <React.Fragment key={index}>
                             <tr className="even:bg-gray-50 align-middle">
@@ -2518,16 +2567,24 @@ ${payload.whtType && payload.whtType !== "none"
                         </td>
                         <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
                           ₱{products.reduce((acc, p, idx) => {
+                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+                            const amt = parseFloat(p.product_amount ?? "0") || 0;
                             const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
-                            return acc + (base * disc) / 100;
+                            const unitDiscountAmt = (amt * disc) / 100;
+                            const discountedUnitPrice = amt - unitDiscountAmt;
+                            const lineTotal = discountedUnitPrice * qty;
+                            return acc + lineTotal;
                           }, 0).toFixed(2)}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-black">
                           ₱{products.reduce((acc, p, idx) => {
+                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+                            const amt = parseFloat(p.product_amount ?? "0") || 0;
                             const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
-                            return acc + base - (base * disc) / 100;
+                            const unitDiscountAmt = (amt * disc) / 100;
+                            const discountedUnitPrice = amt - unitDiscountAmt;
+                            const lineTotal = discountedUnitPrice * qty;
+                            return acc + lineTotal;
                           }, 0).toFixed(2)}
                         </td>
                         <td className="border border-gray-300 p-2"></td>
