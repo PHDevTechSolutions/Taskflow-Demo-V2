@@ -20,16 +20,11 @@ import {
 } from "@/components/ui/dialog";
 import { useNotifications } from "@/contexts/NotificationContext";
 
-const EspironLogo = ({ unreadCount = 0 }: { unreadCount?: number }) => (
+const EspironLogo = () => (
   <div className="flex items-center justify-center size-9 bg-linear-to-br from-[#be2d2d] to-[#5f2828] rounded-xl shadow-lg">
     <div className="relative flex items-center justify-center size-full">
       <MessageSquare size={18} className="text-white" />
       <div className="absolute inset-0 border-2 border-white/20 rounded-xl scale-90" />
-      {unreadCount > 0 && (
-        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#dc8c28] text-[9px] font-bold text-white border border-white shadow-md animate-pulse">
-          {unreadCount > 9 ? '9+' : unreadCount}
-        </span>
-      )}
     </div>
   </div>
 );
@@ -461,7 +456,7 @@ export function CollaborationHubDialog({
           <div className="p-4 bg-linear-to-r from-gray-800 to-gray-900 text-white rounded-b-3xl">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <EspironLogo unreadCount={unreadCount} />
+                <EspironLogo />
                 <div>
                   <h3 className="text-base font-bold tracking-tight text-white">{spfNumber}</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
