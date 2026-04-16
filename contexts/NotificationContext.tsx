@@ -11,7 +11,7 @@ import React, {
 import { supabase } from "@/utils/supabase";
 import { useUser } from "@/contexts/UserContext";
 import { dbCollab } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, QuerySnapshot, DocumentData } from "firebase/firestore";
+import { collection, onSnapshot, QuerySnapshot, DocumentData } from "firebase/firestore";
 
 /** Raw `spf_creation.status` values that map to actionable badges on the requests list. */
 const CREATION_NOTIFICATION_STATUSES = new Set([
@@ -69,12 +69,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const unreadCountMapRef = useRef<Map<string, number>>(new Map());
   const latestCreationStatusRef = useRef<Map<string, string>>(new Map());
   const lastSeenCreationRef = useRef<Map<string, string>>(new Map());
-  // Chat notification tracking
+
+  // ─── Chat notification state ─────────────────────────────────────────────────
+  // Source of truth: Firebase seenBy array per message.
+  // Persisted to localStorage so it survives page refreshes/restarts.
+  // Cleared only when the user actually opens the chat dialog (markChatAsRead).
   const chatUnreadMapRef = useRef<Map<string, number>>(new Map());
-  const chatLastReadMapRef = useRef<Map<string, string>>(new Map());
-  const chatLastSeenMessageIdRef = useRef<Map<string, string>>(new Map()); // Track last seen message ID per chat
   const firebaseUnsubscribeRef = useRef<(() => void) | null>(null);
   const chatNotifSoundRef = useRef<HTMLAudioElement | null>(null);
+  // Track the last known message count per chat to detect genuinely NEW messages
+  const chatLastMsgCountRef = useRef<Map<string, number>>(new Map());
 
   const getStorageKey = useCallback((uid: string) => `spf-notif-read-map:${uid}`, []);
   const getInitKey = useCallback((uid: string) => `spf-notif-init:${uid}`, []);
@@ -82,10 +86,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const getKnownSignatureKey = useCallback((uid: string) => `spf-notif-known-map:${uid}`, []);
   const getUnreadCountKey = useCallback((uid: string) => `spf-notif-unread-count-map:${uid}`, []);
   const getLastSeenCreationKey = useCallback((uid: string) => `spf-notif-last-seen-creation:${uid}`, []);
-  // Chat storage keys
-  const getChatUnreadKey = useCallback((uid: string) => `chat-notif-unread-map:${uid}`, []);
-  const getChatLastReadKey = useCallback((uid: string) => `chat-notif-last-read:${uid}`, []);
-  const getChatLastSeenMsgIdKey = useCallback((uid: string) => `chat-notif-last-seen-msg:${uid}`, []);
+
+  // ── Chat localStorage keys ───────────────────────────────────────────────────
+  // Key format: chat-unread-v2:{userId}
+  // Stores a plain object: { [docId]: unreadCount }
+  // "v2" to avoid conflicts with the old key schema
+  const getChatUnreadKey = useCallback((uid: string) => `chat-unread-v2:${uid}`, []);
+
   const normalizeSPFNumber = useCallback((value: unknown) => {
     if (typeof value !== "string") return "";
     return value.trim().replace(/\s+/g, "").toUpperCase();
@@ -111,15 +118,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     localStorage.setItem(getLastSeenCreationKey(uid), JSON.stringify(payload));
   }, [getLastSeenCreationKey]);
 
+  // ── Persist chat unread map to localStorage ──────────────────────────────────
   const persistChatUnreadMap = useCallback((uid: string, map: Map<string, number>) => {
-    const payload = Object.fromEntries(map.entries());
-    localStorage.setItem(getChatUnreadKey(uid), JSON.stringify(payload));
+    try {
+      const payload: Record<string, number> = {};
+      map.forEach((count, docId) => {
+        if (count > 0) payload[docId] = count;
+      });
+      localStorage.setItem(getChatUnreadKey(uid), JSON.stringify(payload));
+    } catch (e) {
+      console.error("Failed to persist chat unread map:", e);
+    }
   }, [getChatUnreadKey]);
 
-  const persistChatLastSeenMsgIdMap = useCallback((uid: string, map: Map<string, string>) => {
-    const payload = Object.fromEntries(map.entries());
-    localStorage.setItem(getChatLastSeenMsgIdKey(uid), JSON.stringify(payload));
-  }, [getChatLastSeenMsgIdKey]);
+  // ── Recalculate total chat unread and update state ───────────────────────────
+  const recalcChatUnreadTotal = useCallback(() => {
+    let total = 0;
+    chatUnreadMapRef.current.forEach((count) => { total += count; });
+    setUnreadChatCount(total);
+  }, []);
 
   const applyEffectiveUnreadAggregates = useCallback(() => {
     const unreadSet = new Set<string>();
@@ -144,9 +161,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const playNotificationSound = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (stopTimerRef.current) {
-      window.clearTimeout(stopTimerRef.current);
-    }
+    if (stopTimerRef.current) window.clearTimeout(stopTimerRef.current);
     audio.currentTime = 0;
     void audio.play().catch(() => {});
     stopTimerRef.current = window.setTimeout(() => {
@@ -156,6 +171,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, 5000);
   }, []);
 
+  // ─── SPF request notification logic (Supabase) ───────────────────────────────
   useEffect(() => {
     if (!userId) {
       unreadSPFRef.current = new Set();
@@ -173,9 +189,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       audioRef.current = new Audio("/musics/notif-sound.mp3");
       audioRef.current.preload = "auto";
     }
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
 
     let cancelled = false;
 
@@ -184,10 +198,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .from("spf_request")
         .select("spf_number, status")
         .not("spf_number", "is", null);
-const { data: creationData } = await supabase
-  .from("spf_creation")
-  .select("id, spf_number, status, date_created, date_updated, product_offer_image, product_offer_qty, product_offer_unit_cost, product_offer_technical_specification, supplier_brand, price_validity, tds")
-  .not("spf_number", "is", null);
+      const { data: creationData } = await supabase
+        .from("spf_creation")
+        .select("id, spf_number, status, date_created, date_updated, product_offer_image, product_offer_qty, product_offer_unit_cost, product_offer_technical_specification, supplier_brand, price_validity, tds")
+        .not("spf_number", "is", null);
 
       if (cancelled) return;
 
@@ -195,19 +209,11 @@ const { data: creationData } = await supabase
         (acc, row) => {
           const spfNumber = normalizeSPFNumber(row?.spf_number);
           if (!spfNumber) return acc;
-          acc.push({
-            spf_number: spfNumber,
-            status: typeof row?.status === "string" ? row.status : null,
-          });
+          acc.push({ spf_number: spfNumber, status: typeof row?.status === "string" ? row.status : null });
           return acc;
-        },
-        []
+        }, []
       );
-      const currentSPF = new Set(
-        requestRows
-          .map((row) => row.spf_number)
-          .filter((spf): spf is string => typeof spf === "string" && spf.length > 0)
-      );
+      const currentSPF = new Set(requestRows.map((row) => row.spf_number).filter((spf): spf is string => !!spf));
 
       const lastSeenKey = getLastSeenCreationKey(userId);
       const rawLastSeenCreation = localStorage.getItem(lastSeenKey);
@@ -221,14 +227,10 @@ const { data: creationData } = await supabase
               if (n && typeof v === "string") lastSeenMap.set(n, v);
             });
           }
-        } catch {
-          /* ignore */
-        }
+        } catch { /* ignore */ }
       }
       const staleLastSeenSpf: string[] = [];
-      lastSeenMap.forEach((_, spf) => {
-        if (!currentSPF.has(spf)) staleLastSeenSpf.push(spf);
-      });
+      lastSeenMap.forEach((_, spf) => { if (!currentSPF.has(spf)) staleLastSeenSpf.push(spf); });
       staleLastSeenSpf.forEach((spf) => lastSeenMap.delete(spf));
       lastSeenCreationRef.current = lastSeenMap;
 
@@ -237,65 +239,36 @@ const { data: creationData } = await supabase
       (creationData ?? []).forEach((row) => {
         const spf = normalizeSPFNumber(row?.spf_number);
         if (!spf) return;
-
-        const dateUpdatedValue = row?.date_updated;
-        const dateCreatedValue = row?.date_created;
-        const dateUpdatedMs =
-          typeof dateUpdatedValue === "string" || dateUpdatedValue instanceof Date
-            ? new Date(dateUpdatedValue).getTime()
-            : Number.NaN;
-        const dateCreatedMs =
-          typeof dateCreatedValue === "string" || dateCreatedValue instanceof Date
-            ? new Date(dateCreatedValue).getTime()
-            : Number.NaN;
-        const idMs = typeof row?.id === "number" ? row.id : Number.NaN;
-        const versionPoint = Number.isFinite(dateUpdatedMs)
-          ? dateUpdatedMs
-          : Number.isFinite(dateCreatedMs)
-            ? dateCreatedMs
-            : Number.isFinite(idMs)
-              ? idMs
-              : 0;
-        const previousVersionPoint = creationVersionMap.get(spf) ?? Number.NEGATIVE_INFINITY;
-        if (versionPoint < previousVersionPoint) return;
-
-// AFTER:
-creationVersionMap.set(spf, versionPoint);
-const creationStatus = typeof row?.status === "string" ? row.status : "unknown";
-
-// Build a content fingerprint from the actual row data
-// so ANY field change (not just status/timestamp) triggers a notification
-const contentFingerprint = [
-  creationStatus,
-  typeof row?.product_offer_image === "string" ? row.product_offer_image.slice(0, 100) : "",
-  typeof row?.product_offer_qty === "string" ? row.product_offer_qty : "",
-  typeof row?.product_offer_unit_cost === "string" ? row.product_offer_unit_cost : "",
-  typeof row?.supplier_brand === "string" ? row.supplier_brand : "",
-  typeof row?.price_validity === "string" ? row.price_validity : "",
-  typeof row?.tds === "string" ? row.tds : "",
-].join("|~|");
-
-creationSnapshotMap.set(spf, {
-  status: creationStatus,
-  version: versionPoint,
-  contentFingerprint,
-});
+        const dateUpdatedMs = typeof row?.date_updated === "string" ? new Date(row.date_updated).getTime() : NaN;
+        const dateCreatedMs = typeof row?.date_created === "string" ? new Date(row.date_created).getTime() : NaN;
+        const idMs = typeof row?.id === "number" ? row.id : NaN;
+        const versionPoint = Number.isFinite(dateUpdatedMs) ? dateUpdatedMs : Number.isFinite(dateCreatedMs) ? dateCreatedMs : Number.isFinite(idMs) ? idMs : 0;
+        if (versionPoint < (creationVersionMap.get(spf) ?? -Infinity)) return;
+        creationVersionMap.set(spf, versionPoint);
+        const creationStatus = typeof row?.status === "string" ? row.status : "unknown";
+        const contentFingerprint = [
+          creationStatus,
+          typeof row?.product_offer_image === "string" ? row.product_offer_image.slice(0, 100) : "",
+          typeof row?.product_offer_qty === "string" ? row.product_offer_qty : "",
+          typeof row?.product_offer_unit_cost === "string" ? row.product_offer_unit_cost : "",
+          typeof row?.supplier_brand === "string" ? row.supplier_brand : "",
+          typeof row?.price_validity === "string" ? row.price_validity : "",
+          typeof row?.tds === "string" ? row.tds : "",
+        ].join("|~|");
+        creationSnapshotMap.set(spf, { status: creationStatus, version: versionPoint, contentFingerprint });
       });
+
       const currentSignatureMap = new Map<string, string>();
       requestRows.forEach((row) => {
         const requestStatus = typeof row.status === "string" ? row.status : "unknown";
-        const normalizedRequestStatus = requestStatus.trim().toLowerCase();
         const creationSnapshot = creationSnapshotMap.get(row.spf_number);
-        const hasCreation = creationSnapshot ? "1" : "0";
-const normalizedCreationStatus = creationSnapshot
-  ? creationSnapshot.status.trim().toLowerCase()
-  : "__none__";
-const creationVersion = creationSnapshot ? String(creationSnapshot.version) : "__none__";
-const creationFingerprint = creationSnapshot?.contentFingerprint ?? "__none__";
-currentSignatureMap.set(
-  row.spf_number,
-  `request:${normalizedRequestStatus}|creation:${normalizedCreationStatus}|creation_v:${creationVersion}|has_creation:${hasCreation}|content:${creationFingerprint}`
-);
+        const normalizedCreationStatus = creationSnapshot ? creationSnapshot.status.trim().toLowerCase() : "__none__";
+        const creationVersion = creationSnapshot ? String(creationSnapshot.version) : "__none__";
+        const creationFingerprint = creationSnapshot?.contentFingerprint ?? "__none__";
+        currentSignatureMap.set(
+          row.spf_number,
+          `request:${requestStatus.trim().toLowerCase()}|creation:${normalizedCreationStatus}|creation_v:${creationVersion}|has_creation:${creationSnapshot ? "1" : "0"}|content:${creationFingerprint}`
+        );
       });
       latestSignatureRef.current = currentSignatureMap;
 
@@ -312,55 +285,29 @@ currentSignatureMap.set(
       const knownKey = getKnownSignatureKey(userId);
       const unreadCountKey = getUnreadCountKey(userId);
       const initialized = localStorage.getItem(initKey) === "1";
-      const rawReadMap = localStorage.getItem(storageKey);
-      const rawLegacy = localStorage.getItem(legacyKey);
-      const rawKnownSignatureMap = localStorage.getItem(knownKey);
-      const rawUnreadCountMap = localStorage.getItem(unreadCountKey);
-      const parsedReadMap = rawReadMap ? JSON.parse(rawReadMap) : {};
-      const parsedLegacy = rawLegacy ? JSON.parse(rawLegacy) : [];
-      const parsedKnownSignatureMap = rawKnownSignatureMap ? JSON.parse(rawKnownSignatureMap) : {};
-      const parsedUnreadCountMap = rawUnreadCountMap ? JSON.parse(rawUnreadCountMap) : {};
+      const parsedReadMap = (() => { try { return JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { return {}; } })();
+      const parsedLegacy = (() => { try { return JSON.parse(localStorage.getItem(legacyKey) || "[]"); } catch { return []; } })();
+      const parsedKnownSignatureMap = (() => { try { return JSON.parse(localStorage.getItem(knownKey) || "{}"); } catch { return {}; } })();
+      const parsedUnreadCountMap = (() => { try { return JSON.parse(localStorage.getItem(unreadCountKey) || "{}"); } catch { return {}; } })();
+
       const readMap = new Map<string, string>();
       const knownMap = new Map<string, string>();
       const unreadCountMap = new Map<string, number>();
-      if (parsedReadMap && typeof parsedReadMap === "object" && !Array.isArray(parsedReadMap)) {
-        Object.entries(parsedReadMap).forEach(([spf, signature]) => {
-          const normalizedSPF = normalizeSPFNumber(spf);
-          if (!normalizedSPF || typeof signature !== "string") return;
-          readMap.set(normalizedSPF, signature);
-        });
+      if (parsedReadMap && typeof parsedReadMap === "object") {
+        Object.entries(parsedReadMap).forEach(([spf, sig]) => { const n = normalizeSPFNumber(spf); if (n && typeof sig === "string") readMap.set(n, sig); });
       }
-      if (
-        parsedKnownSignatureMap &&
-        typeof parsedKnownSignatureMap === "object" &&
-        !Array.isArray(parsedKnownSignatureMap)
-      ) {
-        Object.entries(parsedKnownSignatureMap).forEach(([spf, signature]) => {
-          const normalizedSPF = normalizeSPFNumber(spf);
-          if (!normalizedSPF || typeof signature !== "string") return;
-          knownMap.set(normalizedSPF, signature);
-        });
+      if (parsedKnownSignatureMap && typeof parsedKnownSignatureMap === "object") {
+        Object.entries(parsedKnownSignatureMap).forEach(([spf, sig]) => { const n = normalizeSPFNumber(spf); if (n && typeof sig === "string") knownMap.set(n, sig); });
       }
-      if (parsedUnreadCountMap && typeof parsedUnreadCountMap === "object" && !Array.isArray(parsedUnreadCountMap)) {
-        Object.entries(parsedUnreadCountMap).forEach(([spf, count]) => {
-          const normalizedSPF = normalizeSPFNumber(spf);
-          if (!normalizedSPF || typeof count !== "number" || !Number.isFinite(count) || count <= 0) return;
-          unreadCountMap.set(normalizedSPF, count);
-        });
+      if (parsedUnreadCountMap && typeof parsedUnreadCountMap === "object") {
+        Object.entries(parsedUnreadCountMap).forEach(([spf, count]) => { const n = normalizeSPFNumber(spf); if (n && typeof count === "number" && count > 0) unreadCountMap.set(n, count); });
       }
       if (Array.isArray(parsedLegacy)) {
-        parsedLegacy.forEach((spf) => {
-          const normalizedSPF = normalizeSPFNumber(spf);
-          if (!normalizedSPF) return;
-          const signature = currentSignatureMap.get(normalizedSPF);
-          if (signature) readMap.set(normalizedSPF, signature);
-        });
+        parsedLegacy.forEach((spf) => { const n = normalizeSPFNumber(spf); if (!n) return; const sig = currentSignatureMap.get(n); if (sig) readMap.set(n, sig); });
       }
 
       if (!initialized) {
-        currentSignatureMap.forEach((signature, spf) => readMap.set(spf, signature));
-        knownMap.clear();
-        currentSignatureMap.forEach((signature, spf) => knownMap.set(spf, signature));
+        currentSignatureMap.forEach((sig, spf) => { readMap.set(spf, sig); knownMap.set(spf, sig); });
         unreadCountMap.clear();
         localStorage.setItem(initKey, "1");
       }
@@ -372,35 +319,21 @@ currentSignatureMap.set(
         const currentSignature = currentSignatureMap.get(spf);
         if (!currentSignature) return;
         activeKnownMap.set(spf, currentSignature);
-
         const signature = readMap.get(spf);
-        if (typeof signature === "string") {
-          activeReadMap.set(spf, signature);
-        }
-
+        if (typeof signature === "string") activeReadMap.set(spf, signature);
         if (!initialized) return;
-
         const previousKnownSignature = knownMap.get(spf);
         const readSignature = activeReadMap.get(spf);
         const previousUnreadCount = unreadCountMap.get(spf) ?? 0;
-
         if (!previousKnownSignature) {
-          if (readSignature !== currentSignature) {
-            activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount));
-          }
+          if (readSignature !== currentSignature) activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount));
           return;
         }
-
         if (previousKnownSignature !== currentSignature) {
-          if (readSignature !== currentSignature) {
-            activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount + 1));
-          }
+          if (readSignature !== currentSignature) activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount + 1));
           return;
         }
-
-        if (readSignature !== currentSignature) {
-          activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount));
-        }
+        if (readSignature !== currentSignature) activeUnreadCountMap.set(spf, Math.max(1, previousUnreadCount));
       });
       readSPFRef.current = activeReadMap;
       knownSignatureRef.current = activeKnownMap;
@@ -416,199 +349,127 @@ currentSignatureMap.set(
 
     const channel = supabase
       .channel("spf_request_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "spf_request" },
-        () => {
-          void syncUnreadState();
-          playNotificationSound();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "spf_creation" },
-        () => {
-          void syncUnreadState();
-          playNotificationSound();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "spf_request" }, () => { void syncUnreadState(); playNotificationSound(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "spf_creation" }, () => { void syncUnreadState(); playNotificationSound(); })
       .subscribe();
-
     channelRef.current = channel;
 
     return () => {
       cancelled = true;
-      if (stopTimerRef.current) {
-        window.clearTimeout(stopTimerRef.current);
-        stopTimerRef.current = null;
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
+      if (stopTimerRef.current) { window.clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
       supabase.removeChannel(channel);
     };
   }, [
-    userId,
-    getInitKey,
-    getStorageKey,
-    getLegacyStorageKey,
-    getKnownSignatureKey,
-    getUnreadCountKey,
-    persistReadMap,
-    persistKnownSignatureMap,
-    persistUnreadCountMap,
-    normalizeSPFNumber,
-    playNotificationSound,
-    getLastSeenCreationKey,
-    applyEffectiveUnreadAggregates,
+    userId, getInitKey, getStorageKey, getLegacyStorageKey, getKnownSignatureKey,
+    getUnreadCountKey, persistReadMap, persistKnownSignatureMap, persistUnreadCountMap,
+    normalizeSPFNumber, playNotificationSound, getLastSeenCreationKey, applyEffectiveUnreadAggregates,
   ]);
 
-  // Chat notification helper - defined before Firebase useEffect
-  const recalcChatUnreadTotal = useCallback(() => {
-    let total = 0;
-    chatUnreadMapRef.current.forEach((count) => {
-      total += count;
-    });
-    setUnreadChatCount(total);
-  }, []);
-
-  // Firebase real-time listener for chat messages
+  // ─── Firebase chat unread listener ───────────────────────────────────────────
+  // Strategy:
+  //   1. On mount, load persisted unread counts from localStorage immediately
+  //      so badges are visible before Firebase even connects.
+  //   2. On every Firebase snapshot, recompute unread per chat doc by counting
+  //      messages where senderId !== userId AND userId NOT in seenBy.
+  //   3. If the new count is higher than what we had, play a sound (new message).
+  //   4. Persist the updated map to localStorage so it survives refreshes.
+  //   5. markChatAsRead() clears the entry for that docId and persists — this is
+  //      the ONLY way the badge goes away.
   useEffect(() => {
     if (!userId) {
-      // Clear chat notification state when user logs out
       chatUnreadMapRef.current = new Map();
-      chatLastReadMapRef.current = new Map();
-      chatLastSeenMessageIdRef.current = new Map();
+      chatLastMsgCountRef.current = new Map();
       setUnreadChatCount(0);
-      if (firebaseUnsubscribeRef.current) {
-        firebaseUnsubscribeRef.current();
-        firebaseUnsubscribeRef.current = null;
-      }
+      if (firebaseUnsubscribeRef.current) { firebaseUnsubscribeRef.current(); firebaseUnsubscribeRef.current = null; }
       return;
     }
 
-    // Initialize chat notification sound
+    // Init sound
     if (!chatNotifSoundRef.current) {
       chatNotifSoundRef.current = new Audio("/musics/notif-messege-sound.mp3");
       chatNotifSoundRef.current.preload = "auto";
     }
 
-    // Load persisted chat unread state from localStorage
-    const loadPersistedChatState = () => {
-      try {
-        const unreadKey = getChatUnreadKey(userId);
-        const lastSeenMsgKey = getChatLastSeenMsgIdKey(userId);
-        
-        const rawUnread = localStorage.getItem(unreadKey);
-        const rawLastSeenMsg = localStorage.getItem(lastSeenMsgKey);
-        
-        if (rawUnread) {
-          const parsed = JSON.parse(rawUnread);
-          if (parsed && typeof parsed === "object") {
-            Object.entries(parsed).forEach(([docId, count]) => {
-              if (typeof count === "number" && count > 0) {
-                chatUnreadMapRef.current.set(docId, count);
-              }
-            });
-          }
-        }
-        
-        if (rawLastSeenMsg) {
-          const parsed = JSON.parse(rawLastSeenMsg);
-          if (parsed && typeof parsed === "object") {
-            Object.entries(parsed).forEach(([docId, msgId]) => {
-              if (typeof msgId === "string") {
-                chatLastSeenMessageIdRef.current.set(docId, msgId);
-              }
-            });
-          }
-        }
-        
+    // ── Step 1: Load persisted unread counts immediately ───────────────────────
+    try {
+      const raw = localStorage.getItem(getChatUnreadKey(userId));
+      if (raw) {
+        const parsed: Record<string, number> = JSON.parse(raw);
+        chatUnreadMapRef.current = new Map(
+          Object.entries(parsed).filter(([, v]) => typeof v === "number" && v > 0) as [string, number][]
+        );
         recalcChatUnreadTotal();
-      } catch (e) {
-        console.error("Failed to load persisted chat state:", e);
       }
-    };
-    
-    loadPersistedChatState();
+    } catch (e) {
+      console.error("Failed to load persisted chat unread:", e);
+    }
 
-    // Listen to spf_creations collection for chat messages
+    // ── Step 2: Subscribe to Firebase for live updates ─────────────────────────
     const collRef = collection(dbCollab, "spf_creations");
-    const unsubscribe = onSnapshot(collRef, (snapshot: QuerySnapshot<DocumentData>) => {
-      let hasNewUnread = false;
-      
-      snapshot.forEach((docSnapshot) => {
-        const docId = docSnapshot.id;
-        const data = docSnapshot.data();
-        const messages = data.messages || [];
-        
-        // Calculate unread messages for this chat
-        const unreadMessages = messages.filter((msg: any) => {
-          // Message is unread if:
-          // 1. It's not from the current user
-          // 2. Current user is NOT in the seenBy array
-          const isFromOthers = msg.senderId !== userId;
-          const notSeen = !msg.seenBy?.includes(userId);
-          return isFromOthers && notSeen;
-        });
-        
-        const unreadCount = unreadMessages.length;
-        const previousCount = chatUnreadMapRef.current.get(docId) || 0;
-        
-        // Check if there are new unread messages
-        if (unreadCount > previousCount) {
-          hasNewUnread = true;
-        }
-        
-        // Update the unread count for this chat
-        if (unreadCount > 0) {
-          chatUnreadMapRef.current.set(docId, unreadCount);
-        } else {
-          chatUnreadMapRef.current.delete(docId);
-        }
-      });
-      
-      // Recalculate total unread count
-      recalcChatUnreadTotal();
-      
-      // Persist to localStorage
-      persistChatUnreadMap(userId, chatUnreadMapRef.current);
-      
-      // Play notification sound if there are new unread messages
-      if (hasNewUnread && chatNotifSoundRef.current) {
-        chatNotifSoundRef.current.currentTime = 0;
-        chatNotifSoundRef.current.play().catch(() => {});
-      }
-    }, (error) => {
-      console.error("Error listening to chat messages:", error);
-    });
-    
-    firebaseUnsubscribeRef.current = unsubscribe;
-    
-    return () => {
-      if (firebaseUnsubscribeRef.current) {
-        firebaseUnsubscribeRef.current();
-        firebaseUnsubscribeRef.current = null;
-      }
-    };
-  }, [
-    userId,
-    getChatUnreadKey,
-    getChatLastSeenMsgIdKey,
-    persistChatUnreadMap,
-    recalcChatUnreadTotal,
-  ]);
+    const unsubscribe = onSnapshot(
+      collRef,
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        let hasNewMessages = false;
 
+        snapshot.forEach((docSnapshot) => {
+          const docId = docSnapshot.id;
+          const data = docSnapshot.data();
+          const messages: any[] = data.messages || [];
+
+          // Count messages from others that this user hasn't seen
+          const unreadCount = messages.filter(
+            (msg) => msg.senderId !== userId && !(msg.seenBy ?? []).includes(userId)
+          ).length;
+
+          const prevCount = chatUnreadMapRef.current.get(docId) ?? 0;
+          const prevMsgCount = chatLastMsgCountRef.current.get(docId) ?? 0;
+
+          // Detect genuinely new incoming messages (total count grew AND there are new unseens)
+          if (messages.length > prevMsgCount && unreadCount > prevCount) {
+            hasNewMessages = true;
+          }
+
+          // Update msg count tracker
+          chatLastMsgCountRef.current.set(docId, messages.length);
+
+          // Update unread map
+          if (unreadCount > 0) {
+            chatUnreadMapRef.current.set(docId, unreadCount);
+          } else {
+            // Only clear if Firebase confirms seenBy contains userId
+            // (i.e., the dialog already marked them as read in Firestore)
+            chatUnreadMapRef.current.delete(docId);
+          }
+        });
+
+        recalcChatUnreadTotal();
+        persistChatUnreadMap(userId, chatUnreadMapRef.current);
+
+        if (hasNewMessages && chatNotifSoundRef.current) {
+          chatNotifSoundRef.current.currentTime = 0;
+          chatNotifSoundRef.current.play().catch(() => {});
+        }
+      },
+      (error) => {
+        console.error("Firebase chat snapshot error:", error);
+      }
+    );
+
+    firebaseUnsubscribeRef.current = unsubscribe;
+    return () => {
+      if (firebaseUnsubscribeRef.current) { firebaseUnsubscribeRef.current(); firebaseUnsubscribeRef.current = null; }
+    };
+  }, [userId, getChatUnreadKey, persistChatUnreadMap, recalcChatUnreadTotal]);
+
+  // ─── SPF notification helpers ─────────────────────────────────────────────────
   const markSPFRequestAsRead = useCallback((spfNumber: string) => {
     if (!userId) return;
     const normalizedSPF = normalizeSPFNumber(spfNumber);
     if (!normalizedSPF) return;
     const currentSignature = latestSignatureRef.current.get(normalizedSPF);
     const currentCreation = latestCreationStatusRef.current.get(normalizedSPF) ?? "";
-    if (currentSignature) {
-      readSPFRef.current.set(normalizedSPF, currentSignature);
-    }
+    if (currentSignature) readSPFRef.current.set(normalizedSPF, currentSignature);
     unreadCountMapRef.current.delete(normalizedSPF);
     lastSeenCreationRef.current.set(normalizedSPF, currentCreation);
     persistLastSeenCreationMap(userId, lastSeenCreationRef.current);
@@ -616,15 +477,7 @@ currentSignatureMap.set(
     persistKnownSignatureMap(userId, knownSignatureRef.current);
     persistUnreadCountMap(userId, unreadCountMapRef.current);
     applyEffectiveUnreadAggregates();
-  }, [
-    normalizeSPFNumber,
-    persistReadMap,
-    persistKnownSignatureMap,
-    persistUnreadCountMap,
-    persistLastSeenCreationMap,
-    userId,
-    applyEffectiveUnreadAggregates,
-  ]);
+  }, [normalizeSPFNumber, persistReadMap, persistKnownSignatureMap, persistUnreadCountMap, persistLastSeenCreationMap, userId, applyEffectiveUnreadAggregates]);
 
   const isSPFRequestUnread = useCallback((spfNumber: string) => {
     const normalizedSPF = normalizeSPFNumber(spfNumber);
@@ -632,8 +485,7 @@ currentSignatureMap.set(
     const delta = unreadCountMapRef.current.get(normalizedSPF) ?? 0;
     const creation = latestCreationStatusRef.current.get(normalizedSPF) ?? "";
     const lastSeen = lastSeenCreationRef.current.get(normalizedSPF);
-    const alertUnread =
-      isCreationNotificationStatus(creation) &&
+    const alertUnread = isCreationNotificationStatus(creation) &&
       normalizeCreationStatusForCompare(creation) !== normalizeCreationStatusForCompare(lastSeen);
     return Math.max(delta, alertUnread ? 1 : 0) > 0;
   }, [normalizeSPFNumber]);
@@ -644,16 +496,22 @@ currentSignatureMap.set(
     const delta = unreadCountMapRef.current.get(normalizedSPF) ?? 0;
     const creation = latestCreationStatusRef.current.get(normalizedSPF) ?? "";
     const lastSeen = lastSeenCreationRef.current.get(normalizedSPF);
-    const alertUnread =
-      isCreationNotificationStatus(creation) &&
+    const alertUnread = isCreationNotificationStatus(creation) &&
       normalizeCreationStatusForCompare(creation) !== normalizeCreationStatusForCompare(lastSeen);
     return Math.max(delta, alertUnread ? 1 : 0);
   }, [normalizeSPFNumber]);
 
+  // ─── Chat notification helpers ────────────────────────────────────────────────
+
+  /**
+   * Call this when the user opens the chat dialog for a specific docId.
+   * It immediately clears the badge for that chat and persists the change.
+   * The Firebase seenBy update (done inside CollaborationHubDialog) will
+   * subsequently confirm via snapshot that unread = 0 for that doc.
+   */
   const markChatAsRead = useCallback((requestId: string) => {
     if (!userId || !requestId) return;
     chatUnreadMapRef.current.delete(requestId);
-    chatLastReadMapRef.current.set(requestId, new Date().toISOString());
     persistChatUnreadMap(userId, chatUnreadMapRef.current);
     recalcChatUnreadTotal();
   }, [userId, persistChatUnreadMap, recalcChatUnreadTotal]);
@@ -668,6 +526,11 @@ currentSignatureMap.set(
     return chatUnreadMapRef.current.get(requestId) ?? 0;
   }, []);
 
+  /**
+   * Allows CollaborationHubDialog to manually push a count update.
+   * Kept for backward compatibility but the primary source of truth
+   * is now the Firebase onSnapshot listener above.
+   */
   const updateChatUnreadCount = useCallback((requestId: string, count: number) => {
     if (!userId || !requestId) return;
     if (count <= 0) {
@@ -680,11 +543,7 @@ currentSignatureMap.set(
   }, [userId, persistChatUnreadMap, recalcChatUnreadTotal]);
 
   const clearNotifications = useCallback(() => {
-    if (!userId) {
-      unreadSPFRef.current = new Set();
-      setUnreadCount(0);
-      return;
-    }
+    if (!userId) { unreadSPFRef.current = new Set(); setUnreadCount(0); return; }
     latestSignatureRef.current.forEach((signature, spf) => {
       readSPFRef.current.set(spf, signature);
       const creation = latestCreationStatusRef.current.get(spf) ?? "";
@@ -696,14 +555,7 @@ currentSignatureMap.set(
     persistUnreadCountMap(userId, unreadCountMapRef.current);
     persistLastSeenCreationMap(userId, lastSeenCreationRef.current);
     applyEffectiveUnreadAggregates();
-  }, [
-    persistReadMap,
-    persistKnownSignatureMap,
-    persistUnreadCountMap,
-    persistLastSeenCreationMap,
-    userId,
-    applyEffectiveUnreadAggregates,
-  ]);
+  }, [persistReadMap, persistKnownSignatureMap, persistUnreadCountMap, persistLastSeenCreationMap, userId, applyEffectiveUnreadAggregates]);
 
   return (
     <NotificationContext.Provider value={{
