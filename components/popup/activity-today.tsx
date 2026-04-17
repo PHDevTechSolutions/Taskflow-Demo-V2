@@ -43,7 +43,12 @@ const isToday = (dateStr: string) => {
 
 const getDismissed = (): string[] => {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+  } catch {
+    localStorage.removeItem(DISMISSED_KEY);
+    return [];
+  }
 };
 
 const hasShownToday = (): boolean => {

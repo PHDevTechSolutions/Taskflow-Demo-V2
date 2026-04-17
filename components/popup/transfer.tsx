@@ -104,7 +104,12 @@ export function TransferAlertDialog() {
 
         if (json.success && json.data.length > 0) {
           // Load dismissed list from localStorage
-          const dismissedTransfers: string[] = JSON.parse(localStorage.getItem("dismissedTransfers") || "[]");
+          let dismissedTransfers: string[] = [];
+          try {
+            dismissedTransfers = JSON.parse(localStorage.getItem("dismissedTransfers") || "[]");
+          } catch {
+            localStorage.removeItem("dismissedTransfers");
+          }
 
           // Filter out transfers already dismissed
           const newTransfers = json.data.filter(
@@ -172,7 +177,12 @@ export function TransferAlertDialog() {
   // When user confirms they want to dismiss and never see again until new transfer
   function confirmDismiss() {
     // Save dismissed transfer company names to localStorage, so they won't show again
-    const dismissedTransfers: string[] = JSON.parse(localStorage.getItem("dismissedTransfers") || "[]");
+    let dismissedTransfers: string[] = [];
+    try {
+      dismissedTransfers = JSON.parse(localStorage.getItem("dismissedTransfers") || "[]");
+    } catch {
+      localStorage.removeItem("dismissedTransfers");
+    }
     const newDismissed = [...dismissedTransfers, ...transfers.map(t => t.company_name)];
     localStorage.setItem("dismissedTransfers", JSON.stringify(newDismissed));
 

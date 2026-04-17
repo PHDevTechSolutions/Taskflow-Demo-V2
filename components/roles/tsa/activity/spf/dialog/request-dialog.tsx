@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, Plus, Trash2, ImageIcon, Check,
-  ShieldCheck, FileText, Package, Building2,
+  ShieldCheck, FileText, Package, Building2, X, ZoomIn,
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { supabase } from "@/utils/supabase";
@@ -331,8 +331,15 @@ function QuotationView({
   const [submitting, setSubmitting] = useState(false);
   const [offers, setOffers] = useState<SPFCreationRow[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
 
   const fullName = [firstname, lastname].filter(Boolean).join(" ").trim() || prepared_by || "";
+
+  const openFullImage = (url: string) => {
+    setFullImageUrl(url);
+    setIsImageDialogOpen(true);
+  };
 
   const items = (() => {
     const descs = (currentSPF?.item_description || "").split(",").map((s: string) => s.trim());
@@ -404,7 +411,7 @@ function QuotationView({
                   <div style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#1f2937", padding: "4px 10px" }}>
                       <FileText style={{ width: "10px", height: "10px", color: "#f9fafb" }} />
-                      <span style={{ ...F, fontSize: "10px", letterSpacing: "0.1em", color: "#f9fafb", fontWeight: 700 }}>{currentSPF?.spf_number || "SPF-PENDING"}</span>
+                      <span style={{ ...F, fontSize: "10px", color: "#f9fafb", fontWeight: 700 }}>{currentSPF?.spf_number || "SPF-PENDING"}</span>
                     </div>
                     <div style={{ ...F, fontSize: "9px", color: "#9ca3af", marginTop: "5px" }}>{today}</div>
                   </div>
@@ -462,9 +469,20 @@ function QuotationView({
                               <span style={{ ...F, fontSize: "7px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700 }}>Item</span>
                               <span style={{ ...F, fontSize: "18px", fontWeight: 900, color: "#374151", lineHeight: 1 }}>{String(i + 1).padStart(2, "0")}</span>
                               {item.item_photo ? (
-                                <div style={{ width: "50px", height: "50px", border: "1px solid #d1d5db", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <img src={item.item_photo} alt={`Item ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                                </div>
+                                <>
+                                  <div
+                                    style={{ width: "50px", height: "50px", border: "1px solid #d1d5db", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                    onClick={() => openFullImage(item.item_photo)}
+                                  >
+                                    <img src={item.item_photo} alt={`Item ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                  </div>
+                                  <button
+                                    onClick={() => openFullImage(item.item_photo)}
+                                    style={{ ...F, fontSize: "7px", color: "#1e3a8a", background: "#dbeafe", padding: "2px 6px", border: "1px solid #93c5fd", cursor: "pointer", fontWeight: 600 }}
+                                  >
+                                    View Full
+                                  </button>
+                                </>
                               ) : (
                                 <div style={{ width: "50px", height: "50px", border: "1.5px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                   <span style={{ fontSize: "7px", color: "#d1d5db", ...F, textTransform: "uppercase" }}>No Photo</span>
@@ -575,15 +593,28 @@ function QuotationView({
                                       <div key={pi} style={{ border: "1px solid #e5e7eb", overflow: "hidden" }}>
                                         <div style={{ background: "#f0f9ff", borderBottom: "1px solid #dbeafe", padding: "4px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                           <span style={{ ...F, fontSize: "7.5px", color: "#1e40af", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Variant {pi + 1}</span>
-                                          {prod.image ? (
-                                            <div style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                              <img src={prod.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                                            </div>
-                                          ) : (
-                                            <div style={{ width: "32px", height: "32px", border: "1.5px dashed #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                              <span style={{ fontSize: "6px", color: "#bfdbfe", ...F, textTransform: "uppercase" }}>No Img</span>
-                                            </div>
-                                          )}
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            {prod.image ? (
+                                              <>
+                                                <div
+                                                  style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                                  onClick={() => openFullImage(prod.image)}
+                                                >
+                                                  <img src={prod.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                                </div>
+                                                <button
+                                                  onClick={() => openFullImage(prod.image)}
+                                                  style={{ ...F, fontSize: "7px", color: "#1e40af", background: "#dbeafe", padding: "2px 6px", border: "1px solid #93c5fd", cursor: "pointer", fontWeight: 600 }}
+                                                >
+                                                  View
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <div style={{ width: "32px", height: "32px", border: "1.5px dashed #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                <span style={{ fontSize: "6px", color: "#bfdbfe", ...F, textTransform: "uppercase" }}>No Img</span>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
 
                                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid #e5e7eb" }}>
@@ -639,6 +670,37 @@ function QuotationView({
           </div>
         </div>
       </DialogContent>
+
+      {/* Full Image Dialog */}
+      <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
+        <DialogContent
+          className="p-0 overflow-hidden"
+          style={{
+            maxWidth: "90vw",
+            maxHeight: "90vh",
+            width: "auto",
+            borderRadius: "4px",
+            border: "1px solid #d1d5db",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.1)",
+          }}
+        >
+          <div style={{ position: "relative", background: "#f8f7f4", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+            <button
+              onClick={() => setIsImageDialogOpen(false)}
+              style={{ position: "absolute", top: "8px", right: "8px", background: "#1f2937", border: "none", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 10 }}
+            >
+              <X style={{ width: "16px", height: "16px", color: "#f9fafb" }} />
+            </button>
+            {fullImageUrl && (
+              <img
+                src={fullImageUrl}
+                alt="Full size"
+                style={{ maxWidth: "100%", maxHeight: "calc(90vh - 60px)", objectFit: "contain", borderRadius: "2px" }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

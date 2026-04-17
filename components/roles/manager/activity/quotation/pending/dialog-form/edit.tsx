@@ -1044,97 +1044,12 @@ export default function TaskListEditDialog({
                             <XIcon className="w-4 h-4 mr-2" /> Close
                         </Button>
                         <Button
-                            onClick={() => openStatusDialog("Approved By Sales Head")}
-                            disabled={isUpdating}
-                            className="rounded-none p-6 bg-green-600"
-                        >
-                            <Check /> Approve
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => setIsDeclineOpen(true)}
-                            disabled={isUpdating}
-                            className="rounded-none p-6"
-                        >
-                            <XIcon /> Decline
-                        </Button>
-                        <Button
                             type="button"
                             onClick={DownloadPDF}
                             className="rounded-xs p-6 bg-blue-600"
                         >
                             <FileText />
                             PDF
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isDeclineOpen} onOpenChange={setIsDeclineOpen}>
-                <DialogContent className="max-w-md rounded-none">
-                    <DialogHeader>
-                        <DialogTitle>Decline Quotation</DialogTitle>
-                        <DialogDescription>Provide a reason for declining this quotation.</DialogDescription>
-                    </DialogHeader>
-
-                    <textarea
-                        value={tsmRemarks}
-                        onChange={(e) => setTsmRemarks(e.target.value)}
-                        placeholder="Enter reason for decline..."
-                        className="w-full min-h-[120px] border p-2 text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
-                    />
-
-                    <DialogFooter className="flex justify-end gap-3">
-                        <Button variant="outline" onClick={() => setIsDeclineOpen(false)} className="rounded-none p-6">
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            disabled={!tsmRemarks.trim() || isUpdating}
-                            onClick={() => {
-                                handleUpdateStatus("Decline By Sales Head", tsmRemarks);
-                                setIsDeclineOpen(false);
-                            }}
-                            className="rounded-none p-6"
-                        >
-                            Confirm Decline
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Approve / Endorse Dialog */}
-            <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-                <DialogContent className="max-w-md rounded-none">
-                    <DialogHeader>
-                        <DialogTitle>{statusDialogTitle}</DialogTitle>
-                        <DialogDescription>
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <textarea
-                        value={tsmRemarks}
-                        onChange={(e) => setTsmRemarks(e.target.value)}
-                        placeholder="Enter remarks..."
-                        className="w-full min-h-[100px] border p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 mt-2"
-                    />
-
-                    <DialogFooter className="flex justify-end gap-3 mt-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsStatusDialogOpen(false)}
-                            className="rounded-none p-6"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={() => {
-                                handleUpdateStatus(selectedStatus!, tsmRemarks);
-                                setIsStatusDialogOpen(false);
-                            }}
-                            className="rounded-none p-6"
-                        >
-                            Confirm
                         </Button>
                     </DialogFooter>
                 </DialogContent>

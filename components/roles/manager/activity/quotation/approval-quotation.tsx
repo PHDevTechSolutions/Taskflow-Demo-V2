@@ -8,7 +8,7 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import TaskListEditDialog from "./dialog/edit";
+import TaskListEditDialog from "./pending/dialog-form/edit";
 
 interface Completed {
     id: number;
@@ -580,6 +580,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>Actions</TableHead>
                                     <TableHead>Agent</TableHead>
                                     <TableHead>Company</TableHead>
                                     <TableHead>Contact Person</TableHead>
@@ -588,12 +589,33 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                     <TableHead>Status</TableHead>
                                     <TableHead>Quotation Status</TableHead>
                                     <TableHead>Date Created</TableHead>
-                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredActivities.map((item) => (
                                     <TableRow key={item.id}>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
+                                                        Actions
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="rounded-none text-xs">
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setEditItem(item);
+                                                            setEditDialogOpen(true);
+                                                        }}
+                                                        className="flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                        View
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
                                         <TableCell>
                                             {displayValue(item.agent_name)}
                                         </TableCell>
@@ -635,28 +657,6 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
                                         <TableCell>
                                             {new Date(item.date_created).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
-                                                        Actions
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="rounded-none text-xs">
-                                                    <DropdownMenuItem
-                                                        onClick={() => {
-                                                            setEditItem(item);
-                                                            setEditDialogOpen(true);
-                                                        }}
-                                                        className="flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                        View
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))}

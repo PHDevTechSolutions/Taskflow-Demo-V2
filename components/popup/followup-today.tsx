@@ -54,10 +54,15 @@ const isToday = (dateStr?: string) => {
   );
 };
 
-const getDismissedActivities = (): string[] =>
-  typeof window === "undefined"
-    ? []
-    : JSON.parse(localStorage.getItem("dismissedFollowups") || "[]");
+const getDismissedActivities = (): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem("dismissedFollowups") || "[]");
+  } catch {
+    localStorage.removeItem("dismissedFollowups");
+    return [];
+  }
+};
 
 const setDismissedActivities = (ids: string[]) => {
   localStorage.setItem("dismissedFollowups", JSON.stringify(ids));

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Loader2, ShieldCheck, ShieldX, SendToBack, FileText, Package, Building2 } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldX, SendToBack, FileText, Package, Building2, X, ZoomIn } from "lucide-react";
 import { supabase } from "@/utils/supabase";
+import { Button } from "@/components/ui/button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,13 @@ export function RequestDialog({
   const [submitting, setSubmitting] = useState(false);
   const [offers, setOffers] = useState<SPFCreationRow[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+
+  const openFullImage = (url: string) => {
+    setFullImageUrl(url);
+    setIsImageDialogOpen(true);
+  };
 
   const fullName = [firstname, lastname].filter(Boolean).join(" ").trim() || prepared_by || "";
 
@@ -320,7 +328,6 @@ export function RequestDialog({
   const statusBorder = sl === "approved" ? "#6ee7b7" : sl === "endorsed to sales head" ? "#93c5fd" : "#fcd34d";
   const statusLabel = sl === "approved by procurement" ? "Ready for Quotation" : currentSPF?.status;
 
-
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
@@ -350,7 +357,7 @@ export function RequestDialog({
                   <div style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#1f2937", padding: "4px 10px" }}>
                       <FileText style={{ width: "10px", height: "10px", color: "#f9fafb" }} />
-                      <span style={{ ...F, fontSize: "10px", letterSpacing: "0.1em", color: "#f9fafb", fontWeight: 700 }}>{currentSPF?.spf_number || "SPF-PENDING"}</span>
+                      <span style={{ ...F, fontSize: "10px", color: "#f9fafb", fontWeight: 700 }}>{currentSPF?.spf_number || "SPF-PENDING"}</span>
                     </div>
                     <div style={{ ...F, fontSize: "9px", color: "#9ca3af", marginTop: "5px" }}>{today}</div>
                   </div>
@@ -408,9 +415,18 @@ export function RequestDialog({
                               <span style={{ ...F, fontSize: "7px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700 }}>Item</span>
                               <span style={{ ...F, fontSize: "18px", fontWeight: 900, color: "#374151", lineHeight: 1 }}>{String(i + 1).padStart(2, "0")}</span>
                               {item.item_photo ? (
-                                <div style={{ width: "50px", height: "50px", border: "1px solid #d1d5db", background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <img src={item.item_photo} alt={`Item ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                                </div>
+                                <>
+                                  <div style={{ width: "50px", height: "50px", border: "1px solid #d1d5db", background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <img src={item.item_photo} alt={`Item ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                  </div>
+                                  <button
+                                    onClick={() => openFullImage(item.item_photo!)}
+                                    style={{ ...F, fontSize: "7px", background: "#1f2937", color: "#f9fafb", padding: "2px 6px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", marginTop: "2px" }}
+                                  >
+                                    <ZoomIn style={{ width: "8px", height: "8px" }} />
+                                    View Full
+                                  </button>
+                                </>
                               ) : (
                                 <div style={{ width: "50px", height: "50px", border: "1.5px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                   <span style={{ fontSize: "7px", color: "#d1d5db", ...F, textTransform: "uppercase" }}>No Photo</span>
@@ -523,9 +539,22 @@ export function RequestDialog({
                                           <div style={{ background: "#f0f9ff", borderBottom: "1px solid #dbeafe", padding: "4px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                             <span style={{ ...F, fontSize: "7.5px", color: "#1e40af", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Variant {pi + 1}</span>
                                             {prod.image ? (
-                                              <div style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                <img src={prod.image} alt={`R${ri + 1}P${pi + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                                              </div>
+                                              <>
+                                                <div
+                                                  onClick={() => openFullImage(prod.image)}
+                                                  style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                                  title="Click to view full image"
+                                                >
+                                                  <img src={prod.image} alt={`R${ri + 1}P${pi + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                                </div>
+                                                <button
+                                                  onClick={() => openFullImage(prod.image)}
+                                                  style={{ ...F, fontSize: "6px", background: "#1e3a8a", color: "#bfdbfe", padding: "1px 4px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "1px" }}
+                                                >
+                                                  <ZoomIn style={{ width: "7px", height: "7px" }} />
+                                                  View
+                                                </button>
+                                              </>
                                             ) : (
                                               <div style={{ width: "32px", height: "32px", border: "1.5px dashed #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                                 <span style={{ fontSize: "6px", color: "#bfdbfe", ...F, textTransform: "uppercase" }}>No Img</span>
@@ -630,6 +659,31 @@ export function RequestDialog({
             )}
         </div>
       </DialogContent>
+
+      {/* Full Image Dialog */}
+      <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
+        <DialogContent className="p-0 max-w-5xl w-[120vw] bg-white border-none">
+          <div style={{ position: "relative", padding: "16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsImageDialogOpen(false)}
+              className="absolute top-2 right-2 rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+            {fullImageUrl ? (
+              <img
+                src={fullImageUrl}
+                alt="Full view"
+                style={{ maxWidth: "100%", maxHeight: "90vh", objectFit: "contain" }}
+              />
+            ) : (
+              <div style={{ padding: "40px", color: "#9ca3af" }}>No image</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

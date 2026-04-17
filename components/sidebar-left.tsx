@@ -269,7 +269,13 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
   // Persist sidebar open/close state
   React.useEffect(() => {
     const saved = localStorage.getItem("sidebarOpenSections");
-    if (saved) setOpenSections(JSON.parse(saved));
+    if (saved) {
+      try {
+        setOpenSections(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem("sidebarOpenSections");
+      }
+    }
   }, []);
 
   React.useEffect(() => {

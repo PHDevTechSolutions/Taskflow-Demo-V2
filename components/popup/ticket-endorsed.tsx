@@ -91,7 +91,12 @@ export function TicketEndorsed() {
       const json     = await res.json();
       const all: EndorsedTicket[] = json.activities || [];
       const today    = new Date().toISOString().split("T")[0];
-      const dismissed: string[] = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+      let dismissed: string[] = [];
+      try {
+        dismissed = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+      } catch {
+        localStorage.removeItem(DISMISSED_KEY);
+      }
 
       const fresh = all.filter(
         (t) => !dismissed.includes(t.id) && toLocalDateStr(t.date_created) === today
@@ -144,7 +149,12 @@ export function TicketEndorsed() {
   const handleDismiss = () => setConfirmOpen(true);
 
   const confirmDismiss = () => {
-    const prev: string[] = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+    let prev: string[] = [];
+    try {
+      prev = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+    } catch {
+      localStorage.removeItem(DISMISSED_KEY);
+    }
     localStorage.setItem(DISMISSED_KEY, JSON.stringify([...prev, ...tickets.map((t) => t.id)]));
     localStorage.removeItem(SOUND_KEY);
     setSoundPlayed(false);

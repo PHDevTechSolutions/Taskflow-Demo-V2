@@ -126,7 +126,12 @@ export function ApproveTransferDialog() {
 
         if (json.success && json.data.length > 0) {
           // Load dismissed list from localStorage
-          const dismissedDeletions: string[] = JSON.parse(localStorage.getItem("dismissedDeletions") || "[]");
+          let dismissedDeletions: string[] = [];
+          try {
+            dismissedDeletions = JSON.parse(localStorage.getItem("dismissedDeletions") || "[]");
+          } catch {
+            localStorage.removeItem("dismissedDeletions");
+          }
 
           // Filter out dismissed companies
           const newDeletions = json.data.filter(
@@ -184,7 +189,12 @@ export function ApproveTransferDialog() {
   }
 
   function confirmDismiss() {
-    const dismissedDeletions: string[] = JSON.parse(localStorage.getItem("dismissedDeletions") || "[]");
+    let dismissedDeletions: string[] = [];
+    try {
+      dismissedDeletions = JSON.parse(localStorage.getItem("dismissedDeletions") || "[]");
+    } catch {
+      localStorage.removeItem("dismissedDeletions");
+    }
     const newDismissed = [...dismissedDeletions, ...deletions.map(t => t.company_name)];
     localStorage.setItem("dismissedDeletions", JSON.stringify(newDismissed));
 
