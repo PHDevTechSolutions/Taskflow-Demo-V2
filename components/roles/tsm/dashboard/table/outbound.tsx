@@ -19,6 +19,7 @@ interface HistoryItem {
   status: string;
   type_activity: string;
   actual_sales?: number | string;
+  quotation_amount?: number | string;
   start_date: string;
   end_date: string;
   date_created: string;
@@ -173,7 +174,23 @@ export function OutboundCallsTableCard({
       const numSO = soRefNums.size;
       const numSI = siRefNums.size;
 
-      // ── 4. Conversions
+      // ── 4. Calculate Quote Amount (sum of quotation_amount from Quote-Done activities)
+      let quoteAmount = 0;
+      obRefNums.forEach((refNum) => {
+        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
+        activitiesOnRef.forEach((act) => {
+          if (act.status === "Quote-Done" && act.quotation_amount) {
+            const amount = typeof act.quotation_amount === "string"
+              ? parseFloat(act.quotation_amount)
+              : act.quotation_amount;
+            if (!isNaN(amount)) {
+              quoteAmount += amount;
+            }
+          }
+        });
+      });
+
+      // ── 5. Conversions
       const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
       // Calls → Quote: how many of the OB call refs eventually got a Quote
       const callsToQuote = pct(numQuotes, totalCalls);
@@ -188,6 +205,7 @@ export function OutboundCallsTableCard({
         numQuotes,
         numSO,
         numSI,
+        quoteAmount,
         achievement,
         callsToQuote,
         quoteToSO,
@@ -202,11 +220,13 @@ export function OutboundCallsTableCard({
     const numQuotes = statsByAgent.reduce((s, a) => s + a.numQuotes, 0);
     const numSO = statsByAgent.reduce((s, a) => s + a.numSO, 0);
     const numSI = statsByAgent.reduce((s, a) => s + a.numSI, 0);
+    const totalQuoteAmount = statsByAgent.reduce((s, a) => s + a.quoteAmount, 0);
     return {
       totalCalls,
       numQuotes,
       numSO,
       numSI,
+      totalQuoteAmount,
       achievement: pct(totalCalls, obTarget * statsByAgent.length || 1),
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO: pct(numSO, numQuotes),
@@ -230,6 +250,7 @@ export function OutboundCallsTableCard({
         { header: "Achievement (%)", key: "achievement", width: 15 },
         { header: "Quotes (Based on OB)", key: "quotes", width: 20 },
         { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
+        { header: "Quote Amount", key: "quoteAmount", width: 18 },
         { header: "SO (Based on OB)", key: "so", width: 20 },
         { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
         { header: "SI (Based on OB)", key: "si", width: 20 },
@@ -256,6 +277,7 @@ export function OutboundCallsTableCard({
           achievement: (stat.achievement / 100), // decimal for percentage format
           quotes: stat.numQuotes,
           callsToQuote: parseFloat(stat.callsToQuote) / 100,
+          quoteAmount: stat.quoteAmount,
           so: stat.numSO,
           quoteToSO: parseFloat(stat.quoteToSO) / 100,
           si: stat.numSI,
@@ -271,6 +293,7 @@ export function OutboundCallsTableCard({
         achievement: parseFloat(totals.achievement) / 100,
         quotes: totals.numQuotes,
         callsToQuote: parseFloat(totals.callsToQuote) / 100,
+        quoteAmount: totals.totalQuoteAmount,
         so: totals.numSO,
         quoteToSO: parseFloat(totals.quoteToSO) / 100,
         si: totals.numSI,
@@ -283,8 +306,12 @@ export function OutboundCallsTableCard({
         row.eachCell((cell, colNumber) => {
           if (rowNumber > 1) {
             // Percentages: Achievement, Conversions
-            if ([4, 6, 8, 10].includes(colNumber)) {
+            if ([4, 6, 9, 11].includes(colNumber)) {
               cell.numFmt = '0.00%';
+            }
+            // Currency: Quote Amount
+            if ([7].includes(colNumber)) {
+              cell.numFmt = '₱#,##0.00';
             }
           }
         });
@@ -366,6 +393,7 @@ export function OutboundCallsTableCard({
                   <TableHead className="text-gray-500 text-center">Achievement</TableHead>
                   <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">Quote Based on OB Successful</TableHead>
                   <TableHead className="text-gray-500 text-center">Calls → Quote<span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span></TableHead>
+                  <TableHead className="text-gray-500 text-center">Quote Amount</TableHead>
                   <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SO Based on OB Successful</TableHead>
                   <TableHead className="text-gray-500 text-center">Quote → SO<span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span></TableHead>
                   <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SI Based on OB Successful</TableHead>
@@ -420,6 +448,11 @@ export function OutboundCallsTableCard({
                         <span className="text-gray-700">{stat.callsToQuote}</span>
                       </TableCell>
 
+                      {/* Quote Amount */}
+                      <TableCell className="text-center font-semibold text-green-600">
+                        ₱{stat.quoteAmount.toLocaleString()}
+                      </TableCell>
+
                       <TableCell className="text-center font-bold">
                         {convBadge(stat.numSO)}
                       </TableCell>
@@ -452,6 +485,7 @@ export function OutboundCallsTableCard({
                   <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>
                   <TableCell className="text-center">{totals.callsToQuote}</TableCell>
+                  <TableCell className="text-center font-semibold text-green-600">₱{totals.totalQuoteAmount.toLocaleString()}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numSO)}</TableCell>
                   <TableCell className="text-center">{totals.quoteToSO}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numSI)}</TableCell>

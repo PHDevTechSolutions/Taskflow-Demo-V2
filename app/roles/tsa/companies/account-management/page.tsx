@@ -124,11 +124,12 @@ function getTypeClientStyle(type: string) {
 type FilterType = "all" | "with-activity" | "no-activity" | string;
 
 function StatCard({
-  label, value, accent, onClick, isActive, sublabel, showFraction
+  label, value, accent, onClick, isActive, sublabel, showFraction, isNegative
 }: {
   label: string; value: number | string; accent: string;
   onClick?: () => void; isActive?: boolean; sublabel?: string;
   showFraction?: { count: number; total: number };
+  isNegative?: boolean;
 }) {
   const percentage = showFraction && showFraction.total > 0
     ? Math.round((showFraction.count / showFraction.total) * 100)
@@ -147,7 +148,9 @@ function StatCard({
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
         {percentage !== null && (
-          <span className="text-lg font-semibold text-emerald-600 tabular-nums">/ {percentage}%</span>
+          <span className={`text-lg font-semibold tabular-nums ${isNegative ? "text-amber-600" : "text-emerald-600"}`}>
+            / {percentage}%
+          </span>
         )}
       </div>
       {sublabel && <span className="text-[9px] text-gray-400">{sublabel}</span>}
@@ -583,6 +586,15 @@ function DashboardContent() {
                 {/* Stats - Clickable Cards for Filtering */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   <StatCard
+                    label="Total Accounts"
+                    value={accounts.length}
+                    accent="#1e293b"
+                    onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
+                    isActive={activityFilter === "all" && !typeFilter}
+                    showFraction={{ count: accounts.length, total: accounts.length }}
+                    sublabel="all accounts"
+                  />
+                  <StatCard
                     label="With Activity"
                     value={withActivityCount}
                     accent="#10b981"
@@ -597,6 +609,7 @@ function DashboardContent() {
                     accent="#f59e0b"
                     onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")}
                     isActive={activityFilter === "without"}
+                    isNegative
                     showFraction={{ count: withoutActivityCount, total: accounts.length }}
                     sublabel={`of ${accounts.length} total`}
                   />

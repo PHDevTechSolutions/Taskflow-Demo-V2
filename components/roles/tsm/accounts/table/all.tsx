@@ -128,10 +128,16 @@ function getTypeClientStyle(type: string) {
 
 /* ─── Stat Card ───────────────────────────────────────────────────── */
 
-function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive }: {
+function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive, showFraction, isNegative }: {
   label: string; value: number | string; accent: string;
   onClick?: () => void; clickable?: boolean; sublabel?: string; isActive?: boolean;
+  showFraction?: { count: number; total: number };
+  isNegative?: boolean;
 }) {
+  const percentage = showFraction && showFraction.total > 0
+    ? Math.round((showFraction.count / showFraction.total) * 100)
+    : null;
+
   return (
     <div onClick={onClick}
       className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all duration-150
@@ -141,7 +147,14 @@ function StatCard({ label, value, accent, onClick, clickable, sublabel, isActive
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{ background: `radial-gradient(circle at 80% 20%, ${accent}, transparent 70%)` }} />
       <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</span>
-      <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
+        {percentage !== null && (
+          <span className={`text-lg font-semibold tabular-nums ${isNegative ? "text-amber-600" : "text-emerald-600"}`}>
+            / {percentage}%
+          </span>
+        )}
+      </div>
       {sublabel && <span className="text-[10px] text-gray-400 mt-0.5">{sublabel}</span>}
       {isActive && (
         <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
@@ -185,6 +198,9 @@ function AgentDrillBreadcrumb({
 function AgentRowCard({ name, accountCount, withActivity, withoutActivity, onClick }: {
   name: string; accountCount: number; withActivity: number; withoutActivity: number; onClick: () => void;
 }) {
+  const withPct = accountCount > 0 ? Math.round((withActivity / accountCount) * 100) : 0;
+  const withoutPct = accountCount > 0 ? Math.round((withoutActivity / accountCount) * 100) : 0;
+
   return (
     <div onClick={onClick}
       className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all duration-150 group">
@@ -197,19 +213,19 @@ function AgentRowCard({ name, accountCount, withActivity, withoutActivity, onCli
           <div className="flex items-center gap-2 mt-0.5">
             <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {withActivity} w/ activity
+              {withActivity} / {withPct}% w/ activity
             </span>
             <span className="text-slate-200">·</span>
             <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              {withoutActivity} no activity
+              {withoutActivity} / {withoutPct}% no activity
             </span>
           </div>
         </div>
       </div>
       <div className="flex items-center gap-4 shrink-0">
         <div className="text-right">
-          <p className="text-lg font-bold text-slate-800 tabular-nums">{accountCount.toLocaleString()}</p>
+          <p className="text-lg font-bold text-slate-800 tabular-nums">{accountCount.toLocaleString()} / <span className="text-emerald-600">{withPct}%</span></p>
           <p className="text-[10px] text-slate-400 uppercase tracking-wide">accounts</p>
         </div>
         <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
@@ -732,7 +748,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [exportOpen, setExportOpen] = useState(false);
-  const [activeListOpen, setActiveListOpen] = useState<ListSource>(null);
+  const [activityFilter, setActivityFilter] = useState<"all" | "with" | "without">("all");
 
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
   const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
@@ -829,21 +845,29 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     });
     let entries = Object.entries(c).sort((a, b) => b[1] - a[1]);
 
-    // ← THIS IS THE KEY LINE
     if (typeClientFilter) {
       entries = entries.filter(([type]) => type === typeClientFilter);
     }
 
     return entries;
-  }, [unfilteredScopedBase, typeClientFilter]); // ← Add typeClientFilter here
+  }, [unfilteredScopedBase, typeClientFilter]);
 
   const agentsData = useMemo(() => {
+    // Filter accounts based on activity filter
+    let filteredAccounts = typeClientFilteredAccounts;
+    if (activityFilter === "with") {
+      filteredAccounts = typeClientFilteredAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
+    } else if (activityFilter === "without") {
+      filteredAccounts = typeClientFilteredAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase()));
+    }
+
     const map: Record<string, Account[]> = {};
-    typeClientFilteredAccounts.forEach((a) => {
+    filteredAccounts.forEach((a) => {
       const ref = a.referenceid?.toLowerCase() ?? "unassigned";
       if (!map[ref]) map[ref] = [];
       map[ref].push(a);
     });
+
     return Object.entries(map)
       .map(([agentId, arr]) => {
         let acts = allActivities.filter((a) => a.referenceid?.toLowerCase() === agentId);
@@ -863,12 +887,18 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         };
       })
       .sort((a, b) => b.accountCount - a.accountCount);
-  }, [typeClientFilteredAccounts, agentMap, allActivities, hasDateFilter, dateCreatedFilterRange]);
+  }, [typeClientFilteredAccounts, agentMap, allActivities, hasDateFilter, dateCreatedFilterRange, activityFilter, companiesWithActivity]);
 
   const agentAccounts = useMemo(() => {
     if (!selectedAgentId) return [];
-    return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-  }, [selectedAgentId, typeClientFilteredAccounts]);
+    let accounts = typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+    if (activityFilter === "with") {
+      accounts = accounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
+    } else if (activityFilter === "without") {
+      accounts = accounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase()));
+    }
+    return accounts;
+  }, [selectedAgentId, typeClientFilteredAccounts, activityFilter, companiesWithActivity]);
 
   const filteredAccounts = useMemo(() => {
     const q = search.toLowerCase();
@@ -882,7 +912,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  useEffect(() => setCurrentPage(1), [search, selectedAgentId]);
+  useEffect(() => setCurrentPage(1), [search, selectedAgentId, activityFilter]);
 
   const goToAgents = () => {
     setDrillLevel("agents");
@@ -926,7 +956,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     }
   };
 
-  const handleHistoryBack = historySource ? () => setActiveListOpen(historySource) : null;
+  const handleHistoryBack = historySource ? () => setActivityFilter(historySource) : null;
 
   const accentColors = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
 
@@ -968,40 +998,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         account={historyAccount}
       />
 
-      <AccountListDialog
-        open={activeListOpen === "with"}
-        onClose={() => setActiveListOpen(null)}
-        source="with"
-        title="Accounts With Activities"
-        description={listDesc(withActivityAccounts.length, "with")}
-        icon={<CheckCircle2 size={16} className="text-emerald-500" />}
-        iconBg="bg-emerald-50 border-emerald-100"
-        accounts={withActivityAccounts}
-        agentMap={agentMap}
-        activityCountMap={activityCountMap}
-        onViewHistory={(n, s) => {
-          setActiveListOpen(null);
-          openHistory(n, s);
-        }}
-      />
-
-      <AccountListDialog
-        open={activeListOpen === "without"}
-        onClose={() => setActiveListOpen(null)}
-        source="without"
-        title="Accounts With No Activities"
-        description={listDesc(withoutActivityAccounts.length, "without")}
-        icon={<AlertCircle size={16} className="text-amber-500" />}
-        iconBg="bg-amber-50 border-amber-100"
-        accounts={withoutActivityAccounts}
-        agentMap={agentMap}
-        activityCountMap={activityCountMap}
-        onViewHistory={(n, s) => {
-          setActiveListOpen(null);
-          openHistory(n, s);
-        }}
-      />
-
       <div className="space-y-5">
         {hasDateFilter && (
           <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
@@ -1026,22 +1022,36 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          <StatCard label="Total Accounts" value={overallCounts.total} accent="#1e293b" />
           <StatCard
-            label="With Activities"
-            value={overallCounts.withAct}
-            accent="#10b981"
+            label="Total Accounts"
+            value={scopedBase.length}
+            accent="#1e293b"
             clickable
-            sublabel={hasDateFilter ? "in range" : undefined}
-            onClick={() => setActiveListOpen("with")}
+            isActive={activityFilter === "all"}
+            onClick={() => setActivityFilter("all")}
+            showFraction={{ count: scopedBase.length, total: scopedBase.length }}
+            sublabel="all accounts"
           />
           <StatCard
-            label="No Activities"
-            value={overallCounts.withoutAct}
+            label="With Activity"
+            value={withActivityAccounts.length}
+            accent="#10b981"
+            clickable
+            isActive={activityFilter === "with"}
+            onClick={() => setActivityFilter((prev) => prev === "with" ? "all" : "with")}
+            showFraction={{ count: withActivityAccounts.length, total: scopedBase.length }}
+            sublabel={`of ${scopedBase.length} total`}
+          />
+          <StatCard
+            label="No Activity"
+            value={withoutActivityAccounts.length}
             accent="#f59e0b"
             clickable
-            sublabel={hasDateFilter ? "in range" : undefined}
-            onClick={() => setActiveListOpen("without")}
+            isActive={activityFilter === "without"}
+            isNegative
+            onClick={() => setActivityFilter((prev) => prev === "without" ? "all" : "without")}
+            showFraction={{ count: withoutActivityAccounts.length, total: scopedBase.length }}
+            sublabel={`of ${scopedBase.length} total`}
           />
           {typeClientCounts.map(([type, count], i) => (
             <StatCard

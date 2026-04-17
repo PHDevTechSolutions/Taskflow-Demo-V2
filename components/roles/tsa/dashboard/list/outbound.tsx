@@ -149,6 +149,20 @@ export function OutboundCallsCard({
     const numSO = soRefNums.size;
     const numSI = siRefNums.size;
 
+    // Calculate Quote Amount (sum of quotation_amount from Quote-Done activities)
+    let quoteAmount = 0;
+    obRefNums.forEach((refNum) => {
+      const acts = historyByRefNum.get(refNum) ?? [];
+      acts.forEach((act) => {
+        if (act.status === "Quote-Done" && act.quotation_amount) {
+          const amount = parseFloat(act.quotation_amount);
+          if (!isNaN(amount)) {
+            quoteAmount += amount;
+          }
+        }
+      });
+    });
+
     const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
 
     const totalSales = history.reduce((sum, h) => {
@@ -161,6 +175,7 @@ export function OutboundCallsCard({
       numQuotes,
       numSO,
       numSI,
+      quoteAmount,
       achievement,
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO: pct(numSO, numQuotes),
@@ -197,6 +212,7 @@ export function OutboundCallsCard({
                 <TableHead className="text-center">Successful OB</TableHead>
                 <TableHead className="text-center">Achievement</TableHead>
                 <TableHead className="text-center">Calls → Quote</TableHead>
+                <TableHead className="text-center">Quote Amount</TableHead>
                 <TableHead className="text-center">Quote → SO</TableHead>
                 <TableHead className="text-center">SO → SI</TableHead>
                 <TableHead className="text-center">Total Sales</TableHead>
@@ -210,6 +226,9 @@ export function OutboundCallsCard({
                 <TableCell className="text-center">{stats.achievement.toFixed(2)}%</TableCell>
                 <TableCell className="text-center">
                   {stats.callsToQuote} {convBadge(stats.numQuotes)}
+                </TableCell>
+                <TableCell className="text-center font-semibold text-green-600">
+                  ₱{stats.quoteAmount.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-center">
                   {stats.quoteToSO} {convBadge(stats.numSO)}

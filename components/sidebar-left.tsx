@@ -35,8 +35,8 @@ const roleConfig: Record<string, { label: string; className: string }> = {
     className:
       "bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-800",
   },
-  "Super Admin": {
-    label: "Super Admin",
+  "SuperAdmin": {
+    label: "SuperAdmin",
     className:
       "bg-rose-500/10 text-rose-600 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-800",
   },
@@ -307,7 +307,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
 
     // Grant Super Admin access to Procurement department
     if (userDetails.Department === "Procurement") {
-      role = "Super Admin";
+      role = "SuperAdmin";
     }
 
     return data.workspaces
@@ -318,7 +318,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
           if (role === "Territory Sales Associate") return p.url?.includes("/tsa");
           if (role === "Territory Sales Manager") return p.url?.includes("/tsm");
           if (role === "Manager") return p.url?.includes("/manager");
-          if (role === "Super Admin") return p.url?.includes("/admin");
+          if (role === "SuperAdmin") return p.url?.includes("/admin");
           return false;
         }),
       }))
@@ -332,7 +332,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
 
     // Grant Super Admin access to Procurement department
     if (userDetails.Department === "Procurement") {
-      role = "Super Admin";
+      role = "SuperAdmin";
     }
 
     return data.favorites.filter((fav) => {
@@ -345,7 +345,7 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
       if (role === "Territory Sales Associate") return fav.url?.includes("/tsa");
       if (role === "Territory Sales Manager") return fav.url?.includes("/tsm");
       if (role === "Manager") return fav.url?.includes("/manager");
-      if (role === "Super Admin") return fav.url?.includes("/admin");
+      if (role === "SuperAdmin") return fav.url?.includes("/admin");
       return false;
     });
   }, [userDetails.Role, userDetails.Department]);
