@@ -254,7 +254,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i: SI) => selectedAgent === "all" || i.referenceid === selectedAgent)
       .filter((i: SI) => {
         if (!fromStr && !toStr) return true;
-        const d = recordDateStr(i.delivery_date) ?? recordDateStr(i.date_created);
+        // Manager SI table filters on delivery_date
+        const d = recordDateStr(i.delivery_date);
         if (!d) return false;
         if (fromStr && d < fromStr) return false;
         if (toStr && d > toStr) return false;

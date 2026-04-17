@@ -717,6 +717,111 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // === RENDER ===
   return (
     <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
+      {/* ─── Endorsed Tickets Section ─────────────────────────────────────────── */}
+      {/* Always render endorsed tickets regardless of accounts status */}
+      {loadingEndorsed ? (
+        <div className="flex justify-center items-center h-20">
+          <Spinner className="size-6" />
+        </div>
+      ) : errorEndorsed ? (
+        <Alert variant="destructive" className="p-3 text-xs mb-4">
+          <AlertCircleIcon className="inline-block mr-2" />
+          {errorEndorsed}
+        </Alert>
+      ) : endorsedTickets.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="text-xs font-bold mb-4">
+            Endorsed Tickets ({endorsedTickets.length})
+          </h2>
+
+          <Accordion
+            type="single"
+            collapsible
+            className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500"
+          >
+            {endorsedTickets.map((ticket) => (
+              <AccordionItem key={ticket.id} value={ticket.id}>
+                <div className="flex justify-between items-center p-2 select-none">
+                  <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
+                    {ticket.company_name}
+                  </AccordionTrigger>
+
+                  {/* Always show Use Ticket — no lock check for endorsed tickets */}
+                  <Button
+                    type="button"
+                    className="cursor-pointer rounded-none"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openConfirmUseTicket(ticket);
+                    }}
+                  >
+                    <TicketIcon /> Use Ticket
+                  </Button>
+                </div>
+
+                <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
+                  <p>
+                    <strong>Contact Person:</strong>{" "}
+                    {ticket.contact_person}
+                  </p>
+                  <p>
+                    <strong>Contact Number:</strong>{" "}
+                    {ticket.contact_number}
+                  </p>
+                  <p>
+                    <strong>Email Address:</strong> {ticket.email_address}
+                  </p>
+                  <p>
+                    <strong>Address:</strong> {ticket.address}
+                  </p>
+                  <p>
+                    <strong>Ticket Reference #:</strong>{" "}
+                    {ticket.ticket_reference_number}
+                  </p>
+                  <p>
+                    <strong>Wrap Up:</strong> {ticket.wrap_up}
+                  </p>
+                  <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
+                    <strong>Inquiry / Notes:</strong> {ticket.ticket_remarks || ticket.inquiry}
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      ) : null}
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="text-xs rounded-none">
+          <DialogHeader>
+            <DialogTitle>Use Endorsed Ticket</DialogTitle>
+          </DialogHeader>
+          <div>
+            Are you sure you want to use this ticket? This action cannot be
+            undone.
+          </div>
+          <DialogFooter className="flex gap-4 mt-4 justify-end">
+            <Button
+              variant="outline"
+              className="rounded-none p-6"
+              onClick={() => setConfirmOpen(false)}
+              disabled={confirmLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="rounded-none p-6"
+              onClick={handleConfirmUseEndorsed}
+              disabled={confirmLoading}
+            >
+              {confirmLoading ? "Processing..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <div className="flex justify-center items-center h-40">
           <Spinner className="size-8" />
@@ -750,111 +855,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
         </Alert>
       ) : (
         <>
-          {/* Endorsed Tickets */}
-          {/* CHANGE 1: Tickets are never locked — always show "Use Ticket" button */}
-          {loadingEndorsed ? (
-            <div className="flex justify-center items-center h-20">
-              <Spinner className="size-6" />
-            </div>
-          ) : errorEndorsed ? (
-            <Alert variant="destructive" className="p-3 text-xs">
-              <AlertCircleIcon className="inline-block mr-2" />
-              {errorEndorsed}
-            </Alert>
-          ) : endorsedTickets.length > 0 ? (
-            <section>
-              <h2 className="text-xs font-bold mb-4">
-                Endorsed Tickets ({endorsedTickets.length})
-              </h2>
-
-              <Accordion
-                type="single"
-                collapsible
-                className="w-full border-3 rounded-none shadow-sm mt-2 border-red-500"
-              >
-                {endorsedTickets.map((ticket) => (
-                  <AccordionItem key={ticket.id} value={ticket.id}>
-                    <div className="flex justify-between items-center p-2 select-none">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono uppercase">
-                        {ticket.company_name}
-                      </AccordionTrigger>
-
-                      {/* Always show Use Ticket — no lock check for endorsed tickets */}
-                      <Button
-                        type="button"
-                        className="cursor-pointer rounded-none"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openConfirmUseTicket(ticket);
-                        }}
-                      >
-                        <TicketIcon /> Use Ticket
-                      </Button>
-                    </div>
-
-                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs uppercase">
-                      <p>
-                        <strong>Contact Person:</strong>{" "}
-                        {ticket.contact_person}
-                      </p>
-                      <p>
-                        <strong>Contact Number:</strong>{" "}
-                        {ticket.contact_number}
-                      </p>
-                      <p>
-                        <strong>Email Address:</strong> {ticket.email_address}
-                      </p>
-                      <p>
-                        <strong>Address:</strong> {ticket.address}
-                      </p>
-                      <p>
-                        <strong>Ticket Reference #:</strong>{" "}
-                        {ticket.ticket_reference_number}
-                      </p>
-                      <p>
-                        <strong>Wrap Up:</strong> {ticket.wrap_up}
-                      </p>
-                      <p className="border border-red-500 border-dashed rounded-none p-4 bg-red-100">
-                        <strong>Inquiry / Notes:</strong> {ticket.inquiry}
-                      </p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </section>
-          ) : null}
-
-          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <DialogContent className="text-xs rounded-none">
-              <DialogHeader>
-                <DialogTitle>Use Endorsed Ticket</DialogTitle>
-              </DialogHeader>
-              <div>
-                Are you sure you want to use this ticket? This action cannot be
-                undone.
-              </div>
-              <DialogFooter className="flex gap-4 mt-4 justify-end">
-                <Button
-                  variant="outline"
-                  className="rounded-none p-6"
-                  onClick={() => setConfirmOpen(false)}
-                  disabled={confirmLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="default"
-                  className="rounded-none p-6"
-                  onClick={handleConfirmUseEndorsed}
-                  disabled={confirmLoading}
-                >
-                  {confirmLoading ? "Processing..." : "Confirm"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
           <div className="flex items-center gap-2 w-full">
             {/* Search input */}
             <Input

@@ -52,8 +52,9 @@ const isSameDay = (d1: Date, d2: Date) =>
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
 
-const inDateRange = (dateStr: string, range: any): boolean => {
+const inDateRange = (dateStr: string | null | undefined, range: any): boolean => {
   if (!range?.from && !range?.to) return true;
+  if (!dateStr) return false;
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return false;
   const from = range.from ? new Date(range.from) : null;
@@ -130,7 +131,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i) => i.type_activity?.toLowerCase() === "delivered / closed transaction")
       .filter((i) => !s || [i.company_name, i.dr_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
       .filter((i) => filterStatus === "all" || i.status === filterStatus)
-      .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
+      .filter((i) => inDateRange(i.delivery_date, dateCreatedFilterRange))
       .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
