@@ -37,7 +37,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { sileo } from "sileo";
+
+const QUOTATION_STATUS_OPTIONS = {
+  "Pending Client Approval": [
+    "For Bidding",
+    "Nego",
+    "Waiting for Approval",
+  ],
+  "Order Complete": [],
+  "Convert to SO": [],
+  "Decline": [
+    "Loss Price is Too High",
+    "Lead Time Issue",
+    "Insufficient Stock",
+    "Lost Bid",
+    "Canvass Only",
+    "Did not Meet the Specs",
+    "Declined / Dissaproved",
+  ],
+};
 
 import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
@@ -100,6 +127,11 @@ interface Completed {
   tsm_remarks: string;
   manager_remarks: string;
   quotation_status: string;
+  quotation_status_sub?: string;
+  so_number?: string;
+  so_amount?: number;
+  dr_number?: string;
+  delivery_date?: string;
   discounted_priced?: string;
   discounted_amount?: string;
 }
@@ -530,6 +562,149 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     }
   };
 
+  // ── Status Progression Automation ─────────────────────────────────────────────
+  const autoUpdateStatus = async (item: Completed, trigger: 'quotation' | 'so' | 'delivery') => {
+    try {
+      let newStatus: string | null = null;
+      let reason = '';
+      
+      // Business rules for status progression
+      switch (trigger) {
+        case 'quotation':
+          if (item.quotation_status === 'Convert to SO' && item.quotation_number && item.quotation_amount) {
+            newStatus = 'Quote-Done';
+            reason = 'Quotation marked for SO conversion';
+          }
+          break;
+          
+        case 'so':
+          if (item.so_number && item.so_amount && item.status === 'Quote-Done') {
+            newStatus = 'SO-Done';
+            reason = 'Sales Order created';
+          }
+          break;
+          
+        case 'delivery':
+          if (item.dr_number && item.delivery_date && item.status === 'SO-Done') {
+            newStatus = 'Delivered';
+            reason = 'Delivery recorded';
+          }
+          break;
+      }
+      
+      if (newStatus && newStatus !== item.status) {
+        const res = await fetch('/api/activity/tsa/historical/auto-update-status', {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRF-Protection': '1'
+          },
+          body: JSON.stringify({
+            id: item.id,
+            newStatus,
+            previousStatus: item.status,
+            trigger,
+            reason,
+            autoUpdate: true
+          })
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData?.error || 'Failed to auto-update status');
+        }
+        
+        // Show notification for auto-update
+        sileo.success({
+          title: 'Status Auto-Updated',
+          description: `${item.company_name} status changed to ${newStatus.replace('-', ' ')}`,
+          duration: 3000,
+          position: 'top-right',
+          fill: 'black',
+          styles: { title: 'text-white!', description: 'text-white' },
+        });
+        
+        // Refresh data
+        fetchActivities();
+      }
+    } catch (error: any) {
+      console.error('Auto status update failed:', error);
+      sileo.error({
+        title: 'Auto-Update Failed',
+        description: error?.message || 'Could not auto-update status',
+        duration: 3000,
+        position: 'top-right',
+        fill: 'black',
+        styles: { title: 'text-white!', description: 'text-white' },
+      });
+    }
+  };
+
+  const handleQuotationStatusUpdate = async (id: number, main: string, sub: string) => {
+    // Input validation
+    if (!id || !main?.trim()) {
+      sileo.error({
+        title: "Invalid Request",
+        description: "Missing required parameters.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/activity/tsa/historical/update-quotation-status", {
+        method: "PUT",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-CSRF-Protection": "1"
+        },
+        body: JSON.stringify({ 
+          id, 
+          quotation_status: main.trim(), 
+          quotation_status_sub: sub?.trim() || "" 
+        }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || "Failed to update");
+      }
+
+      // Find the updated item to trigger automation
+      const updatedItem = activities.find(item => item.id === id);
+      if (updatedItem) {
+        // Create updated item object
+        const itemWithNewStatus = { ...updatedItem, quotation_status: main.trim() };
+        
+        // Trigger status progression automation
+        await autoUpdateStatus(itemWithNewStatus, 'quotation');
+      }
+
+      sileo.success({
+        title: "Updated",
+        description: `Quotation status updated successfully.`,
+        duration: 2000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      fetchActivities();
+    } catch (error: any) {
+      console.error("Quotation status update failed:", error);
+      sileo.error({
+        title: "Update Failed",
+        description: error?.message || "Could not update the quotation status.",
+        duration: 3000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    }
+  };
+
   return (
     <>
       <style>{`
@@ -679,7 +854,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                   </TableHead>
                   <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation #</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Remarks</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Status</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Remarks</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Status</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Duration</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Company</TableHead>
@@ -735,8 +911,47 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         {displayValue(item.quotation_number)}
                       </TableCell>
 
-                      <TableCell className="max-w-[150px] truncate text-zinc-600" title={item.quotation_status}>
-                        {item.quotation_status}
+                      <TableCell className="px-3">
+                        {item.status === "Quote-Done" ? (
+                          <Select
+                            value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
+                            onValueChange={(val: string) => {
+                              const [main, sub] = val.split("__");
+                              handleQuotationStatusUpdate(item.id, main, sub || "");
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-[10px] w-[140px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50 transition-colors font-bold uppercase tracking-tight">
+                              <SelectValue asChild><span>{item.quotation_status || 'Select status'}</span></SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="rounded-none">
+                              {Object.entries(QUOTATION_STATUS_OPTIONS).map(([mainStatus, subStatuses]) => (
+                                <SelectGroup key={mainStatus}>
+                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-semibold">
+                                    {mainStatus}
+                                  </SelectItem>
+                                  {subStatuses.map(subStatus => (
+                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-8">
+                                      {subStatus}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-zinc-500 font-medium">{displayValue(item.quotation_status)}</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="px-3 capitalize">
+                        <div className="flex items-center gap-1">
+                          {displayValue(item.quotation_status_sub)}
+                          {item.quotation_status === 'Convert to SO' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800">
+                              AUTO
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
 
                       <TableCell className="text-center">

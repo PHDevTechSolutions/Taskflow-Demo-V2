@@ -1271,10 +1271,10 @@ export const TaskList: React.FC<CompletedProps> = ({
                   </TableHead>
                   <TableHead className="w-24 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
                   {[
-                    "Date", "Duration", "Company", "Status", "Quotation Status", "Quotation Remarks",
+                    "Date", "Quotation #", "Duration", "Company", "Status", "Quotation Status", "Quotation Remarks",
                     "Contact #", "Type Client", "Project Name", "Project Type",
                     "Source", "Target Quota", "Activity Type", "Callback",
-                    "Call Status", "Call Type", "Quotation #", "Quotation Amount",
+                    "Call Status", "Call Type", "Quotation Amount",
                     "SO #", "SO Amount", "Actual Sales", "Delivery Date", "DR #",
                     "Ticket Ref #", "Remarks", "Date Followup", "Payment Terms",
                   ].map((h) => (
@@ -1357,6 +1357,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                           month: "short", day: "numeric", year: "numeric",
                         })}
                       </TableCell>
+                      <TableCell className="uppercase px-3 font-mono">{displayValue(item.quotation_number)}</TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-[11px] text-zinc-500 px-3">
                         {formatDuration(item.start_date, item.end_date)}
                       </TableCell>
@@ -1458,7 +1459,6 @@ export const TaskList: React.FC<CompletedProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="px-3">{displayValue(item.call_type)}</TableCell>
-                      <TableCell className="uppercase px-3 font-mono">{displayValue(item.quotation_number)}</TableCell>
                       <TableCell className="px-3 tabular-nums">
                         {item.quotation_amount != null
                           ? item.quotation_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })
