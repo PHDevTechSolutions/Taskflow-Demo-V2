@@ -3462,7 +3462,7 @@ ${spec.value}
                           <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
                           <th className="p-3 border-r border-black w-20 text-center">UNIT PRICE</th>
                           <th className="p-3 border-r border-black w-5 text-center">DISC</th>
-                          <th className="p-3 border-r border-black w-20 text-center">NET UNIT PRICE</th>
+                          <th className="p-3 border-r border-black w-20 text-center">DISCOUNT PRICE</th>
                           <th className="p-3 w-20 text-center">TOTAL AMOUNT</th>
                         </tr>
                       </thead>

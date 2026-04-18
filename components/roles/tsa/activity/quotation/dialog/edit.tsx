@@ -1281,8 +1281,8 @@ export default function TaskListEditDialog({
             .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
             .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
             .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
-            .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; }
-            .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
+            .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; padding-right: 8px; }
+            .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; padding-right: 8px; }
             /* LOGISTICS */
             .variance-footnote { margin-top: 12px; font-size: 9.5px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid black; padding-bottom: 3px; }
             .logistics-container { margin-top: 10px; border: 1.5px solid black; font-size: 9px; line-height: 1.4; }
@@ -1317,16 +1317,16 @@ export default function TaskListEditDialog({
             .sum-tbl td { padding: 3.5px 10px; }
             .sum-lbl { text-align: right; font-weight: 700; text-transform: uppercase; color: #6b7280; font-size: 7.5px; border-right: 2px solid black; white-space: nowrap; }
             .sum-val { text-align: right; font-weight: 900; color: ${PRIMARY_CHARCOAL}; font-size: 9px; white-space: nowrap; min-width: 90px; }
-            .sum-divider td { border-bottom: 2px solid black; }
+            .sum-divider td { border-bottom: 2px solid black; padding-bottom: 6px; }
             .sum-total-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 9px; border-right: 2px solid black; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; }
             .sum-total-val { text-align: right; font-weight: 900; color: #1e3a8a; font-size: 12px; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; min-width: 90px; }
             .sum-gray-lbl { text-align: right; font-weight: 600; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #9ca3af; padding: 3px 10px; white-space: nowrap; }
             .sum-gray-val { text-align: right; font-weight: 600; color: #9ca3af; font-size: 8px; padding: 3px 10px; white-space: nowrap; }
             .sum-ewt-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #1d4ed8; background: #eff6ff; padding: 4px 10px; white-space: nowrap; }
             .sum-ewt-val { text-align: right; font-weight: 900; color: #1d4ed8; background: #eff6ff; font-size: 8.5px; padding: 4px 10px; white-space: nowrap; }
-            .sum-final-row { background: ${PRIMARY_CHARCOAL}; }
-            .sum-final-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 8.5px; border-right: 1px solid #374151; color: white; padding: 7px 10px; white-space: nowrap; }
-            .sum-final-val { text-align: right; font-weight: 900; font-size: 14px; color: white; padding: 7px 10px; white-space: nowrap; }
+            .sum-final-row { background: ${PRIMARY_CHARCOAL}; padding-top: 10px; }
+            .sum-final-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 8.5px; border-right: 1px solid #374151; color: white; padding: 2px 10px; white-space: nowrap; line-height: 1.2; }
+            .sum-final-val { text-align: right; font-weight: 900; font-size: 14px; color: white; padding: 2px 10px; white-space: nowrap; line-height: 1.2; }
             /* SIGNATURE */
             .sig-hierarchy { margin-top: 14px; padding-top: 12px; border-top: 3px solid #1d4ed8; padding-bottom: 16px; }
             .sig-message { font-size: 8.5px; margin-bottom: 18px; font-weight: 400; line-height: 1.5; color: #374151; }
@@ -1416,13 +1416,13 @@ export default function TaskListEditDialog({
         <thead>
         <tr>
         <th style="width:35px;text-align:center;">NO</th>
-        <th style="width:35px;text-align:center;">QTY</th>
+        <th style="width:40px;text-align:center;">QTY</th>
         <th style="width:105px;text-align:center;">REF. PHOTO</th>
         <th style="text-align:left;">PRODUCT DESCRIPTION</th>
         <th style="width:60px;text-align:center;">UNIT PRICE</th>
         <th style="width:40px;text-align:center;">DISC</th>
         <th style="width:70px;text-align:center;">DISCOUNT PRICE</th>
-        <th style="width:60px;text-align:center;">TOTAL</th>
+        <th style="width:90px;text-align:center;">TOTAL</th>
         </tr>
         </thead>
         </table>
@@ -1448,7 +1448,7 @@ export default function TaskListEditDialog({
           <table class="main-table" style="border:1.5px solid black;border-top:none;">
           <tr>
           <td style="width:35px;" class="item-no">${index + 1}</td>
-          <td style="width:35px;" class="qty-col">${item.qty}</td>
+          <td style="width:40px;" class="qty-col">${item.qty}</td>
           <td style="width:105px;padding:8px;text-align:center;vertical-align:middle;">
           <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
           </td>
@@ -1462,7 +1462,7 @@ export default function TaskListEditDialog({
           <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           <td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td>
           <td style="width:70px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          <td style="width:60px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="width:90px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           </table>
           </div>`,
@@ -1503,7 +1503,7 @@ export default function TaskListEditDialog({
       const _total = Number(payload.totalPrice) || 0;
 
       // ✅ Calculations (rounded properly)
-      const _netSales = round2((payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * item.unitPrice), 0));
+      const _netSales = round2((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : ((Number(item.qty) || 0) * item.unitPrice)), 0));
       const _vatAmount = round2(_total * (12 / 112));
       const _netOfVat = round2(_total / 1.12);
       const _whtAmount = round2(payload.whtAmount || 0);
@@ -1512,7 +1512,7 @@ export default function TaskListEditDialog({
       const _vatBreak =
         payload.vatTypeLabel === "VAT Inc"
           ? `
-<tr>
+<tr style="border-bottom: 1px solid #e5e7eb;">
   <td class="sum-gray-lbl">Less: VAT (12%)</td>
   <td class="sum-gray-val">₱${peso(_vatAmount)}</td>
 </tr>
@@ -1597,7 +1597,7 @@ ${payload.whtType && payload.whtType !== "none"
             <td class="sum-val">₱${peso(_restockingNum)}</td>
           </tr>
 
-          <tr>
+          <tr style="border-bottom: 2px solid black;">
             <td class="sum-total-lbl">Total Invoice Amount</td>
             <td class="sum-total-val">₱${peso(_total)}</td>
           </tr>
