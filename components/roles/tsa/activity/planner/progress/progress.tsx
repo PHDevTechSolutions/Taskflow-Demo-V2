@@ -281,6 +281,10 @@ export const Progress: React.FC<NewTaskProps> = ({
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) =>

@@ -156,6 +156,7 @@ interface SelectedProduct extends Product {
   procurementMinQty?: number;
   procurementLeadTime?: string;
   procurementLockedPrice?: boolean;
+  originalPrice?: number;
   procurementItemCode?: string;
   regPrice?: number;
 }
@@ -1720,6 +1721,12 @@ Procurement
                       <FieldContent className="flex-1">
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
+<<<<<<< HEAD
+=======
+
+                        {/* Buttons only show if selected */}
+                        
+>>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
                       </FieldContent>
 
                       {/* RIGHT */}
@@ -2543,6 +2550,7 @@ Procurement
                                                     procurementMinQty: p.quantity,
                                                     procurementLeadTime: p.leadTime,
                                                     procurementLockedPrice: true,
+                                                    originalPrice: p.finalSellingPrice,
                                                     procurementItemCode: p.sku || "",
                                                     regPrice: 0,
                                                   },
@@ -3123,24 +3131,38 @@ ${spec.value}
                                     <td className="border border-gray-300 p-1 sm:p-2">
                                       <Input
                                         type="number"
-                                        min={0}
+                                        min={p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0}
                                         step="0.01"
                                         value={p.price}
-                                        readOnly={p.procurementLockedPrice}
+                                        readOnly={false}
                                         onChange={(e) => {
-                                          if (p.procurementLockedPrice) return;
-                                          const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                          const raw = parseFloat(e.target.value) || 0;
+                                          const minPrice = p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0;
+                                          const val = Math.max(minPrice, raw);
                                           setSelectedProducts((prev) => {
                                             const copy = [...prev];
                                             copy[idx] = { ...copy[idx], price: val };
                                             return copy;
                                           });
                                         }}
+                                        onBlur={(e) => {
+                                          if (p.procurementLockedPrice) {
+                                            const val = parseFloat(e.target.value) || 0;
+                                            const minPrice = p.originalPrice ?? 0;
+                                            if (val < minPrice) {
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[idx] = { ...copy[idx], price: minPrice };
+                                                return copy;
+                                              });
+                                            }
+                                          }
+                                        }}
                                         className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                       />
                                       {p.procurementLockedPrice && (
                                         <div className="text-[9px] text-gray-500 mt-1">
-                                          Final selling price (locked)
+                                          Final selling price (locked at ₱{(p.originalPrice ?? 0).toLocaleString(undefined,{ minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                         </div>
                                       )}
                                     </td>
