@@ -2675,11 +2675,9 @@ ${payload.whtType && payload.whtType !== "none"
               <Button variant="outline" className="rounded-none h-12 px-6 border-2" onClick={onClose}>
                 Cancel
               </Button>
-              {!hasSPF && (
                 <Button onClick={onClickSave} className="rounded-none h-12 px-6">
                   Save
                 </Button>
-              )}
             </div>
           </DialogFooter>
         </DialogContent>
