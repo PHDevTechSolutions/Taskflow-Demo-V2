@@ -12,6 +12,7 @@ import { OutboundCallsTableCard } from "./table/outbound-calls";
 import { QuotationTableCard } from "../../tsm/dashboard/table/quotation";
 import { SalesOrderTableCard } from "../../tsm/dashboard/table/sales-order";
 import { InboundRepliesCard } from "../../tsm/dashboard/table/inbound-replies";
+import { SiteVisits } from "@/components/roles/tsm/dashboard/table/site-visits";
 import { Building2, PhoneForwarded, X } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -474,6 +475,12 @@ export function AgentList({
                 />
                 <OutboundCard history={filteredHistory} agents={agents} />
                 <InboundRepliesCard history={filteredHistory} agents={agents} />
+                <SiteVisits
+                    agents={agents}
+                    dateCreatedFilterRange={dateCreatedFilterRange}
+                    referenceid={referenceid}
+                    isManager={true}
+                />
             </div>
         </main>
     );

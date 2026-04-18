@@ -12,6 +12,7 @@ import { OutboundCallsTableCard } from "@/components/roles/tsm/dashboard/table/o
 import { QuotationTableCard } from "@/components/roles/tsm/dashboard/table/quotation";
 import { SalesOrderTableCard } from "@/components/roles/tsm/dashboard/table/sales-order";
 import { InboundRepliesCard } from "@/components/roles/tsm/dashboard/table/inbound-replies";
+import { SiteVisits } from "@/components/roles/tsm/dashboard/table/site-visits";
 
 import { Building2, PhoneForwarded, ChevronRight, Download, X, LogIn, LogOut, Check } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -767,6 +768,12 @@ export function AgentList({
 
                         <OutboundCard history={filteredHistory} agents={agents} />
                         <InboundRepliesCard history={filteredHistory} agents={agents} />
+
+                        <SiteVisits
+                            agents={agents}
+                            dateCreatedFilterRange={dateCreatedFilterRange}
+                            referenceid={referenceid}
+                        />
                     </div>
                 </>
             )}
