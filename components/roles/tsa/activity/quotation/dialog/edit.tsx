@@ -572,17 +572,14 @@ export default function TaskListEditDialog({
     products.forEach((p, idx) => {
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
       const amt = parseFloat(p.product_amount ?? "0") || 0;
-      const isChecked = checkedRows[idx] ?? false;
-      const rowDiscount = isChecked
-        ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
-        : 0;
-      const unitDiscountAmount = (amt * rowDiscount) / 100;
-      const discountedUnitPrice = amt - unitDiscountAmount;
-      const lineTotal = discountedUnitPrice * qty;
+      let lineTotal = qty * amt;
+      if (checkedRows[idx] && vatType === "vat_inc") {
+        lineTotal = lineTotal * ((100 - discount) / 100);
+      }
       total += lineTotal;
     });
     setQuotationAmount(total);
-  }, [products, checkedRows, vatTypeState]);
+  }, [products, checkedRows, discount, vatType]);
 
   const handleProductChange = (
     index: number,
@@ -692,12 +689,7 @@ export default function TaskListEditDialog({
 
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
       const restockingFeeNum = parseFloat(restockingFeeState) || 0;
-      const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
-      // Calculate EWT deduction if applicable
-      const whtAmount = whtTypeState !== "none"
-        ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
-        : 0;
-      const totalQuotationAmount = totalPriceWithDelivery - whtAmount;
+      const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
       const bodyData: Completed & {
         vat_type?: "vat_inc" | "vat_exe" | "zero_rated";
@@ -738,13 +730,9 @@ export default function TaskListEditDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bodyData),
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        console.error("API Error:", errorData);
-        throw new Error(errorData.error || "Failed to update activity");
-      }
+      if (!res.ok) throw new Error("Failed to update activity");
       sileo.success({
-        title: "Successful",
+        title: "Succeess",
         description: "Activity updated successfully!",
         duration: 4000,
         position: "top-right",
@@ -777,18 +765,8 @@ export default function TaskListEditDialog({
     else if (quotation_type === "Ecoshift Corporation")
       emailDomain = "ecoshiftcorp.com";
     else emailDomain = email?.split("@")[1] ?? "";
-
-    // TSM email with domain - use TsmEmailAddress prop and override domain
-    const tsmSourceEmail = TsmEmailAddress || tsmemail || "";
-    const tsmEmailUsername = tsmSourceEmail?.split("@")[0] ?? "";
-    const tsmEmailWithDomain =
-      tsmEmailUsername && emailDomain ? `${tsmEmailUsername}@${emailDomain}` : tsmSourceEmail;
-
-    // Manager email with domain - use ManagerEmailAddress prop and override domain
-    const managerSourceEmail = ManagerEmailAddress || "";
-    const managerEmailUsername = managerSourceEmail?.split("@")[0] ?? "";
-    const managerEmailWithDomain =
-      managerEmailUsername && emailDomain ? `${managerEmailUsername}@${emailDomain}` : managerSourceEmail;
+    const salesemail =
+      emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
 
     const items = products.map((p: ProductItem, index: number) => {
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
@@ -796,9 +774,8 @@ export default function TaskListEditDialog({
       const isDiscounted = checkedRows[index] ?? false;
       const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
       const baseAmount = qty * unitPrice;
-      const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
-      const discountedAmount = unitPrice - unitDiscountAmount;
-      const totalAmount = discountedAmount * qty;
+      const discountedAmount = isDiscounted && rowDiscount > 0 ? (baseAmount * rowDiscount) / 100 : 0;
+      const totalAmount = baseAmount - discountedAmount;
 
       return {
         itemNo: index + 1,
@@ -812,8 +789,6 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
-        discountAmount: unitDiscountAmount,
-        discountedAmount,
         totalAmount,
         isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
           const rawD = p.product_description || p.description || "";
@@ -851,11 +826,10 @@ export default function TaskListEditDialog({
             : "Zero-Rated",
       totalPrice: totalPriceWithDelivery,
       salesRepresentative: salesRepresentativeName,
-      salesemail: `${emailUsername}@${emailDomain}`,
+      salesemail,
       salescontact: contact ?? "",
       salestsmname: tsmname || "—",
-      salestsmemail: tsmEmailWithDomain,
-      salestsmemaildomain: emailDomain,
+      salestsmemail: tsmemail ?? "",
       salestsmcontact: tsmcontact ?? "",
       salesmanagername: managername || "—",
       vatType: vatTypeState ?? null,
@@ -882,11 +856,11 @@ export default function TaskListEditDialog({
       agentContactNumber: agentContactNumber ?? null,
       agentEmailAddress: agentEmailAddress ?? null,
       TsmSignature: TsmSignature ?? null,
-      TsmEmailAddress: tsmEmailWithDomain || TsmEmailAddress || null,
+      TsmEmailAddress: TsmEmailAddress ?? null,
       TsmContactNumber: TsmContactNumber ?? null,
       ManagerSignature: ManagerSignature ?? null,
       ManagerContactNumber: ManagerContactNumber ?? null,
-      ManagerEmailAddress: managerEmailWithDomain || ManagerEmailAddress || null,
+      ManagerEmailAddress: ManagerEmailAddress ?? null,
     };
   };
 
@@ -1092,17 +1066,17 @@ export default function TaskListEditDialog({
   }, [selectedRevisedQuotation]);
 
   useEffect(() => {
-    if (!item.quotation_number) return;
+    if (!activityReferenceNumber) return;
     const fetch_ = async () => {
       const { data, error } = await supabase
         .from("revised_quotations")
         .select("*")
-        .eq("quotation_number", item.quotation_number)
+        .eq("activity_reference_number", activityReferenceNumber)
         .order("id", { ascending: false });
       if (!error) setRevisedQuotations(data || []);
     };
     fetch_();
-  }, [item.quotation_number]);
+  }, [activityReferenceNumber]);
 
   const payload = getQuotationPayload();
   const isEcoshift = quotation_type === "Ecoshift Corporation";
@@ -1294,8 +1268,8 @@ export default function TaskListEditDialog({
             .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
             .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
             .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
-            .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; padding-right: 8px; }
-            .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; padding-right: 8px; }
+            .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; }
+            .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
             /* LOGISTICS */
             .variance-footnote { margin-top: 12px; font-size: 9.5px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid black; padding-bottom: 3px; }
             .logistics-container { margin-top: 10px; border: 1.5px solid black; font-size: 9px; line-height: 1.4; }
@@ -1330,16 +1304,16 @@ export default function TaskListEditDialog({
             .sum-tbl td { padding: 3.5px 10px; }
             .sum-lbl { text-align: right; font-weight: 700; text-transform: uppercase; color: #6b7280; font-size: 7.5px; border-right: 2px solid black; white-space: nowrap; }
             .sum-val { text-align: right; font-weight: 900; color: ${PRIMARY_CHARCOAL}; font-size: 9px; white-space: nowrap; min-width: 90px; }
-            .sum-divider td { border-bottom: 2px solid black; padding-bottom: 6px; }
+            .sum-divider td { border-bottom: 2px solid black; }
             .sum-total-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 9px; border-right: 2px solid black; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; }
             .sum-total-val { text-align: right; font-weight: 900; color: #1e3a8a; font-size: 12px; background: #f3f4f6; padding: 5px 10px; white-space: nowrap; min-width: 90px; }
             .sum-gray-lbl { text-align: right; font-weight: 600; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #9ca3af; padding: 3px 10px; white-space: nowrap; }
             .sum-gray-val { text-align: right; font-weight: 600; color: #9ca3af; font-size: 8px; padding: 3px 10px; white-space: nowrap; }
             .sum-ewt-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 7px; border-right: 2px solid black; color: #1d4ed8; background: #eff6ff; padding: 4px 10px; white-space: nowrap; }
             .sum-ewt-val { text-align: right; font-weight: 900; color: #1d4ed8; background: #eff6ff; font-size: 8.5px; padding: 4px 10px; white-space: nowrap; }
-            .sum-final-row { background: ${PRIMARY_CHARCOAL}; padding-top: 10px; }
-            .sum-final-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 8.5px; border-right: 1px solid #374151; color: white; padding: 2px 10px; white-space: nowrap; line-height: 1.2; }
-            .sum-final-val { text-align: right; font-weight: 900; font-size: 14px; color: white; padding: 2px 10px; white-space: nowrap; line-height: 1.2; }
+            .sum-final-row { background: ${PRIMARY_CHARCOAL}; }
+            .sum-final-lbl { text-align: right; font-weight: 900; text-transform: uppercase; font-size: 8.5px; border-right: 1px solid #374151; color: white; padding: 7px 10px; white-space: nowrap; }
+            .sum-final-val { text-align: right; font-weight: 900; font-size: 14px; color: white; padding: 7px 10px; white-space: nowrap; }
             /* SIGNATURE */
             .sig-hierarchy { margin-top: 14px; padding-top: 12px; border-top: 3px solid #1d4ed8; padding-bottom: 16px; }
             .sig-message { font-size: 8.5px; margin-bottom: 18px; font-weight: 400; line-height: 1.5; color: #374151; }
@@ -1423,24 +1397,7 @@ export default function TaskListEditDialog({
       currentY += clientBlock.h;
 
       const headerBlock = await renderBlock(
-        `<div class="content-area">
-        <div class="table-container" style="border-bottom:1.5px solid black;">
-        <table class="main-table">
-        <thead>
-        <tr>
-        <th style="width:35px;text-align:center;">NO</th>
-        <th style="width:40px;text-align:center;">QTY</th>
-        <th style="width:105px;text-align:center;">REF. PHOTO</th>
-        <th style="text-align:left;">PRODUCT DESCRIPTION</th>
-        <th style="width:60px;text-align:center;">UNIT PRICE</th>
-        <th style="width:40px;text-align:center;">DISC</th>
-        <th style="width:70px;text-align:center;">DISCOUNT PRICE</th>
-        <th style="width:90px;text-align:center;">TOTAL</th>
-        </tr>
-        </thead>
-        </table>
-        </div>
-        </div>`,
+        `<div class="content-area"><div class="table-container" style="border-bottom:1.5px solid black;"><table class="main-table"><thead><tr><th style="width:35px;text-align:center;">NO</th><th style="width:35px;text-align:center;">QTY</th><th style="width:105px;text-align:center;">REF. PHOTO</th><th style="text-align:left;">PRODUCT DESCRIPTION</th><th style="width:90px;text-align:right;">UNIT PRICE</th><th style="width:90px;text-align:right;">TOTAL AMOUNT</th></tr></thead></table></div></div>`,
       );
       pdf.addImage(
         headerBlock.img,
@@ -1453,32 +1410,8 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
-        const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
-          ? item.discountedAmount
-          : item.unitPrice;
         const rowBlock = await renderBlock(
-          `<div class="content-area">
-          <table class="main-table" style="border:1.5px solid black;border-top:none;">
-          <tr>
-          <td style="width:35px;" class="item-no">${index + 1}</td>
-          <td style="width:40px;" class="qty-col">${item.qty}</td>
-          <td style="width:105px;padding:8px;text-align:center;vertical-align:middle;">
-          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
-          </td>
-          <td style="padding:8px 10px;">
-          <p class="product-title">${item.title}</p>
-          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
-          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          <div class="desc-text">${item.product_description}</div>
-          ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
-          </td>
-          <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          <td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td>
-          <td style="width:70px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          <td style="width:90px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          </tr>
-          </table>
-          </div>`,
+          `<div class="content-area"><table class="main-table" style="border:1.5px solid black;border-top:none;"><tr><td style="width:35px;" class="item-no">${index + 1}</td><td style="width:35px;" class="qty-col">${item.qty}</td><td style="width:105px;padding:8px;text-align:center;vertical-align:middle;"><img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;"></td><td style="padding:8px 10px;"><p class="product-title">${item.title}</p>${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}<div class="desc-text">${item.product_description}</div>${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}</td><td style="width:90px;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td style="width:90px;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></table></div>`,
         );
         if (currentY + rowBlock.h > pdfHeight - 50) {
           finalizeCurrentPage();
@@ -1516,7 +1449,7 @@ export default function TaskListEditDialog({
       const _total = Number(payload.totalPrice) || 0;
 
       // ✅ Calculations (rounded properly)
-      const _netSales = round2((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : ((Number(item.qty) || 0) * item.unitPrice)), 0));
+      const _netSales = round2(_total - _deliveryNum - _restockingNum);
       const _vatAmount = round2(_total * (12 / 112));
       const _netOfVat = round2(_total / 1.12);
       const _whtAmount = round2(payload.whtAmount || 0);
@@ -1525,7 +1458,7 @@ export default function TaskListEditDialog({
       const _vatBreak =
         payload.vatTypeLabel === "VAT Inc"
           ? `
-<tr style="border-bottom: 1px solid #e5e7eb;">
+<tr>
   <td class="sum-gray-lbl">Less: VAT (12%)</td>
   <td class="sum-gray-val">₱${peso(_vatAmount)}</td>
 </tr>
@@ -1610,7 +1543,7 @@ ${payload.whtType && payload.whtType !== "none"
             <td class="sum-val">₱${peso(_restockingNum)}</td>
           </tr>
 
-          <tr style="border-bottom: 2px solid black;">
+          <tr>
             <td class="sum-total-lbl">Total Invoice Amount</td>
             <td class="sum-total-val">₱${peso(_total)}</td>
           </tr>
@@ -1838,7 +1771,7 @@ ${payload.whtType && payload.whtType !== "none"
               <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
                 <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
                   {/* Source Switcher with SPF + SPF 1 */}
-                  <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  <div className="grid grid-cols-5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {[
                       { source: "shopify", label: "Shopify", icon: "🛍️" },
                       // { source: "firebase_shopify", label: "CMS", icon: "📦" },
@@ -1872,15 +1805,51 @@ ${payload.whtType && payload.whtType !== "none"
                   {isSpfMode ? (
                     <div className="flex flex-col gap-2 border border-red-200 bg-red-50 p-2.5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SRF</span>
-                        <span className="text-[9px] text-red-400 italic">— Service Request Form</span>
+                        <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SPF</span>
+                        <span className="text-[9px] text-red-400 italic">— Special Product Form</span>
                       </div>
-                      
+                      {/* Cloudinary Image Upload */}
                       <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Service Name *</label>
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Image (optional)</label>
+                        <div className="flex items-center gap-2">
+                          <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed border-red-300 bg-white px-3 py-2 cursor-pointer hover:bg-red-50 transition ${spfUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                            <ImagePlus className="w-4 h-4 text-red-400" />
+                            <span className="text-[10px] font-bold uppercase text-red-500">
+                              {spfUploading ? "Uploading..." : spfManualProduct.imageUrl ? "Change" : "Upload"}
+                            </span>
+                            <input type="file" accept="image/*" className="hidden" disabled={spfUploading}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setSpfUploading(true);
+                                try {
+                                  if (spfManualProduct.cloudinaryPublicId) await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId);
+                                  const formData = new FormData();
+                                  formData.append("file", file);
+                                  const res = await fetch("/api/cloudinary/upload", { method: "POST", body: formData });
+                                  const data = await res.json();
+                                  if (data.url) setSpfManualProduct(prev => ({ ...prev, imageUrl: data.url, cloudinaryPublicId: data.publicId || "" }));
+                                } catch (err) { console.error("Upload failed:", err); }
+                                finally { setSpfUploading(false); }
+                              }}
+                            />
+                          </label>
+                          {spfManualProduct.imageUrl && (
+                            <button type="button" onClick={async () => { await deleteCloudinaryImage(spfManualProduct.cloudinaryPublicId); setSpfManualProduct(prev => ({ ...prev, imageUrl: "", cloudinaryPublicId: "" })); }} className="p-1 text-red-500 hover:text-red-700">
+                              <Trash className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        {spfManualProduct.imageUrl && <img src={spfManualProduct.imageUrl} alt="preview" className="w-16 h-16 object-cover border border-gray-200 mt-1 rounded-sm" />}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Product Name *</label>
                         <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
                       </div>
-                      
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Item Code / SKU</label>
+                        <Input type="text" placeholder="Enter item code..." value={spfManualProduct.sku} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, sku: e.target.value }))} className="rounded-none text-xs uppercase" />
+                      </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
@@ -1920,7 +1889,7 @@ ${payload.whtType && payload.whtType !== "none"
                         }}
                         className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
                       >
-                        <Plus className="w-4 h-4" /> Submit Request
+                        <Plus className="w-4 h-4" /> Add SPF Product
                       </Button>
                     </div>
                   ) : isSpf1Mode ? (
@@ -2217,11 +2186,8 @@ ${payload.whtType && payload.whtType !== "none"
                 )}
 
                 <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold mb-2">
                     Revised Quotations History
-                    <span className="bg-[#121212] text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                      {revisedQuotations.length}
-                    </span>
                   </h3>
                   {revisedQuotations.length === 0 ? (
                     <p>No revised quotations found.</p>
@@ -2372,9 +2338,8 @@ ${payload.whtType && payload.whtType !== "none"
                         const rowDiscount = isChecked
                           ? (product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
                           : 0;
-                        const unitDiscountAmount = isChecked ? (amt * rowDiscount) / 100 : 0;
-                        const discountedAmount = amt - unitDiscountAmount; // Unit price after discount
-                        const totalAfterDiscount = discountedAmount * qty; // Total after discount
+                        const discountedAmount = isChecked ? (baseAmount * rowDiscount) / 100 : 0;
+                        const totalAfterDiscount = baseAmount - discountedAmount;
                         return (
                           <React.Fragment key={index}>
                             <tr className="even:bg-gray-50 align-middle">
@@ -2592,24 +2557,16 @@ ${payload.whtType && payload.whtType !== "none"
                         </td>
                         <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
                           ₱{products.reduce((acc, p, idx) => {
-                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-                            const amt = parseFloat(p.product_amount ?? "0") || 0;
                             const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const unitDiscountAmt = (amt * disc) / 100;
-                            const discountedUnitPrice = amt - unitDiscountAmt;
-                            const lineTotal = discountedUnitPrice * qty;
-                            return acc + lineTotal;
+                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
+                            return acc + (base * disc) / 100;
                           }, 0).toFixed(2)}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-black">
                           ₱{products.reduce((acc, p, idx) => {
-                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-                            const amt = parseFloat(p.product_amount ?? "0") || 0;
                             const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const unitDiscountAmt = (amt * disc) / 100;
-                            const discountedUnitPrice = amt - unitDiscountAmt;
-                            const lineTotal = discountedUnitPrice * qty;
-                            return acc + lineTotal;
+                            const base = (parseFloat(p.product_quantity ?? "0") || 0) * (parseFloat(p.product_amount ?? "0") || 0);
+                            return acc + base - (base * disc) / 100;
                           }, 0).toFixed(2)}
                         </td>
                         <td className="border border-gray-300 p-2"></td>
