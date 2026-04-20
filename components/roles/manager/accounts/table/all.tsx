@@ -1180,7 +1180,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             clickable
             isActive={activityFilter === "all"}
             onClick={() => setActivityFilter("all")}
-            showFraction={{ count: overallCounts.total, total: overallCounts.total }}
             sublabel="all accounts"
           />
           <StatCard
