@@ -131,11 +131,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i) => i.type_activity?.toLowerCase() === "delivered / closed transaction")
       .filter((i) => !s || [i.company_name, i.dr_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
       .filter((i) => filterStatus === "all" || i.status === filterStatus)
-<<<<<<< HEAD
       .filter((i) => inDateRange(i.delivery_date, dateCreatedFilterRange))
-=======
       .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
->>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
       .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
