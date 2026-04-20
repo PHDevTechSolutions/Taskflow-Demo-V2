@@ -206,14 +206,9 @@ export const SITable: React.FC<SIProps> = ({
       .filter((i) => {
         if (!fromStr && !toStr) return true;
 
-<<<<<<< HEAD
         // The SI table filters on delivery_date, not date_created
         const d = recordDateStr(i.delivery_date);
         if (!d) return false;
-=======
-        const dateToCheck = recordDateStr(i.date_created);
-        if (!dateToCheck) return false;
->>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
 
         if (fromStr && d < fromStr) return false;
         if (toStr && d > toStr) return false;
