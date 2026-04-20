@@ -789,7 +789,7 @@ export default function TaskListEditDialog({
               <th style="width:40px;">ITEM NO</th><th style="width:40px;">QTY</th>
               <th style="width:100px;">REFERENCE PHOTO</th><th style="width:180px;">PRODUCT DESCRIPTION</th>
               <th style="width:70px; text-align:right;">UNIT PRICE</th><th style="width:50px; text-align:center;">DISC</th>
-              <th style="width:70px; text-align:right;">NET UNIT PRICE</th><th style="width:80px; text-align:right;">TOTAL AMOUNT</th>
+              <th style="width:70px; text-align:right;">DISCOUNTED PRICE</th><th style="width:80px; text-align:right;">TOTAL AMOUNT</th>
             </tr></thead></table>
           </div>
         </div>`);
