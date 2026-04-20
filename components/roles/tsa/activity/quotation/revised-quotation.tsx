@@ -96,6 +96,7 @@ interface Completed {
   ticket_reference_number?: string;
   remarks?: string;
   status?: string;
+  call_status?: string;
   start_date: string;
   end_date: string;
   date_created: string;
@@ -439,13 +440,28 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       );
       if (!matchesSearch) return false;
 
-      // 3. Status filter
+      // 3. Base filter: Only show Quote-Done activities in this view
+      if (item.status !== "Quote-Done") return false;
+
+      // 4. Additional status sub-filter (if needed for future use)
       if (filterStatus !== "all" && item.status !== filterStatus) return false;
 
-      // 4. Type Activity filter (Fixed to Quotation Preparation)
-      if (item.type_activity !== "Quotation Preparation") return false;
+      // 5. Type Activity filter
+      if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
 
-      // 5. Date Range filter
+      // 6. Source filter
+      if (filterSource !== "all" && item.source !== filterSource) return false;
+
+      // 7. Type Client filter
+      if (filterTypeClient !== "all" && item.type_client !== filterTypeClient) return false;
+
+      // 8. Call Status filter
+      if (filterCallStatus !== "all" && item.call_status !== filterCallStatus) return false;
+
+      // 9. Quotation Status filter
+      if (filterQuotationStatus !== "all" && item.quotation_status !== filterQuotationStatus) return false;
+
+      // 10. Date Range filter
       if (dateCreatedFilterRange?.from || dateCreatedFilterRange?.to) {
         const updated = new Date(item.date_updated ?? item.date_created);
         if (isNaN(updated.getTime())) return false;
@@ -455,7 +471,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
 
       return true;
     });
-  }, [sortedActivities, searchTerm, filterStatus, dateCreatedFilterRange]);
+  }, [sortedActivities, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
 
   const statusOptions = useMemo(() => {
     const s = new Set<string>();
@@ -490,8 +506,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   }, [sortedActivities]);
 
   const callStatusOptions = useMemo(() => {
-    return [] as string[];
-  }, []);
+    const s = new Set<string>();
+    sortedActivities.forEach((a) => {
+      if (a.call_status) s.add(a.call_status);
+    });
+    return Array.from(s).sort();
+  }, [sortedActivities]);
 
   const quotationStatusOptions = useMemo(() => {
     const s = new Set<string>();

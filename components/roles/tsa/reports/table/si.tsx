@@ -132,6 +132,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i) => !s || [i.company_name, i.dr_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
       .filter((i) => filterStatus === "all" || i.status === filterStatus)
       .filter((i) => inDateRange(i.delivery_date, dateCreatedFilterRange))
+      .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
       .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
@@ -320,7 +321,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
               <TableHeader>
                 <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
                   {[
-                    "Delivery Date", "SI Date", "SI Amount", "SO Number", 
+                    "Date Created", "Delivery Date", "SI Date", "SI Amount", "SO Number", 
                     "DR Number", "Company", "Contact Person", "Contact No.", 
                     "Remarks", "Payment Terms"
                   ].map((h) => (
@@ -333,6 +334,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
               <TableBody>
                 {paginated.map((item) => (
                   <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                    <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.date_created)}</TableCell>
                     <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.delivery_date)}</TableCell>
                     <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.si_date)}</TableCell>
                     <TableCell className="text-left text-zinc-900 px-3 font-bold">{item.actual_sales != null ? fmt(item.actual_sales) : "—"}</TableCell>

@@ -98,6 +98,7 @@ interface ProductItem {
   procurementMinQty?: number;
   procurementLeadTime?: string;
   procurementLockedPrice?: boolean;
+  originalPrice?: number;
   cloudinaryPublicId?: string;
 }
 
@@ -533,6 +534,7 @@ export default function TaskListEditDialog({
         procurementLeadTime: leadTime || undefined,
         procurementMinQty: isSpf1 ? (parseFloat(qty) || undefined) : undefined,
         procurementLockedPrice: isSpf1 ? true : undefined,
+        originalPrice: isSpf1 ? (parseFloat(amt) || 0) : undefined,
       });
     }
     setProducts(arr);
@@ -2048,6 +2050,7 @@ ${payload.whtType && payload.whtType !== "none"
                                                   procurementMinQty: p.quantity,
                                                   procurementLeadTime: p.leadTime,
                                                   procurementLockedPrice: true,
+                                                  originalPrice: p.finalSellingPrice,
                                                 };
                                                 setProducts(prev => [...prev, newProduct]);
                                                 setMobilePanelTab("products");
@@ -2493,19 +2496,30 @@ ${payload.whtType && payload.whtType !== "none"
                               <td className="border border-gray-300 p-1 sm:p-2">
                                 <Input
                                   type="number"
-                                  min={0}
+                                  min={product.procurementLockedPrice ? (product.originalPrice ?? 0) : 0}
                                   step="any"
                                   value={product.product_amount ?? ""}
-                                  readOnly={product.procurementLockedPrice}
+                                  readOnly={false}
                                   onChange={(e) => {
-                                    if (product.procurementLockedPrice) return;
-                                    handleProductChange(index, "product_amount", e.target.value);
+                                    const num = parseFloat(e.target.value) || 0;
+                                    const minPrice = product.procurementLockedPrice ? (product.originalPrice ?? 0) : 0;
+                                    const clamped = Math.max(minPrice, num);
+                                    handleProductChange(index, "product_amount", String(clamped));
+                                  }}
+                                  onBlur={(e) => {
+                                    if (product.procurementLockedPrice) {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      const minPrice = product.originalPrice ?? 0;
+                                      if (val < minPrice) {
+                                        handleProductChange(index, "product_amount", String(minPrice));
+                                      }
+                                    }
                                   }}
                                   className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs text-center border-none shadow-none ${product.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                 />
                                 {product.procurementLockedPrice && (
                                   <div className="text-[9px] text-gray-500 mt-1 text-center">
-                                    Final selling price (locked)
+                                    Final selling price (locked at ₱{(product.originalPrice ?? 0).toLocaleString(undefined,{ minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                   </div>
                                 )}
                               </td>
@@ -2704,11 +2718,9 @@ ${payload.whtType && payload.whtType !== "none"
               <Button variant="outline" className="rounded-none h-12 px-6 border-2" onClick={onClose}>
                 Cancel
               </Button>
-              {!hasSPF && (
                 <Button onClick={onClickSave} className="rounded-none h-12 px-6">
                   Save
                 </Button>
-              )}
             </div>
           </DialogFooter>
         </DialogContent>
