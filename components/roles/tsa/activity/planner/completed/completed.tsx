@@ -215,7 +215,7 @@ export const Completed: React.FC<NewTaskProps> = ({
     return true;
   };
 
-  const allowedStatuses = ["Completed", "Delivered"];
+  const allowedStatuses = ["Completed"];
 
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
@@ -299,21 +299,16 @@ export const Completed: React.FC<NewTaskProps> = ({
           {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800";
-            let cardBgClass = "bg-gray-100";
 
             if (item.status === "Completed") {
               badgeClass = "bg-green-400 text-white";
-              cardBgClass = "bg-green-100";
-            } else if (item.status === "Delivered") {
-              badgeClass = "bg-teal-500 text-white";
-              cardBgClass = "bg-teal-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
+                className="w-full border rounded-none shadow-sm mt-2"
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
