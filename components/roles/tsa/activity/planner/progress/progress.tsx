@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Accordion,
   AccordionItem,
@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import { DeliveredDialog } from "../dialog/delivered";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Filter } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface SupervisorDetails {
@@ -92,6 +94,7 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
+  quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
 
@@ -151,6 +154,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -270,18 +274,23 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
   };
 
-  const allowedStatuses = [
-    "On-Progress",
-    "Assisted",
-    "SO-Done",
-    "Pending",
-    "Cancelled",
-  ];
-
+  // Show all activities EXCEPT:
+  // - Quote-Done with today's scheduled date (goes to Scheduled card)
+  // - Quote-Done with "Pending Client Approval" (goes to Overdue card)
+  // - Completed and Delivered (finished activities)
   const mergedData = activities
-    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => {
+      // Exclude Completed and Delivered statuses
+      if (a.status === "Completed" || a.status === "Delivered") {
+        return false;
+      }
+      // Exclude Quote-Done status with today's scheduled date
+      if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
+        return false;
+      }
+      return true;
+    })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
-    
     .map((activity) => {
       const relatedHistoryItems = history.filter(
         (h) =>
@@ -293,14 +302,39 @@ export const Progress: React.FC<NewTaskProps> = ({
         relatedHistoryItems,
       };
     })
+    // Exclude Quote-Done with "Pending Client Approval" - those go to Overdue
+    .filter((activity) => {
+      if (activity.status === "Quote-Done") {
+        const hasPendingApproval = activity.relatedHistoryItems.some(
+          (h) => h.quotation_status === "Pending Client Approval"
+        );
+        // Exclude if has Pending Client Approval (goes to Overdue instead)
+        return !hasPendingApproval;
+      }
+      return true;
+    })
+    // Apply status filter
+    .filter((activity) => {
+      if (statusFilter !== "All" && activity.status !== statusFilter) return false;
+      return true;
+    })
     .sort(
       (a, b) =>
         new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
     );
 
+  // Get unique status options from data
+  const statusOptions = useMemo(() => {
+    const s = new Set<string>();
+    mergedData.forEach((a) => {
+      if (a.status) s.add(a.status);
+    });
+    return Array.from(s).sort();
+  }, [mergedData]);
+
   const filteredData = mergedData.filter((item) => {
     const lowerSearch = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
       (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
       (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
         false) ||
@@ -308,8 +342,11 @@ export const Progress: React.FC<NewTaskProps> = ({
         (h) =>
           (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
           (h.so_number?.toLowerCase().includes(lowerSearch) ?? false),
-      )
-    );
+      );
+    
+    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
   });
 
   const openDoneDialog = (id: string) => {
@@ -355,7 +392,7 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   useEffect(() => {
     onCountChange?.(filteredData.length);
-  }, [filteredData.length]);
+  }, [filteredData.length, onCountChange]);
 
   if (loading) {
     return (
@@ -462,36 +499,77 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   return (
     <>
-      <Input
-        type="search"
-        placeholder="Search..."
-        className="text-xs grow rounded-none mb-2"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        aria-label="Search accounts"
-      />
+      <div className="flex items-center gap-2 w-full mb-2">
+        <Input
+          type="search"
+          placeholder="Search..."
+          className="text-xs grow rounded-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="whitespace-nowrap rounded-none">
+              {statusFilter === "All" ? <Filter className="h-4 w-4" /> : statusFilter} Filter
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => setStatusFilter("All")}>
+                <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" />
+                All
+              </DropdownMenuItem>
+              {statusOptions.map((status) => {
+                let badgeClass = "bg-gray-400";
+                if (status === "Assisted" || status === "On-Progress") badgeClass = "bg-orange-400";
+                else if (status === "SO-Done") badgeClass = "bg-yellow-400";
+                else if (status === "Quote-Done") badgeClass = "bg-blue-500";
+                else if (status === "Pending") badgeClass = "bg-purple-500";
+                else if (status === "Cancelled") badgeClass = "bg-red-600";
+                
+                return (
+                  <DropdownMenuItem key={status} onClick={() => setStatusFilter(status)} className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${badgeClass}`} />
+                    <span className="capitalize">{status.replace("-", " ")}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
           {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
+            let cardBgClass = "bg-gray-100"; // default light background
 
             if (item.status === "Assisted" || item.status === "On-Progress") {
               badgeClass = "bg-orange-400 text-white";
+              cardBgClass = "bg-orange-100";
             } else if (item.status === "SO-Done") {
               badgeClass = "bg-yellow-400 text-black";
+              cardBgClass = "bg-yellow-100";
             } else if (item.status === "Quote-Done") {
               badgeClass = "bg-blue-500 text-white";
+              cardBgClass = "bg-blue-100";
+            } else if (item.status === "Pending") {
+              badgeClass = "bg-purple-500 text-white";
+              cardBgClass = "bg-purple-100";
             } else if (item.status === "Cancelled") {
               badgeClass = "bg-red-600 text-white";
+              cardBgClass = "bg-red-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className="w-full border rounded-none bg-orange-100 shadow-sm mt-2"
+                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
