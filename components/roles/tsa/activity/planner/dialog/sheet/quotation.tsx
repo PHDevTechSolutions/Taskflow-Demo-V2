@@ -1721,12 +1721,6 @@ Procurement
                       <FieldContent className="flex-1">
                         <FieldTitle>{label}</FieldTitle>
                         <FieldDescription>{description}</FieldDescription>
-<<<<<<< HEAD
-=======
-
-                        {/* Buttons only show if selected */}
-                        
->>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
                       </FieldContent>
 
                       {/* RIGHT */}
