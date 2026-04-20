@@ -49,7 +49,7 @@ export function CollaborationHubRowTrigger({
     if (!userId) return;
     const fetchUser = async () => {
       try {
-        const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`);
+        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (res.ok) {
           const data = await res.json();
           setUserData({
