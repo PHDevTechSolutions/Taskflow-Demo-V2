@@ -1,48 +1,17 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import {
-  CheckCircle2Icon,
-  Trash,
-  Check,
-  LoaderPinwheel,
-  PhoneOutgoing,
-  PackageCheck,
-  ReceiptText,
-  Activity,
-  MoreVertical,
-  Lock,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { toast } from "sonner";
-import { sileo } from "sileo";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
+import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Lock, } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { HoverCard, HoverCardContent, HoverCardTrigger, } from "@/components/ui/hover-card";
 import { supabase } from "@/utils/supabase";
-import { DeleteDialog } from "./dialog/delete";
-import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
-import { DeliveredDialog } from "../dialog/delivered";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -74,7 +43,6 @@ interface Activity {
   email_address: string;
   address: string;
   contact_person: string;
-  signature: string | null;
 }
 
 interface HistoryItem {
@@ -92,7 +60,6 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
-  quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
 
@@ -115,7 +82,7 @@ interface NewTaskProps {
   onCountChange?: (count: number) => void;
 }
 
-export const Progress: React.FC<NewTaskProps> = ({
+export const Completed: React.FC<NewTaskProps> = ({
   referenceid,
   target_quota,
   firstname,
@@ -134,21 +101,8 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-
-  // --- DELETE DIALOG STATE ---
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
-  const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
-    null,
-  );
-  const [errorHistory, setErrorHistory] = useState<string | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -261,32 +215,10 @@ export const Progress: React.FC<NewTaskProps> = ({
     return true;
   };
 
-  const isToday = (dateStr: string): boolean => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    return (
-      date.getFullYear() === today.getFullYear() &&
-      date.getMonth() === today.getMonth() &&
-      date.getDate() === today.getDate()
-    );
-  };
+  const allowedStatuses = ["Completed"];
 
-  // Show all activities EXCEPT:
-  // - Quote-Done with today's scheduled date (goes to Scheduled card)
-  // - Quote-Done with "Pending Client Approval" (goes to Overdue card)
-  // - Completed and Delivered (finished activities)
   const mergedData = activities
-    .filter((a) => {
-      // Exclude Completed and Delivered statuses
-      if (a.status === "Completed" || a.status === "Delivered") {
-        return false;
-      }
-      // Exclude Quote-Done status with today's scheduled date
-      if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
-        return false;
-      }
-      return true;
-    })
+    .filter((a) => allowedStatuses.includes(a.status))
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -298,17 +230,6 @@ export const Progress: React.FC<NewTaskProps> = ({
         ...activity,
         relatedHistoryItems,
       };
-    })
-    // Exclude Quote-Done with "Pending Client Approval" - those go to Overdue
-    .filter((activity) => {
-      if (activity.status === "Quote-Done") {
-        const hasPendingApproval = activity.relatedHistoryItems.some(
-          (h) => h.quotation_status === "Pending Client Approval"
-        );
-        // Exclude if has Pending Client Approval (goes to Overdue instead)
-        return !hasPendingApproval;
-      }
-      return true;
     })
     .sort(
       (a, b) =>
@@ -329,153 +250,38 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
   });
 
-  const openDoneDialog = (id: string) => {
-    setSelectedActivityId(id);
-    setDialogOpen(true);
-  };
-
-  const handleConfirmDone = async () => {
-    if (!selectedActivityId) return;
-
-    try {
-      setUpdatingId(selectedActivityId);
-
-      const res = await fetch("/api/act-update-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedActivityId }),
-        cache: "no-store",
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        toast.error(
-          `Failed to update status: ${result.error || "Unknown error"}`,
-        );
-        setUpdatingId(null);
-        return;
-      }
-
-      setDialogOpen(false);
-      await fetchAllData();
-      window.location.reload();
-
-      toast.success("Transaction marked as Done.");
-    } catch {
-      toast.error("An error occurred while updating status.");
-    } finally {
-      setUpdatingId(null);
-      setSelectedActivityId(null);
-    }
-  };
-
   useEffect(() => {
     onCountChange?.(filteredData.length);
   }, [filteredData.length]);
 
-  if (loading) {
+  if (error) {
     return (
-      <div className="flex justify-center items-center h-40">
-        <Spinner className="size-8" />
-      </div>
+      <Alert
+        variant="destructive"
+        className="flex flex-col space-y-4 p-4 text-xs"
+      >
+        <div className="flex items-center space-x-3">
+          <AlertCircleIcon className="h-6 w-6 text-red-600" />
+          <div>
+            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
+            <AlertDescription className="text-xs">
+              Please check your internet connection or try again later.
+            </AlertDescription>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <CheckCircle2Icon className="h-6 w-6 text-green-600" />
+          <div>
+            <AlertTitle className="text-black">Add New Data</AlertTitle>
+            <AlertDescription className="text-xs">
+              You can start by adding new entries to populate your database.
+            </AlertDescription>
+          </div>
+        </div>
+      </Alert>
     );
   }
-
-  const openDeleteDialog = (id: string) => {
-    setSelectedDeleteId(id);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!selectedDeleteId) return;
-
-    try {
-      setUpdatingId(selectedDeleteId);
-      setDeleteDialogOpen(false);
-
-      // Call your bulk delete API
-      const res = await fetch("/api/activity/tsa/planner/delete", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [Number(selectedDeleteId)] }),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || "Delete failed");
-      }
-
-      await fetchAllData();
-      toast.success("Activity deleted successfully.");
-    } catch (err: any) {
-      toast.error(err.message || "An error occurred while deleting.");
-    } finally {
-      setUpdatingId(null);
-      setSelectedDeleteId(null);
-    }
-  };
-
-  const openDeliveredDialog = (id: string) => {
-    setSelectedActivityId(id);
-    setDialogDeliveredOpen(true);
-  };
-
-  const handleConfirmDelivered = async () => {
-    if (!selectedActivityId) return;
-
-    try {
-      setUpdatingId(selectedActivityId);
-
-      const res = await fetch("/api/act-update-status-delivered", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedActivityId }),
-        cache: "no-store",
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        sileo.error({
-          title: "Failed",
-          description: `Failed to update status: ${result.error || "Unknown error"}`,
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
-        setUpdatingId(null);
-        return;
-      }
-
-      setDialogDeliveredOpen(false);
-      await fetchAllData();
-      window.location.reload();
-
-      sileo.success({
-        title: "Success",
-        description: "Transaction marked as Done.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch {
-      sileo.error({
-        title: "Failed",
-        description: "An error occurred while updating status.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } finally {
-      setUpdatingId(null);
-      setSelectedActivityId(null);
-    }
-  };
 
   return (
     <>
@@ -492,31 +298,17 @@ export const Progress: React.FC<NewTaskProps> = ({
         <Accordion type="single" collapsible className="w-full">
           {filteredData.map((item) => {
             // Define bg colors base sa status
-            let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
-            let cardBgClass = "bg-gray-100"; // default light background
+            let badgeClass = "bg-gray-200 text-gray-800";
 
-            if (item.status === "Assisted" || item.status === "On-Progress") {
-              badgeClass = "bg-orange-400 text-white";
-              cardBgClass = "bg-orange-100";
-            } else if (item.status === "SO-Done") {
-              badgeClass = "bg-yellow-400 text-black";
-              cardBgClass = "bg-yellow-100";
-            } else if (item.status === "Quote-Done") {
-              badgeClass = "bg-blue-500 text-white";
-              cardBgClass = "bg-blue-100";
-            } else if (item.status === "Pending") {
-              badgeClass = "bg-purple-500 text-white";
-              cardBgClass = "bg-purple-100";
-            } else if (item.status === "Cancelled") {
-              badgeClass = "bg-red-600 text-white";
-              cardBgClass = "bg-red-100";
+            if (item.status === "Completed") {
+              badgeClass = "bg-green-400 text-white";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
+                className="w-full border rounded-none shadow-sm mt-2"
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
@@ -556,55 +348,13 @@ export const Progress: React.FC<NewTaskProps> = ({
                         signature={signature}
                       />
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            className="cursor-pointer rounded-none"
-                          >
-                            Actions <MoreVertical />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          {/*<DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDoneDialog(item.id);
-                            }}
-                          >
-                            <Check className="mr-2 text-red-500" /> Mark as
-                            Pending
-                          </DropdownMenuItem>*/}
-
-                          <DropdownMenuItem
-                            disabled={updatingId === item.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeliveredDialog(item.id);
-                            }}
-                          >
-                            <Check className="mr-2 h-4 w-4 text-green-600" />
-                            Mark as Completed
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteDialog(item.id);
-                            }}
-                          >
-                            <Trash className="mr-2 text-red-600" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
 
                   <div className="ml-1 flex flex-wrap gap-1 uppercase">
                     {/* MAIN STATUS BADGE */}
                     <Badge
-                      className={`${badgeClass} rounded-sm shadow-md p-2 font-mono flex items-center gap-2 whitespace-nowrap text-[10px]`}
+                      className={`${badgeClass} font-mono flex items-center gap-2 whitespace-nowrap rounded-sm shadow-md p-2 text-[10px]`}
                     >
                       <LoaderPinwheel size={14} className="animate-spin" />
                       {item.status.replace("-", " ")}
@@ -632,32 +382,42 @@ export const Progress: React.FC<NewTaskProps> = ({
                             lowerAct.includes("outbound") ||
                             lowerAct.includes("call")
                           ) {
-                            return <PhoneOutgoing />;
+                            return <PhoneOutgoing size={14} />;
                           }
                           if (
                             lowerAct.includes("sales order") ||
                             lowerAct.includes("so prep")
                           ) {
-                            return <PackageCheck />;
+                            return <PackageCheck size={14} />;
                           }
                           if (
                             lowerAct.includes("quotation") ||
                             lowerAct.includes("quote")
                           ) {
-                            return <ReceiptText />;
+                            return <ReceiptText size={14} />;
                           }
-                          return <Activity />;
+                          return <Activity size={14} />;
                         };
 
                         return (
-                          <Badge
-                            key={activity}
-                            variant="outline"
-                            className="flex items-center justify-center w-8 h-8 p-0"
-                            title={activity.toUpperCase()}
-                          >
-                            {getIcon(activity)}
-                          </Badge>
+                          <HoverCard key={activity}>
+                            <HoverCardTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className="flex items-center justify-center w-8 h-8 p-0 cursor-default"
+                              >
+                                {getIcon(activity)}
+                              </Badge>
+                            </HoverCardTrigger>
+
+                            <HoverCardContent
+                              side="top"
+                              align="center"
+                              className="text-xs font-medium px-3 py-2 w-auto"
+                            >
+                              {activity.toUpperCase()}
+                            </HoverCardContent>
+                          </HoverCard>
                         );
                       })}
                   </div>
@@ -854,39 +614,12 @@ export const Progress: React.FC<NewTaskProps> = ({
                     <strong>Date Created:</strong>{" "}
                     {new Date(item.date_created).toLocaleDateString()}
                   </p>
-                  <p>
-                    <strong>Date Updated:</strong>{" "}
-                    {new Date(item.date_updated).toLocaleDateString()}
-                  </p>
                 </AccordionContent>
               </AccordionItem>
             );
           })}
         </Accordion>
       </div>
-
-      <DeleteDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        onConfirm={handleConfirmDelete}
-        loading={updatingId !== null}
-        title="Delete Activity"
-        description="Are you sure you want to delete this activity? This action cannot be undone."
-      />
-
-      <DeliveredDialog
-        open={dialogDeliveredOpen}
-        onOpenChange={setDialogDeliveredOpen}
-        onConfirm={handleConfirmDelivered}
-        loading={updatingId !== null}
-      />
-
-      <DoneDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onConfirm={handleConfirmDone}
-        loading={updatingId !== null}
-      />
     </>
   );
 };

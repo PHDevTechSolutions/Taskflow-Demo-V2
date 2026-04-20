@@ -232,7 +232,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
   }, [referenceid, fetchAllData]);
 
   const mergedActivities = activities
-    // FIX: whitelist — only show Assisted, Quote-Done
+    // FIX: whitelist — only show Assisted, Quote-Done, SO-Done
     .filter((a) => ALLOWED_STATUSES.includes(a.status))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -240,17 +240,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
           h.activity_reference_number === activity.activity_reference_number,
       );
       return { ...activity, relatedHistoryItems };
-    })
-    // Special condition: For Quote-Done, only show if quotation_status is "Pending Client Approval"
-    .filter((activity) => {
-      if (activity.status === "Quote-Done") {
-        const hasPendingApproval = activity.relatedHistoryItems.some(
-          (h) => h.quotation_status === "Pending Client Approval"
-        );
-        return hasPendingApproval;
-      }
-      // Assisted activities always show
-      return true;
     });
 
   const todayStr = toLocalDateString(new Date());

@@ -146,12 +146,12 @@ export default function TaskListEditDialog({
 }: TaskListEditDialogProps) {
   const [saving, setSaving] = useState(false);
 
-  // FIX: initialize from item directly, include company fields even if empty
+  // FIX: initialize from item directly, include company fields and remarks even if empty
   const buildInitial = (src: Completed): Partial<Completed> =>
     EDITABLE_FIELDS.reduce((acc, key) => {
       const val = src[key];
-      // Always include company_name and contact_number as they are required fields
-      if (key === "company_name" || key === "contact_number") {
+      // Always include company_name, contact_number, and remarks as they should always be editable
+      if (key === "company_name" || key === "contact_number" || key === "remarks") {
         (acc as any)[key] = val || "";
       } else if (val !== undefined && val !== null && String(val).trim() !== "") {
         (acc as any)[key] = val;
@@ -217,8 +217,9 @@ export default function TaskListEditDialog({
     }
   };
 
-  // Visible fields only — type_activity is hidden (read-only context)
-  const visibleEntries = Object.entries(formData).filter(([key]) => key !== "type_activity");
+  // Visible fields — type_activity is hidden (read-only context)
+  // remarks is always shown even if empty
+  const visibleEntries = Object.entries(formData).filter(([key]) => key !== "type_activity" && key !== "remarks");
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -255,6 +256,20 @@ export default function TaskListEditDialog({
               </div>
             </div>
           )}
+
+          {/* ── remarks textarea — always shown ─────────────────── */}
+          <div>
+            <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+              Remarks
+            </Label>
+            <Textarea
+              className="w-full rounded-none text-xs resize-none"
+              rows={3}
+              value={String(formData.remarks ?? "")}
+              onChange={(e) => handleChange("remarks", e.target.value)}
+              placeholder="Enter remarks..."
+            />
+          </div>
 
           {visibleEntries.length === 0 && (
             <p className="text-xs text-zinc-400 italic text-center py-4">
@@ -310,23 +325,6 @@ export default function TaskListEditDialog({
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                </div>
-              );
-            }
-
-            // ── remarks textarea ────────────────────────────────────
-            if (key === "remarks") {
-              return (
-                <div key={key}>
-                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
-                    Remarks
-                  </Label>
-                  <Textarea
-                    className="w-full rounded-none text-xs resize-none"
-                    rows={3}
-                    value={String(value ?? "")}
-                    onChange={(e) => handleChange("remarks", e.target.value)}
-                  />
                 </div>
               );
             }

@@ -548,22 +548,43 @@ export function CreateActivityDialog({
             const scheduled_date = followUpDate || null;
 
             // Update status AND scheduled_date if available
+            // Include all activity data for new activity creation (Cluster/OB Calls flow)
+            const statusPayload = {
+                activity_reference_number: activityRef,
+                status,
+                scheduled_date,
+                // Additional fields for new activity creation
+                referenceid: referenceid || newActivity.referenceid,
+                tsm: tsm || newActivity.tsm,
+                manager: manager || newActivity.manager,
+                // Note: target_quota not sent to activity table (only history)
+                account_reference_number: accountReferenceNumber || newActivity.account_reference_number,
+                ticket_reference_number: ticket_reference_number || newActivity.ticket_reference_number,
+                type_client: type_client || newActivity.type_client,
+                company_name: company_name || newActivity.company_name,
+                contact_person: contact_person || newActivity.contact_person,
+                contact_number: contact_number || newActivity.contact_number,
+                email_address: email_address || newActivity.email_address,
+                address: address || newActivity.address,
+                agent: agent || newActivity.agent,
+                is_new_activity: true,
+            };
+            console.log("Status API Payload:", statusPayload);
+
             const statusRes = await fetch("/api/act-edit-status-activity", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    activity_reference_number: activityRef,
-                    status,
-                    ...(scheduled_date && { scheduled_date }), // only add if scheduled_date is not null
-                }),
+                body: JSON.stringify(statusPayload),
             });
 
             const statusResult = await statusRes.json();
 
             if (!statusRes.ok) {
+                const errorMsg = statusResult.error || "Failed to update activity status.";
+                console.error("Status API Error:", statusResult);
                 sileo.error({
                     title: "Failed",
-                    description: "Failed to update activity status.",
+                    description: errorMsg,
                     duration: 4000,
                     position: "top-right",
                     fill: "black",

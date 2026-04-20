@@ -775,8 +775,18 @@ export default function TaskListEditDialog({
     else if (quotation_type === "Ecoshift Corporation")
       emailDomain = "ecoshiftcorp.com";
     else emailDomain = email?.split("@")[1] ?? "";
-    const salesemail =
-      emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+
+    // TSM email with domain - use TsmEmailAddress prop and override domain
+    const tsmSourceEmail = TsmEmailAddress || tsmemail || "";
+    const tsmEmailUsername = tsmSourceEmail?.split("@")[0] ?? "";
+    const tsmEmailWithDomain =
+      tsmEmailUsername && emailDomain ? `${tsmEmailUsername}@${emailDomain}` : tsmSourceEmail;
+
+    // Manager email with domain - use ManagerEmailAddress prop and override domain
+    const managerSourceEmail = ManagerEmailAddress || "";
+    const managerEmailUsername = managerSourceEmail?.split("@")[0] ?? "";
+    const managerEmailWithDomain =
+      managerEmailUsername && emailDomain ? `${managerEmailUsername}@${emailDomain}` : managerSourceEmail;
 
     const items = products.map((p: ProductItem, index: number) => {
       const qty = parseFloat(p.product_quantity ?? "0") || 0;
@@ -785,8 +795,8 @@ export default function TaskListEditDialog({
       const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
       const baseAmount = qty * unitPrice;
       const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
-      const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount
-      const totalAmount = discountedAmount * qty; // Total amount after discount
+      const discountedAmount = unitPrice - unitDiscountAmount;
+      const totalAmount = discountedAmount * qty;
 
       return {
         itemNo: index + 1,
@@ -800,7 +810,7 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
-        discountAmount: unitDiscountAmount, // Amount of discount per unit
+        discountAmount: unitDiscountAmount,
         discountedAmount,
         totalAmount,
         isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
@@ -839,10 +849,11 @@ export default function TaskListEditDialog({
             : "Zero-Rated",
       totalPrice: totalPriceWithDelivery,
       salesRepresentative: salesRepresentativeName,
-      salesemail,
+      salesemail: `${emailUsername}@${emailDomain}`,
       salescontact: contact ?? "",
       salestsmname: tsmname || "—",
-      salestsmemail: tsmemail ?? "",
+      salestsmemail: tsmEmailWithDomain,
+      salestsmemaildomain: emailDomain,
       salestsmcontact: tsmcontact ?? "",
       salesmanagername: managername || "—",
       vatType: vatTypeState ?? null,
@@ -869,11 +880,11 @@ export default function TaskListEditDialog({
       agentContactNumber: agentContactNumber ?? null,
       agentEmailAddress: agentEmailAddress ?? null,
       TsmSignature: TsmSignature ?? null,
-      TsmEmailAddress: TsmEmailAddress ?? null,
+      TsmEmailAddress: tsmEmailWithDomain || TsmEmailAddress || null,
       TsmContactNumber: TsmContactNumber ?? null,
       ManagerSignature: ManagerSignature ?? null,
       ManagerContactNumber: ManagerContactNumber ?? null,
-      ManagerEmailAddress: ManagerEmailAddress ?? null,
+      ManagerEmailAddress: managerEmailWithDomain || ManagerEmailAddress || null,
     };
   };
 
