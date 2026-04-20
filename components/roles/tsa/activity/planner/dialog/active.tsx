@@ -649,7 +649,6 @@ export function AccountDialog({
                       Enter the full name(s) of the primary contact person(s).
                     </FieldDescription>
                   </FieldContent>
-<<<<<<< HEAD
 
                   {/* Determine the number of contact entries (max of all three arrays) */}
                   {(() => {
@@ -860,44 +859,6 @@ export function AccountDialog({
                       <PlusIcon className="h-4 w-4 mr-1" /> Add Contact Person
                     </Button>
                   </div>
-=======
-                  {formData.contact_person.map((val, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-2">
-                      <Input
-                        value={val}
-                        onChange={(e) => {
-                          const copy = [...formData.contact_person];
-                          copy[i] = e.target.value;
-                          updateField("contact_person", copy);
-                        }}
-                        placeholder="Contact Person"
-                        className="uppercase rounded-none flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="rounded-none"
-                        disabled={formData.contact_person.length === 1}
-                        onClick={() => {
-                          const copy = [...formData.contact_person];
-                          copy.splice(i, 1);
-                          updateField("contact_person", copy);
-                        }}
-                      >
-                        <MinusIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        className="rounded-none"
-                        onClick={() =>
-                          updateField("contact_person", [...formData.contact_person, ""])
-                        }
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
->>>>>>> 55eb0bd131465cac4cb7f5d568d7dac2b6796455
                 </FieldSet>
               </FieldGroup>
             </div>
