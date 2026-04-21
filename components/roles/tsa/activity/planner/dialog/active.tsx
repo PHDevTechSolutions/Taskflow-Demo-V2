@@ -464,7 +464,8 @@ export function AccountDialog({
           formData.contact_number.length > 0 &&
           formData.contact_number.every((v) => v.trim() !== "") &&
           !companyError &&
-          formData.email_address.every((em) => em === "N/A" || isValidEmail(em) || !em.trim())
+          formData.email_address.length > 0 &&
+          formData.email_address.every((em) => em === "N/A" || isValidEmail(em))
         );
       case 1:
         return (
@@ -649,216 +650,42 @@ export function AccountDialog({
                       Enter the full name(s) of the primary contact person(s).
                     </FieldDescription>
                   </FieldContent>
-
-                  {/* Determine the number of contact entries (max of all three arrays) */}
-                  {(() => {
-                    const maxLen = Math.max(
-                      formData.contact_person.length,
-                      formData.contact_number.length,
-                      formData.email_address.length
-                    );
-                    const entries = [];
-                    for (let i = 0; i < maxLen; i++) {
-                      const person = formData.contact_person[i] || "";
-                      const number = formData.contact_number[i] || "";
-                      const email = formData.email_address[i] || "";
-                      
-                      // Number formatting logic
-                      const isIntl = number.startsWith("+");
-                      const digits = number.replace(/\D/g, "");
-                      const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
-                      const isMobile = !isIntl && digits.startsWith("09");
-                      const isCustom = number.startsWith("#");
-                      
-                      let displayVal = number;
-                      if (isCustom) displayVal = number.slice(1);
-                      else if (isIntl) displayVal = formatIntl(number);
-                      else if (isLandline) displayVal = formatLandline(number);
-                      else displayVal = formatPH(number);
-
-                      const emailError = email && email !== "N/A" && !isValidEmail(email) ? "Invalid email format" : "";
-
-                      entries.push(
-                        <div key={i} className="border border-gray-200 rounded-none p-4 mb-4 bg-gray-50/50">
-                          {/* Contact Person */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Contact Person {i + 1}
-                            </label>
-                            <div className="flex gap-2">
-                              <Input
-                                value={person}
-                                onChange={(e) => {
-                                  const copy = [...formData.contact_person];
-                                  copy[i] = e.target.value;
-                                  updateField("contact_person", copy);
-                                }}
-                                placeholder="Full Name"
-                                className="uppercase rounded-none flex-1"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Contact Number */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Contact Number {i + 1}
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
-                                onValueChange={(v) => {
-                                  const copy = [...formData.contact_number];
-                                  const currentDigits = number.replace(/\D/g, "");
-                                  
-                                  if (v === "local") {
-                                    copy[i] = currentDigits.startsWith("63")
-                                      ? "0" + currentDigits.slice(2)
-                                      : currentDigits.startsWith("0")
-                                      ? currentDigits
-                                      : "09";
-                                  } else if (v === "intl") {
-                                    copy[i] = currentDigits.startsWith("0")
-                                      ? `+63${currentDigits.slice(1)}`
-                                      : currentDigits.startsWith("63")
-                                      ? "+" + currentDigits
-                                      : "+63";
-                                  } else if (v === "landline") {
-                                    copy[i] = currentDigits.startsWith("63")
-                                      ? "0" + currentDigits.slice(2, 3)
-                                      : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
-                                      ? currentDigits.slice(0, 4)
-                                      : "02";
-                                  } else if (v === "custom") {
-                                    copy[i] = "#" + (number.startsWith("#") ? number.slice(1) : number);
-                                  }
-                                  updateField("contact_number", copy);
-                                }}
-                              >
-                                <SelectTrigger className="w-[100px] rounded-none">
-                                  {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="local">Phil</SelectItem>
-                                  <SelectItem value="landline">Landline</SelectItem>
-                                  <SelectItem value="intl">Intl</SelectItem>
-                                  <SelectItem value="custom">Custom</SelectItem>
-                                </SelectContent>
-                              </Select>
-
-                              <Input
-                                value={displayVal}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  const copy = [...formData.contact_number];
-                                  if (isCustom) {
-                                    // For custom: allow any characters except comma (use slash for multiple numbers)
-                                    copy[i] = "#" + raw.replace(/,/g, "");
-                                  } else {
-                                    const cleaned = isIntl
-                                      ? "+" + raw.replace(/[^0-9]/g, "")
-                                      : raw.replace(/[^0-9\/\s]/g, "");
-                                    copy[i] = cleaned;
-                                  }
-                                  updateField("contact_number", copy);
-                                }}
-                                placeholder={isCustom ? "Any format (use / for multiple)" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567 / 0922-456-7890"}
-                                className="rounded-none flex-1"
-                              />
-                            </div>
-                            {/* Number validation */}
-                            {isMobile && digits.length > 0 && digits.length !== 11 && (
-                              <p className="text-red-500 text-xs mt-1">Mobile must be 11 digits.</p>
-                            )}
-                            {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
-                              <p className="text-red-500 text-xs mt-1">Landline must be 9-10 digits.</p>
-                            )}
-                          </div>
-
-                          {/* Email Address */}
-                          <div className="mb-3">
-                            <label className="text-xs font-semibold text-gray-600 uppercase mb-1 block">
-                              Email Address {i + 1}
-                            </label>
-                            <div className="flex gap-2">
-                              <Input
-                                type="email"
-                                value={email}
-                                disabled={email === "N/A"}
-                                onChange={(e) => {
-                                  const copy = [...formData.email_address];
-                                  copy[i] = e.target.value;
-                                  updateField("email_address", copy);
-                                }}
-                                placeholder={email === "N/A" ? "No email provided" : "email@example.com"}
-                                className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
-                              />
-                            </div>
-                            {/* No Email Checkbox */}
-                            <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
-                              <input
-                                type="checkbox"
-                                id={`noEmail-${i}`}
-                                checked={email === "N/A"}
-                                onChange={(e) => {
-                                  const copy = [...formData.email_address];
-                                  copy[i] = e.target.checked ? "N/A" : "";
-                                  updateField("email_address", copy);
-                                }}
-                                className="w-4 h-4 cursor-pointer"
-                              />
-                              <label htmlFor={`noEmail-${i}`} className="text-xs text-amber-800 cursor-pointer select-none">
-                                No email address provided
-                              </label>
-                            </div>
-                            {emailError && (
-                              <p className="text-red-500 text-xs mt-1">{emailError}</p>
-                            )}
-                          </div>
-
-                          {/* Remove Contact Entry */}
-                          <div className="flex justify-end">
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="rounded-none"
-                              disabled={maxLen === 1}
-                              onClick={() => {
-                                const personCopy = [...formData.contact_person];
-                                const numberCopy = [...formData.contact_number];
-                                const emailCopy = [...formData.email_address];
-                                personCopy.splice(i, 1);
-                                numberCopy.splice(i, 1);
-                                emailCopy.splice(i, 1);
-                                updateField("contact_person", personCopy.length > 0 ? personCopy : [""]);
-                                updateField("contact_number", numberCopy.length > 0 ? numberCopy : [""]);
-                                updateField("email_address", emailCopy.length > 0 ? emailCopy : [""]);
-                              }}
-                            >
-                              <MinusIcon className="h-4 w-4 mr-1" /> Remove Contact
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return entries;
-                  })()}
-
-                  {/* Add New Contact Entry */}
-                  <div className="mt-2">
-                    <Button
-                      type="button"
-                      className="rounded-none w-full"
-                      onClick={() => {
-                        updateField("contact_person", [...formData.contact_person, ""]);
-                        updateField("contact_number", [...formData.contact_number, ""]);
-                        updateField("email_address", [...formData.email_address, ""]);
-                      }}
-                    >
-                      <PlusIcon className="h-4 w-4 mr-1" /> Add Contact Person
-                    </Button>
-                  </div>
+                  {formData.contact_person.map((val, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <Input
+                        value={val}
+                        onChange={(e) => {
+                          const copy = [...formData.contact_person];
+                          copy[i] = e.target.value;
+                          updateField("contact_person", copy);
+                        }}
+                        placeholder="Contact Person"
+                        className="uppercase rounded-none flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="rounded-none"
+                        disabled={formData.contact_person.length === 1}
+                        onClick={() => {
+                          const copy = [...formData.contact_person];
+                          copy.splice(i, 1);
+                          updateField("contact_person", copy);
+                        }}
+                      >
+                        <MinusIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        className="rounded-none"
+                        onClick={() =>
+                          updateField("contact_person", [...formData.contact_person, ""])
+                        }
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </FieldSet>
               </FieldGroup>
             </div>
