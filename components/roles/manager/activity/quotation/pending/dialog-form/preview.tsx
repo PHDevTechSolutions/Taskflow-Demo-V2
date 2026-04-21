@@ -14,8 +14,6 @@ type Item = {
     unitPrice: number;
     totalAmount: number;
     remarks: string;
-    discount?: number;
-    discountedAmount?: number;
 };
 
 type Payload = {
@@ -31,7 +29,6 @@ type Payload = {
     salescontact: string;
     salesemail: string;
     salestsmname?: string;
-    salesmanagername: string;
     salestsmcontact?: string;
     salestsmemail?: string;
     items: Item[];
@@ -53,15 +50,11 @@ type Payload = {
     agentContactNumber?: string | null;
     agentEmailAddress?: string | null;
     tsmName?: string | null;
-    tsmSignature?: string | null;
-    tsmContactNumber?: string | null;
-    tsmEmailAddress?: string | null;
     managerName?: string | null;
 
     signature?: string | null;
-    salesheademail?: string | null;
-    salesheadcontact?: string | null;
-
+    tsmcontact?: string | null;
+    tsmemail?: string | null;
 };
 
 type PreviewProps = {
@@ -69,6 +62,8 @@ type PreviewProps = {
     quotationType: string;
     setIsPreviewOpen: (open: boolean) => void;
 };
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
     const isEcoshift = quotationType === "Ecoshift Corporation";
@@ -151,10 +146,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-24 text-right">UNIT PRICE</th>
-                                <th className="p-3 border-r border-black w-16 text-center">DISC</th>
-                                <th className="p-3 border-r border-black w-24 text-right">NET UNIT PRICE</th>
-                                <th className="p-3 w-24 text-right">TOTAL AMOUNT</th>
+                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black">
@@ -179,26 +172,10 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                         <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
-                                        ₱{item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="p-4 text-center border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-black text-red-600">{item.discount}%</span>
-                                        ) : (
-                                            <span className="text-[10px] text-gray-300">—</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-medium text-red-600">
-                                                ₱{item.discountedAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] font-medium">₱{item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                        )}
+                                        ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-4 text-right font-black align-top text-[#121212]">
-                                        ₱{item.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
@@ -230,7 +207,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 </td>
 
                                 {/* Right: Fee Breakdown */}
-                                <td colSpan={4} className="p-0 align-top">
+                                <td colSpan={2} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
                                             {/* Net Sales */}
@@ -239,28 +216,28 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Delivery Fee */}
                                             <tr className="border-b border-gray-100">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Delivery Charge</td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Restocking Fee */}
                                             <tr className="border-b-2 border-black">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Restocking Fee</td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.restockingFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Total Invoice */}
                                             <tr className="bg-gray-50 border-b border-black">
                                                 <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">Total Invoice Amount</td>
                                                 <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900 tabular-nums">
-                                                    ₱{payload.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* VAT breakdown if vat_inc */}
@@ -269,13 +246,13 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     <tr className="border-b border-gray-100">
                                                         <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12/112)</td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
                                                     <tr className={payload.whtType && payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
                                                         <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Net of VAT (Tax Base)</td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice / 1.12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
                                                     {payload.whtType && payload.whtType !== "none" && (
@@ -284,7 +261,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                                 Less: {payload.whtLabel}
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-black text-blue-700 tabular-nums">
-                                                                − ₱{(payload.whtAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                − ₱{(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </td>
                                                         </tr>
                                                     )}
@@ -304,7 +281,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     {payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
                                                 </td>
                                                 <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
-                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -386,8 +363,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 content: (
                                     <div className="bg-yellow-50 p-2">
                                         <p>*5-7 days if on stock upon receipt of approved PO.</p>
-                                        <p>*Indent orders: 45-60 days upon receipt of approved PO & down payment.</p>
-                                        <p>*In conflict of estimates, the latter will prevail.</p>
+                                        <p>*For items not on stock/indent order, an estimate of 45-60 days upon receipt of approved PO & down payment. Barring any delay in shipping and customs clearance beyond Disruptive's control.</p>
+                                        <p>*In the event of a conflict or inconsistency in estimated days under Availability and another estimate indicated elsewhere in this quotation, the latter will prevail.</p>
                                     </div>
                                 ),
                             },
@@ -395,7 +372,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 label: "Warranty",
                                 content: (
                                     <div className="bg-yellow-50 p-2">
-                                        <p>One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                        <p><b>Regular Item:</b> One (1) year from the time of delivery for all busted lights except the damaged fixture.</p>
+                                        <p><b>Promo Item:</b> Three (3) months from the time of delivery for all busted lights except the damaged fixture.</p>
                                         <p>The warranty will be VOID under the following circumstances:</p>
                                         <p>*If the unit is being tampered with.</p>
                                         <p>*If the item(s) is/are altered in any way by unauthorized technicians.</p>
@@ -410,20 +388,14 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                             {
                                 label: "SO Validity",
                                 content: (
-                                    <p>
-                                        Sales order valid for <span className="text-red-600 font-black">14 working days</span> from issuance.
-                                        Unconfirmed orders within this period are <span className="text-red-600 font-black">automatically cancelled</span>.
-                                    </p>
+                                    <p>Sales order has <span className="text-red-600 font-black italic">validity period of 14 working days</span>. (excluding holidays and Sundays) from the date of issuance. Any sales order not confirmed and no verified payment within this <span className="text-red-600 font-black">14-day period will be automatically cancelled</span>.</p>
                                 ),
                             },
                             {
                                 label: "Storage",
                                 content: (
                                     <div className="bg-yellow-50 p-2">
-                                        <p>
-                                            Undelivered confirmed orders after 14 working days charged
-                                            <span className="text-red-600 font-black"> 10% storage fee/month (0.33%/day)</span>.
-                                        </p>
+                                        <p>Orders with confirmation/verified payment but undelivered after 14 working days (excluding holidays and Sundays starting from picking date) due to clients’ request or shortcomings will be charged a storage fee of 10% of the value of the orders per month <span className="text-red-600 font-black"> (10% / 30 days =  0.33% per day)</span>.</p>
                                     </div>
                                 ),
                             },
@@ -431,10 +403,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 label: "Return",
                                 content: (
                                     <div className="bg-yellow-50 p-2">
-                                        <p>
-                                            <span className="text-red-600 font-black underline">7-day return policy</span> for defective, damaged, or incomplete products —
-                                            must be communicated within 7 days.
-                                        </p>
+                                        <p><span className="text-red-600 font-black"><u>7 days return policy - </u></span>if the product received is defective, damaged, or incomplete. This must be communicated to Disruptive, and Disruptive has duly acknowledged communication as received within a maximum of 7 days to qualify for replacement.</p>
                                     </div>
                                 ),
                             },
@@ -443,21 +412,20 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 content: (
                                     <div className="p-2">
                                         <p><span className="text-red-600 font-black">Cash on Delivery (COD)</span></p>
-                                        <p className="font-semibold mt-1">
-                                            Orders below ₱10,000: cash on delivery accepted. Above ₱10,000: bank deposit or e-payment required.
-                                        </p>
-                                        <p className="mt-1">For special items: 70% down payment, 30% upon delivery.</p>
-                                        <p className="font-black mt-3">BANK DETAILS — Payee: {companyName}</p>
-                                        <div className="grid grid-cols-2 gap-4 mt-2">
+                                        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
+                                        <p>For special items,  Seventy Percent (70%) down payment, 30% upon delivery.</p>
+                                        <p className="mt-5"><b>BANK DETAILS</b></p>
+                                        <p className="mb-5"><strong>Payee to: <b>{isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</b></strong></p>
+                                        <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <p className="font-black">METROBANK</p>
-                                                <p>Account Name: {companyName}</p>
-                                                <p>Account No: {isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</p>
+                                                <p className="font-black">BANK: METROBANK</p>
+                                                <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
+                                                <p>Account Number: {isEcoshift ? '243-7-243805100' : '243-7-24354164-2'}</p>
                                             </div>
                                             <div>
-                                                <p className="font-black">BDO</p>
-                                                <p>Account Name: {companyName}</p>
-                                                <p>Account No: {isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</p>
+                                                <p className="font-black">BANK: BDO</p>
+                                                <p>Account Name: {isEcoshift ? 'ECOSHIFT CORPORATION' : 'DISRUPTIVE SOLUTIONS INC.'}</p>
+                                                <p>Account Number: {isEcoshift ? '0021-8801-7271' : '0021-8801-9258'}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -474,21 +442,21 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                             {
                                 label: "Validity",
                                 content: (
-                                    <p>
-                                        <span className="text-red-600 font-black underline">Thirty (30) calendar days</span> from the date of this offer.
-                                        Quoted prices subject to change with market conditions.
-                                    </p>
+                                    <>
+                                        <p className="text-red-600 font-black underline">Thirty (30) calendar days from the date of this offer.</p>
+                                        <p>In the event of changes in prevailing market conditions, duties, taxes, and all other importation charges, quoted prices are subject to change.</p>
+                                    </>
                                 ),
                             },
                             {
                                 label: "Cancellation",
                                 content: (
                                     <div className="bg-yellow-50 p-2 space-y-0.5">
-                                        <p>1. Quoted items are non-cancellable.</p>
-                                        <p>2. Client responsible for 100% of costs incurred if cancelled.</p>
-                                        <p>3. Downpayment for indent/special items is non-refundable.</p>
-                                        <p>4. COD payment must be ready within 7 days or order is auto-cancelled.</p>
-                                        <p>5. Special Projects (SPF) cancellations subject to 100% charge.</p>
+                                        <p>1. Above quoted items are non-cancellable.</p>
+                                        <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
+                                        <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+                                        <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+                                        <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
                                     </div>
                                 ),
                             },
@@ -537,9 +505,9 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                             {/* Approver */}
                             <div>
                                 <p className="text-[9px] font-black uppercase text-gray-400 mb-8">Approved By:</p>
-                                {payload.tsmSignature ? (
+                                {payload.signature ? (
                                     <img
-                                        src={payload.tsmSignature}
+                                        src={payload.signature}
                                         alt="TSM Signature"
                                         className="h-14 object-contain mb-1"
                                     />
@@ -550,28 +518,17 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 )}
                                 <p className="text-[10px] font-black uppercase mt-1">{payload.tsmName || "—"}</p>
                                 <div className="border-b border-black w-56 mt-0.5" />
-                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">TERRITORY SALES MANAGER</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.tsmContactNumber || "N/A"}</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.tsmEmailAddress || "N/A"}</p>
+                                <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Territory Sales Manager</p>
+                                <p className="text-[9px] text-gray-400 italic">Mobile: {payload.tsmcontact || "N/A"}</p>
+                                <p className="text-[9px] text-gray-400 italic">Email: {payload.tsmemail || "N/A"}</p>
                             </div>
 
                             {/* Noted By */}
                             <div>
-                                <p className="text-[10px] font-black uppercase text-gray-400 mb-10">Noted By:</p>
-                                {payload.signature ? (
-                                    <img
-                                        src={payload.signature}
-                                        alt="Agent Signature"
-                                        className="w-40 h-20 object-contain flex align-items center justify-center mb-2 border-none"
-                                    />
-                                ) : (
-                                    <p className="text-[9px] text-gray-500 italic mb-2">No signature available</p>
-                                )}
-                                <p className="text-[11px] font-black uppercase mt-1">{payload.managerName}</p>
-                                <div className="border-b border-black w-64"></div>
-                                <p className="text-[9px] font-bold text-gray-500 mt-1 uppercase tracking-widest">Sales-B2B</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Mobile: {payload.salesheadcontact || "N/A"}</p>
-                                <p className="text-[9px] text-gray-500 font-bold italic">Email: {payload.salesheademail || "N/A"}</p>
+                                <p className="text-[9px] font-black uppercase text-gray-400 mb-8">Noted By:</p>
+                                <p className="text-[10px] font-black uppercase mt-1">{payload.managerName || "—"}</p>
+                                <div className="border-b border-black w-56 mt-0.5" />
+                                <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Sales-B2B</p>
                             </div>
                         </div>
 

@@ -5,12 +5,16 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
   CalendarDays, ArrowLeft, FileText, Hash, Building2,
   Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import { format } from "date-fns";
 
 /* ─── Types ───────────────────────────────────────────────────────── */
 
@@ -779,7 +783,7 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records, a
 
 /* ─── Main Component ──────────────────────────────────────────────── */
 
-export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: AccountsTableProps) {
+export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setDateCreatedFilterRangeAction }: AccountsTableProps) {
   const [agents, setAgents] = useState<any[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
@@ -803,6 +807,10 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [exportOpen, setExportOpen] = useState(false);
   const [activeListOpen, setActiveListOpen] = useState<ListSource>(null);
   const [activityFilter, setActivityFilter] = useState<"all" | "with" | "without">("all");
+
+  const [agentClusterAccounts, setAgentClusterAccounts] = useState<Account[]>([]);
+  const [agentActivities, setAgentActivities] = useState<Activity[]>([]);
+  const [loadingAgentData, setLoadingAgentData] = useState(false);
 
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
   const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
@@ -831,8 +839,12 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     const params = new URLSearchParams({ referenceid: userDetails.referenceid });
-    if (dateCreatedFilterRange?.from) params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
-    if (dateCreatedFilterRange?.to) params.set("to", dateCreatedFilterRange.to.toISOString().slice(0, 10));
+    // Always fetch full month activities (like End of Day Report) - ALWAYS use current month
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    params.set("from", monthStart.toISOString().slice(0, 10));
+    params.set("to", monthEnd.toISOString().slice(0, 10));
     fetch(`/api/reports/manager/fetch?${params.toString()}`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
@@ -843,7 +855,77 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       .catch((err) => { if (cancelled || err?.name === "AbortError") return; setAllActivities([]); })
       .finally(() => { clearTimeout(timeout); if (!cancelled) setLoadingActivities(false); });
     return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
-  }, [userDetails.referenceid, dateCreatedFilterRange]);
+  }, [userDetails.referenceid]);
+
+  useEffect(() => {
+    if (drillLevel !== "accounts" || !selectedAgentId) {
+      setAgentClusterAccounts([]);
+      setAgentActivities([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAgentData(true);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    const fetchAgentData = async () => {
+      try {
+        const accountsRes = await fetch(
+          `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(selectedAgentId)}`,
+          { signal: controller.signal }
+        );
+        let accounts: Account[] = [];
+        if (accountsRes.ok) {
+          const accountsData = await accountsRes.json();
+          accounts = Array.isArray(accountsData) 
+            ? accountsData 
+            : Array.isArray(accountsData?.data) 
+              ? accountsData.data 
+              : [];
+        }
+        if (cancelled) return;
+        setAgentClusterAccounts(accounts);
+
+        // Always fetch full month's activities (like End of Day Report) - ALWAYS use current month
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        
+        const params = new URLSearchParams({ referenceid: selectedAgentId });
+        params.set("from", monthStart.toISOString().slice(0, 10));
+        params.set("to", monthEnd.toISOString().slice(0, 10));
+
+        const activitiesRes = await fetch(
+          `/api/activity/tsa/breaches/fetch?${params.toString()}`,
+          { signal: controller.signal }
+        );
+        
+        let activities: Activity[] = [];
+        if (activitiesRes.ok) {
+          const activitiesData = await activitiesRes.json();
+          activities = Array.isArray(activitiesData)
+            ? activitiesData
+            : Array.isArray(activitiesData?.data)
+              ? activitiesData.data
+              : [];
+        }
+        if (cancelled) return;
+        setAgentActivities(activities);
+      } catch (err) {
+        if (cancelled || (err instanceof Error && err.name === "AbortError")) return;
+        setAgentClusterAccounts([]);
+        setAgentActivities([]);
+      } finally {
+        clearTimeout(timeout);
+        if (!cancelled) setLoadingAgentData(false);
+      }
+    };
+
+    fetchAgentData();
+    return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
+  }, [drillLevel, selectedAgentId, dateCreatedFilterRange]); // Keep dependency for React rules, but code inside doesn't use it for API calls
 
   const agentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -857,26 +939,32 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     posts.filter((a) => a.status?.toLowerCase() === "active"),
     [posts]);
 
-  // ── Type client filter applied on top of active accounts ──
   const typeClientFilteredAccounts = useMemo(() =>
     typeClientFilter
       ? allActiveAccounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter)
       : allActiveAccounts,
     [allActiveAccounts, typeClientFilter]);
 
-  // ── Set of active company names (lowercase) — source of truth ──
   const activeCompanyNames = useMemo(() => {
     const s = new Set<string>();
     allActiveAccounts.forEach((a) => s.add(a.company_name.toLowerCase()));
     return s;
   }, [allActiveAccounts]);
 
-  // ── Filter allActivities to only include companies still in active accounts ──
   const activeFilteredActivities = useMemo(() =>
     allActivities.filter((a) =>
       a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
     ),
     [allActivities, activeCompanyNames]);
+
+  const effectiveActivities = useMemo(() => {
+    if (drillLevel === "accounts" && agentActivities.length > 0) {
+      // Use all agent activities - the matching to accounts will happen in activityKeySet
+      // Don't pre-filter by company name as some activities may only have account_reference_number
+      return agentActivities;
+    }
+    return activeFilteredActivities;
+  }, [drillLevel, agentActivities, activeFilteredActivities]);
 
   const tsmIds = useMemo(() => {
     const s = new Set<string>();
@@ -884,64 +972,70 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return [...s];
   }, [typeClientFilteredAccounts]);
 
-  // ── activityKeySet uses activeFilteredActivities ──
-  const activityKeySet = useMemo(() => {
+  // Match activities to accounts by company_name ONLY (like End of Day Report)
+  // Also apply same month-based date filtering as End of Day Report
+  // ALWAYS use current month - do not use dateCreatedFilterRange
+  const touchedCompanies = useMemo(() => {
     const s = new Set<string>();
-    activeFilteredActivities.forEach((a) => {
-      if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
-      else if (a.company_name) s.add(`name:${a.company_name.toLowerCase()}`);
+    
+    // Always use current month for filtering - date picker does NOT affect counts
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    
+    effectiveActivities.forEach((a) => {
+      if (!a.company_name || !a.date_created) return;
+      
+      // Apply same month-based date filter as End of Day Report
+      const t = new Date(a.date_created).getTime();
+      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+      
+      s.add(a.company_name.toLowerCase());
     });
     return s;
-  }, [activeFilteredActivities]);
+  }, [effectiveActivities]); // Removed dateCreatedFilterRange dependency - counts always use current month
 
-  const getAccountKey = (account: Account): string => {
-    if (account.account_reference_number) return account.account_reference_number.toLowerCase();
-    return `name:${account.company_name.toLowerCase()}`;
-  };
-
-  // ── companiesWithActivity uses activityKeySet derived from activeFilteredActivities ──
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
-    allActiveAccounts.forEach((a) => {
-      if (activityKeySet.has(getAccountKey(a))) s.add(a.company_name.toLowerCase());
+    const accountsToCheck = (drillLevel === "accounts" && agentClusterAccounts.length > 0)
+      ? agentClusterAccounts
+      : allActiveAccounts;
+    accountsToCheck.forEach((a) => {
+      if (a.company_name && touchedCompanies.has(a.company_name.toLowerCase())) {
+        s.add(a.company_name.toLowerCase());
+      }
     });
     return s;
-  }, [allActiveAccounts, activityKeySet]);
+  }, [drillLevel, agentClusterAccounts, allActiveAccounts, touchedCompanies]);
 
-  // ── activityCountMap uses activeFilteredActivities ──
   const activityCountMap = useMemo(() => {
-    const refCount: Record<string, number> = {};
+    // Count activities by company_name only (like End of Day Report)
     const nameCount: Record<string, number> = {};
-    activeFilteredActivities.forEach((a) => {
-      if (a.account_reference_number) {
-        const k = a.account_reference_number.toLowerCase();
-        refCount[k] = (refCount[k] ?? 0) + 1;
-      } else if (a.company_name) {
+    effectiveActivities.forEach((a) => {
+      if (a.company_name) {
         const k = a.company_name.toLowerCase();
         nameCount[k] = (nameCount[k] ?? 0) + 1;
       }
     });
     const m: Record<string, number> = {};
-    allActiveAccounts.forEach((a) => {
+    const accountsToCount = (drillLevel === "accounts" && agentClusterAccounts.length > 0)
+      ? agentClusterAccounts
+      : allActiveAccounts;
+    accountsToCount.forEach((a) => {
       const key = a.company_name.toLowerCase();
-      if (a.account_reference_number) {
-        const refKey = a.account_reference_number.toLowerCase();
-        if (refCount[refKey]) m[key] = (m[key] ?? 0) + refCount[refKey];
-      } else if (nameCount[key]) {
+      if (nameCount[key]) {
         m[key] = (m[key] ?? 0) + nameCount[key];
       }
     });
     return m;
-  }, [activeFilteredActivities, allActiveAccounts]);
+  }, [effectiveActivities, drillLevel, agentClusterAccounts, allActiveAccounts]);
 
   const tsmData = useMemo(() => {
     return tsmIds.map((tsmId) => {
       const allTsmAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === tsmId);
-      // Calculate activity counts from ALL accounts (not filtered)
       const withAct = allTsmAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
       const withoutAct = allTsmAccounts.length - withAct;
       
-      // Apply activity filter for display
       let tsmAccounts = allTsmAccounts;
       if (activityFilter === "with") {
         tsmAccounts = tsmAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
@@ -964,7 +1058,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const agentsUnderTSM = useMemo(() => {
     if (!selectedTSMId) return [];
-    // Filter accounts based on activity filter
     let filteredAccounts = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     if (activityFilter === "with") {
       filteredAccounts = filteredAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
@@ -982,48 +1075,60 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
 
   const agentAccounts = useMemo(() => {
     if (!selectedAgentId) return [];
-    let accounts = typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-    // Apply activity filter
+    
+    let accounts = drillLevel === "accounts" && agentClusterAccounts.length > 0
+      ? agentClusterAccounts
+      : typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+    
+    if (typeClientFilter && accounts.length > 0) {
+      accounts = accounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter);
+    }
+    
     if (activityFilter === "with") {
       accounts = accounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
     } else if (activityFilter === "without") {
       accounts = accounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase()));
     }
     return accounts;
-  }, [selectedAgentId, typeClientFilteredAccounts, activityFilter, companiesWithActivity]);
+  }, [selectedAgentId, drillLevel, agentClusterAccounts, typeClientFilteredAccounts, typeClientFilter, activityFilter, companiesWithActivity]);
 
   const withActivityAccounts = useMemo(() => agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
   const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
 
   const scopedBase = useMemo(() => {
-    let base = typeClientFilteredAccounts;
+    let base: Account[] = [];
     if (drillLevel === "tsm") {
       base = typeClientFilteredAccounts;
     } else if (drillLevel === "agent") {
       base = typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
     } else {
-      base = typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+      base = agentClusterAccounts.length > 0
+        ? agentClusterAccounts
+        : typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+      
+      if (typeClientFilter && base.length > 0) {
+        base = base.filter((a) => a.type_client?.toUpperCase() === typeClientFilter);
+      }
     }
-    // Apply activity filter
     if (activityFilter === "with") {
       base = base.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
     } else if (activityFilter === "without") {
       base = base.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase()));
     }
     return base;
-  }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, selectedAgentId, activityFilter, companiesWithActivity]);
+  }, [drillLevel, typeClientFilteredAccounts, agentClusterAccounts, selectedTSMId, selectedAgentId, typeClientFilter, activityFilter, companiesWithActivity]);
 
   const scopedWithActivity = useMemo(() => scopedBase.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
   const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
 
-  // ── Unfiltered scoped base for stat cards (percentages should not change with filter) ──
   const unfilteredScopedBase = useMemo(() => {
     if (drillLevel === "tsm") return typeClientFilteredAccounts;
     if (drillLevel === "agent") return typeClientFilteredAccounts.filter((a) => a.tsm?.toLowerCase() === selectedTSMId);
-    return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
-  }, [drillLevel, typeClientFilteredAccounts, selectedTSMId, selectedAgentId]);
+    return agentClusterAccounts.length > 0
+      ? agentClusterAccounts
+      : typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
+  }, [drillLevel, typeClientFilteredAccounts, agentClusterAccounts, selectedTSMId, selectedAgentId]);
 
-  // ── Calculate overall counts from UNFILTERED base (for constant percentages) ──
   const overallCounts = useMemo(() => {
     const total = unfilteredScopedBase.length;
     const withAct = unfilteredScopedBase.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
@@ -1090,7 +1195,10 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const isActive = activeCompanyNames.has(companyName.toLowerCase());
     if (!isActive) return;
 
-    const acct = allActiveAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
+    // At accounts level, find account in agentClusterAccounts first
+    const acct = (drillLevel === "accounts" && agentClusterAccounts.length > 0
+      ? agentClusterAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase())
+      : allActiveAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase())) ?? null;
 
     setHistoryCompany(companyName);
     setHistoryAccount(acct);
@@ -1098,7 +1206,8 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     setHistoryOpen(true);
     setLoadingHistory(true);
 
-    const filtered = activeFilteredActivities.filter((a) =>
+    // Use effectiveActivities (agent-specific when at accounts level)
+    const filtered = effectiveActivities.filter((a) =>
       (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
     );
     setActivities(filtered);
@@ -1172,6 +1281,13 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
+        {loadingAgentData && (
+          <div className="flex items-center gap-2 text-[11px] text-emerald-600 font-medium">
+            <div className="w-3 h-3 rounded-full border-2 border-emerald-300 border-t-emerald-600 animate-spin" />
+            Loading agent-specific data (matching End of Day Report)...
+          </div>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <StatCard
             label="Total Accounts"
@@ -1180,7 +1296,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
             clickable
             isActive={activityFilter === "all"}
             onClick={() => setActivityFilter("all")}
-            showFraction={{ count: overallCounts.total, total: overallCounts.total }}
             sublabel="all accounts"
           />
           <StatCard
@@ -1247,6 +1362,63 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                     onChange={(e) => setSearch(e.target.value)}
                     className="border rounded-lg pl-8 pr-3 py-1.5 text-xs w-52 focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm" />
                 </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700"
+                    >
+                      <CalendarDays size={12} />
+                      {dateCreatedFilterRange?.from ? (
+                        dateCreatedFilterRange.to ? (
+                          <>
+                            {format(dateCreatedFilterRange.from, "LLL dd, y")} -{" "}
+                            {format(dateCreatedFilterRange.to, "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(dateCreatedFilterRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateCreatedFilterRange?.from}
+                      selected={dateCreatedFilterRange}
+                      onSelect={(range) => {
+                        setDateCreatedFilterRangeAction?.(range);
+                      }}
+                      numberOfMonths={2}
+                    />
+                    <div className="flex items-center justify-between p-3 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDateCreatedFilterRangeAction?.(undefined)}
+                        className="text-xs text-slate-500 hover:text-slate-700"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          const from = new Date(today.getFullYear(), today.getMonth(), 1);
+                          const to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                          setDateCreatedFilterRangeAction?.({ from, to });
+                        }}
+                        className="text-xs bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        This Month
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <button onClick={() => setExportOpen(true)}
                   className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-[#161b22] px-3 py-1.5 text-xs font-bold font-mono text-black hover:text-white border border-green-500/20 transition-colors shadow-sm">
                   Export CSV
@@ -1310,7 +1482,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b border-gray-100">
-                      {["Actions", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
+                      {["Actions", "Last Touch", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                       ))}
                     </TableRow>
@@ -1318,7 +1490,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                   <TableBody>
                     {paginatedAccounts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-14 text-sm text-gray-400">No accounts found</TableCell>
+                        <TableCell colSpan={10} className="text-center py-14 text-sm text-gray-400">No accounts found</TableCell>
                       </TableRow>
                     ) : paginatedAccounts.map((account) => {
                       const hasAct = companiesWithActivity.has(account.company_name.toLowerCase());
@@ -1340,6 +1512,21 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                               />
                               {actCnt > 0 && <span className="text-[10px] text-slate-400 tabular-nums">{actCnt}</span>}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-gray-600 text-[10px] whitespace-nowrap">
+                            {(() => {
+                              // Get latest activity date for this company
+                              const companyActivities = effectiveActivities.filter(
+                                (a) => a.company_name?.toLowerCase() === account.company_name.toLowerCase()
+                              );
+                              if (companyActivities.length === 0) return "-";
+                              const latest = companyActivities.reduce((latest, current) => {
+                                const currentDate = new Date(current.date_created || 0).getTime();
+                                const latestDate = new Date(latest.date_created || 0).getTime();
+                                return currentDate > latestDate ? current : latest;
+                              }, companyActivities[0]);
+                              return fmtDate(latest.date_created) ?? "-";
+                            })()}
                           </TableCell>
                           <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-sm">{account.company_name}</TableCell>
                           <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.contact_person}</TableCell>

@@ -4,8 +4,7 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Preview } from "./preview";
 import { Button } from "@/components/ui/button";
-import { Check, ArrowRight, XIcon, FileText, History } from "lucide-react";
-import { supabase } from "@/utils/supabase";
+import { Check, ArrowRight, XIcon, FileText } from "lucide-react";
 
 interface Completed {
     id: number;
@@ -36,8 +35,6 @@ interface Completed {
     restocking_fee?: string;
     quotation_vatable?: string;
     quotation_subject?: string;
-    discounted_priced?: string;
-    discounted_amount?: string;
 }
 
 interface ProductItem {
@@ -192,9 +189,6 @@ export default function TaskListEditDialog({
     const [statusDialogMessage, setStatusDialogMessage] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<"Approved By Sales Head" | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
-    const [revisedQuotations, setRevisedQuotations] = useState<any[]>([]);
-    const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<any | null>(null);
-    const [viewingCurrent, setViewingCurrent] = useState(true);
 
 
     // These can be from props or item or company info
@@ -206,122 +200,6 @@ export default function TaskListEditDialog({
     const email_address = company?.email_address || ""; // add if available
     const contact_person = company?.contact_person || ""; // add if available
 
-    // ─── Fetch Revised Quotations History ───────────────────────────────────
-    useEffect(() => {
-        if (!item.quotation_number) return;
-        const fetchRevised = async () => {
-            const { data, error } = await supabase
-                .from("revised_quotations")
-                .select("*")
-                .eq("quotation_number", item.quotation_number)
-                .order("id", { ascending: false });
-            if (!error) setRevisedQuotations(data || []);
-        };
-        fetchRevised();
-    }, [item.quotation_number]);
-
-    // ─── Build payload from revision ─────────────────────────────────────────
-    const getRevisionPayload = (revision: any) => {
-        const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
-        const emailUsername = email?.split("@")[0] ?? "";
-        let emailDomain = "";
-        if (revision.quotation_type === "Disruptive Solutions Inc") emailDomain = "disruptivesolutionsinc.com";
-        else if (revision.quotation_type === "Ecoshift Corporation") emailDomain = "ecoshiftcorp.com";
-        else emailDomain = email?.split("@")[1] ?? "";
-        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
-
-        const quantities = revision.product_quantity?.split(",").map((v: string) => v.trim()) || [];
-        const amounts = revision.product_amount?.split(",").map((v: string) => v.trim()) || [];
-        const titles = revision.product_title?.split(",").map((v: string) => v.trim()) || [];
-        const descriptions = revision.product_description?.split("||").map((v: string) => v.trim()) || [];
-        const photos = revision.product_photo?.split(",").map((v: string) => v.trim()) || [];
-        const skus = revision.product_sku?.split(",").map((v: string) => v.trim()) || [];
-        const remarks = revision.item_remarks?.split(",").map((v: string) => v.trim()) || [];
-        const discountPercents = revision.discounted_priced?.split(",").map((v: string) => parseFloat(v.trim()) || 0) || [];
-
-        const maxLen = Math.max(quantities.length, amounts.length, titles.length, 1);
-        const items = Array.from({ length: maxLen }, (_, i) => {
-            const qty = parseFloat(quantities[i] ?? "0") || 0;
-            const unitPrice = parseFloat(amounts[i] ?? "0") || 0;
-            const discountPct = discountPercents[i] ?? 0;
-            const isDiscounted = discountPct > 0;
-            const unitDiscountAmount = isDiscounted ? (unitPrice * discountPct) / 100 : 0;
-            const discountedAmount = unitPrice - unitDiscountAmount;
-            const totalAmount = discountedAmount * qty;
-            return {
-                itemNo: i + 1,
-                qty,
-                photo: photos[i] ?? "",
-                title: titles[i] ?? "",
-                sku: skus[i] ?? "",
-                remarks: remarks[i] ?? "",
-                product_description: descriptions[i] ?? "",
-                unitPrice,
-                discount: discountPct,
-                discountedAmount,
-                totalAmount,
-            };
-        });
-
-        const deliveryFeeNum = parseFloat(revision.delivery_fee) || 0;
-        const restockingFeeNum = parseFloat(revision.restocking_fee) || 0;
-        const quotationAmt = parseFloat(String(revision.quotation_amount)) || 0;
-        const whtType = revision.quotation_vatable ?? "none";
-        const vatType = revision.vat_type ?? "zero_rated";
-        const whtLabel = whtType === "wht_1" ? "EWT 1% (Goods)" : whtType === "wht_2" ? "EWT 2% (Services)" : "None";
-
-        const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
-        const vatMultiplier = vatType === "vat_inc" ? 1.12 : 1;
-        const denominator = 1 - (whtRate / vatMultiplier);
-        const totalPriceWithDelivery = whtType !== "none" && denominator > 0
-            ? quotationAmt / denominator
-            : quotationAmt;
-
-        const whtBase = vatType === "vat_inc" ? totalPriceWithDelivery / 1.12 : totalPriceWithDelivery;
-        const whtAmount = whtType !== "none" ? totalPriceWithDelivery * (whtRate / vatMultiplier) : 0;
-        const netAmountToCollect = totalPriceWithDelivery - whtAmount;
-
-        return {
-            referenceNo: revision.quotation_number || revision.version || "DRAFT-XXXX",
-            date: revision.start_date ? new Date(revision.start_date).toLocaleDateString() : new Date().toLocaleDateString(),
-            companyName: revision.company_name || company_name,
-            address: revision.address || address,
-            telNo: revision.contact_number || contact_number,
-            email: revision.email_address || email_address,
-            attention: revision.contact_person || contact_person,
-            subject: revision.quotation_subject || "For Quotation",
-            items,
-            vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-            totalPrice: totalPriceWithDelivery,
-            deliveryFee: revision.delivery_fee ?? "",
-            vatType,
-            restockingFee: restockingFeeNum,
-            whtType,
-            whtLabel,
-            whtBase,
-            whtAmount,
-            netAmountToCollect,
-            salesRepresentative: salesRepresentativeName,
-            salesemail,
-            salescontact: contact ?? "",
-            salestsmname: tsmname ?? "",
-            salestsmemail: tsmemail ?? "",
-            salestsmcontact: tsmcontact ?? "",
-            salesmanagername: managername ?? "",
-            agentName: agentName ?? null,
-            agentSignature: agentSignature ?? null,
-            agentContactNumber: agentContactNumber ?? null,
-            agentEmailAddress: agentEmailAddress ?? null,
-            tsmName: tsmName ?? null,
-            tsmSignature: tsmSignature ?? null,
-            tsmContactNumber: tsmContactNumber ?? null,
-            tsmEmailAddress: tsmEmailAddress ?? null,
-            managerName: managerName ?? null,
-            signature: signature ?? null,
-            salesheademail: email ?? null,
-            salesheadcontact: contact ?? null,
-        };
-    };
 
     useEffect(() => {
         const quantities = splitAndTrim(item.product_quantity);
@@ -331,7 +209,6 @@ export default function TaskListEditDialog({
         const photos = splitAndTrim(item.product_photo);
         const skus = splitAndTrim(item.product_sku);
         const remarks = splitAndTrim(item.item_remarks);
-        const discountedPrices = splitAndTrim(item.discounted_priced);
 
         const maxLen = Math.max(
             quantities.length,
@@ -341,60 +218,48 @@ export default function TaskListEditDialog({
             photos.length,
             skus.length,
             remarks.length,
-            discountedPrices.length,
             1 // ensure at least one empty row if all empty
         );
 
-        const newCheckedRows: Record<number, boolean> = {};
-        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => {
-            const discountValue = parseFloat(discountedPrices[i] ?? "0") || 0;
-            const isDiscounted = discountValue > 0;
-            if (isDiscounted) {
-                newCheckedRows[i] = true;
-            }
-            return {
-                product_quantity: quantities[i] ?? "",
-                product_amount: amounts[i] ?? "",
-                product_title: titles[i] ?? "",
-                product_description: descriptions[i] ?? "",
-                product_photo: photos[i] ?? "",
-                product_sku: skus[i] ?? "",
-                item_remarks: remarks[i] ?? "",
-                quantity: parseFloat(quantities[i] ?? "0") || 0,
-                description: descriptions[i] ?? "",
-                skus: skus[i] ? [skus[i]] : undefined,
-                title: titles[i] ?? "",
-                images: photos[i] ? [{ src: photos[i] }] : undefined,
-                isDiscounted: isDiscounted,
-                discount: discountValue,
-                price: parseFloat(amounts[i] ?? "0") || 0,
-            };
-        });
+        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => ({
+            product_quantity: quantities[i] ?? "",
+            product_amount: amounts[i] ?? "",
+            product_title: titles[i] ?? "",
+            product_description: descriptions[i] ?? "",
+            product_photo: photos[i] ?? "",
+            product_sku: skus[i] ?? "",
+            item_remarks: remarks[i] ?? "",
+            quantity: 0,
+            description: descriptions[i] ?? "",
+            skus: undefined,
+            title: titles[i] ?? "",
+            images: undefined,
+            isDiscounted: false,
+            price: 0,
+        }));
 
         setProducts(arr);
-        setCheckedRows(newCheckedRows);
     }, [item]);
 
-    // ✅ Update the quotationAmount calculation to use per-row discount
+    // ✅ Update the quotationAmount calculation to include delivery fee
     useEffect(() => {
         let total = 0;
         products.forEach((p, idx) => {
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const amt = parseFloat(p.product_amount ?? "0") || 0;
-            const baseAmount = qty * amt;
-            const isChecked = checkedRows[idx] ?? false;
-            const rowDiscount = isChecked
-                ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
-                : 0;
-            const discountedAmount = (baseAmount * rowDiscount) / 100;
-            const lineTotal = baseAmount - discountedAmount;
+            let lineTotal = qty * amt;
+
+            if (checkedRows[idx] && vatType === "vat_inc") {
+                lineTotal = lineTotal * ((100 - discount) / 100);
+            }
+
             total += lineTotal;
         });
 
         // NOTE: deliveryFee is shown separately in the PDF/preview, NOT added here
         // to avoid double-counting (the payload passes it as a separate field).
         setQuotationAmount(total);
-    }, [products, checkedRows, vatTypeState]);
+    }, [products, checkedRows, discount, vatType]);
 
     // Download handler with your given logic integrated
     const getQuotationPayload = () => {
@@ -417,13 +282,9 @@ export default function TaskListEditDialog({
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
             const isDiscounted = checkedRows[index] ?? false;
-            const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
-            // NET UNIT PRICE = Unit Price - (Unit Price × Discount Percentage)
-            const discountedAmount = isDiscounted && rowDiscount > 0
-                ? unitPrice - (unitPrice * rowDiscount) / 100
-                : unitPrice;
-            // TOTAL AMOUNT = Net Unit Price × Quantity
-            const totalAmount = discountedAmount * qty;
+            const baseAmount = qty * unitPrice;
+            const discountedAmount = isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
+            const totalAmount = baseAmount - discountedAmount;
 
             return {
                 itemNo: index + 1,
@@ -432,12 +293,9 @@ export default function TaskListEditDialog({
                 title: p.product_title ?? "",
                 sku: p.product_sku ?? "",
                 remarks: p.item_remarks ?? "",
-                itemRemarks: p.item_remarks ?? "",
                 product_description:
                     p.description?.trim() ? p.description : p.product_description || "",
                 unitPrice,
-                discount: rowDiscount,
-                discountedAmount,
                 totalAmount,
                 isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
                     const rawD = p.product_description || p.description || "";
@@ -454,6 +312,7 @@ export default function TaskListEditDialog({
 
         const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
         const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+        const totalQuotationAmount = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
         const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
         return {
@@ -464,7 +323,7 @@ export default function TaskListEditDialog({
             telNo: contact_number ?? "",
             email: email_address ?? "",
             attention: contact_person ?? "",
-            subject: quotationSubjectState || "For Quotation",
+            subject: "For Quotation",
             items,
             vatTypeLabel:
                 vatType === "vat_inc"
@@ -740,7 +599,7 @@ export default function TaskListEditDialog({
               <tr class="summary-bar" style="border-bottom:1px solid black; border-top:1px solid black;">
                 <td colspan="3"></td>
                 <td style="width:70px; border-left:1px solid black; font-size:9px;" class="grand-total-label">Grand Total:</td>
-                <td style="width:130px; font-size:15px;" class="grand-total-value">₱${payload.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style="width:130px; font-size:15px;" class="grand-total-value">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
             </table>
           </div>
@@ -951,90 +810,32 @@ export default function TaskListEditDialog({
         }
     };
 
-    const payload = getQuotationPayload();
-
     return (
         <>
             <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
                 <DialogContent
-                    className="max-w-[1400px] w-[95vw] max-h-[90vh] p-0 border-none bg-white shadow-2xl flex flex-col"
-                    style={{ maxWidth: "1400px", width: "100vw" }}
+                    className="max-w-[1000px] w-[95vw] max-h-[90vh] p-0 border-none bg-white shadow-2xl flex flex-col"
+                    style={{ maxWidth: "950px", width: "100vw" }}
                 >
-                    <DialogHeader className="px-5 pt-4 pb-0 border-b border-gray-100">
-                        <DialogTitle className="text-sm font-black uppercase tracking-tight text-gray-800">
-                            Quotation Review
-                        </DialogTitle>
-                        <DialogDescription className="text-[11px] text-gray-400 pb-3">
-                            {quotationNumber} · {company_name}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {/* Two-column layout: Left Preview, Right Revisions */}
-                    <div className="flex-1 grid grid-cols-[1fr_380px] overflow-hidden">
-                        {/* Left: Preview */}
-                        <div className="overflow-auto p-3 border-r border-gray-200">
-                            <Preview
-                                payload={viewingCurrent ? getQuotationPayload() : selectedRevisedQuotation ? getRevisionPayload(selectedRevisedQuotation) : getQuotationPayload()}
-                                quotationType={quotation_type}
-                                setIsPreviewOpen={() => { }}
-                            />
-                        </div>
-
-                        {/* Right: Revisions Panel */}
-                        <div className="bg-gray-50 flex flex-col overflow-hidden">
-                            <div className="p-4 border-b border-gray-200 bg-white">
-                                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-tight text-gray-800">
-                                    <History className="w-4 h-4" />
-                                    Revision History
-                                    <span className="bg-[#121212] text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto">
-                                        {revisedQuotations.length}
-                                    </span>
-                                </h3>
-                            </div>
-                            <div className="flex-1 overflow-auto p-3">
-                                {/* Current/Latest Button */}
-                                <div
-                                    onClick={() => { setViewingCurrent(true); setSelectedRevisedQuotation(null); }}
-                                    className={`mb-3 border rounded-sm p-3 cursor-pointer transition hover:shadow-md ${viewingCurrent ? "bg-[#121212] text-white border-[#121212]" : "bg-white border-gray-300"}`}
-                                >
-                                    <div className="font-semibold text-sm mb-1 flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${viewingCurrent ? "bg-emerald-400" : "bg-emerald-500"}`}></span>
-                                        CURRENT / LATEST
-                                    </div>
-                                    <div className={`text-xs ${viewingCurrent ? "text-gray-300" : "text-gray-500"}`}>
-                                        <div>Quotation: {item.quotation_number}</div>
-                                        <div>Amount: ₱{payload.netAmountToCollect.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                    </div>
-                                </div>
-
-                                {revisedQuotations.length === 0 ? (
-                                    <p className="text-xs text-gray-500 italic text-center py-4">No revised quotations found.</p>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {revisedQuotations.map((q) => (
-                                            <div
-                                                key={q.id}
-                                                onClick={() => { setViewingCurrent(false); setSelectedRevisedQuotation(q); }}
-                                                className={`border rounded-sm p-3 text-xs cursor-pointer transition hover:shadow-md ${!viewingCurrent && selectedRevisedQuotation?.id === q.id ? "bg-gray-100 border-[#121212]" : "bg-white border-gray-300"}`}
-                                            >
-                                                <div className="font-semibold text-sm mb-1 text-gray-800">{q.version || "N/A"}</div>
-                                                <div className="text-gray-600 space-y-0.5">
-                                                    <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
-                                                    <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                    <div className="text-gray-400 text-[10px] mt-1">
-                                                        {q.start_date ? new Date(q.start_date).toLocaleDateString() : "N/A"} - {q.end_date ? new Date(q.end_date).toLocaleDateString() : "N/A"}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                    {/* Close button */}
+                    <button
+                        onClick={onClose}
+                        className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-100 transition-colors z-50"
+                        aria-label="Close"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                    {/* Scrollable content */}
+                    <div className="flex flex-col flex-1 overflow-auto p-2 space-y-4">
+                        <Preview
+                            payload={getQuotationPayload()}
+                            quotationType={quotation_type}
+                            setIsPreviewOpen={() => { }}
+                        />
                     </div>
 
-                    {/* Action footer */}
-                    <DialogFooter className="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-5 py-3 bg-gray-50">
+                    {/* Footer always visible */}
+                    <DialogFooter className="flex justify-end gap-2 border-t p-4 bg-white">
                         <Button
                             variant="outline"
                             onClick={onClose}

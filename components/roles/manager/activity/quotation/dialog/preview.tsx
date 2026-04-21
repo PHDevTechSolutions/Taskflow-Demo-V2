@@ -14,8 +14,6 @@ type Item = {
     unitPrice: number;
     totalAmount: number;
     remarks: string;
-    discount?: number;
-    discountedAmount?: number;
 };
 
 type Payload = {
@@ -151,10 +149,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-24 text-right">UNIT PRICE</th>
-                                <th className="p-3 border-r border-black w-16 text-center">DISC</th>
-                                <th className="p-3 border-r border-black w-24 text-right">NET UNIT PRICE</th>
-                                <th className="p-3 w-24 text-right">TOTAL AMOUNT</th>
+                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black">
@@ -179,26 +175,10 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                         <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
-                                        ₱{item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="p-4 text-center border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-black text-red-600">{item.discount}%</span>
-                                        ) : (
-                                            <span className="text-[10px] text-gray-300">—</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-medium text-red-600">
-                                                ₱{item.discountedAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] font-medium">₱{item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                        )}
+                                        ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-4 text-right font-black align-top text-[#121212]">
-                                        ₱{item.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
@@ -230,7 +210,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 </td>
 
                                 {/* Right: Fee Breakdown */}
-                                <td colSpan={4} className="p-0 align-top">
+                                <td colSpan={2} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
                                             {/* Net Sales */}
@@ -239,28 +219,28 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.totalPrice - (Number(payload.deliveryFee) || 0) - (payload.restockingFee || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Delivery Fee */}
                                             <tr className="border-b border-gray-100">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Delivery Charge</td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(payload.deliveryFee) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Restocking Fee */}
                                             <tr className="border-b-2 border-black">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">Restocking Fee</td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{(payload.restockingFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.restockingFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* Total Invoice */}
                                             <tr className="bg-gray-50 border-b border-black">
                                                 <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">Total Invoice Amount</td>
                                                 <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900 tabular-nums">
-                                                    ₱{payload.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                             {/* VAT breakdown if vat_inc */}
@@ -269,13 +249,13 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     <tr className="border-b border-gray-100">
                                                         <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Less: VAT (12/112)</td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
                                                     <tr className={payload.whtType && payload.whtType !== "none" ? "border-b border-gray-100" : "border-b-2 border-black"}>
                                                         <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">Net of VAT (Tax Base)</td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(payload.totalPrice / 1.12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
                                                     {payload.whtType && payload.whtType !== "none" && (
@@ -284,7 +264,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                                 Less: {payload.whtLabel}
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-black text-blue-700 tabular-nums">
-                                                                − ₱{(payload.whtAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                − ₱{(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </td>
                                                         </tr>
                                                     )}
@@ -304,7 +284,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                                     {payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due"}
                                                 </td>
                                                 <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
-                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{(payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         </tbody>

@@ -14,8 +14,6 @@ type Item = {
     unitPrice: number;
     totalAmount: number;
     remarks: string;
-    discount?: number;
-    discountedAmount?: number;
 };
 
 type Payload = {
@@ -148,10 +146,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-24 text-right">UNIT PRICE</th>
-                                <th className="p-3 border-r border-black w-16 text-center">DISC</th>
-                                <th className="p-3 border-r border-black w-28 text-right">NET UNIT PRICE</th>
-                                <th className="p-3 w-28 text-right">TOTAL AMOUNT</th>
+                                <th className="p-3 border-r border-black w-32 text-right">UNIT PRICE</th>
+                                <th className="p-3 w-32 text-right">TOTAL AMOUNT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black">
@@ -178,24 +174,8 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
                                         ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-4 text-center border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-black text-red-600">{item.discount}%</span>
-                                        ) : (
-                                            <span className="text-[10px] text-gray-300">—</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="text-[10px] font-medium text-red-600">
-                                                ₱{item.discountedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] font-medium">₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        )}
-                                    </td>
                                     <td className="p-4 text-right font-black align-top text-[#121212]">
-                                        ₱{(item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
@@ -227,7 +207,7 @@ export const Preview: React.FC<PreviewProps> = ({ payload, quotationType }) => {
                                 </td>
 
                                 {/* Right: Fee Breakdown */}
-                                <td colSpan={4} className="p-0 align-top">
+                                <td colSpan={2} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
                                             {/* Net Sales */}

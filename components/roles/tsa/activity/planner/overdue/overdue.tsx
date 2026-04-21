@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, Calendar, CheckSquare, Square, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -141,9 +138,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set());
-  const [dialogRescheduleOpen, setDialogRescheduleOpen] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState<string>("");
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -232,7 +226,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
   }, [referenceid, fetchAllData]);
 
   const mergedActivities = activities
-    // FIX: whitelist — only show Assisted, Quote-Done
+    // FIX: whitelist — only show Assisted, Quote-Done, SO-Done
     .filter((a) => ALLOWED_STATUSES.includes(a.status))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -240,17 +234,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
           h.activity_reference_number === activity.activity_reference_number,
       );
       return { ...activity, relatedHistoryItems };
-    })
-    // Special condition: For Quote-Done, only show if quotation_status is "Pending Client Approval"
-    .filter((activity) => {
-      if (activity.status === "Quote-Done") {
-        const hasPendingApproval = activity.relatedHistoryItems.some(
-          (h) => h.quotation_status === "Pending Client Approval"
-        );
-        return hasPendingApproval;
-      }
-      // Assisted activities always show
-      return true;
     });
 
   const todayStr = toLocalDateString(new Date());
@@ -635,149 +618,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
   const selectedTicketReferenceNumber =
     selectedActivity?.ticket_reference_number || null;
 
-  const toggleActivitySelection = (activityId: string) => {
-    setSelectedActivities(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(activityId)) {
-        newSet.delete(activityId);
-      } else {
-        newSet.add(activityId);
-      }
-      return newSet;
-    });
-  };
-
-  const toggleAllActivities = () => {
-    if (selectedActivities.size === filteredActivities.length) {
-      setSelectedActivities(new Set());
-    } else {
-      setSelectedActivities(new Set(filteredActivities.map(a => a.id)));
-    }
-  };
-
-  const handleBulkComplete = async () => {
-    if (selectedActivities.size === 0) return;
-
-    try {
-      setUpdatingId('bulk');
-      const promises = Array.from(selectedActivities).map(id => 
-        fetch("/api/act-update-status-delivered", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id }),
-          cache: "no-store",
-        })
-      );
-
-      await Promise.all(promises);
-      setSelectedActivities(new Set());
-      await fetchAllData();
-      window.location.reload();
-
-      sileo.success({
-        title: "Success",
-        description: `${selectedActivities.size} transactions marked as completed.`,
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch {
-      sileo.error({
-        title: "Failed",
-        description: "An error occurred while updating status.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const openRescheduleDialog = (id: string) => {
-    setSelectedActivityId(id);
-    setRescheduleDate("");
-    setDialogRescheduleOpen(true);
-  };
-
-  const handleConfirmReschedule = async () => {
-    if (!selectedActivityId || !rescheduleDate) return;
-
-    const selectedDate = new Date(rescheduleDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
-      sileo.error({
-        title: "Invalid Date",
-        description: "Cannot reschedule to a past date.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-      return;
-    }
-
-    try {
-      setUpdatingId(selectedActivityId);
-
-      const res = await fetch("/api/act-reschedule-activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: selectedActivityId,
-          newScheduledDate: rescheduleDate,
-        }),
-        cache: "no-store",
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        sileo.error({
-          title: "Failed",
-          description: `Failed to reschedule: ${result.error || "Unknown error"}`,
-          duration: 4000,
-          position: "top-right",
-          fill: "black",
-          styles: { title: "text-white!", description: "text-white" },
-        });
-        setUpdatingId(null);
-        return;
-      }
-
-      setDialogRescheduleOpen(false);
-      await fetchAllData();
-      window.location.reload();
-
-      sileo.success({
-        title: "Success",
-        description: "Activity rescheduled successfully.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch {
-      sileo.error({
-        title: "Failed",
-        description: "An error occurred while rescheduling.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } finally {
-      setUpdatingId(null);
-      setSelectedActivityId(null);
-      setRescheduleDate("");
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -833,17 +673,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
     <>
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 w-full">
-          {filteredActivities.length > 0 && (
-            <div className="flex items-center gap-2 mb-2">
-              <Checkbox
-                checked={selectedActivities.size === filteredActivities.length && filteredActivities.length > 0}
-                onCheckedChange={toggleAllActivities}
-                className="rounded-none"
-              />
-              <span className="text-xs">Select All</span>
-            </div>
-          )}
-          
           <Input
             type="search"
             placeholder="Search..."
@@ -886,21 +715,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {selectedActivities.size > 0 && (
-            <Button
-              onClick={handleBulkComplete}
-              disabled={updatingId === 'bulk'}
-              className="bg-green-600 hover:bg-green-700 text-white rounded-none mb-2"
-            >
-              {updatingId === 'bulk' ? (
-                <Spinner className="size-4 mr-2" />
-              ) : (
-                <CheckSquare className="mr-2 h-4 w-4" />
-              )}
-              Complete ({selectedActivities.size})
-            </Button>
-          )}
         </div>
       </div>
 
@@ -927,16 +741,9 @@ export const Overdue: React.FC<ScheduledProps> = ({
                 >
                   <div className="p-2 select-none">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={selectedActivities.has(item.id)}
-                          onCheckedChange={() => toggleActivitySelection(item.id)}
-                          className="rounded-none"
-                        />
-                        <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
-                          {item.company_name}
-                        </AccordionTrigger>
-                      </div>
+                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer">
+                        {item.company_name}
+                      </AccordionTrigger>
 
                       <div className="flex gap-2 ml-4">
                         <CreateActivityDialog
@@ -974,6 +781,17 @@ export const Overdue: React.FC<ScheduledProps> = ({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuGroup>
+                              {/*<DropdownMenuItem
+                                disabled={updatingId === item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDoneDialog(item.id);
+                                }}
+                              >
+                                <Check className="mr-2 h-4 w-4 text-red-600" />
+                                Mark as Pending
+                              </DropdownMenuItem>*/}
+
                               <DropdownMenuItem
                                 disabled={updatingId === item.id}
                                 onClick={(e) => {
@@ -983,17 +801,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
                               >
                                 <Check className="mr-2 h-4 w-4 text-green-600" />
                                 Mark as Completed
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem
-                                disabled={updatingId === item.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openRescheduleDialog(item.id);
-                                }}
-                              >
-                                <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-                                Mark as Rescheduled
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -1339,51 +1146,6 @@ export const Overdue: React.FC<ScheduledProps> = ({
         onConfirm={handleConfirmCancelled}
         loading={updatingId !== null}
       />
-
-      <Dialog open={dialogRescheduleOpen} onOpenChange={setDialogRescheduleOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Reschedule Activity</DialogTitle>
-            <DialogDescription>
-              Select a new date to reschedule this activity. Past dates are not allowed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="reschedule-date" className="text-right">
-                New Date
-              </Label>
-              <Input
-                id="reschedule-date"
-                type="date"
-                value={rescheduleDate}
-                onChange={(e) => setRescheduleDate(e.target.value)}
-                min={toLocalDateString(new Date())}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDialogRescheduleOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmReschedule}
-              disabled={!rescheduleDate || updatingId !== null}
-            >
-              {updatingId !== null ? (
-                <Spinner className="size-4 mr-2" />
-              ) : null}
-              Reschedule
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
