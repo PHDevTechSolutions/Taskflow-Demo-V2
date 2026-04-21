@@ -721,24 +721,16 @@ export default function TSAReports() {
           {/* Database Coverage */}
           <SectionCard
             title="Database Coverage"
-          > {/*badge={
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCoverageDialogSource("covered")}
-                  className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
-                >
-                  <List size={10} />
-                  Covered
-                </button>
-                <span className="text-gray-300 text-[9px]">·</span>
-                <button
-                  onClick={() => setCoverageDialogSource("uncovered")}
-                  className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
-                >
-                  Not Reached
-                </button>
-              </div>
-            }*/}
+            badge={
+              <button
+                onClick={() => setCoverageDialogSource("covered")}
+                className="flex items-center gap-1 text-[9px] text-blue-600 font-semibold hover:underline"
+              >
+                <List size={10} />
+                View
+              </button>
+            }
+          >
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>

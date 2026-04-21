@@ -12,6 +12,7 @@ import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
   CalendarDays, ArrowLeft, FileText, Hash, Building2,
   Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
+  ShieldAlert,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { format } from "date-fns";
@@ -23,6 +24,7 @@ interface Account {
   type_client: string; date_created: string; contact_person: string;
   contact_number: string; email_address: string; address?: string;
   delivery_address?: string; region: string; industry: string; status?: string;
+  manager?: string;
 }
 
 interface Activity {
@@ -781,6 +783,216 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records, a
   );
 }
 
+/* ─── Audit Dialog ──────────────────────────────────────────────── */
+
+interface AuditDialogProps {
+  open: boolean;
+  onClose: () => void;
+  accounts: Account[];
+  agentMap: Record<string, string>;
+}
+
+interface ManagerAnomaly {
+  companyName: string;
+  expectedManager: string;
+  anomalousAccounts: Account[];
+  totalCount: number;
+  anomalousCount: number;
+}
+
+function AuditDialog({ open, onClose, accounts, agentMap }: AuditDialogProps) {
+  const [search, setSearch] = useState("");
+
+  const anomalies = useMemo(() => {
+    const byCompany: Record<string, Account[]> = {};
+    accounts.forEach((a) => {
+      const key = a.company_name.toLowerCase();
+      if (!byCompany[key]) byCompany[key] = [];
+      byCompany[key].push(a);
+    });
+
+    const results: ManagerAnomaly[] = [];
+
+    Object.entries(byCompany).forEach(([companyName, companyAccounts]) => {
+      if (companyAccounts.length <= 1) return;
+
+      const managerCounts: Record<string, number> = {};
+      companyAccounts.forEach((a) => {
+        const manager = (a.manager || "Unknown").trim();
+        managerCounts[manager] = (managerCounts[manager] || 0) + 1;
+      });
+
+      const entries = Object.entries(managerCounts);
+      if (entries.length <= 1) return;
+
+      entries.sort((a, b) => b[1] - a[1]);
+      const [expectedManager] = entries[0];
+
+      const anomalous = companyAccounts.filter(
+        (a) => (a.manager || "Unknown").trim() !== expectedManager
+      );
+
+      if (anomalous.length > 0) {
+        results.push({
+          companyName: companyAccounts[0].company_name,
+          expectedManager,
+          anomalousAccounts: anomalous,
+          totalCount: companyAccounts.length,
+          anomalousCount: anomalous.length,
+        });
+      }
+    });
+
+    return results.sort((a, b) => b.anomalousCount - a.anomalousCount);
+  }, [accounts]);
+
+  const filteredAnomalies = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return anomalies;
+    return anomalies.filter(
+      (a) =>
+        a.companyName.toLowerCase().includes(q) ||
+        a.expectedManager.toLowerCase().includes(q) ||
+        a.anomalousAccounts.some(
+          (acc) =>
+            (acc.manager || "").toLowerCase().includes(q) ||
+            acc.contact_person.toLowerCase().includes(q)
+        )
+    );
+  }, [anomalies, search]);
+
+  const totalAnomalousAccounts = useMemo(
+    () => anomalies.reduce((sum, a) => sum + a.anomalousCount, 0),
+    [anomalies]
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-4xl w-full max-h-[88vh] flex flex-col p-0 gap-0 rounded-2xl border border-slate-200 shadow-2xl overflow-hidden bg-white"
+      >
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between shrink-0 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-9 h-9 rounded-xl border shrink-0 bg-rose-50 border-rose-100">
+              <ShieldAlert size={16} className="text-rose-500" />
+            </span>
+            <div>
+              <DialogTitle className="text-sm font-bold text-slate-800">
+                Manager Audit Report
+              </DialogTitle>
+              <DialogDescription className="text-[11px] text-slate-400 mt-0.5">
+                {anomalies.length} companies with mismatched managers · {totalAnomalousAccounts} anomalous accounts
+              </DialogDescription>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+            <Search size={13} className="text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search company, manager, contact..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-2 border-b border-slate-100 shrink-0">
+          <span className="text-[11px] text-slate-500 font-medium">
+            {filteredAnomalies.length} issue{filteredAnomalies.length !== 1 ? "s" : ""} found
+            {search && ` matching "${search}"`}
+          </span>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+          {filteredAnomalies.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+              <ShieldAlert size={32} strokeWidth={1} />
+              <p className="text-sm font-medium">
+                {search ? "No matching issues found" : "No manager anomalies detected"}
+              </p>
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="text-xs text-indigo-400 hover:text-indigo-600 font-medium transition-colors"
+                >
+                  Clear search
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredAnomalies.map((anomaly) => (
+              <div
+                key={anomaly.companyName}
+                className="rounded-xl border border-rose-200 bg-rose-50/30 overflow-hidden"
+              >
+                <div className="px-4 py-3 border-b border-rose-100 bg-rose-50/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">
+                        {anomaly.companyName}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {anomaly.totalCount} total accounts ·{" "}
+                        <span className="text-rose-600 font-semibold">
+                          {anomaly.anomalousCount} with wrong manager
+                        </span>
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        Correct: {anomaly.expectedManager}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="divide-y divide-rose-100">
+                  {anomaly.anomalousAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="px-4 py-3 flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-700">
+                          {account.contact_person}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {account.email_address} · {account.region}
+                        </p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                        Wrong: {account.manager || "Unknown"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Main Component ──────────────────────────────────────────────── */
 
 export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setDateCreatedFilterRangeAction }: AccountsTableProps) {
@@ -812,6 +1024,8 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
   const [agentActivities, setAgentActivities] = useState<Activity[]>([]);
   const [loadingAgentData, setLoadingAgentData] = useState(false);
 
+  const [auditOpen, setAuditOpen] = useState(false);
+
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
   const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
 
@@ -839,12 +1053,13 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     const params = new URLSearchParams({ referenceid: userDetails.referenceid });
-    // Always fetch full month activities (like End of Day Report) - ALWAYS use current month
-    const today = new Date();
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    params.set("from", monthStart.toISOString().slice(0, 10));
-    params.set("to", monthEnd.toISOString().slice(0, 10));
+    // If date range is selected, use it; otherwise fetch all activities (no date limit)
+    if (dateCreatedFilterRange?.from) {
+      params.set("from", new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10));
+    }
+    if (dateCreatedFilterRange?.to) {
+      params.set("to", new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10));
+    }
     fetch(`/api/reports/manager/fetch?${params.toString()}`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
@@ -855,7 +1070,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
       .catch((err) => { if (cancelled || err?.name === "AbortError") return; setAllActivities([]); })
       .finally(() => { clearTimeout(timeout); if (!cancelled) setLoadingActivities(false); });
     return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
-  }, [userDetails.referenceid]);
+  }, [userDetails.referenceid, dateCreatedFilterRange]);
 
   useEffect(() => {
     if (drillLevel !== "accounts" || !selectedAgentId) {
@@ -888,14 +1103,14 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
         if (cancelled) return;
         setAgentClusterAccounts(accounts);
 
-        // Always fetch full month's activities (like End of Day Report) - ALWAYS use current month
-        const today = new Date();
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        
+        // If date range is selected, use it; otherwise fetch all activities (no date limit)
         const params = new URLSearchParams({ referenceid: selectedAgentId });
-        params.set("from", monthStart.toISOString().slice(0, 10));
-        params.set("to", monthEnd.toISOString().slice(0, 10));
+        if (dateCreatedFilterRange?.from) {
+          params.set("from", new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10));
+        }
+        if (dateCreatedFilterRange?.to) {
+          params.set("to", new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10));
+        }
 
         const activitiesRes = await fetch(
           `/api/activity/tsa/breaches/fetch?${params.toString()}`,
@@ -925,7 +1140,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
 
     fetchAgentData();
     return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
-  }, [drillLevel, selectedAgentId, dateCreatedFilterRange]); // Keep dependency for React rules, but code inside doesn't use it for API calls
+  }, [drillLevel, selectedAgentId, dateCreatedFilterRange]);
 
   const agentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -972,28 +1187,32 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
     return [...s];
   }, [typeClientFilteredAccounts]);
 
-  // Match activities to accounts by company_name ONLY (like End of Day Report)
-  // Also apply same month-based date filtering as End of Day Report
-  // ALWAYS use current month - do not use dateCreatedFilterRange
+  // Match activities to accounts by company_name ONLY
+  // Apply date range filter if selected, otherwise show all activities
   const touchedCompanies = useMemo(() => {
     const s = new Set<string>();
     
-    // Always use current month for filtering - date picker does NOT affect counts
-    const today = new Date();
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    // If date range is selected, filter by it; otherwise include all activities
+    const hasFrom = !!dateCreatedFilterRange?.from;
+    const hasTo = !!dateCreatedFilterRange?.to;
+    const fromTime = hasFrom ? new Date(dateCreatedFilterRange.from!).setHours(0,0,0,0) : null;
+    const toTime = hasTo ? new Date(dateCreatedFilterRange.to!).setHours(23,59,59,999) : null;
     
     effectiveActivities.forEach((a) => {
       if (!a.company_name || !a.date_created) return;
       
-      // Apply same month-based date filter as End of Day Report
-      const t = new Date(a.date_created).getTime();
-      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+      // Apply date range filter if set
+      if (hasFrom || hasTo) {
+        const t = new Date(a.date_created).getTime();
+        if (isNaN(t)) return;
+        if (fromTime && t < fromTime) return;
+        if (toTime && t > toTime) return;
+      }
       
       s.add(a.company_name.toLowerCase());
     });
     return s;
-  }, [effectiveActivities]); // Removed dateCreatedFilterRange dependency - counts always use current month
+  }, [effectiveActivities, dateCreatedFilterRange]);
 
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
@@ -1252,6 +1471,12 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
         onViewHistory={(n, s) => { setActiveListOpen(null); openHistory(n, s); }}
       />
 
+      <AuditDialog
+        open={auditOpen} onClose={() => setAuditOpen(false)}
+        accounts={drillLevel === "accounts" ? filteredAccounts : allActiveAccounts}
+        agentMap={agentMap}
+      />
+
       <div className="space-y-4">
         {hasDateFilter && (
           <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
@@ -1423,6 +1648,10 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
                   className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-[#161b22] px-3 py-1.5 text-xs font-bold font-mono text-black hover:text-white border border-green-500/20 transition-colors shadow-sm">
                   Export CSV
                 </button>
+                <button onClick={() => setAuditOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-rose-50 px-3 py-1.5 text-xs font-bold font-mono text-rose-600 hover:text-rose-700 border border-rose-200 transition-colors shadow-sm">
+                  <ShieldAlert size={14} /> Audit
+                </button>
               </>
             )}
           </div>
@@ -1482,7 +1711,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b border-gray-100">
-                      {["Actions", "Last Touch", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
+                      {["Actions", "Last Touch", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Manager", "Date"].map((h) => (
                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                       ))}
                     </TableRow>
@@ -1540,6 +1769,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange, setD
                             </span>
                           </TableCell>
                           <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.industry}</TableCell>
+                          <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.manager}</TableCell>
                           <TableCell className="text-gray-400 text-[11px] whitespace-nowrap tabular-nums">{fmtDate(account.date_created) ?? ""}</TableCell>
                         </TableRow>
                       );

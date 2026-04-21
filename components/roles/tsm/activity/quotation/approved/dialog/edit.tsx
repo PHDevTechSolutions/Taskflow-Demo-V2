@@ -11,7 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { Preview } from "../dialog/preview";
 import { Button } from "@/components/ui/button";
-import { Check, ArrowRight, XIcon, FileText, Loader2 } from "lucide-react";
+import { Check, ArrowRight, XIcon, FileText, Loader2, History } from "lucide-react";
+import { supabase } from "@/utils/supabase";
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +52,8 @@ interface CompletedItem {
     quotation_vatable?: string;
     quotation_subject?: string;
     tsm_approved_status?: string;
+    discounted_priced?: string;
+    discounted_amount?: string;
 }
 
 interface ProductItem {
@@ -165,6 +174,9 @@ export default function TaskListEditDialog({
     const [statusDialogTitle, setStatusDialogTitle] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<"Approved" | "Endorsed to Sales Head" | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [revisedQuotations, setRevisedQuotations] = useState<any[]>([]);
+    const [selectedRevisedQuotation, setSelectedRevisedQuotation] = useState<any | null>(null);
+    const [viewingCurrent, setViewingCurrent] = useState(true);
 
     // Derived company info
     const company_name = company?.company_name || "";
@@ -176,6 +188,136 @@ export default function TaskListEditDialog({
     const quotationNumber = item.quotation_number || "";
     const isEcoshift = quotation_type === "Ecoshift Corporation";
     const headerImagePath = isEcoshift ? "/ecoshift-banner.png" : "/disruptive-banner.png";
+
+    // ─── Fetch Revised Quotations History ───────────────────────────────────
+    useEffect(() => {
+        if (!item.quotation_number) return;
+        const fetchRevised = async () => {
+            const { data, error } = await supabase
+                .from("revised_quotations")
+                .select("*")
+                .eq("quotation_number", item.quotation_number)
+                .order("id", { ascending: false });
+            if (!error) setRevisedQuotations(data || []);
+        };
+        fetchRevised();
+    }, [item.quotation_number]);
+
+    // ─── Build payload from revision ─────────────────────────────────────────
+    const getRevisionPayload = (revision: any) => {
+        const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+        const emailUsername = email?.split("@")[0] ?? "";
+        let emailDomain = "";
+        if (revision.quotation_type === "Disruptive Solutions Inc") emailDomain = "disruptivesolutionsinc.com";
+        else if (revision.quotation_type === "Ecoshift Corporation") emailDomain = "ecoshiftcorp.com";
+        else emailDomain = email?.split("@")[1] ?? "";
+        const salesemail = emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
+
+        const quantities = revision.product_quantity?.split(",").map((v: string) => v.trim()) || [];
+        const amounts = revision.product_amount?.split(",").map((v: string) => v.trim()) || [];
+        const titles = revision.product_title?.split(",").map((v: string) => v.trim()) || [];
+        const descriptions = revision.product_description?.split("||").map((v: string) => v.trim()) || [];
+        const photos = revision.product_photo?.split(",").map((v: string) => v.trim()) || [];
+        const skus = revision.product_sku?.split(",").map((v: string) => v.trim()) || [];
+        const remarks = revision.item_remarks?.split(",").map((v: string) => v.trim()) || [];
+        const discountPercents = revision.discounted_priced?.split(",").map((v: string) => parseFloat(v.trim()) || 0) || [];
+
+        const maxLen = Math.max(quantities.length, amounts.length, titles.length, 1);
+        const items = Array.from({ length: maxLen }, (_, i) => {
+            const qty = parseFloat(quantities[i] ?? "0") || 0;
+            const unitPrice = parseFloat(amounts[i] ?? "0") || 0;
+            const discountPct = discountPercents[i] ?? 0;
+            const isDiscounted = discountPct > 0;
+            const unitDiscountAmount = isDiscounted ? (unitPrice * discountPct) / 100 : 0;
+            const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount (NET UNIT PRICE)
+            const totalAmount = discountedAmount * qty; // Total after discount
+            return {
+                itemNo: i + 1,
+                qty,
+                photo: photos[i] ?? "",
+                title: titles[i] ?? "",
+                sku: skus[i] ?? "",
+                remarks: remarks[i] ?? "",
+                product_description: descriptions[i] ?? "",
+                unitPrice,
+                discount: discountPct,
+                discountedAmount,
+                totalAmount,
+            };
+        });
+
+        const deliveryFeeNum = parseFloat(revision.delivery_fee) || 0;
+        const restockingFeeNum = parseFloat(revision.restocking_fee) || 0;
+        // quotation_amount stored = net_sales + delivery + restocking - EWT
+        const quotationAmt = parseFloat(String(revision.quotation_amount)) || 0;
+        const whtType = revision.quotation_vatable ?? "none";
+        const vatType = revision.vat_type ?? "zero_rated";
+        const whtLabel = whtType === "wht_1" ? "EWT 1% (Goods)" : whtType === "wht_2" ? "EWT 2% (Services)" : "None";
+
+        // Reverse engineer: total before EWT = quotation_amount + EWT
+        // First, we need to find what total was used to calculate EWT
+        // EWT is calculated on (net_sales + delivery + restocking) with VAT adjustment
+        // Since quotation_amount = total - EWT, we work backwards
+
+        // Estimate total before EWT by adding back approximate EWT
+        // EWT = (total / 1.12 if vat_inc else total) * rate
+        // So total ≈ quotation_amount + EWT
+
+        // Calculate total before EWT (totalPriceWithDelivery)
+        // For VAT Inc: EWT base = total / 1.12
+        // For non-VAT: EWT base = total
+        const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
+        const vatMultiplier = vatType === "vat_inc" ? 1.12 : 1;
+
+        // quotation_amount = total - (total / vatMultiplier) * whtRate
+        // quotation_amount = total * (1 - whtRate / vatMultiplier)
+        // total = quotation_amount / (1 - whtRate / vatMultiplier)
+        const denominator = 1 - (whtRate / vatMultiplier);
+        const totalPriceWithDelivery = whtType !== "none" && denominator > 0
+            ? quotationAmt / denominator
+            : quotationAmt;
+
+        const whtBase = vatType === "vat_inc" ? totalPriceWithDelivery / 1.12 : totalPriceWithDelivery;
+        const whtAmount = whtType !== "none" ? totalPriceWithDelivery * (whtRate / vatMultiplier) : 0;
+        const netAmountToCollect = totalPriceWithDelivery - whtAmount;
+
+        return {
+            referenceNo: revision.quotation_number || revision.version || "DRAFT-XXXX",
+            date: revision.start_date ? new Date(revision.start_date).toLocaleDateString() : new Date().toLocaleDateString(),
+            companyName: revision.company_name || company_name,
+            address: revision.address || address,
+            telNo: revision.contact_number || contact_number,
+            email: revision.email_address || email_address,
+            attention: revision.contact_person || contact_person,
+            subject: revision.quotation_subject || "For Quotation",
+            items,
+            vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
+            totalPrice: totalPriceWithDelivery,
+            deliveryFee: revision.delivery_fee ?? "",
+            vatType,
+            restockingFee: restockingFeeNum,
+            whtType,
+            whtLabel,
+            whtBase,
+            whtAmount,
+            netAmountToCollect,
+            salesRepresentative: salesRepresentativeName,
+            salesemail,
+            salescontact: contact ?? "",
+            salestsmname: tsmname ?? "",
+            salestsmemail: tsmemail ?? "",
+            salestsmcontact: tsmcontact ?? "",
+            agentName: agentName ?? null,
+            agentSignature: agentSignature ?? "",
+            agentContactNumber: agentContactNumber ?? null,
+            agentEmailAddress: agentEmailAddress ?? null,
+            tsmName: tsmName ?? null,
+            managerName: managerName || managername || null,
+            signature: null,
+            tsmemail: email ?? null,
+            tsmcontact: contact ?? null,
+        };
+    };
 
     // ─── Payload builder ──────────────────────────────────────────────────────
     const getQuotationPayload = () => {
@@ -191,9 +333,10 @@ export default function TaskListEditDialog({
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
             const isDiscounted = checkedRows[index] ?? false;
-            const baseAmount = qty * unitPrice;
-            const discountedAmount = isDiscounted && vatType === "vat_inc" ? (baseAmount * discount) / 100 : 0;
-            const totalAmount = baseAmount - discountedAmount;
+            const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
+            const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
+            const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount (NET UNIT PRICE)
+            const totalAmount = discountedAmount * qty; // Total after discount
             return {
                 itemNo: index + 1,
                 qty,
@@ -203,6 +346,8 @@ export default function TaskListEditDialog({
                 remarks: p.item_remarks ?? "",
                 product_description: p.description?.trim() ? p.description : p.product_description || "",
                 unitPrice,
+                discount: rowDiscount,
+                discountedAmount,
                 totalAmount,
                 isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
                     const rawD = p.product_description || p.description || "";
@@ -320,30 +465,42 @@ export default function TaskListEditDialog({
         const photos = splitAndTrim(item.product_photo);
         const skus = splitAndTrim(item.product_sku);
         const remarks = splitAndTrim(item.item_remarks);
+        const discountedPrices = splitAndTrim(item.discounted_priced);
 
         const maxLen = Math.max(
             quantities.length, amounts.length, titles.length,
-            descriptions.length, photos.length, skus.length, remarks.length, 1
+            descriptions.length, photos.length, skus.length, remarks.length,
+            discountedPrices.length, 1
         );
 
-        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => ({
-            product_quantity: quantities[i] ?? "",
-            product_amount: amounts[i] ?? "",
-            product_title: titles[i] ?? "",
-            product_description: descriptions[i] ?? "",
-            product_photo: photos[i] ?? "",
-            product_sku: skus[i] ?? "",
-            item_remarks: remarks[i] ?? "",
-            quantity: 0,
-            description: descriptions[i] ?? "",
-            skus: undefined,
-            title: titles[i] ?? "",
-            images: undefined,
-            isDiscounted: false,
-            price: 0,
-        }));
+        const newCheckedRows: Record<number, boolean> = {};
+        const arr: ProductItem[] = Array.from({ length: maxLen }, (_, i) => {
+            const discountValue = parseFloat(discountedPrices[i] ?? "0") || 0;
+            const isDiscounted = discountValue > 0;
+            if (isDiscounted) {
+                newCheckedRows[i] = true;
+            }
+            return {
+                product_quantity: quantities[i] ?? "",
+                product_amount: amounts[i] ?? "",
+                product_title: titles[i] ?? "",
+                product_description: descriptions[i] ?? "",
+                product_photo: photos[i] ?? "",
+                product_sku: skus[i] ?? "",
+                item_remarks: remarks[i] ?? "",
+                quantity: parseFloat(quantities[i] ?? "0") || 0,
+                description: descriptions[i] ?? "",
+                skus: skus[i] ? [skus[i]] : undefined,
+                title: titles[i] ?? "",
+                images: photos[i] ? [{ src: photos[i] }] : undefined,
+                isDiscounted: isDiscounted,
+                discount: discountValue,
+                price: parseFloat(amounts[i] ?? "0") || 0,
+            };
+        });
 
         setProducts(arr);
+        setCheckedRows(newCheckedRows);
     }, [item]);
 
     // ─── Compute total ────────────────────────────────────────────────────────
@@ -352,14 +509,18 @@ export default function TaskListEditDialog({
         products.forEach((p, idx) => {
             const qty = parseFloat(p.product_quantity ?? "0") || 0;
             const amt = parseFloat(p.product_amount ?? "0") || 0;
-            let lineTotal = qty * amt;
-            if (checkedRows[idx] && vatType === "vat_inc") {
-                lineTotal = lineTotal * ((100 - discount) / 100);
-            }
+            const isChecked = checkedRows[idx] ?? false;
+            const rowDiscount = isChecked
+                ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+                : 0;
+            const unitDiscountAmount = (amt * rowDiscount) / 100;
+            const netUnitPrice = amt - unitDiscountAmount;
+            const lineTotal = netUnitPrice * qty;
             total += lineTotal;
         });
-        setQuotationAmount(total);
-    }, [products, checkedRows, discount, vatType]);
+        // Round to 2 decimal places to prevent floating-point precision issues
+        setQuotationAmount(Math.round(total * 100) / 100);
+    }, [products, checkedRows, vatTypeState]);
 
     // ─── PDF Security helpers ─────────────────────────────────────────────────
 
@@ -617,44 +778,57 @@ export default function TaskListEditDialog({
           </div>
           <p class="intro-text">We are pleased to offer you the following products for consideration:</p>
         </div>`);
-            pdf.addImage(clientBlock.img, "JPEG", 0, currentY, pdfWidth, clientBlock.h);
-            currentY += clientBlock.h;
+        pdf.addImage(clientBlock.img, "JPEG", 0, currentY, pdfWidth, clientBlock.h);
+        currentY += clientBlock.h;
 
-            // Table header
-            const headerBlock = await renderBlock(`
+        // Table header
+        const headerBlock = await renderBlock(`
         <div class="content-area">
           <div class="table-container" style="border-bottom: 1.5px solid black;">
             <table class="main-table"><thead><tr>
               <th style="width:40px;">ITEM NO</th><th style="width:40px;">QTY</th>
-              <th style="width:120px;">REFERENCE PHOTO</th><th style="width:200px;">PRODUCT DESCRIPTION</th>
-              <th style="width:80px; text-align:right;">UNIT PRICE</th><th style="width:80px; text-align:right;">TOTAL AMOUNT</th>
+              <th style="width:100px;">REFERENCE PHOTO</th><th style="width:180px;">PRODUCT DESCRIPTION</th>
+              <th style="width:70px; text-align:right;">UNIT PRICE</th><th style="width:50px; text-align:center;">DISC</th>
+              <th style="width:70px; text-align:right;">DISCOUNTED PRICE</th><th style="width:80px; text-align:right;">TOTAL AMOUNT</th>
             </tr></thead></table>
           </div>
         </div>`);
-            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-            currentY += 28;
+        pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+        currentY += 28;
 
-            // Item rows
-            for (const [index, rowItem] of payload.items.entries()) {
-                const rowBlock = await renderBlock(`
+        // Item rows
+        for (const [index, rowItem] of payload.items.entries()) {
+            const discountDisplay = rowItem.discount && rowItem.discount > 0 
+                ? `<span style="color:#dc2626; font-weight:900;">${rowItem.discount}%</span>` 
+                : `<span style="color:#9ca3af;">—</span>`;
+            const netUnitPrice = rowItem.discountedAmount && rowItem.discount && rowItem.discount > 0
+                ? rowItem.discountedAmount
+                : rowItem.unitPrice;
+            const rowBlock = await renderBlock(`
           <div class="content-area">
             <table class="main-table" style="border: 1.5px solid black; border-top: none;"><tr>
               <td style="width:40px;" class="item-no">${index + 1}</td>
               <td style="width:40px;" class="qty-col">${rowItem.qty}</td>
-              <td style="width:120px;"><img src="${rowItem.photo}" class="ref-photo"></td>
-              <td style="width:200px;">
+              <td style="width:100px;"><img src="${rowItem.photo}" class="ref-photo"></td>
+              <td style="width:180px;">
                 <div class="product-title" style="font-size:7px;">${rowItem.title}</div>
                 <div class="sku-text">${rowItem.sku}</div>
                 <div class="desc-text">${rowItem.product_description}<span class="desc-remarks">${rowItem.remarks}</span></div>
               </td>
-              <td style="width:80px; text-align:right;">₱${rowItem.unitPrice.toLocaleString()}</td>
-              <td style="width:80px; text-align:right; font-weight:900;">₱${rowItem.totalAmount.toLocaleString()}</td>
+              <td style="width:70px; text-align:right;">₱${rowItem.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              <td style="width:50px; text-align:center;">${discountDisplay}</td>
+              <td style="width:70px; text-align:right;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              <td style="width:80px; text-align:right; font-weight:900;">₱${rowItem.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
             </tr></table>
           </div>`);
 
-                if (currentY + rowBlock.h > pdfHeight - BOTTOM_MARGIN) {
-                    finalizeCurrentPage();
-                    pdf.addPage([612, 936]);
+            if (currentY + rowBlock.h > pdfHeight - BOTTOM_MARGIN) {
+                finalizeCurrentPage();
+                pdf.addPage([612, 936]);
+                pageCount++;
+                currentY = await initiateNewPage();
+                pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+                currentY += 28;
                     pageCount++;
                     currentY = await initiateNewPage();
                     pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
@@ -933,8 +1107,8 @@ export default function TaskListEditDialog({
             {/* Main dialog */}
             <Dialog open onOpenChange={onClose}>
                 <DialogContent
-                    className="max-w-[1000px] w-[95vw] max-h-[90vh] p-0 border-none bg-white shadow-2xl flex flex-col"
-                    style={{ maxWidth: "950px", width: "100vw" }}
+                    className="max-w-[1400px] w-[95vw] max-h-[90vh] p-0 border-none bg-white shadow-2xl flex flex-col"
+                    style={{ maxWidth: "1400px", width: "100vw" }}
                 >
                     <DialogHeader className="px-5 pt-4 pb-0 border-b border-gray-100">
                         <DialogTitle className="text-sm font-black uppercase tracking-tight text-gray-800">
@@ -945,33 +1119,88 @@ export default function TaskListEditDialog({
                         </DialogDescription>
                     </DialogHeader>
 
-                    {/* Scrollable preview */}
-                    <div className="flex-1 overflow-auto p-3">
-                        <Preview
-                            payload={getQuotationPayload()}
-                            quotationType={quotation_type}
-                            setIsPreviewOpen={() => { }}
-                        />
+                    {/* Two-column layout: Left Preview, Right Revisions */}
+                    <div className="flex-1 grid grid-cols-[1fr_380px] overflow-hidden">
+                        {/* Left: Preview */}
+                        <div className="overflow-auto p-3 border-r border-gray-200">
+                            <Preview
+                                payload={viewingCurrent ? getQuotationPayload() : selectedRevisedQuotation ? getRevisionPayload(selectedRevisedQuotation) : getQuotationPayload()}
+                                quotationType={quotation_type}
+                                setIsPreviewOpen={() => { }}
+                            />
 
-                        {/* ── DOCUMENT SECURITY MICRO-FOOTER ───────────────────────────────────── */}
-                        <div className="mx-12 mb-8 border-t border-dashed border-gray-300 pt-3 flex items-center justify-between gap-4">
-                            <div className="flex flex-col">
-                                <p className="text-[8px] text-gray-400 font-medium leading-relaxed">
-                                    Document ID: <span className="font-black text-gray-500">{payload.referenceNo}</span>
-                                    &nbsp;·&nbsp; Issued: {securityTimestamp}
-                                    &nbsp;·&nbsp; {companyLabel}
-                                </p>
-                                <p className="text-[8px] text-gray-400 italic shrink-0 mt-1">
-                                    This document is only valid when downloaded from Taskflow.
-                                </p>
-                            </div>
-
-                            {qrDataUrl && (
-                                <div className="flex flex-col items-center">
-                                    <img src={qrDataUrl} alt="Verification QR" className="w-20 h-20 opacity-80 mix-blend-multiply" />
-                                    <span className="text-[6px] font-black text-gray-300 uppercase tracking-widest mt-1">Verify Authenticity</span>
+                            {/* ── DOCUMENT SECURITY MICRO-FOOTER ───────────────────────────────────── */}
+                            <div className="mx-12 mb-8 border-t border-dashed border-gray-300 pt-3 flex items-center justify-between gap-4">
+                                <div className="flex flex-col">
+                                    <p className="text-[8px] text-gray-400 font-medium leading-relaxed">
+                                        Document ID: <span className="font-black text-gray-500">{payload.referenceNo}</span>
+                                        &nbsp;·&nbsp; Issued: {securityTimestamp}
+                                        &nbsp;·&nbsp; {companyLabel}
+                                    </p>
+                                    <p className="text-[8px] text-gray-400 italic shrink-0 mt-1">
+                                        This document is only valid when downloaded from Taskflow.
+                                    </p>
                                 </div>
-                            )}
+
+                                {qrDataUrl && (
+                                    <div className="flex flex-col items-center">
+                                        <img src={qrDataUrl} alt="Verification QR" className="w-20 h-20 opacity-80 mix-blend-multiply" />
+                                        <span className="text-[6px] font-black text-gray-300 uppercase tracking-widest mt-1">Verify Authenticity</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right: Revisions Panel */}
+                        <div className="bg-gray-50 flex flex-col overflow-hidden">
+                            <div className="p-4 border-b border-gray-200 bg-white">
+                                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-tight text-gray-800">
+                                    <History className="w-4 h-4" />
+                                    Revision History
+                                    <span className="bg-[#121212] text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto">
+                                        {revisedQuotations.length}
+                                    </span>
+                                </h3>
+                            </div>
+                            <div className="flex-1 overflow-auto p-3">
+                                {/* Current/Latest Button */}
+                                <div
+                                    onClick={() => { setViewingCurrent(true); setSelectedRevisedQuotation(null); }}
+                                    className={`mb-3 border rounded-sm p-3 cursor-pointer transition hover:shadow-md ${viewingCurrent ? "bg-[#121212] text-white border-[#121212]" : "bg-white border-gray-300"}`}
+                                >
+                                    <div className="font-semibold text-sm mb-1 flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${viewingCurrent ? "bg-emerald-400" : "bg-emerald-500"}`}></span>
+                                        CURRENT / LATEST
+                                    </div>
+                                    <div className={`text-xs ${viewingCurrent ? "text-gray-300" : "text-gray-500"}`}>
+                                        <div>Quotation: {item.quotation_number}</div>
+                                        <div>Amount: ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    </div>
+                                </div>
+
+                                {revisedQuotations.length === 0 ? (
+                                    <p className="text-xs text-gray-500 italic text-center py-4">No revised quotations found.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {revisedQuotations.map((q) => (
+                                            <div
+                                                key={q.id}
+                                                onClick={() => { setViewingCurrent(false); setSelectedRevisedQuotation(q); }}
+                                                className={`border rounded-sm p-3 text-xs cursor-pointer transition hover:shadow-md ${!viewingCurrent && selectedRevisedQuotation?.id === q.id ? "bg-gray-100 border-[#121212]" : "bg-white border-gray-300"}`}
+                                            >
+                                                <div className="font-semibold text-sm mb-1 text-gray-800">{q.version || "N/A"}</div>
+                                                <div className="text-gray-600 space-y-0.5">
+                                                    <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
+                                                    <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString()}</div>
+                                                    <div className="text-gray-400 text-[10px] mt-1">
+                                                        {q.start_date ? new Date(q.start_date).toLocaleDateString() : "N/A"} - {q.end_date ? new Date(q.end_date).toLocaleDateString() : "N/A"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
