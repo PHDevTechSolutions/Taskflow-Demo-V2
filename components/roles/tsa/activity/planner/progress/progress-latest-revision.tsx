@@ -8,6 +8,13 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CheckCircle2Icon,
   Trash,
   Check,
@@ -152,6 +159,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -316,7 +324,13 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
 
   const filteredData = mergedData.filter((item) => {
+    // Status filter
+    if (statusFilter !== "all" && item.status !== statusFilter) {
+      return false;
+    }
+    // Search filter
     const lowerSearch = searchTerm.toLowerCase();
+    if (!lowerSearch) return true;
     return (
       (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
       (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
@@ -479,14 +493,30 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   return (
     <>
-      <Input
-        type="search"
-        placeholder="Search..."
-        className="text-xs grow rounded-none mb-2"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        aria-label="Search accounts"
-      />
+      <div className="flex gap-2 mb-2">
+        <Input
+          type="search"
+          placeholder="Search..."
+          className="text-xs grow rounded-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px] text-xs rounded-none">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="Assisted">Assisted</SelectItem>
+            <SelectItem value="On-Progress">On-Progress</SelectItem>
+            <SelectItem value="SO-Done">SO-Done</SelectItem>
+            <SelectItem value="Quote-Done">Quote-Done</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">

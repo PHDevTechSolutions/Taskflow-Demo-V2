@@ -1,7 +1,7 @@
 // popup/breaches.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -83,17 +83,6 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity => {
 // Outbound is determined ONLY by source === "Outbound - Touchbase"
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase" && a.call_status === "Successful";
-
-// ─── Date range helper (same as page.tsx) ──────────────────────────────────────
-const isDateInRange = (dateStr: string, from: string, to: string): boolean => {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return false;
-  const fromDate = new Date(from);
-  fromDate.setHours(0, 0, 0, 0);
-  const toDate = new Date(to);
-  toDate.setHours(23, 59, 59, 999);
-  return date >= fromDate && date <= toDate;
-};
 
 // ─── Reusable UI ──────────────────────────────────────────────────────────────
 
@@ -189,6 +178,11 @@ export function BreachesDialog() {
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
+  // Segment dialog for clickable client types
+  const [segmentDialogOpen, setSegmentDialogOpen] = useState(false);
+  const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
+  const [segmentFilter, setSegmentFilter] = useState<"with" | "without">("with");
+
   // ─── Sync userId from URL ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -223,14 +217,19 @@ export function BreachesDialog() {
       const active: any[] = (data.data || []).filter((a: any) => (a.status || "").toLowerCase() === "active");
       const norm = (val: string) => (val || "").toLowerCase().replace(/\s+/g, "");
 
+      // Deduplicate by company_name (case-insensitive)
+      const uniqueByCompany = Array.from(
+        new Map(active.map(a => [(a.company_name || "").toLowerCase(), a])).values()
+      );
+
       setDenominators({
-        total: active.length,
-        top50: active.filter((a) => norm(a.type_client) === "top50").length,
-        next30: active.filter((a) => norm(a.type_client) === "next30").length,
-        bal20: active.filter((a) => norm(a.type_client) === "balance20").length,
-        csrClient: active.filter((a) => norm(a.type_client) === "csrclient").length,
-        newClient: active.filter((a) => norm(a.type_client) === "newclient").length,
-        tsaClient: active.filter((a) => norm(a.type_client) === "tsaclient").length,
+        total: uniqueByCompany.length,
+        top50: uniqueByCompany.filter((a) => norm(a.type_client) === "top50").length,
+        next30: uniqueByCompany.filter((a) => norm(a.type_client) === "next30").length,
+        bal20: uniqueByCompany.filter((a) => norm(a.type_client) === "balance20").length,
+        csrClient: uniqueByCompany.filter((a) => norm(a.type_client) === "csrclient").length,
+        newClient: uniqueByCompany.filter((a) => norm(a.type_client) === "newclient").length,
+        tsaClient: uniqueByCompany.filter((a) => norm(a.type_client) === "tsaclient").length,
       });
 
       setClusterAccounts(
@@ -440,22 +439,13 @@ export function BreachesDialog() {
 
   // ─── Territory coverage ─────────────────────────────────────────────────
   //
-  // Scope: DATE RANGE (fromDate → toDate) — NOT full calendar month.
+  // Scope: the FULL calendar month of fromDate (month start → month end).
   // - "Covered"     = cluster accounts whose company_name appears in ANY
-  //                   activity within the selected date range
+  //                   activity within that month range
   // - "Not Reached" = the rest
-  // - Uses same filtering logic as page.tsx
-  // - Denominators come from clusterAccounts (already filtered to ACTIVE only).
-
-  // ─── Filter activities by date range (same as page.tsx) ───
-  const filteredActivitiesByDate = useMemo(() => {
-    if (!fromDate || !toDate) return activities;
-    return activities.filter((a) => {
-      const dateToCheck = a.date_updated || a.date_created;
-      if (!dateToCheck) return false;
-      return isDateInRange(dateToCheck, fromDate, toDate);
-    });
-  }, [activities, fromDate, toDate]);
+  // - NO source filter — isOutboundTouchbase applies only to the Outbound
+  //   Performance card, NOT to coverage counts.
+  // - Denominators come from clusterAccounts, not activities.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
@@ -467,14 +457,52 @@ export function BreachesDialog() {
       return;
     }
 
-    // Step 1 — company names with ANY activity within the DATE RANGE
+    // Explicit month bounds from fromDate (use UTC to avoid timezone issues)
+    const fromDateObj = new Date(fromDate + "T00:00:00Z"); // Treat as UTC
+    const year = fromDateObj.getUTCFullYear();
+    const month = fromDateObj.getUTCMonth();
+    // Month start: 1st of month at 00:00:00 UTC
+    const monthStart = Date.UTC(year, month, 1, 0, 0, 0, 0);
+    // Month end: last day of month at 23:59:59.999 UTC
+    const monthEnd = Date.UTC(year, month + 1, 0, 23, 59, 59, 999);
+
+    // DEBUG
+    console.log("[DEBUG] fromDate:", fromDate, "monthStart:", new Date(monthStart).toISOString(), "monthEnd:", new Date(monthEnd).toISOString());
+
+    // Step 1 — company names with ANY activity within the calendar month
     const touchedCompanies = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
-    filteredActivitiesByDate.forEach((act) => {
-      if (!act.company_name) return;
+    activities.forEach((act) => {
+      if (!act.company_name || !act.date_created) return;
+      // Parse date_created as literal date (ignore timezone)
+      const dateStr = act.date_created.toString().split('T')[0]; // "2026-03-31" from "2026-03-31T10:30:00Z"
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return;
+      // Create UTC timestamp from literal date components (treat as midnight UTC)
+      const t = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+      
+      // DEBUG for first few activities
+      if (Math.random() < 0.01) {
+        console.log("[DEBUG] Activity date:", dateStr, "parsed:", new Date(t).toISOString(), "inRange:", t >= monthStart && t <= monthEnd);
+      }
+      
+      if (isNaN(t) || t < monthStart || t > monthEnd) return;
 
-      touchedCompanies.add(act.company_name.toLowerCase());
+      const companyLower = act.company_name.toLowerCase();
+      
+      // DEBUG: Check for specific company
+      if (companyLower.includes("seventy seven")) {
+        console.log("[DEBUG] Seventy Seven Seed activity:", {
+          date: dateStr,
+          parsed: new Date(t).toISOString(),
+          inRange: t >= monthStart && t <= monthEnd,
+          source: act.source,
+          ref: act.activity_reference_number
+        });
+      }
+      
+      touchedCompanies.add(companyLower);
 
       if (act.activity_reference_number) {
         byActivityRef[act.activity_reference_number] = act;
@@ -491,12 +519,20 @@ export function BreachesDialog() {
       !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
     );
 
-    setCoveredAccounts(covered);
-    setUncoveredAccounts(uncovered);
+    // Deduplicate covered/uncovered by company_name (same company = 1 count)
+    const uniqueCovered = Array.from(
+      new Map(covered.map(acc => [(acc.company_name || "").toLowerCase(), acc])).values()
+    );
+    const uniqueUncovered = Array.from(
+      new Map(uncovered.map(acc => [(acc.company_name || "").toLowerCase(), acc])).values()
+    );
 
-    // Step 3 — segment counts from covered cluster accounts
+    setCoveredAccounts(uniqueCovered);
+    setUncoveredAccounts(uniqueUncovered);
+
+    // Step 3 — segment counts from UNIQUE covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
-    covered.forEach((acc) => {
+    uniqueCovered.forEach((acc) => {
       const type = acc.type_client ?? "";
       if (type === "top50") seg.top50++;
       else if (type === "next30") seg.next30++;
@@ -506,9 +542,9 @@ export function BreachesDialog() {
       else if (type === "tsaclient") seg.tsaClient++;
     });
 
-    setUniqueClientReach(covered.length);
-    setClientSegments({ ...seg, outbound: covered.length });
-  }, [filteredActivitiesByDate, clusterAccounts]);
+    setUniqueClientReach(uniqueCovered.length);
+    setClientSegments({ ...seg, outbound: uniqueCovered.length });
+  }, [activities, clusterAccounts, fromDate]);
 
   // ─── New clients per company ────────────────────────────────────────────
 
@@ -591,6 +627,84 @@ export function BreachesDialog() {
 
   return (
     <>
+      {/* ── SEGMENT DIALOG ──────────────────────────────────────────────── */}
+      {(() => {
+        if (!selectedSegment) return null;
+        const segmentList = [
+          { key: "top50", label: "Top 50" },
+          { key: "next30", label: "Next 30" },
+          { key: "balance20", label: "Balance 20" },
+          { key: "csrclient", label: "CSR Client" },
+          { key: "newclient", label: "New Client" },
+          { key: "tsaclient", label: "TSA Client" },
+        ];
+        const current = segmentList.find(s => s.key === selectedSegment);
+        const segmentLabel = current?.label ?? selectedSegment;
+
+        // Filter accounts by selected segment and activity filter
+        const withActivity = coveredAccounts.filter(acc => acc.type_client === selectedSegment);
+        const withoutActivity = uncoveredAccounts.filter(acc => acc.type_client === selectedSegment);
+        const displayList = segmentFilter === "with" ? withActivity : withoutActivity;
+
+        return (
+          <Dialog open={segmentDialogOpen} onOpenChange={(v) => { if (!v) { setSegmentDialogOpen(false); setSelectedSegment(null); } }}>
+            <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-[11px] font-black uppercase tracking-wider text-gray-700">
+                    {segmentLabel}
+                    <span className="ml-2 text-gray-400 font-normal">{displayList.length}</span>
+                  </DialogTitle>
+                  <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setSegmentFilter("with")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${segmentFilter === "with" ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      With Activity · {withActivity.length}
+                    </button>
+                    <button
+                      onClick={() => setSegmentFilter("without")}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${segmentFilter === "without" ? "bg-amber-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      Without · {withoutActivity.length}
+                    </button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {displayList.length === 0 ? (
+                <p className="text-[11px] text-gray-300 italic px-4 py-6 text-center">
+                  {segmentFilter === "with"
+                    ? `No ${segmentLabel} accounts with activity.`
+                    : `All ${segmentLabel} accounts have activity.`}
+                </p>
+              ) : (
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead className="sticky top-0 bg-gray-50 z-10">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-black uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                          Company
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayList.map((acc, i) => (
+                        <tr key={acc.account_reference_number || i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="px-3 py-2 text-gray-700 font-medium border-b border-gray-100">
+                            {acc.company_name || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
       {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
       {(() => {
         const isCovered = coverageDialogSource === "covered";
@@ -692,7 +806,7 @@ export function BreachesDialog() {
               <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                 Sync Configuration
               </h4>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
                     Reference ID
@@ -706,24 +820,13 @@ export function BreachesDialog() {
                 </div>
                 <div>
                   <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                    From Date
+                    Target Date
                   </label>
                   <Input
                     type="date"
                     className="h-7 text-[11px] rounded-none bg-white border-gray-200"
                     value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                    To Date
-                  </label>
-                  <Input
-                    type="date"
-                    className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
+                    onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
                   />
                 </div>
               </div>
@@ -783,29 +886,11 @@ export function BreachesDialog() {
                 </SectionCard>
 
                 {/* Database Coverage */}
-                <SectionCard
-                  title="Database Coverage"
-                > {/*badge={
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setCoverageDialogSource("covered")}
-                        className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
-                      >
-                        <List size={10} />
-                        Covered
-                      </button>
-                      <span className="text-gray-300 text-[9px]">·</span>
-                      <button
-                        onClick={() => setCoverageDialogSource("uncovered")}
-                        className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
-                      >
-                        Not Reached
-                      </button>
-                    </div>
-                  }*/}
+                <SectionCard title="Database Coverage">
                   <div className="space-y-2">
+                    {/* With Activity / Total */}
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
+                      <span className="text-[14px] font-black text-blue-700">{coveredAccounts.length}</span>
                       <span className="text-[10px] text-gray-400">of {denominators.total} accounts</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 w-full overflow-hidden">
@@ -813,26 +898,50 @@ export function BreachesDialog() {
                         className="h-full bg-blue-600 transition-all duration-500"
                         style={{
                           width: denominators.total
-                            ? `${Math.min(100, (uniqueClientReach / denominators.total) * 100)}%`
+                            ? `${Math.min(100, (coveredAccounts.length / denominators.total) * 100)}%`
                             : "0%",
                         }}
                       />
                     </div>
+
+                    {/* Activity Status */}
+                    <div className="grid grid-cols-2 gap-2 py-2 border-y border-gray-100">
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase mb-1">With Activity</p>
+                        <p className="text-[16px] font-black text-emerald-600">{coveredAccounts.length}</p>
+                        <p className="text-[9px] text-gray-400">
+                          {denominators.total ? Math.round((coveredAccounts.length / denominators.total) * 100) : 0}% of total
+                        </p>
+                      </div>
+                      <div className="text-center border-l border-gray-100">
+                        <p className="text-[9px] text-gray-400 uppercase mb-1">No Activity</p>
+                        <p className="text-[16px] font-black text-amber-600">{uncoveredAccounts.length}</p>
+                        <p className="text-[9px] text-gray-400">
+                          {denominators.total ? Math.round((uncoveredAccounts.length / denominators.total) * 100) : 0}% of total
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Type Client Grid - Covered/Total format */}
                     <div className="grid grid-cols-3 gap-1 mt-2">
                       {[
-                        { label: "Top 50", val: clientSegments.top50, denom: denominators.top50 },
-                        { label: "Next 30", val: clientSegments.next30, denom: denominators.next30 },
-                        { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
-                        { label: "CSR", val: clientSegments.csrClient, denom: denominators.csrClient },
-                        { label: "New", val: clientSegments.newClient, denom: denominators.newClient },
-                        { label: "TSA", val: clientSegments.tsaClient, denom: denominators.tsaClient },
-                      ].map(({ label, val, denom }) => (
-                        <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
-                          <p className="text-[8px] text-gray-400 uppercase">{label}</p>
-                          <p className="text-[10px] font-black text-gray-700">
-                            {val}<span className="text-gray-400 font-normal">/{denom}</span>
+                        { label: "Top 50", key: "top50", covered: clientSegments.top50, total: denominators.top50 },
+                        { label: "Next 30", key: "next30", covered: clientSegments.next30, total: denominators.next30 },
+                        { label: "Bal 20", key: "balance20", covered: clientSegments.balance20, total: denominators.bal20 },
+                        { label: "CSR", key: "csrclient", covered: clientSegments.csrClient, total: denominators.csrClient },
+                        { label: "New", key: "newclient", covered: clientSegments.newClient, total: denominators.newClient },
+                        { label: "TSA", key: "tsaclient", covered: clientSegments.tsaClient, total: denominators.tsaClient },
+                      ].map(({ label, key, covered, total }) => (
+                        <button
+                          key={label}
+                          onClick={() => { setSelectedSegment(key); setSegmentFilter("with"); setSegmentDialogOpen(true); }}
+                          className="bg-gray-50 px-2 py-1 text-center border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer group"
+                        >
+                          <p className="text-[8px] text-gray-400 uppercase group-hover:text-blue-600">{label}</p>
+                          <p className="text-[10px] font-black text-gray-700 group-hover:text-blue-700">
+                            {covered}<span className="text-gray-400 font-normal group-hover:text-blue-400">/{total}</span>
                           </p>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
