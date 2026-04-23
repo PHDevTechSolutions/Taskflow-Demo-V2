@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { type DateRange } from "react-day-picker";
-import { addDays, startOfMonth, endOfMonth } from "date-fns";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -49,6 +48,7 @@ interface Activity {
   remarks?: string;
   status?: string;
   date_created?: string;
+  date_updated?: string;
   referenceid?: string;
   quotation_amount?: number;
   quotation_number?: string;
@@ -99,6 +99,18 @@ const fmtDuration = (start?: string | null, end?: string | null): string | null 
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60); const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
+// ─── Date range helper ──────────────────────────────────────────────
+const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
+  if (!range?.from) return true; // No filter = include all
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return false;
+  const from = new Date(range.from);
+  from.setHours(0, 0, 0, 0);
+  const to = range.to ? new Date(range.to) : new Date(range.from);
+  to.setHours(23, 59, 59, 999);
+  return date >= from && date <= to;
 };
 
 /* ─── Type client color map ───────────────────────────────────────── */
@@ -317,7 +329,8 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-[10px] text-slate-600 font-mono">{fmtDate(r.date_created) ?? "—"}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{fmtDate(r.date_updated || r.date_created) ?? "—"}</p>
+                    <p className="text-[9px] text-slate-600 font-mono">updated</p>
                     {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "▲ less" : "▼ more"}</span>}
                   </div>
                 </div>
@@ -370,10 +383,8 @@ function DashboardContent() {
   const [historyAccount, setHistoryAccount] = useState<Account | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<Activity[]>([]);
-  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  });
+  // Date range state - NOW USED for filtering activities data
+  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
 
   const queryUserId = searchParams?.get("id") ?? "";
 
@@ -432,35 +443,23 @@ function DashboardContent() {
     fetchUserData();
   }, [userId]);
 
-  // Format date for API
-  const formatDateForApi = (date: Date | undefined): string | null => {
-    if (!date) return null;
-    return date.toISOString().split("T")[0]; // YYYY-MM-DD
-  };
-
-  // Fetch accounts & activities when referenceid or date range changes
+  // ─── Fetch ALL accounts & activities (NO date filtering) ───
   useEffect(() => {
     if (!userDetails.referenceid) return;
 
     const fetchData = async () => {
       setLoadingData(true);
       try {
-        // Fetch all accounts from Neon (no date filtering)
+        // Fetch all accounts from Neon
         const accRes = await fetch(`/api/accounts?referenceid=${encodeURIComponent(userDetails.referenceid)}`);
         if (accRes.ok) {
           const accData = await accRes.json();
           const list = Array.isArray(accData) ? accData : accData.data ?? [];
-          setAccounts(list.filter((a: Account) => a.status?.toLowerCase() === "active"));
+          setAccounts(list);
         }
 
-        // Build activities API URL with date filters only
-        let activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}`;
-        const fromDate = formatDateForApi(dateCreatedFilterRange?.from);
-        const toDate = formatDateForApi(dateCreatedFilterRange?.to);
-        if (fromDate) activitiesUrl += `&from=${encodeURIComponent(fromDate)}`;
-        if (toDate) activitiesUrl += `&to=${encodeURIComponent(toDate)}`;
-
-        // Fetch activities
+        // ─── Fetch ALL activities (NO date filter) ───
+        const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}`;
         const actRes = await fetch(activitiesUrl);
         if (actRes.ok) {
           const actData = await actRes.json();
@@ -476,26 +475,61 @@ function DashboardContent() {
     };
 
     fetchData();
-  }, [userDetails.referenceid, dateCreatedFilterRange]);
+  }, [userDetails.referenceid]);
 
+  // ─── Filter to ONLY ACTIVE accounts ───
+  const activeAccounts = useMemo(() => {
+    return accounts.filter((a) => a.status?.toLowerCase() === "active");
+  }, [accounts]);
+
+  // ─── Filter activities by date range (default: ALL activities) ───
+  const filteredActivitiesByDate = useMemo(() => {
+    if (!dateCreatedFilterRange?.from) return activities; // No filter = return all
+    return activities.filter((a) => {
+      const dateToCheck = a.date_updated || a.date_created;
+      if (!dateToCheck) return false;
+      return isDateInRange(dateToCheck, dateCreatedFilterRange);
+    });
+  }, [activities, dateCreatedFilterRange]);
+
+  // ─── Activity counts based on DATE-FILTERED activities ───
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
-    activities.forEach((a) => {
+    filteredActivitiesByDate.forEach((a) => {
       if (a.company_name) {
         m[a.company_name.toLowerCase()] = (m[a.company_name.toLowerCase()] ?? 0) + 1;
       }
     });
     return m;
-  }, [activities]);
+  }, [filteredActivitiesByDate]);
 
+  // ─── Last activity date per company (based on filtered activities) ───
+  const lastActivityDateMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    filteredActivitiesByDate.forEach((a) => {
+      if (a.company_name) {
+        const key = a.company_name.toLowerCase();
+        const date = a.date_updated || a.date_created;
+        if (date) {
+          // Keep the most recent date
+          if (!m[key] || new Date(date) > new Date(m[key])) {
+            m[key] = date;
+          }
+        }
+      }
+    });
+    return m;
+  }, [filteredActivitiesByDate]);
+
+  // ─── Companies with activity (based on filtered activities) ───
   const companiesWithActivity = useMemo(() => {
     const s = new Set<string>();
-    activities.forEach((a) => { if (a.company_name) s.add(a.company_name.toLowerCase()); });
+    filteredActivitiesByDate.forEach((a) => { if (a.company_name) s.add(a.company_name.toLowerCase()); });
     return s;
-  }, [activities]);
+  }, [filteredActivitiesByDate]);
 
   const filteredAccounts = useMemo(() => {
-    let list = accounts;
+    let list = activeAccounts; // Only show ACTIVE accounts
 
     // Apply activity filter
     if (activityFilter === "with") {
@@ -515,21 +549,37 @@ function DashboardContent() {
       a.contact_person.toLowerCase().includes(q) ||
       a.email_address.toLowerCase().includes(q)
     );
-  }, [accounts, search, typeFilter, activityFilter, companiesWithActivity]);
+  }, [activeAccounts, search, typeFilter, activityFilter, companiesWithActivity]);
 
   const typeClientCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    accounts.forEach((a) => { const t = (a.type_client ?? "Unknown").toUpperCase(); c[t] = (c[t] ?? 0) + 1; });
+    activeAccounts.forEach((a) => { const t = (a.type_client ?? "Unknown").toUpperCase(); c[t] = (c[t] ?? 0) + 1; });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [accounts]);
+  }, [activeAccounts]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   useEffect(() => setCurrentPage(1), [search, typeFilter, activityFilter]);
 
-  const withActivityCount = accounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
-  const withoutActivityCount = accounts.length - withActivityCount;
+  // ─── Counts based on ACTIVE accounts only ───
+  const withActivityCount = activeAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
+  const withoutActivityCount = activeAccounts.length - withActivityCount;
+
+  // ─── DEBUG: Log counts for verification ───
+  useEffect(() => {
+    console.log("=== ACTIVITY COUNT DEBUG ===");
+    console.log("Total Accounts (all):", accounts.length);
+    console.log("Active Accounts:", activeAccounts.length);
+    console.log("Total Activities (all):", activities.length);
+    console.log("Filtered Activities (by date):", filteredActivitiesByDate.length);
+    console.log("Date Range:", dateCreatedFilterRange?.from ? `${dateCreatedFilterRange.from} to ${dateCreatedFilterRange.to || dateCreatedFilterRange.from}` : "ALL (no filter)");
+    console.log("Unique companies in activities:", companiesWithActivity.size);
+    console.log("With Activity count (active only):", withActivityCount);
+    console.log("No Activity count (active only):", withoutActivityCount);
+    console.log("Sample companies with activity:", Array.from(companiesWithActivity).slice(0, 5));
+    console.log("============================");
+  }, [accounts.length, activeAccounts.length, activities.length, filteredActivitiesByDate.length, dateCreatedFilterRange?.from?.toString(), dateCreatedFilterRange?.to?.toString(), companiesWithActivity.size, withActivityCount, withoutActivityCount]);
 
   const openHistory = (companyName: string) => {
     const acct = accounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
@@ -537,7 +587,16 @@ function DashboardContent() {
     setHistoryAccount(acct);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    const records = activities.filter((a) => (a.company_name ?? "").toLowerCase() === companyName.toLowerCase());
+    // Filter by company AND date range (if selected)
+    const records = activities.filter((a) => {
+      const matchCompany = (a.company_name ?? "").toLowerCase() === companyName.toLowerCase();
+      if (!matchCompany) return false;
+      // Apply date filter if exists
+      if (!dateCreatedFilterRange?.from) return true; // No date filter
+      const dateToCheck = a.date_updated || a.date_created;
+      if (!dateToCheck) return false;
+      return isDateInRange(dateToCheck, dateCreatedFilterRange);
+    });
     setHistoryRecords(records);
     setLoadingHistory(false);
   };
@@ -587,12 +646,12 @@ function DashboardContent() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   <StatCard
                     label="Total Accounts"
-                    value={accounts.length}
+                    value={activeAccounts.length}
                     accent="#1e293b"
                     onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
                     isActive={activityFilter === "all" && !typeFilter}
-                    showFraction={{ count: accounts.length, total: accounts.length }}
-                    sublabel="all accounts"
+                    showFraction={{ count: activeAccounts.length, total: activeAccounts.length }}
+                    sublabel="active only"
                   />
                   <StatCard
                     label="With Activity"
@@ -600,8 +659,8 @@ function DashboardContent() {
                     accent="#10b981"
                     onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")}
                     isActive={activityFilter === "with"}
-                    showFraction={{ count: withActivityCount, total: accounts.length }}
-                    sublabel={`of ${accounts.length} total`}
+                    showFraction={{ count: withActivityCount, total: activeAccounts.length }}
+                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
                   />
                   <StatCard
                     label="No Activity"
@@ -610,8 +669,8 @@ function DashboardContent() {
                     onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")}
                     isActive={activityFilter === "without"}
                     isNegative
-                    showFraction={{ count: withoutActivityCount, total: accounts.length }}
-                    sublabel={`of ${accounts.length} total`}
+                    showFraction={{ count: withoutActivityCount, total: activeAccounts.length }}
+                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
                   />
                   {typeClientCounts.map(([type, count], i) => (
                     <StatCard
@@ -626,8 +685,8 @@ function DashboardContent() {
                 </div>
 
                 {/* Active Filters Display */}
-                {(activityFilter !== "all" || typeFilter) && (
-                  <div className="flex items-center gap-2">
+                {(activityFilter !== "all" || typeFilter || dateCreatedFilterRange?.from) && (
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-500">Active filters:</span>
                     {activityFilter !== "all" && (
                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -641,8 +700,14 @@ function DashboardContent() {
                         <button onClick={() => setTypeFilter(null)} className="text-indigo-400 hover:text-indigo-700"><X size={10} /></button>
                       </span>
                     )}
+                    {dateCreatedFilterRange?.from && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        📅 {dateCreatedFilterRange.from.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} {dateCreatedFilterRange.to && dateCreatedFilterRange.to !== dateCreatedFilterRange.from && `to ${dateCreatedFilterRange.to.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}`}
+                        <button onClick={() => setDateCreatedFilterRangeAction(undefined)} className="text-amber-400 hover:text-amber-700"><X size={10} /></button>
+                      </span>
+                    )}
                     <button
-                      onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
+                      onClick={() => { setActivityFilter("all"); setTypeFilter(null); setDateCreatedFilterRangeAction(undefined); }}
                       className="text-[11px] text-gray-400 hover:text-gray-600 underline"
                     >
                       Clear all
@@ -663,7 +728,7 @@ function DashboardContent() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50 border-b border-gray-100">
-                          {["Actions",  "Activities", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry"].map((h) => (
+                          {["Actions", "Activities", "Last Touch", "Company", "Type"].map((h) => (
                             <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                           ))}
                         </TableRow>
@@ -671,7 +736,7 @@ function DashboardContent() {
                       <TableBody>
                         {filteredAccounts.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center py-14 text-sm text-gray-400">
+                            <TableCell colSpan={5} className="text-center py-14 text-sm text-gray-400">
                               {search || typeFilter ? "No accounts match your filters" : "No accounts found"}
                             </TableCell>
                           </TableRow>
@@ -688,21 +753,36 @@ function DashboardContent() {
                                   </button>
                                 </TableCell>
                                 <TableCell>
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}>
+                                  <button 
+                                    onClick={() => openHistory(account.company_name)}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}
+                                  >
                                     <FileText size={9} /> {actCount}
-                                  </span>
+                                  </button>
+                                </TableCell>
+                                <TableCell>
+                                  {(() => {
+                                    const lastActDate = lastActivityDateMap[account.company_name.toLowerCase()];
+                                    const fallbackDate = account.date_created;
+                                    const hasActivity = !!lastActDate;
+                                    const displayDate = hasActivity ? lastActDate : fallbackDate;
+                                    return (
+                                      <span className={`text-[10px] font-mono ${hasActivity ? "text-gray-500" : "text-amber-600"}`}>
+                                        {fmtDate(displayDate) ?? "—"}
+                                        {!hasActivity && displayDate && (
+                                          <span className="text-[9px] text-amber-500 ml-1">(created)</span>
+                                        )}
+                                      </span>
+                                    );
+                                  })()}
                                 </TableCell>
                                 <TableCell className="font-semibold text-gray-800 text-sm">{account.company_name}</TableCell>
-                                <TableCell className="text-gray-500 text-xs">{account.contact_person}</TableCell>
-                                <TableCell className="text-gray-500 text-xs">{account.contact_number}</TableCell>
-                                <TableCell className="text-gray-500 text-xs">{account.email_address}</TableCell>
-                                <TableCell className="text-gray-500 text-xs">{account.region}</TableCell>
+          
                                 <TableCell>
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} /> {account.type_client?.toUpperCase()}
                                   </span>
                                 </TableCell>
-                                <TableCell className="text-gray-500 text-xs">{account.industry}</TableCell>
                               </TableRow>
                             );
                           })

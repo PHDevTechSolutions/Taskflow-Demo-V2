@@ -57,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 start_date: data.start_date ? new Date(data.start_date) : null,
                 end_date: data.end_date ? new Date(data.end_date) : null,
                 date_created: new Date().toISOString(),
+                date_request_tsa: new Date().toISOString(),
             };
 
             const { data: inserted, error } = await supabase
