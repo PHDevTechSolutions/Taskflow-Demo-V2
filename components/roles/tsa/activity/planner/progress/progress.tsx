@@ -92,6 +92,7 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
+  quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
 
@@ -270,16 +271,22 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
   };
 
-  const allowedStatuses = [
-    "On-Progress",
-    "Assisted",
-    "SO-Done",
-    "Pending",
-    "Cancelled",
-  ];
-
+  // Show all activities EXCEPT:
+  // - Quote-Done with today's scheduled date (goes to Scheduled card)
+  // - Quote-Done with "Pending Client Approval" (goes to Overdue card)
+  // - Completed and Delivered (finished activities)
   const mergedData = activities
-    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => {
+      // Exclude Completed and Delivered statuses
+      if (a.status === "Completed" || a.status === "Delivered") {
+        return false;
+      }
+      // Exclude Quote-Done status with today's scheduled date
+      if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
+        return false;
+      }
+      return true;
+    })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -291,6 +298,17 @@ export const Progress: React.FC<NewTaskProps> = ({
         ...activity,
         relatedHistoryItems,
       };
+    })
+    // Exclude Quote-Done with "Pending Client Approval" - those go to Overdue
+    .filter((activity) => {
+      if (activity.status === "Quote-Done") {
+        const hasPendingApproval = activity.relatedHistoryItems.some(
+          (h) => h.quotation_status === "Pending Client Approval"
+        );
+        // Exclude if has Pending Client Approval (goes to Overdue instead)
+        return !hasPendingApproval;
+      }
+      return true;
     })
     .sort(
       (a, b) =>
@@ -475,22 +493,30 @@ export const Progress: React.FC<NewTaskProps> = ({
           {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
+            let cardBgClass = "bg-gray-100"; // default light background
 
             if (item.status === "Assisted" || item.status === "On-Progress") {
               badgeClass = "bg-orange-400 text-white";
+              cardBgClass = "bg-orange-100";
             } else if (item.status === "SO-Done") {
               badgeClass = "bg-yellow-400 text-black";
+              cardBgClass = "bg-yellow-100";
             } else if (item.status === "Quote-Done") {
               badgeClass = "bg-blue-500 text-white";
+              cardBgClass = "bg-blue-100";
+            } else if (item.status === "Pending") {
+              badgeClass = "bg-purple-500 text-white";
+              cardBgClass = "bg-purple-100";
             } else if (item.status === "Cancelled") {
               badgeClass = "bg-red-600 text-white";
+              cardBgClass = "bg-red-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className="w-full border rounded-none bg-orange-100 shadow-sm mt-2"
+                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">

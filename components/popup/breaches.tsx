@@ -1,7 +1,7 @@
 // popup/breaches.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -83,6 +83,17 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity => {
 // Outbound is determined ONLY by source === "Outbound - Touchbase"
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase" && a.call_status === "Successful";
+
+// ─── Date range helper (same as page.tsx) ──────────────────────────────────────
+const isDateInRange = (dateStr: string, from: string, to: string): boolean => {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return false;
+  const fromDate = new Date(from);
+  fromDate.setHours(0, 0, 0, 0);
+  const toDate = new Date(to);
+  toDate.setHours(23, 59, 59, 999);
+  return date >= fromDate && date <= toDate;
+};
 
 // ─── Reusable UI ──────────────────────────────────────────────────────────────
 
@@ -429,13 +440,22 @@ export function BreachesDialog() {
 
   // ─── Territory coverage ─────────────────────────────────────────────────
   //
-  // Scope: the FULL calendar month of fromDate (month start → month end).
+  // Scope: DATE RANGE (fromDate → toDate) — NOT full calendar month.
   // - "Covered"     = cluster accounts whose company_name appears in ANY
-  //                   activity within that month range
+  //                   activity within the selected date range
   // - "Not Reached" = the rest
-  // - NO source filter — isOutboundTouchbase applies only to the Outbound
-  //   Performance card, NOT to coverage counts.
-  // - Denominators come from clusterAccounts, not activities.
+  // - Uses same filtering logic as page.tsx
+  // - Denominators come from clusterAccounts (already filtered to ACTIVE only).
+
+  // ─── Filter activities by date range (same as page.tsx) ───
+  const filteredActivitiesByDate = useMemo(() => {
+    if (!fromDate || !toDate) return activities;
+    return activities.filter((a) => {
+      const dateToCheck = a.date_updated || a.date_created;
+      if (!dateToCheck) return false;
+      return isDateInRange(dateToCheck, fromDate, toDate);
+    });
+  }, [activities, fromDate, toDate]);
 
   useEffect(() => {
     if (!clusterAccounts.length) {
@@ -447,19 +467,12 @@ export function BreachesDialog() {
       return;
     }
 
-    // Explicit month bounds from fromDate
-    const fromDateObj = new Date(fromDate);
-    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-
-    // Step 1 — company names with ANY activity within the calendar month
+    // Step 1 — company names with ANY activity within the DATE RANGE
     const touchedCompanies = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
-    activities.forEach((act) => {
-      if (!act.company_name || !act.date_created) return;
-      const t = new Date(act.date_created).getTime();
-      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+    filteredActivitiesByDate.forEach((act) => {
+      if (!act.company_name) return;
 
       touchedCompanies.add(act.company_name.toLowerCase());
 
@@ -495,7 +508,7 @@ export function BreachesDialog() {
 
     setUniqueClientReach(covered.length);
     setClientSegments({ ...seg, outbound: covered.length });
-  }, [activities, clusterAccounts, fromDate]);
+  }, [filteredActivitiesByDate, clusterAccounts]);
 
   // ─── New clients per company ────────────────────────────────────────────
 
@@ -679,7 +692,7 @@ export function BreachesDialog() {
               <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                 Sync Configuration
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
                     Reference ID
@@ -693,13 +706,24 @@ export function BreachesDialog() {
                 </div>
                 <div>
                   <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                    Target Date
+                    From Date
                   </label>
                   <Input
                     type="date"
                     className="h-7 text-[11px] rounded-none bg-white border-gray-200"
                     value={fromDate}
-                    onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
+                    onChange={(e) => setFromDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                    To Date
+                  </label>
+                  <Input
+                    type="date"
+                    className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
                   />
                 </div>
               </div>

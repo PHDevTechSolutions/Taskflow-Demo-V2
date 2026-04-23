@@ -31,13 +31,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Filter by date range if provided
     if (from && typeof from === "string") {
-      query = query.gte("date_created", from);
+      query = query.gte("date_updated", from);
     }
     if (to && typeof to === "string") {
       // Add 23:59:59 to include the entire day
       const toDate = new Date(to);
       toDate.setHours(23, 59, 59, 999);
-      query = query.lte("date_created", toDate.toISOString());
+      query = query.lte("date_updated", toDate.toISOString());
     }
 
     // Filter by company name if provided
@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Add pagination and ordering
     const { data: activities, error, count } = await query
-      .order("date_created", { ascending: false })
+      .order("date_updated", { ascending: false })
       .range(pageOffset, pageOffset + pageLimit - 1);
 
     if (error) {
