@@ -100,6 +100,16 @@ interface Activity {
     agent: string;
     start_date?: string;
     end_date?: string;
+
+    // Quotation display configuration
+    hide_discount_in_preview?: boolean;
+    show_discount_columns?: boolean;
+    show_summary_discounts?: boolean;
+    show_profit_margins?: boolean;
+    margin_alert_threshold?: number;
+    show_margin_alerts?: boolean;
+    product_view_mode?: string;
+    visible_columns?: any;
 }
 
 interface SupervisorDetails {
@@ -253,6 +263,16 @@ export function CreateActivityDialog({
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
     const [quotationSubject, setQuotationSubject] = useState("For Quotation");
+
+    // Quotation display configuration state
+    const [hideDiscountInPreview, setHideDiscountInPreview] = useState(false);
+    const [showDiscountColumns, setShowDiscountColumns] = useState(false);
+    const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(false);
+    const [showProfitMargins, setShowProfitMargins] = useState(false);
+    const [marginAlertThreshold, setMarginAlertThreshold] = useState(0);
+    const [showMarginAlerts, setShowMarginAlerts] = useState(false);
+    const [productViewMode, setProductViewMode] = useState('list');
+    const [visibleColumns, setVisibleColumns] = useState(null);
 
     // AUTO SET DATE CREATED
     useEffect(() => {
@@ -492,6 +512,16 @@ export function CreateActivityDialog({
             wht_type: whtType,
             quotation_subject: quotationSubject,
             item_remarks: itemRemarks || undefined,
+
+            // Quotation display configuration
+            hide_discount_in_preview: hideDiscountInPreview,
+            show_discount_columns: showDiscountColumns,
+            show_summary_discounts: showSummaryDiscounts,
+            show_profit_margins: showProfitMargins,
+            margin_alert_threshold: marginAlertThreshold,
+            show_margin_alerts: showMarginAlerts,
+            product_view_mode: productViewMode,
+            visible_columns: visibleColumns,
 
             project_type: projectType || undefined,
             project_name: projectName || undefined,
@@ -1103,6 +1133,24 @@ export function CreateActivityDialog({
                                     setQuotationSubject={setQuotationSubject}
 
                                     referenceid={referenceid}
+
+                                    // Quotation display configuration
+                                    hideDiscountInPreview={hideDiscountInPreview}
+                                    setHideDiscountInPreview={setHideDiscountInPreview}
+                                    showDiscountColumns={showDiscountColumns}
+                                    setShowDiscountColumns={setShowDiscountColumns}
+                                    showSummaryDiscounts={showSummaryDiscounts}
+                                    setShowSummaryDiscounts={setShowSummaryDiscounts}
+                                    showProfitMargins={showProfitMargins}
+                                    setShowProfitMargins={setShowProfitMargins}
+                                    marginAlertThreshold={marginAlertThreshold}
+                                    setMarginAlertThreshold={setMarginAlertThreshold}
+                                    showMarginAlerts={showMarginAlerts}
+                                    setShowMarginAlerts={setShowMarginAlerts}
+                                    productViewMode={productViewMode}
+                                    setProductViewMode={setProductViewMode}
+                                    visibleColumns={visibleColumns}
+                                    setVisibleColumns={setVisibleColumns}
                                 />
                             )}
 

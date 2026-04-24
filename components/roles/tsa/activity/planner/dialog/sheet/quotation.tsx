@@ -126,6 +126,24 @@ interface Props {
 
   /** Logged-in TSA cluster id — SPF 1 list is filtered to this user's requests when set */
   referenceid?: string;
+
+  // --- QUOTATION DISPLAY CONFIGURATION ---
+  hideDiscountInPreview?: boolean;
+  setHideDiscountInPreview?: (value: boolean) => void;
+  showDiscountColumns?: boolean;
+  setShowDiscountColumns?: (value: boolean) => void;
+  showSummaryDiscounts?: boolean;
+  setShowSummaryDiscounts?: (value: boolean) => void;
+  showProfitMargins?: boolean;
+  setShowProfitMargins?: (value: boolean) => void;
+  marginAlertThreshold?: number;
+  setMarginAlertThreshold?: (value: number) => void;
+  showMarginAlerts?: boolean;
+  setShowMarginAlerts?: (value: boolean) => void;
+  productViewMode?: string;
+  setProductViewMode?: (value: string) => void;
+  visibleColumns?: any;
+  setVisibleColumns?: (value: any) => void;
 }
 
 const Quotation_SOURCES = [
@@ -352,17 +370,24 @@ export function QuotationSheet(props: Props) {
   }, [showDiscountColumns]);
 
   // NEW: Hide discount columns in preview (for SRP-only quotes)
-  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(false);
+  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(props.hideDiscountInPreview ?? false);
+
+  // NEW: Quotation display configuration fields
+  const [showProfitMargins, setShowProfitMargins] = useState(props.showProfitMargins ?? false);
+  const [marginAlertThreshold, setMarginAlertThreshold] = useState(props.marginAlertThreshold ?? 10);
+  const [showMarginAlerts, setShowMarginAlerts] = useState(props.showMarginAlerts ?? true);
+  const [productViewMode, setProductViewMode] = useState(props.productViewMode ?? 'list');
+  const [visibleColumns, setVisibleColumns] = useState(props.visibleColumns ?? {
+    dragHandle: true,
+    rowNumber: true,
+    discountToggle: true,
+    promoBadge: true,
+    hideDiscount: true,
+    displayMode: true,
+  });
 
   // NEW: Search filter for product table
   const [productSearchQuery, setProductSearchQuery] = useState("");
-
-  // NEW: Show profit margins (internal sales team only)
-  const [showProfitMargins, setShowProfitMargins] = useState(false);
-
-  // NEW: Margin alert threshold - warn when margin drops below this %
-  const [marginAlertThreshold, setMarginAlertThreshold] = useState<number>(10);
-  const [showMarginAlerts, setShowMarginAlerts] = useState(true);
 
   // Confirmation dialog for important toggles
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -382,19 +407,6 @@ export function QuotationSheet(props: Props) {
   const [history, setHistory] = useState<SelectedProduct[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [lastHistoryAction, setLastHistoryAction] = useState<string>("");
-
-  // NEW: View Mode Switcher (List/Grid/Compact)
-  const [productViewMode, setProductViewMode] = useState<"list" | "grid" | "compact">("list");
-
-  // NEW: Column Visibility State
-  const [visibleColumns, setVisibleColumns] = useState({
-    dragHandle: true,
-    rowNumber: true,
-    discountToggle: true,
-    promoBadge: true,
-    hideDiscount: true,
-    displayMode: true,
-  });
 
   // NEW: Recent Products (last 5 added)
   const [recentProducts, setRecentProducts] = useState<SelectedProduct[]>([]);
@@ -3769,15 +3781,11 @@ ${spec.value}
                         {/* Contact Person - dropdown selection with editable details */}
                         <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
                           <span className="font-black uppercase text-blue-600 tracking-wider shrink-0 text-[9px]">Contact Person</span>
-                          <div className="flex flex-col gap-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
                             {/* Contact Person Dropdown */}
                             <Select
-                              value={localContactPerson || "__manual__"}
+                              value={localContactPerson}
                               onValueChange={(value) => {
-                                if (value === "__manual__") {
-                                  // Allow manual editing - don't change current values
-                                  return;
-                                }
                                 const selected = availableContacts?.find(c => c.name === value);
                                 if (selected) {
                                   setLocalContactPerson(selected.name);
@@ -3786,46 +3794,43 @@ ${spec.value}
                                 }
                               }}
                             >
-                              <SelectTrigger className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 h-6">
-                                <SelectValue placeholder="Select contact person..." />
+                              <SelectTrigger className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[10px] font-bold uppercase w-32 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100">
+                                <SelectValue placeholder="Select..." />
                               </SelectTrigger>
                               <SelectContent className="text-[10px]">
                                 {availableContacts && availableContacts.length > 0 ? (
-                                  <>
-                                    {availableContacts.map((contact, idx) => (
-                                      <SelectItem key={idx} value={contact.name} className="text-[10px] py-1">
-                                        <span className="font-bold">{contact.name}</span>
-                                      </SelectItem>
-                                    ))}
-                                    <SelectItem value="__manual__" className="text-[10px] py-1 text-blue-600 font-bold">
-                                      ✎ Manual Entry
+                                  availableContacts.map((contact, idx) => (
+                                    <SelectItem key={idx} value={contact.name} className="text-[10px] py-1">
+                                      <span className="font-bold">{contact.name}</span>
                                     </SelectItem>
-                                  </>
+                                  ))
                                 ) : (
-                                  <SelectItem value="__manual__" className="text-[10px] py-1">
-                                    Manual Entry
-                                  </SelectItem>
+                                  <div className="px-2 py-1 text-[9px] text-gray-500">No contacts</div>
                                 )}
                               </SelectContent>
                             </Select>
-
-                            {/* Editable Contact Details */}
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={localContactNumber}
-                                onChange={(e) => setLocalContactNumber(e.target.value)}
-                                placeholder="Contact number..."
-                                className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
-                              />
-                              <input
-                                type="text"
-                                value={localEmailAddress}
-                                onChange={(e) => setLocalEmailAddress(e.target.value)}
-                                placeholder="Email address..."
-                                className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
-                              />
-                            </div>
+                            {/* Editable Contact Details - inline */}
+                            <input
+                              type="text"
+                              value={localContactPerson}
+                              onChange={(e) => setLocalContactPerson(e.target.value)}
+                              placeholder="Name"
+                              className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
+                            <input
+                              type="text"
+                              value={localContactNumber}
+                              onChange={(e) => setLocalContactNumber(e.target.value)}
+                              placeholder="Number"
+                              className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-24 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
+                            <input
+                              type="text"
+                              value={localEmailAddress}
+                              onChange={(e) => setLocalEmailAddress(e.target.value)}
+                              placeholder="Email"
+                              className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-32 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
                           </div>
                         </div>
 
