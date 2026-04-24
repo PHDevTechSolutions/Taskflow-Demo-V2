@@ -67,6 +67,13 @@ type PreviewProps = {
     quotationType: string;
     setIsPreviewOpen: (open: boolean) => void;
     hideDiscountInPreview?: boolean; // Hide discount columns and show NET as UNIT price
+    showDiscountColumns?: boolean;
+    showSummaryDiscounts?: boolean;
+    showProfitMargins?: boolean;
+    marginAlertThreshold?: number;
+    showMarginAlerts?: boolean;
+    productViewMode?: string;
+    visibleColumns?: any;
 };
 
 export const Preview: React.FC<PreviewProps> = ({
