@@ -373,6 +373,8 @@ export default function TaskListEditDialog({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
   const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
+  // NEW: Hide discount columns in preview (for SRP-only quotes)
+  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(false);
   const [selectedRevisedQuotation, setSelectedRevisedQuotation] =
     useState<RevisedQuotation | null>(null);
   const [revisedQuotations, setRevisedQuotations] = useState<
@@ -2677,7 +2679,20 @@ ${payload.whtType && payload.whtType !== "none"
           </div>
 
           <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2">
+            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2 items-center">
+              {/* Hide Discount in Preview Toggle */}
+              <label className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-3 py-2 rounded transition-colors" title="Hide discount columns in preview - shows SRP only">
+                <input
+                  type="checkbox"
+                  checked={hideDiscountInPreview}
+                  onChange={(e) => setHideDiscountInPreview(e.target.checked)}
+                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                />
+                <span className={`font-medium text-xs ${hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
+                  {hideDiscountInPreview ? '✓ Hide Discounts' : '○ Show Discounts'}
+                </span>
+              </label>
+
               <Button
                 className="flex-1 lg:flex-none bg-[#121212] rounded-none hover:bg-black text-white flex gap-2 items-center h-12 px-6"
                 onClick={() => setIsPreviewOpen(true)}
@@ -2738,6 +2753,7 @@ ${payload.whtType && payload.whtType !== "none"
             payload={getQuotationPayload()}
             quotationType={quotation_type}
             setIsPreviewOpen={setIsPreviewOpen}
+            hideDiscountInPreview={hideDiscountInPreview}
           />
         </DialogContent>
       </Dialog>

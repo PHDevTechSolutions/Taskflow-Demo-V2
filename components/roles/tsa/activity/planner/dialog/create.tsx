@@ -1088,6 +1088,11 @@ export function CreateActivityDialog({
                                     email_address={selectedEmailAddress}
                                     contact_number={selectedContactNumber}
                                     contact_person={selectedContactPerson}
+                                    availableContacts={contactPersons.map((person, idx) => ({
+                                        name: person,
+                                        contact_number: contactNumbers[idx] || "",
+                                        email_address: emailAddresses[idx] || ""
+                                    }))}
                                     managerDetails={managerDetails ?? null}
                                     tsmDetails={tsmDetails ?? null}
                                     signature={signature}

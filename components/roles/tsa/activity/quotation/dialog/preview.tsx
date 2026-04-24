@@ -66,12 +66,14 @@ type PreviewProps = {
     payload: Payload;
     quotationType: string;
     setIsPreviewOpen: (open: boolean) => void;
+    hideDiscountInPreview?: boolean; // Hide discount columns and show NET as UNIT price
 };
 
 export const Preview: React.FC<PreviewProps> = ({
     payload,
     quotationType,
     setIsPreviewOpen,
+    hideDiscountInPreview = false,
 }) => {
     const isEcoshift = quotationType === "Ecoshift Corporation";
     const headerImagePath = isEcoshift
@@ -256,10 +258,16 @@ export const Preview: React.FC<PreviewProps> = ({
                                 <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                                 <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                                 <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                                <th className="p-3 border-r border-black w-20 text-center">UNIT PRICE</th>
-                                <th className="p-3 border-r border-black w-14 text-center">DISC</th>
-                                <th className="p-3 border-r border-black w-20 text-center">DISCOUNT PRICE</th>
-                                <th className="p-3 w-20 text-center">TOTAL AMOUNT</th>
+                                <th className={`p-3 border-r border-black w-20 text-center`}>
+                                    {hideDiscountInPreview ? 'SRP' : 'UNIT PRICE'}
+                                </th>
+                                {!hideDiscountInPreview && (
+                                    <>
+                                        <th className="p-3 border-r border-black w-14 text-center">DISC</th>
+                                        <th className="p-3 border-r border-black w-20 text-center">DISCOUNT PRICE</th>
+                                    </>
+                                )}
+                                <th className={`p-3 text-center ${hideDiscountInPreview ? 'w-24' : 'w-20'}`}>TOTAL AMOUNT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-black">
@@ -299,22 +307,32 @@ export const Preview: React.FC<PreviewProps> = ({
                                         <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
                                     <td className="p-4 text-right border-r border-black align-top font-medium">
-                                        ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="p-4 text-center border-r border-black align-top">
-                                        {item.discount && item.discount > 0 ? (
-                                            <span className="font-bold text-[#121212]">{item.discount}%</span>
+                                        {hideDiscountInPreview ? (
+                                            // Show NET price as UNIT price when hiding discounts
+                                            <span>₱{Number(item.discountedAmount !== undefined && item.discountedAmount > 0 ? item.discountedAmount : item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         ) : (
-                                            <span className="text-gray-400">-</span>
+                                            // Show regular unit price
+                                            <span>₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         )}
                                     </td>
-                                    <td className="p-4 text-center border-r border-black align-top font-medium">
-                                        {item.discount && item.discount > 0 && item.discountedAmount !== undefined ? (
-                                            <span>₱{Number(item.discountedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        ) : (
-                                            <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        )}
-                                    </td>
+                                    {!hideDiscountInPreview && (
+                                        <>
+                                            <td className="p-4 text-center border-r border-black align-top">
+                                                {item.discount && item.discount > 0 ? (
+                                                    <span className="font-bold text-[#121212]">{item.discount}%</span>
+                                                ) : (
+                                                    <span className="text-gray-400">-</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-center border-r border-black align-top font-medium">
+                                                {item.discount && item.discount > 0 && item.discountedAmount !== undefined ? (
+                                                    <span>₱{Number(item.discountedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                ) : (
+                                                    <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                )}
+                                            </td>
+                                        </>
+                                    )}
                                     <td className="p-4 text-center font-black align-top text-[#121212]">
                                         ₱{(item.totalAmount !== undefined ? Number(item.totalAmount) : Number(item.qty) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
@@ -347,7 +365,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                     </div>
                                 </td>
 
-                                <td colSpan={4} className="p-0 align-top">
+                                <td colSpan={hideDiscountInPreview ? 2 : 4} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
 

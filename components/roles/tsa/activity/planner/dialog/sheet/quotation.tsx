@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { sileo } from "sileo";
 import { Separator } from "@/components/ui/separator"
-import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle } from "lucide-react";
+import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle, X, HelpCircle, PanelLeft, Info } from "lucide-react";
 import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { supabase } from "@/utils/supabase";
+import { toast } from "sonner";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -108,6 +110,13 @@ interface Props {
   email_address: string;
   contact_person: string;
 
+  // --- AVAILABLE CONTACTS (for dropdown selection) ---
+  availableContacts?: Array<{
+    name: string;
+    contact_number: string;
+    email_address: string;
+  }>;
+
   // --- SUPERVISOR & TRACEABILITY ---
   salesManagerContact?: string;
   salesManagerEmail?: string;
@@ -149,8 +158,11 @@ interface SelectedProduct extends Product {
   uid: string;
   quantity: number;
   price: number;
-  discount: number;
+  discount: number;           // discount as percentage (0-100)
+  discountAmount?: number;    // discount as peso amount per unit (synced with discount %)
   isDiscounted?: boolean;
+  isPromo?: boolean;          // promo flag — shows "PROMO" badge on quotation
+  hideDiscountInPreview?: boolean; // hide discount details in preview - shows as "Special Price"
   cloudinaryPublicId?: string;
   /** Minimum order qty from PD/procurement — sales may enter equal or higher */
   procurementMinQty?: number;
@@ -159,6 +171,18 @@ interface SelectedProduct extends Product {
   originalPrice?: number;
   procurementItemCode?: string;
   regPrice?: number;
+  /** Per-item visibility controls for granular pricing display */
+  displayMode?: 'transparent' | 'net_only' | 'value_add' | 'bundle' | 'request';
+  showUnitPrice?: boolean;
+  showDiscount?: boolean;
+  showTotal?: boolean;
+  customLabel?: string;
+  /** Competitor and market intelligence */
+  competitorPrice?: number;
+  marketPosition?: 'above' | 'at' | 'below';
+  /** Multi-currency support */
+  currency?: string;
+  exchangeRate?: number;
 }
 
 type SpfCreationRow = {
@@ -265,6 +289,9 @@ export function QuotationSheet(props: Props) {
     email_address,
     contact_person,
 
+    // --- AVAILABLE CONTACTS ---
+    availableContacts = [],
+
     // --- SUPERVISOR & TRACEABILITY ---
     salesManagerContact,
     salesManagerEmail,
@@ -292,18 +319,96 @@ export function QuotationSheet(props: Props) {
   const [localQuotationNumber, setLocalQuotationNumber] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+
+  // Local state for contact person details (editable by sales agent)
+  const [localContactPerson, setLocalContactPerson] = useState(contact_person || "");
+  const [localContactNumber, setLocalContactNumber] = useState(contact_number || "");
+  const [localEmailAddress, setLocalEmailAddress] = useState(email_address || "");
+
   const [productSource, setProductSource] = useState<
     "shopify" | "firebase_shopify" | "firebase_taskflow"
   >("shopify");
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
-  const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
-  const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>("");
+
+  const [showHelp, setShowHelp] = useState(false);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
+
+  // NEW: Discount column visibility (accounting requirement - hide from clients)
+  const [showDiscountColumns, setShowDiscountColumns] = useState(true);
+
+  // NEW: Show/hide summary discount row in preview
+  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(true);
+
+  // Sync Show Discount Row with Show Discounts (but allow manual override)
+  useEffect(() => {
+    if (showDiscountColumns) {
+      setShowSummaryDiscounts(true);
+    } else {
+      setShowSummaryDiscounts(false);
+    }
+  }, [showDiscountColumns]);
+
+  // NEW: Hide discount columns in preview (for SRP-only quotes)
+  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(false);
+
+  // NEW: Search filter for product table
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+
+  // NEW: Show profit margins (internal sales team only)
+  const [showProfitMargins, setShowProfitMargins] = useState(false);
+
+  // NEW: Margin alert threshold - warn when margin drops below this %
+  const [marginAlertThreshold, setMarginAlertThreshold] = useState<number>(10);
+  const [showMarginAlerts, setShowMarginAlerts] = useState(true);
+
+  // Confirmation dialog for important toggles
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    example?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+
+  // NEW: Bulk selection for multi-row operations
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+
+  // NEW: Undo/Redo history
+  const [history, setHistory] = useState<SelectedProduct[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [lastHistoryAction, setLastHistoryAction] = useState<string>("");
+
+  // NEW: View Mode Switcher (List/Grid/Compact)
+  const [productViewMode, setProductViewMode] = useState<"list" | "grid" | "compact">("list");
+
+  // NEW: Column Visibility State
+  const [visibleColumns, setVisibleColumns] = useState({
+    dragHandle: true,
+    rowNumber: true,
+    discountToggle: true,
+    promoBadge: true,
+    hideDiscount: true,
+    displayMode: true,
+  });
+
+  // NEW: Recent Products (last 5 added)
+  const [recentProducts, setRecentProducts] = useState<SelectedProduct[]>([]);
+
+  // NEW: Quote templates
+  const [savedTemplates, setSavedTemplates] = useState<Array<{name: string; products: SelectedProduct[]}>>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   const [expandedRows, setExpandedRows] = useState<{ [uid: string]: boolean }>({});
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragRowUid, setDragRowUid] = useState<string | null>(null);
   const [dragOverRowUid, setDragOverRowUid] = useState<string | null>(null);
+
   const [isSpfMode, setIsSpfMode] = useState(false);
   const [isSpf1Mode, setIsSpf1Mode] = useState(false);
   const [spf1Loading, setSpf1Loading] = useState(false);
@@ -334,6 +439,279 @@ export function QuotationSheet(props: Props) {
     } catch (err) {
       console.error("Failed to delete Cloudinary image:", err);
     }
+  };
+
+  // ==================== UNDO/REDO HISTORY ====================
+  const saveToHistory = (action: string) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push([...selectedProducts]);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setLastHistoryAction(action);
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setSelectedProducts([...history[historyIndex - 1]]);
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setSelectedProducts([...history[historyIndex + 1]]);
+    }
+  };
+
+  // Keyboard shortcuts for undo/redo and copy/paste
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedRows.size > 0) {
+        e.preventDefault();
+        copySelectedRows();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        pasteFromClipboard();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history, historyIndex, selectedRows]);
+
+  // ==================== BULK OPERATIONS ====================
+  const toggleRowSelection = (uid: string) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(uid)) {
+      newSelected.delete(uid);
+    } else {
+      newSelected.add(uid);
+    }
+    setSelectedRows(newSelected);
+  };
+
+  const selectAllRows = () => {
+    if (selectedRows.size === selectedProducts.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(selectedProducts.map(p => p.uid)));
+    }
+  };
+
+  const duplicateSelectedRows = () => {
+    saveToHistory('Duplicate rows');
+    const newProducts = [...selectedProducts];
+    selectedRows.forEach(uid => {
+      const product = selectedProducts.find(p => p.uid === uid);
+      if (product) {
+        newProducts.push({
+          ...product,
+          uid: crypto.randomUUID(),
+        });
+      }
+    });
+    setSelectedProducts(newProducts);
+    setSelectedRows(new Set());
+  };
+
+  const deleteSelectedRows = () => {
+    saveToHistory('Delete rows');
+    selectedRows.forEach(uid => {
+      const product = selectedProducts.find(p => p.uid === uid);
+      if (product?.cloudinaryPublicId) {
+        deleteCloudinaryImage(product.cloudinaryPublicId);
+      }
+    });
+    setSelectedProducts(prev => prev.filter(p => !selectedRows.has(p.uid)));
+    setSelectedRows(new Set());
+  };
+
+  // ==================== EXCEL COPY/PASTE ====================
+  const copySelectedRows = async () => {
+    if (selectedRows.size === 0) return;
+    
+    const rowsToCopy = selectedProducts.filter(p => selectedRows.has(p.uid));
+    const headers = ['Title', 'Quantity', 'Price', 'Discount%', 'DiscountAmt'];
+    const data = rowsToCopy.map(p => [
+      p.title,
+      p.quantity,
+      p.price,
+      p.discount || 0,
+      p.discountAmount || 0
+    ]);
+    
+    const tsvContent = [headers.join('\t'), ...data.map(row => row.join('\t'))].join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(tsvContent);
+      toast.success(`✓ Copied ${rowsToCopy.length} row(s) - Ready to paste`);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      
+      // Parse tab-separated or comma-separated data
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+      if (lines.length === 0) return;
+      
+      saveToHistory('Paste rows from clipboard');
+      
+      const newProducts: SelectedProduct[] = [];
+      
+      lines.forEach(line => {
+        // Try tab-separated first, then comma-separated
+        const cells = line.includes('\t') ? line.split('\t') : line.split(',');
+        
+        // Skip header row if detected
+        if (cells[0]?.toLowerCase().includes('title') || 
+            cells[0]?.toLowerCase().includes('product')) return;
+        
+        const title = cells[0]?.trim() || 'New Product';
+        const quantity = parseInt(cells[1]) || 1;
+        const price = parseFloat(cells[2]) || 0;
+        const discount = parseFloat(cells[3]) || 0;
+        const discountAmount = parseFloat(cells[4]) || 0;
+        
+        newProducts.push({
+          uid: crypto.randomUUID(),
+          id: crypto.randomUUID(),
+          title,
+          quantity,
+          price,
+          discount,
+          discountAmount,
+          description: '',
+          isDiscounted: discount > 0 || discountAmount > 0,
+        } as SelectedProduct);
+      });
+      
+      if (newProducts.length > 0) {
+        setSelectedProducts(prev => [...prev, ...newProducts]);
+        toast.success(`✓ Pasted ${newProducts.length} row(s) - New products added`);
+      }
+    } catch (err) {
+      console.error('Failed to paste:', err);
+      toast.error("Paste failed - Could not read clipboard data. Try copying from Excel first.");
+    }
+  };
+
+  // ==================== RECENT PRODUCTS ====================
+  const addToRecentProducts = useCallback((product: SelectedProduct) => {
+    setRecentProducts((prev) => {
+      const filtered = prev.filter((p) => p.id !== product.id);
+      const updated = [product, ...filtered].slice(0, 5);
+      return updated;
+    });
+  }, []);
+
+  const reAddRecentProduct = useCallback((product: SelectedProduct) => {
+    saveToHistory('Re-add recent product');
+    const newProduct = {
+      ...product,
+      uid: crypto.randomUUID(),
+      quantity: 1,
+    };
+    setSelectedProducts((prev) => [...prev, newProduct]);
+    addToRecentProducts(newProduct);
+  }, []);
+
+  // ==================== USER PREFERENCES PERSISTENCE ====================
+  useEffect(() => {
+    const saved = localStorage.getItem('quotation_preferences');
+    if (saved) {
+      try {
+        const prefs = JSON.parse(saved);
+        if (prefs.productViewMode) setProductViewMode(prefs.productViewMode);
+        if (prefs.visibleColumns) setVisibleColumns(prefs.visibleColumns);
+        if (prefs.showDiscountColumns !== undefined) setShowDiscountColumns(prefs.showDiscountColumns);
+        if (prefs.showSummaryDiscounts !== undefined) setShowSummaryDiscounts(prefs.showSummaryDiscounts);
+        if (prefs.hideDiscountInPreview !== undefined) setHideDiscountInPreview(prefs.hideDiscountInPreview);
+        if (prefs.showProfitMargins !== undefined) setShowProfitMargins(prefs.showProfitMargins);
+        if (prefs.marginAlertThreshold !== undefined) setMarginAlertThreshold(prefs.marginAlertThreshold);
+        if (prefs.showMarginAlerts !== undefined) setShowMarginAlerts(prefs.showMarginAlerts);
+      } catch (e) {
+        console.error('Failed to load preferences:', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const prefs = {
+      productViewMode,
+      visibleColumns,
+      showDiscountColumns,
+      showSummaryDiscounts,
+      hideDiscountInPreview,
+      showProfitMargins,
+      marginAlertThreshold,
+      showMarginAlerts,
+    };
+    localStorage.setItem('quotation_preferences', JSON.stringify(prefs));
+  }, [productViewMode, visibleColumns, showDiscountColumns, showSummaryDiscounts, hideDiscountInPreview, showProfitMargins, marginAlertThreshold, showMarginAlerts]);
+
+  // ==================== MARGIN CALCULATION & ALERTS ====================
+  const calculateMargin = (price: number, cost: number): number => {
+    if (!price || price === 0) return 0;
+    return ((price - cost) / price) * 100;
+  };
+
+  const getMarginAlert = (price: number, cost: number, discountPct: number): { alert: boolean; message: string; severity: 'warning' | 'danger' } | null => {
+    if (!showMarginAlerts) return null;
+
+    // If cost data is available, use margin calculation
+    if (cost && cost > 0) {
+      const margin = calculateMargin(price, cost);
+      if (margin < 0) {
+        return { alert: true, message: `Loss: ${margin.toFixed(1)}% margin`, severity: 'danger' };
+      }
+      if (margin < marginAlertThreshold) {
+        return { alert: true, message: `Low margin: ${margin.toFixed(1)}%`, severity: 'warning' };
+      }
+    } else {
+      // Without cost data, warn based on discount percentage
+      if (discountPct > 50) {
+        return { alert: true, message: `Very high discount: ${discountPct.toFixed(1)}%`, severity: 'danger' };
+      }
+      if (discountPct > 30) {
+        return { alert: true, message: `High discount: ${discountPct.toFixed(1)}%`, severity: 'warning' };
+      }
+    }
+
+    return null;
+  };
+
+  // ==================== TEMPLATES ====================
+  const saveTemplate = () => {
+    if (!templateName.trim()) return;
+    const newTemplate = { name: templateName, products: [...selectedProducts] };
+    setSavedTemplates(prev => [...prev, newTemplate]);
+    setTemplateName('');
+    setShowTemplateModal(false);
+  };
+
+  const loadTemplate = (template: {name: string; products: SelectedProduct[]}) => {
+    saveToHistory(`Load template: ${template.name}`);
+    const newProducts = template.products.map(p => ({
+      ...p,
+      uid: crypto.randomUUID(), // Generate new UIDs
+    }));
+    setSelectedProducts(newProducts);
+    setShowTemplateModal(false);
   };
 
   function addDaysToDate(days: number): string {
@@ -674,6 +1052,13 @@ Procurement
     }
   }, [vatType, setVatType]);
 
+  // Sync local contact person state with props on initial load
+  useEffect(() => {
+    if (contact_person) setLocalContactPerson(contact_person);
+    if (contact_number) setLocalContactNumber(contact_number);
+    if (email_address) setLocalEmailAddress(email_address);
+  }, [contact_person, contact_number, email_address]);
+
   useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
     const quantities = selectedProducts.map((p) => p.quantity.toString());
@@ -793,9 +1178,9 @@ Procurement
       // --- SAFE DEFAULTS (OPTIONAL FIELDS) ---
       const safeCompanyName = company_name ?? "";
       const safeAddress = address ?? "";
-      const safeContactNumber = contact_number ?? "";
-      const safeEmailAddress = email_address ?? "";
-      const safeContactPerson = contact_person ?? "";
+      const safeContactNumber = localContactNumber ?? "";
+      const safeEmailAddress = localEmailAddress ?? "";
+      const safeContactPerson = localContactPerson ?? "";
 
       // --- SALES DETAILS ---
       const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
@@ -973,12 +1358,17 @@ Procurement
       const qty = p.quantity ?? 0;
       const unitPrice = p.price ?? 0;
       const isDiscounted = p.isDiscounted ?? false;
-      const discount = isDiscounted ? (p.discount ?? 0) : 0;
+      const discountPct = isDiscounted ? (p.discount ?? 0) : 0;
 
-      const baseAmount = qty * unitPrice;
-      const unitDiscountAmount = isDiscounted && discount > 0 ? (unitPrice * discount) / 100 : 0;
-      const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount
-      const totalAmount = discountedAmount * qty; // Total amount after discount
+      // Prefer explicit peso amount if set, otherwise compute from %
+      const unitDiscountAmt = isDiscounted
+        ? p.discountAmount != null && p.discountAmount > 0
+          ? p.discountAmount
+          : (unitPrice * discountPct) / 100
+        : 0;
+
+      const discountedUnitPrice = unitPrice - unitDiscountAmt; // Net unit price after discount
+      const totalAmount = discountedUnitPrice * qty;           // Total net
 
       return {
         itemNo: index + 1,
@@ -988,52 +1378,38 @@ Procurement
         sku: p.skus?.join(", ") ?? "",
         description: p.description ?? "",
         itemRemarks: p.itemRemarks ?? "",
+        isPromo: p.isPromo ?? false,
+        hideDiscountInPreview: p.hideDiscountInPreview ?? false,
         unitPrice,
-        discount,
-        discountAmount: unitDiscountAmount, // Amount of discount per unit
-        discountedAmount,
+        discount: discountPct,
+        discountAmount: unitDiscountAmt,
+        totalDiscountAmount: unitDiscountAmt * qty,
+        discountedAmount: discountedUnitPrice,
         totalAmount,
         isSpf1: typeof p.id === "string" && p.id.startsWith("spf1-"),
         procurementLeadTime: p.procurementLeadTime ?? "",
         regPrice: p.regPrice ?? 0,
+        displayMode: p.displayMode || 'transparent',
       };
     });
 
-    // --- CALCULATION LOGIC ---
-    // quotationAmount is now the NET amount (after EWT deduction)
     const netAmountToCollect = Math.round((Number(quotationAmount ?? 0)) * 100) / 100;
     const totalDiscount = items.reduce((acc, item) => acc + (item.discountAmount || 0), 0);
-    const totalGross = items.reduce((acc, item) => acc + (item.totalAmount || 0), 0); // Total amount after discounts
+    const totalGross = items.reduce((acc, item) => acc + (item.totalAmount || 0), 0);
 
-    // Define the Withholding Rate
     const whtRate = whtType === "wht_1" ? 0.01 : whtType === "wht_2" ? 0.02 : 0;
 
-    // Calculate EWT Amount by working backwards from net amount
-    // netAmount = grossAmount - (grossAmount * whtRate) for non-VAT
-    // netAmount = grossAmount - ((grossAmount/1.12) * whtRate) for VAT Inc
-    // We need to solve for grossAmount
     let totalInvoiceAmount: number;
     if (whtRate === 0) {
       totalInvoiceAmount = netAmountToCollect;
     } else if (vatType === "vat_inc") {
-      // net = gross - ((gross/1.12) * whtRate)
-      // net = gross * (1 - (whtRate/1.12))
-      // gross = net / (1 - (whtRate/1.12))
       totalInvoiceAmount = netAmountToCollect / (1 - (whtRate / 1.12));
     } else {
-      // net = gross - (gross * whtRate)
-      // net = gross * (1 - whtRate)
-      // gross = net / (1 - whtRate)
       totalInvoiceAmount = netAmountToCollect / (1 - whtRate);
     }
     totalInvoiceAmount = Math.round(totalInvoiceAmount * 100) / 100;
 
-    // Define the Taxable Base for Withholding
-    const whtBase = vatType === "vat_inc"
-      ? totalInvoiceAmount / 1.12
-      : totalInvoiceAmount;
-
-    // Calculate final EWT Amount
+    const whtBase = vatType === "vat_inc" ? totalInvoiceAmount / 1.12 : totalInvoiceAmount;
     const whtAmount = Math.round((whtBase * whtRate) * 100) / 100;
 
     return {
@@ -1041,30 +1417,22 @@ Procurement
       date: new Date().toLocaleDateString(),
       companyName: company_name ?? "",
       address: address ?? "",
-      telNo: contact_number ?? "",
-      email: email_address ?? "",
-      attention: contact_person ? contact_person : "",
+      telNo: localContactNumber ?? "",
+      email: localEmailAddress ?? "",
+      attention: localContactPerson ? localContactPerson : "",
       subject: quotationSubject || "For Quotation",
       items,
-
-      // --- TAX LOGIC ---
       vatType,
       vatTypeLabel: vatType === "vat_inc" ? "VAT Inc" : vatType === "vat_exe" ? "VAT Exe" : "Zero-Rated",
-
-      // --- WITHHOLDING TAX LOGIC ---
       whtType,
       whtLabel: whtType === "wht_1" ? "EWT 1% (Goods)" : whtType === "wht_2" ? "EWT 2% (Services)" : "No Withholding",
       whtAmount,
-      whtBase, // Useful for the preview table to show the calculation source
-
-      // --- TOTALS ---
+      whtBase,
       totalPrice: totalInvoiceAmount,
-      totalGross, // Full amount before discounts (for Net Sales)
+      totalGross,
       totalDiscount,
       deliveryFee: Number(deliveryFee ?? 0),
       netAmountToCollect,
-
-      // --- STAFF DETAILS ---
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
@@ -1334,29 +1702,24 @@ Procurement
         <div class="label">COMPANY NAME:</div>
         <div class="value">${payload.companyName}</div>
         </div>
-        
+
         <div class="grid-row"><div class="label">ADDRESS:</div>
         <div class="value">${payload.address}</div></div>
         <div class="grid-row">
         <div class="label">TEL NO:</div>
         <div class="value">${payload.telNo}</div>
         </div>
-        
+
         <div class="grid-row border-b">
         <div class="label">EMAIL ADDRESS:</div>
         <div class="value">${payload.email}</div>
         </div>
-        
+
         <div class="grid-row">
         <div class="label">ATTENTION:</div>
         <div class="value">${payload.attention}</div>
         </div>
-        
-        <div class="grid-row border-b">
-        <div class="label">EMAIL ADDRESS:</div>
-        <div class="value">${payload.email}</div>
-        </div>
-        
+
         <div class="grid-row border-b">
         <div class="label">SUBJECT:</div>
         <div class="value">${payload.subject}</div>
@@ -1588,31 +1951,28 @@ Procurement
         <div class="sig-grid">
         <div class="sig-side-internal">
         <div>
-        <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
-        <div style="position: relative; display: inline-block;">
+          <p style="font-style: italic; font-size: 10px; font-weight: 900; margin-bottom: 25px;">${isEcoshift ? 'Ecoshift Corporation' : 'Disruptive Solutions Inc'}</p>
           <img src="${payload.signature || ''}" class="sig-rep-box" />
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); font-size: 8px; font-weight: 900; color: rgba(18, 18, 18, 0.03); text-transform: uppercase; letter-spacing: 0.5em; pointer-events: none; white-space: nowrap;">Official Verified</div>
-        </div>
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales Representative</p>
-        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
-        <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
+          <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesRepresentative}</p>
+          <div class="sig-line"></div>
+          <p class="sig-sub-label">Sales Representative</p>
+          <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.salescontact || 'N/A'}</p>
+          <p style="font-size: 8px; font-style: italic;">Email: ${payload.salesemail || 'N/A'}</p>
         </div>
         <div>
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">SALES MANAGER</p>
-        <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
-        <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
+          <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Approved By:</p>
+          <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salestsmname}</p>
+          <div class="sig-line"></div>
+          <p class="sig-sub-label">SALES MANAGER</p>
+          <p style="font-size: 8px; font-style: italic;">Mobile: ${payload.tsmDetails?.contact || 'N/A'}</p>
+          <p style="font-size: 8px; font-style: italic;">Email: ${payload.tsmDetails?.email || 'N/A'}</p>
         </div>
         <div>
         
-        <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
-        <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
-        <div class="sig-line"></div>
-        <p class="sig-sub-label">Sales-B2B</p>
+          <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #9ca3af; margin-bottom: 25px;">Noted By:</p>
+          <p style="font-size: 10px; font-weight: 900; text-transform: uppercase; mt-1">${payload.salesmanagername}</p>
+          <div class="sig-line"></div>
+          <p class="sig-sub-label">Sales-B2B</p>
         </div>
         </div>
         
@@ -1974,29 +2334,29 @@ Procurement
                 className="capitalize rounded-none"
               />
 
-    <FieldLabel className="font-bold">Status </FieldLabel>
-    {/*<Select value={quotationStatus} onValueChange={setQuotationStatus} required>
-      <SelectTrigger className="w-full rounded-none">
-        <SelectValue placeholder="Select status" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
-          <SelectItem value="For Bidding">For Bidding</SelectItem>
-          <SelectItem value="Nego">Nego</SelectItem>
-          <SelectItem value="Order Completed">Order Completed</SelectItem>
-          <SelectItem value="Convert to SO">Convert to SO</SelectItem>
-          <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
-          <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
-          <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-          <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
-          <SelectItem value="Lost Bid">Lost Bid</SelectItem>
-          <SelectItem value="Canvass Only">Canvass Only</SelectItem>
-          <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
-          <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>*/}
+              <FieldLabel className="font-bold">Status </FieldLabel>
+              {/*<Select value={quotationStatus} onValueChange={setQuotationStatus} required>
+                <SelectTrigger className="w-full rounded-none">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="Pending Client Approval">Pending Client Approval</SelectItem>
+                    <SelectItem value="For Bidding">For Bidding</SelectItem>
+                    <SelectItem value="Nego">Nego</SelectItem>
+                    <SelectItem value="Order Completed">Order Completed</SelectItem>
+                    <SelectItem value="Convert to SO">Convert to SO</SelectItem>
+                    <SelectItem value="Loss Price is Too High">Loss Price is Too High</SelectItem>
+                    <SelectItem value="Lead Time Issue">Lead Time Issue</SelectItem>
+                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    <SelectItem value="Insufficient Stock">Insufficient Stock</SelectItem>
+                    <SelectItem value="Lost Bid">Lost Bid</SelectItem>
+                    <SelectItem value="Canvass Only">Canvass Only</SelectItem>
+                    <SelectItem value="Did Not Meet the Specs">Did Not Meet the Specs</SelectItem>
+                    <SelectItem value="Declined / Disapproved">Decline / Disapproved</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>*/}
 
               <FieldLabel className="font-bold">Approval Process </FieldLabel>
               <Select value={tsmApprovalStatus} onValueChange={setTsmApprovalStatus} required>
@@ -2011,24 +2371,24 @@ Procurement
                 </SelectContent>
               </Select>
 
-    {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
-    { tsmApprovalStatus ? (
-      <>
-        <FieldLabel className="mt-3">Action</FieldLabel>
-        <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
-          {[
-            {
-              value: "Quote-Done",
-              title: "Quote-Done",
-              desc: "The quotation process is complete and finalized.",
-            },
-          ].map((item) => (
-            <FieldLabel key={item.value}>
-              <Field orientation="horizontal" className="w-full items-start">
-                {/* LEFT */}
-                <FieldContent className="flex-1">
-                  <FieldTitle>{item.title}</FieldTitle>
-                  <FieldDescription>{item.desc}</FieldDescription>
+              {/* Quote-Done action — only visible once both Status and Approval Process are filled */}
+              {tsmApprovalStatus ? (
+                <>
+                  <FieldLabel className="mt-3">Action</FieldLabel>
+                  <RadioGroup value={status} onValueChange={setStatus} className="space-y-4">
+                    {[
+                      {
+                        value: "Quote-Done",
+                        title: "Quote-Done",
+                        desc: "The quotation process is complete and finalized.",
+                      },
+                    ].map((item) => (
+                      <FieldLabel key={item.value}>
+                        <Field orientation="horizontal" className="w-full items-start">
+                          {/* LEFT */}
+                          <FieldContent className="flex-1">
+                            <FieldTitle>{item.title}</FieldTitle>
+                            <FieldDescription>{item.desc}</FieldDescription>
 
                             {/* Buttons only visible if selected */}
                             {status === item.value && (
@@ -2147,7 +2507,7 @@ Procurement
       {/* product selection dialog/modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col"
+          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col [&>button]:hidden"
           style={{
             maxWidth: "2300px",
             width: "100vw",
@@ -2155,9 +2515,9 @@ Procurement
         >
           {/* HEADER */}
           <div className="flex flex-col border-b border-gray-200 shrink-0">
-            <div className="flex items-center justify-between pl-8 pr-5 py-4 sm:pl-10 sm:pr-6">
-              <div className="flex items-center gap-3">
-                <DialogTitle className="font-black text-base tracking-tight">Select Products</DialogTitle>
+            <div className="flex items-center justify-between pl-6 pr-4 py-2.5 sm:pl-8 sm:pr-5">
+              <div className="flex items-center gap-2">
+                <DialogTitle className="font-black text-sm tracking-tight">Select Products</DialogTitle>
                 {selectedProducts.length > 0 && (
                   <span className="hidden lg:inline-flex items-center justify-center bg-[#121212] text-white text-[10px] font-black rounded-full w-5 h-5">
                     {selectedProducts.length}
@@ -2166,9 +2526,9 @@ Procurement
               </div>
               {/* Desktop: show total in header when products selected */}
               {selectedProducts.length > 0 && (
-                <div className="hidden lg:flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-lg px-4 py-2">
+                <div className="hidden lg:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5">
                   <span className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">Total</span>
-                  <span className="font-black text-xl text-[#121212] tabular-nums">
+                  <span className="font-black text-lg text-[#121212] tabular-nums">
                     PHP {Number(quotationAmount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -2196,47 +2556,87 @@ Procurement
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
             <div
-              className="h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden"
+              className={`h-full flex flex-col lg:flex-row gap-0 lg:gap-3 lg:pl-3 lg:pr-3 lg:py-3 p-0 overflow-hidden`}
             >
 
               {/* Left side: Search + checkbox selected */}
-              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" && selectedProducts.length > 0 ? "hidden lg:flex" : "flex"}`}>
-                <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
-
-                  {/* Source Switcher */}
-                  <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                    {[
-                      { source: "shopify", label: "Shopify", icon: "🛍️" },
-                      // { source: "firebase_shopify", label: "CMS", icon: "📦" },
-                      { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
-                    ].map(({ source: s, label, icon }) => (
+              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[22rem] min-w-[22rem]'} ${mobilePanelTab === "products" && selectedProducts.length > 0 ? "hidden lg:flex" : "flex"}`}>
+                {/* Collapse/Expand Button & Help */}
+                <div className={`flex items-center gap-1 mb-1 ${leftPanelCollapsed ? 'flex-col' : 'justify-between'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                    className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                    title={leftPanelCollapsed ? "Expand panel" : "Collapse panel"}
+                  >
+                    <PanelLeft className={`w-4 h-4 transition-transform ${leftPanelCollapsed ? 'rotate-180' : ''}`} />
+                  </button>
+                  {!leftPanelCollapsed && (
+                    <>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Product Search</span>
                       <button
-                        key={s}
                         type="button"
-                        onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
-                        className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
+                        onClick={() => setShowHelp(!showHelp)}
+                        className="p-1.5 rounded hover:bg-blue-50 text-blue-500 transition-colors"
+                        title="How to use"
                       >
-                        <span className="text-sm mb-0.5">{icon}</span>
-                        <span>{label}</span>
+                        <HelpCircle className="w-4 h-4" />
                       </button>
-                    ))}
+                    </>
+                  )}
+                </div>
 
+                {/* Help Tooltip */}
+                {showHelp && !leftPanelCollapsed && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[10px] text-blue-800 mb-2">
+                    <p className="font-bold mb-1 flex items-center gap-1"><Info className="w-3 h-3" /> How to add products:</p>
+                    <ul className="space-y-1 ml-4 list-disc">
+                      <li>Type product name in search box</li>
+                      <li>Click the <Plus className="w-3 h-3 inline" /> button to add</li>
+                      <li>Or drag the product card to the table</li>
+                      <li>Click product image to preview</li>
+                    </ul>
+                  </div>
+                )}
+
+                <div className={`flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2 ${leftPanelCollapsed ? 'hidden' : ''}`}>
+
+                  {/* Source Switcher - Premium Pills */}
+                  <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "shopify" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <span>🛍️</span>
+                      <span className="hidden sm:inline">Shopify</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "firebase_taskflow" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <span>🗄️</span>
+                      <span className="hidden sm:inline">DB</span>
+                    </button>
+                    <div className="w-px h-6 bg-gray-300"></div>
                     <button
                       type="button"
                       onClick={() => { setIsSpf1Mode(false); setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-green-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpfMode ? "bg-green-500 text-white shadow-sm" : "text-gray-500 hover:text-green-600"}`}
+                      title="Service Request Form"
                     >
-                      <span className="text-sm mb-0.5">🛠️</span>
-                      <span>Services</span>
+                      <span>🛠️</span>
+                      <span className="hidden sm:inline">SRF</span>
                     </button>
-
                     <button
                       type="button"
                       onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpf1Mode ? "bg-red-500 text-white shadow-sm" : "text-gray-500 hover:text-red-600"}`}
+                      title="Special Price Form"
                     >
-                      <span className="text-sm mb-0.5">🧾</span>
-                      <span>SPF</span>
+                      <span>🧾</span>
+                      <span className="hidden sm:inline">SPF</span>
                     </button>
                   </div>
 
@@ -2384,6 +2784,7 @@ Procurement
                         type="button"
                         disabled={!spfManualProduct.title}
                         onClick={() => {
+                          saveToHistory('Add SPF manual product');
                           setSelectedProducts(prev => [
                             ...prev,
                             {
@@ -2528,6 +2929,7 @@ Procurement
                                               disabled={p.quantity <= 0}
                                               className="w-full rounded-none bg-red-600 hover:bg-red-700 text-white h-8 text-[11px] font-black uppercase tracking-wider"
                                               onClick={() => {
+                                                saveToHistory('Add SPF1 product');
                                                 const specHtml = formatSpfTechSpecToHtml(p.technicalSpecification || "");
                                                 const leadHtml = formatProcurementLeadHtml(p.leadTime || "");
                                                 setSelectedProducts((prev) => [
@@ -2570,68 +2972,75 @@ Procurement
                   ) : (
                     !isManualEntry && (
                       <>
-                        <FieldLabel>Products:</FieldLabel>
-                        <Input
-                          type="text"
-                          className="uppercase rounded-none"
-                          placeholder="Search Product Name or Item Code.."
-                          value={searchTerm}
-                          onChange={async (e) => {
-                            if (isManualEntry) return;
-                            const rawValue = e.target.value;
-                            setSearchTerm(rawValue);
+                        {/* Premium Search Input with View Mode Switcher */}
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            <Input
+                              type="text"
+                              className="uppercase rounded-lg pl-10 pr-4 py-2.5 border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm w-full"
+                              placeholder="Type product name or SKU..."
+                              value={searchTerm}
+                              onChange={async (e) => {
+                                if (isManualEntry) return;
+                                const rawValue = e.target.value;
+                                setSearchTerm(rawValue);
 
-                            if (rawValue.length < 2) {
-                              setSearchResults([]);
-                              return;
-                            }
+                                if (rawValue.length < 2) {
+                                  setSearchResults([]);
+                                  return;
+                                }
 
-                            setIsSearching(true);
-                            try {
-                              if (productSource === 'shopify') {
-                                const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
-                                let data = await res.json();
-                                setSearchResults(data.products || []);
-                              } else if (
-                                productSource === "firebase_shopify" ||
-                                productSource === "firebase_taskflow"
-                              ) {
-                                const searchUpper = rawValue.toUpperCase();
+                                setIsSearching(true);
+                                try {
+                                  if (productSource === 'shopify') {
+                                    const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
+                                    let data = await res.json();
+                                    setSearchResults(data.products || []);
+                                  } else if (
+                                    productSource === "firebase_shopify" ||
+                                    productSource === "firebase_taskflow"
+                                  ) {
+                                    const searchUpper = rawValue.toUpperCase();
 
-                                const websiteFilter =
-                                  productSource === "firebase_shopify"
-                                    ? "Shopify"
-                                    : "Taskflow";
+                                    const websiteFilter =
+                                      productSource === "firebase_shopify"
+                                        ? "Shopify"
+                                        : "Taskflow";
 
-                                const q = query(
-                                  collection(db, "products"),
-                                  where("websites", "array-contains", websiteFilter)
-                                );
+                                    const q = query(
+                                      collection(db, "products"),
+                                      where("websites", "array-contains", websiteFilter)
+                                    );
 
-                                const querySnapshot = await getDocs(q);
+                                    const querySnapshot = await getDocs(q);
 
-                                const firebaseResults = querySnapshot.docs
-                                  .map(doc => {
-                                    const data = doc.data();
+                                    const firebaseResults = querySnapshot.docs
+                                      .map(doc => {
+                                        const data = doc.data();
 
-                                    let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                    let rawSpecsText = "";
+                                        let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                        let rawSpecsText = "";
 
-                                    if (Array.isArray(data.technicalSpecs)) {
-                                      data.technicalSpecs.forEach((group: any) => {
-                                        rawSpecsText += ` ${group.specGroup}`;
+                                        if (Array.isArray(data.technicalSpecs)) {
+                                          data.technicalSpecs.forEach((group: any) => {
+                                            rawSpecsText += ` ${group.specGroup}`;
 
-                                        specsHtml += `
+                                            specsHtml += `
 <div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
 ${group.specGroup}
 </div>`;
 
-                                        specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+                                            specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
 
-                                        group.specs?.forEach((spec: any) => {
-                                          rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                            group.specs?.forEach((spec: any) => {
+                                              rawSpecsText += ` ${spec.name} ${spec.value}`;
 
-                                          specsHtml += `
+                                              specsHtml += `
 <tr>
 <td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
 <b>${spec.name}</b>
@@ -2640,41 +3049,66 @@ ${group.specGroup}
 ${spec.value}
 </td>
 </tr>`;
-                                        });
+                                            });
 
-                                        specsHtml += `</table>`;
-                                      });
-                                    }
+                                            specsHtml += `</table>`;
+                                          });
+                                        }
 
-                                    return {
-                                      id: doc.id,
-                                      title: data.name || "No Name",
-                                      price: data.regularPrice || 0,
-                                      regPrice: data.regularPrice || 0,
-                                      description: specsHtml,
-                                      images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                      skus: data.itemCode ? [data.itemCode] : [],
-                                      discount: 0,
-                                      tempSearchMetadata: (
-                                        data.name +
-                                        " " +
-                                        (data.itemCode || "") +
-                                        " " +
-                                        rawSpecsText
-                                      ).toUpperCase()
-                                    };
-                                  })
-                                  .filter(p => p.tempSearchMetadata.includes(searchUpper));
+                                        return {
+                                          id: doc.id,
+                                          title: data.name || "No Name",
+                                          price: data.regularPrice || 0,
+                                          regPrice: data.regularPrice || 0,
+                                          description: specsHtml,
+                                          images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          discount: 0,
+                                          tempSearchMetadata: (
+                                            data.name +
+                                            " " +
+                                            (data.itemCode || "") +
+                                            " " +
+                                            rawSpecsText
+                                          ).toUpperCase()
+                                        };
+                                      })
+                                      .filter(p => p.tempSearchMetadata.includes(searchUpper));
 
-                                setSearchResults(firebaseResults);
-                              }
-                            } catch (err) {
-                              console.error("Search Protocol Failure:", err);
-                            } finally {
-                              setIsSearching(false);
-                            }
-                          }}
-                        />
+                                    setSearchResults(firebaseResults);
+                                  }
+                                } catch (err) {
+                                  console.error("Search Protocol Failure:", err);
+                                } finally {
+                                  setIsSearching(false);
+                                }
+                              }}
+                            />
+                          </div>
+                          {/* View Mode Switcher - always visible */}
+                          <div className="flex items-center gap-0.5 bg-gray-100 rounded p-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setProductViewMode('list')}
+                              className={`p-1 rounded transition-all ${productViewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              title="List view"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setProductViewMode('grid')}
+                              className={`p-1 rounded transition-all ${productViewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              title="Grid view"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                         {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
                       </>
                     )
@@ -2684,76 +3118,131 @@ ${spec.value}
                 {/* Search Results — only shown when not in SPF mode */}
                 {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
                   <>
-                    <div className="text-xs text-green-600 mb-2 flex items-center gap-2">
-                      <span>Note: you can choose the same products.</span>
-                      <span className="text-[10px] text-blue-500 font-semibold bg-green-100 border border-blue-100 px-3 py-0.5 rounded-full">
-                        ℹ️ Drag cards to add
-                      </span>
+                    {/* Helper tip */}
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400 px-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Click image to preview • Drag to add • Click + to add</span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-4">
+                    {/* Premium Product Cards - Respect View Mode */}
+                    <div className={`overflow-x-hidden ${
+                      productViewMode === 'grid' 
+                        ? 'grid grid-cols-2 gap-2' 
+                        : 'flex flex-col gap-2'
+                    }`}>
                       {searchResults.map((item) => (
-                        <Card
+                        <div
                           key={item.id}
-                          className="cursor-grab active:cursor-grabbing hover:bg-gray-50 rounded-xs select-none border-2 border-transparent hover:border-blue-200 transition-all"
+                          className="group bg-white border border-gray-100 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-blue-200 transition-all overflow-hidden min-h-[56px]"
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.effectAllowed = "copy";
                             e.dataTransfer.setData("application/json", JSON.stringify(item));
                           }}
                         >
-                          <CardHeader className="flex items-center justify-between gap-3">
-                            <label className="flex items-center gap-2 cursor-pointer flex-1">
-                              <Button
-                                onClick={() => {
-                                  const { price: _, ...itemWithoutPrice } = item;
-                                  setSelectedProducts((prev) => [
-                                    ...prev,
-                                    {
-                                      ...itemWithoutPrice,
-                                      uid: crypto.randomUUID(),
-                                      quantity: 1,
-                                      price: item.price ?? 0,
-                                      discount: 0,
-                                      description: item.description || "",
-                                      regPrice: item.regPrice || 0,
-                                    },
-                                  ]);
-                                  setMobilePanelTab("products"); // auto-switch to products view on mobile
-                                }}
-                                className="w-6 h-6 p-0 flex items-center justify-center rounded-full cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </Button>
-                              <CardTitle className="text-base text-xs font-semibold">
-                                {item.title}
-                              </CardTitle>
-                            </label>
-                          </CardHeader>
-
-                          <CardContent className="flex justify-center p-2">
-                            {item.images?.[0]?.src ? (
-                              <img
-                                src={item.images[0].src}
-                                alt={item.title}
-                                className="w-24 h-24 object-cover rounded"
-                              />
-                            ) : (
-                              <div className="w-24 h-24 bg-gray-100 rounded flex items-center justify-center text-gray-400 cursor-not-allowed">
-                                No Image
-                              </div>
-                            )}
-                          </CardContent>
-
-                          <CardFooter className="text-xs text-gray-600">
-                            {item.skus && item.skus.length > 0
-                              ? `ITEM CODE${item.skus.length > 1 ? "s" : ""}: ${item.skus.join(", ")}`
-                              : "No item code available"}
-                          </CardFooter>
-                        </Card>
+                          <div className="grid grid-cols-[40px_1fr_24px] gap-2 items-center h-10">
+                            {/* Product Image */}
+                            <div className="w-10 h-10 flex-shrink-0">
+                              {item.images?.[0]?.src ? (
+                                <img
+                                  src={item.images[0].src}
+                                  alt={item.title}
+                                  className="w-full h-full object-cover rounded-md"
+                                  onClick={() => {
+                                    setPreviewImageUrl(item.images?.[0]?.src || "");
+                                    setImagePreviewOpen(true);
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-50 rounded-md flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Product Info */}
+                            <div className="min-w-0 overflow-hidden">
+                              <h4 className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2">{item.title}</h4>
+                              <p className="text-[9px] text-gray-400 truncate">{item.skus?.[0] || "No SKU"}</p>
+                            </div>
+                            
+                            {/* Add Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                saveToHistory('Add product');
+                                const { price: _, ...itemWithoutPrice } = item;
+                                const newProduct = {
+                                  ...itemWithoutPrice,
+                                  uid: crypto.randomUUID(),
+                                  quantity: 1,
+                                  price: item.price ?? 0,
+                                  discount: 0,
+                                  description: item.description || "",
+                                  regPrice: item.regPrice || 0,
+                                };
+                                setSelectedProducts((prev) => [...prev, newProduct]);
+                                addToRecentProducts(newProduct);
+                                setMobilePanelTab("products");
+                              }}
+                              className="w-6 h-6 flex items-center justify-center bg-[#121212] text-white rounded-full hover:bg-gray-800 transition-colors shadow-sm"
+                              title="Add to quotation"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </>
+                )}
+
+                {/* Recent Products Section */}
+                {!isSpfMode && !isSpf1Mode && !isManualEntry && recentProducts.length > 0 && (
+                  <div className="flex flex-col gap-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Recently Added:</span>
+                      <span className="text-[9px] text-gray-400">({recentProducts.length})</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {recentProducts.map((product) => (
+                        <div
+                          key={product.uid}
+                          className="flex items-center gap-2 p-1.5 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+                          onClick={() => reAddRecentProduct(product)}
+                          title="Click to add again"
+                        >
+                          <div className="w-6 h-6 flex-shrink-0">
+                            {product.images?.[0]?.src ? (
+                              <img
+                                src={product.images[0].src}
+                                alt={product.title}
+                                className="w-full h-full object-cover rounded"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200 rounded" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] text-gray-700 truncate">{product.title}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="w-5 h-5 flex items-center justify-center bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            title="Re-add to quotation"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* Selected Products checkboxes */}
@@ -2771,6 +3260,7 @@ ${spec.value}
                           checked
                           className="accent-blue-500"
                           onChange={() => {
+                            saveToHistory('Remove product');
                             const toRemove = selectedProducts.find((p) => p.uid === item.uid);
                             if (toRemove?.cloudinaryPublicId) {
                               deleteCloudinaryImage(toRemove.cloudinaryPublicId);
@@ -2794,7 +3284,7 @@ ${spec.value}
 
               {/* Right side: Selected Products as Table with Image & Editable Description */}
               <div
-                className={`overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"} ${isDragOver ? "ring-2 ring-blue-400 ring-inset rounded-lg bg-blue-50/30" : ""} transition-all`}
+                className={`flex-1 overflow-y-auto px-2 lg:px-3 pb-3 lg:pb-0 min-h-0 ${selectedProducts.length > 0 && mobilePanelTab === "search" ? "hidden lg:block" : "block"} ${isDragOver ? "ring-2 ring-blue-400 ring-inset rounded-lg bg-blue-50/30" : ""} transition-all`}
                 onDragOver={(e) => {
                   // Only show drop highlight for product cards from left panel, not row reorders
                   if (!e.dataTransfer.types.includes("application/json")) return;
@@ -2813,19 +3303,19 @@ ${spec.value}
                   try {
                     const raw = e.dataTransfer.getData("application/json");
                     if (!raw) return;
+                    saveToHistory('Add product (drag-drop)');
                     const item = JSON.parse(raw) as Product;
                     const { price: _p, ...itemWithoutPrice } = item;
-                    setSelectedProducts((prev) => [
-                      ...prev,
-                      {
-                        ...itemWithoutPrice,
-                        uid: crypto.randomUUID(),
-                        quantity: 1,
-                        price: item.price ?? 0,
-                        discount: 0,
-                        description: item.description || "",
-                      },
-                    ]);
+                    const newProduct = {
+                      ...itemWithoutPrice,
+                      uid: crypto.randomUUID(),
+                      quantity: 1,
+                      price: item.price ?? 0,
+                      discount: 0,
+                      description: item.description || "",
+                    };
+                    setSelectedProducts((prev) => [...prev, newProduct]);
+                    addToRecentProducts(newProduct);
                     setMobilePanelTab("products");
                   } catch (err) {
                     console.error("Drop failed:", err);
@@ -2833,66 +3323,578 @@ ${spec.value}
                 }}
               >
                 {selectedProducts.length === 0 && (
-                  <div className={`flex flex-col items-center justify-center h-full min-h-[300px] border-2 border-dashed rounded-lg transition-all ${isDragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-gray-200 text-gray-300"}`}>
+                  <div className={`flex flex-col items-center justify-center h-full min-h-[300px] border-2 border-dashed rounded-lg transition-all ${isDragOver ? "border-blue-400 bg-blue-50 text-blue-500" : "border-gray-200 text-gray-400"}`}>
                     <div className="text-5xl mb-3">{isDragOver ? "📥" : "📋"}</div>
                     <p className="font-black text-sm uppercase tracking-widest">
                       {isDragOver ? "Drop to add product" : "No products selected"}
                     </p>
-                    <p className="text-xs mt-1 opacity-70">
-                      {isDragOver ? "" : "Search and drag items here, or click ＋"}
+                    {!isDragOver && (
+                      <div className="flex flex-col items-center gap-2 mt-4">
+                        <div className="flex items-center gap-2 text-xs bg-white px-3 py-2 rounded-lg shadow-sm border">
+                          <span className="bg-blue-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">1</span>
+                          <span>Search product on left panel</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs bg-white px-3 py-2 rounded-lg shadow-sm border">
+                          <span className="bg-green-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">2</span>
+                          <span>Click + or drag to add</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs bg-white px-3 py-2 rounded-lg shadow-sm border">
+                          <span className="bg-purple-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">3</span>
+                          <span>Edit prices & quantities here</span>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs mt-4 opacity-60 flex items-center gap-1">
+                      <HelpCircle className="w-3 h-3" /> Click help button for detailed guide
                     </p>
                   </div>
                 )}
                 {selectedProducts.length > 0 && (
                   <>
-                    {/* Controls bar - desktop horizontal, mobile compact */}
+                    {/* Premium Controls Bar */}
                     <div className="flex flex-col gap-2 mb-3">
-                      <div className="hidden lg:flex items-center justify-between mb-1">
-                        <h4 className="font-black text-sm tracking-tight">
-                          Product List
-                          <span className="ml-2 text-xs font-normal text-gray-400">({selectedProducts.length} item{selectedProducts.length !== 1 ? "s" : ""})</span>
-                        </h4>
+                      {/* Row 1: Title + Search + Legend */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <h4 className="font-black text-sm tracking-tight">
+                            Product List
+                            <span className="ml-2 text-xs font-normal text-gray-400">({selectedProducts.length} items)</span>
+                          </h4>
+                          {/* Search */}
+                          <div className="relative w-48">
+                            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input
+                              type="text"
+                              value={productSearchQuery}
+                              onChange={(e) => setProductSearchQuery(e.target.value)}
+                              placeholder="Search in products..."
+                              className="w-full pl-9 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            {productSearchQuery && (
+                              <button
+                                onClick={() => setProductSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                          {productSearchQuery && (
+                            <span className="text-xs text-gray-500">
+                              {selectedProducts.filter(p =>
+                                p.title?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                                p.skus?.some(sku => sku?.toLowerCase().includes(productSearchQuery.toLowerCase()))
+                              ).length} found
+                            </span>
+                          )}
+                        </div>
+                        {/* Quick Legend with Help */}
+                        <div className="flex items-center gap-4 text-xs">
+                          <div className="flex items-center gap-2 text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                            <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-medium">Click any text to edit • Check boxes to enable features</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-gray-500">
+                            <span className="flex items-center gap-1.5" title="Promo items are highlighted in yellow"><span className="w-3 h-3 bg-yellow-400 rounded-sm"></span>Promo</span>
+                            <span className="flex items-center gap-1.5" title="Hides pricing details on PDF"><span className="w-3 h-3 bg-blue-400 rounded-sm"></span>Hide Price</span>
+                            <span className="flex items-center gap-1.5" title="Drag ⠿ handle to reorder rows">⠿ Drag</span>
+                          </div>
+                        </div>
                       </div>
-                      <h4 className="font-bold text-xs lg:hidden">Selected Products: ({selectedProducts.length})</h4>
 
-                      {/* Subject + VAT + WHT — single compact toolbar */}
-                      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
-                        {/* Subject */}
-                        <div className="flex items-center gap-2 px-3 py-6 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                          <span className="font-black uppercase text-red-600 tracking-widest shrink-0">Subject *</span>
+                      {/* Row 2: Options Bar */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs bg-blue-50/50 border border-blue-100 rounded-lg px-3 py-2">
+                        {/* Visual Guide Badge */}
+                        <div className="flex items-center gap-1 text-[9px] font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          PDF OPTIONS
+                        </div>
+
+                        {/* Discount Column Toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newValue = !showDiscountColumns;
+                            console.log('Show Discounts clicked, newValue:', newValue);
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: newValue ? 'Show Discount Columns?' : 'Hide Discount Columns?',
+                              description: newValue
+                                ? 'When ENABLED, your client will see detailed discount breakdown including: Discount %, Discount Amount, and Net Price after discount for each item. This provides full transparency on pricing.'
+                                : 'When DISABLED, discount details will be hidden from the client view. They will only see: Product name, Quantity, Unit Price, and Total. The discount is applied but not visible.',
+                              example: newValue
+                                ? 'LED Bulb - Qty: 10 | Unit: ₱500 | Discount: 20% (₱100 off) | Net: ₱400 | Total: ₱4,000'
+                                : 'LED Bulb - Qty: 10 | Unit: ₱400 | Total: ₱4,000 (Discount applied invisibly)',
+                              onConfirm: () => {
+                                console.log('Confirm clicked, setting showDiscountColumns to:', newValue);
+                                setShowDiscountColumns(newValue);
+                              },
+                              onCancel: () => {
+                                console.log('Cancel clicked');
+                              }
+                            });
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer hover:bg-blue-100/50 px-1.5 py-0.5 rounded transition-colors group pointer-events-auto"
+                          title="Click for detailed explanation with examples"
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${showDiscountColumns ? 'bg-blue-600 border-blue-600' : 'bg-white border-blue-300'}`}>
+                            {showDiscountColumns && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className={`font-medium ${showDiscountColumns ? 'text-blue-700' : 'text-gray-500'}`}>
+                            {showDiscountColumns ? '✓ Show Discounts' : '○ Hide Discounts'}
+                          </span>
+                          <svg className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        <div className="w-px h-4 bg-blue-200"></div>
+
+                        {/* NEW: Hide discount in preview toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newValue = !hideDiscountInPreview;
+                            console.log('SRP Only PDF clicked, newValue:', newValue);
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: newValue ? 'SRP Only PDF?' : 'Full Detail PDF?',
+                              description: newValue
+                                ? 'SRP ONLY mode: Your PDF will display the Suggested Retail Price (SRP) as the Unit Price. Discounts are completely hidden from view. The client sees a clean, standard price list without knowing they received special pricing.'
+                                : 'FULL DETAIL mode: Your PDF will show the actual negotiated prices with discount breakdown. The client can see exactly how much discount they received per item and in total.',
+                              example: newValue
+                                ? 'LED Bulb - Qty: 10 | Unit: ₱500 (SRP) | Total: ₱5,000 (Client sees SRP only, discount is hidden)'
+                                : 'LED Bulb - Qty: 10 | Unit: ₱400 (Nego Price) | You Saved: ₱100/item | Total: ₱4,000',
+                              onConfirm: () => {
+                                console.log('Confirm SRP clicked, setting hideDiscountInPreview to:', newValue);
+                                setHideDiscountInPreview(newValue);
+                              },
+                              onCancel: () => {
+                                console.log('Cancel SRP clicked');
+                              }
+                            });
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-1.5 py-0.5 rounded transition-colors group pointer-events-auto"
+                          title="Click for detailed explanation with examples"
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${hideDiscountInPreview ? 'bg-purple-600 border-purple-600' : 'bg-white border-purple-300'}`}>
+                            {hideDiscountInPreview && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className={`font-medium ${hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
+                            {hideDiscountInPreview ? '✓ SRP Only PDF' : '○ Full Detail PDF'}
+                          </span>
+                          <svg className="w-3 h-3 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        <div className="w-px h-4 bg-blue-200"></div>
+
+                        {/* Summary Discount Toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newValue = !showSummaryDiscounts;
+                            console.log('Show Discount Row clicked, newValue:', newValue);
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: newValue ? 'Show Summary Discount Row?' : 'Hide Summary Discount Row?',
+                              description: newValue
+                                ? 'When ENABLED, your PDF summary will include a "Less: Trade Discount" row showing the total discount amount deducted from Gross Sales. This provides a clear accounting view of the discount given.'
+                                : 'When DISABLED, the discount row is hidden from the summary. The summary jumps from Gross Sales directly to Net Sales without showing the discount deduction line.',
+                              example: newValue
+                                ? 'Gross Sales: ₱10,000 | Less: Trade Discount: ₱2,000 | Net Sales: ₱8,000 (Clear discount breakdown shown)'
+                                : 'Gross Sales: ₱10,000 | Net Sales: ₱8,000 (Discount applied but not shown as separate line)',
+                              onConfirm: () => {
+                                console.log('Confirm Discount Row clicked, setting showSummaryDiscounts to:', newValue);
+                                setShowSummaryDiscounts(newValue);
+                              },
+                              onCancel: () => {
+                                console.log('Cancel Discount Row clicked');
+                              }
+                            });
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer hover:bg-red-100/50 px-1.5 py-0.5 rounded transition-colors group pointer-events-auto"
+                          title="Click for detailed explanation with examples"
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${showSummaryDiscounts ? 'bg-red-600 border-red-600' : 'bg-white border-red-300'}`}>
+                            {showSummaryDiscounts && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className={`font-medium ${showSummaryDiscounts ? 'text-red-700' : 'text-gray-500'}`}>
+                            {showSummaryDiscounts ? '✓ Show Discount Row' : '○ Hide Discount Row'}
+                          </span>
+                          <svg className="w-3 h-3 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        <div className="w-px h-4 bg-blue-200"></div>
+
+                        {/* Profit Margin Toggle (Internal Only) */}
+                        {/* <label className="flex items-center gap-1 cursor-pointer hover:bg-green-100/50 px-1.5 py-0.5 rounded transition-colors group relative" title="Show cost and margin (sales team only)">
                           <input
-                            type="text"
-                            value={quotationSubject}
-                            onChange={(e) => setQuotationSubject(e.target.value)}
-                            placeholder="For Quotation"
-                            className="border-0 bg-transparent px-0 py-0 text-[12px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
+                            type="checkbox"
+                            checked={showProfitMargins}
+                            onChange={(e) => setShowProfitMargins(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded border-green-300 text-green-600 focus:ring-green-500"
                           />
+                          <span className={`font-medium ${showProfitMargins ? 'text-green-700' : 'text-gray-500'}`}>
+                            {showProfitMargins ? '✓ Show Margins' : '○ Hide Margins'}
+                          </span>
+                          <span className="text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">INTERNAL</span>
+                          <span className="absolute -bottom-8 left-0 w-48 bg-gray-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 leading-tight">
+                            {showProfitMargins
+                              ? 'Shows Cost & Margin % per item (Sales team only)'
+                              : 'Hidden from view. Toggle ON to see profit margins'}
+                          </span>
+                        </label> */}
+
+                        <div className="w-px h-4 bg-blue-200"></div>
+
+                        {/* Margin Alert Toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newValue = !showMarginAlerts;
+                            console.log('Margin Alert clicked, newValue:', newValue);
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: newValue ? 'Enable Margin Alert?' : 'Disable Margin Alert?',
+                              description: newValue
+                                ? `Margin alerts will warn you when your profit margin drops below ${marginAlertThreshold}%. This helps protect your profitability on quotes.`
+                                : 'Margin alerts will be disabled. You will no longer receive warnings when margins drop below threshold.',
+                              onConfirm: () => {
+                                console.log('Confirm Margin Alert clicked, setting to:', newValue);
+                                setShowMarginAlerts(newValue);
+                              },
+                              onCancel: () => {
+                                console.log('Cancel Margin Alert clicked');
+                              }
+                            });
+                          }}
+                          className="flex items-center gap-1 cursor-pointer hover:bg-orange-100/50 px-1.5 py-0.5 rounded transition-colors group pointer-events-auto"
+                          title="Click to enable/disable margin alerts"
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${showMarginAlerts ? 'bg-orange-600 border-orange-600' : 'bg-white border-orange-300'}`}>
+                            {showMarginAlerts && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className={`font-medium ${showMarginAlerts ? 'text-orange-700' : 'text-gray-500'}`}>
+                            {showMarginAlerts ? '✓ Margin Alert' : '○ No Alert'}
+                          </span>
+                          {showMarginAlerts && (
+                            <input
+                              type="number"
+                              value={marginAlertThreshold}
+                              onChange={(e) => setMarginAlertThreshold(Number(e.target.value))}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-12 text-[9px] border border-orange-300 rounded px-1 py-0.5"
+                              min="0"
+                              max="100"
+                              title="Alert threshold %"
+                            />
+                          )}
+                          <span className="absolute -bottom-6 left-0 w-44 bg-gray-800 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            Alert when margin below {marginAlertThreshold}%
+                          </span>
+                        </button>
+
+                        <div className="w-px h-4 bg-blue-200"></div>
+
+                        {/* Template Button */}
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplateModal(true)}
+                          className="flex items-center gap-1 text-[10px] font-medium text-purple-600 hover:text-purple-800 hover:bg-purple-100/50 px-1.5 py-0.5 rounded transition-colors"
+                          title="Save/Load quote templates"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                          </svg>
+                          Templates
+                        </button>
+
+                        {/* Undo/Redo Buttons */}
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={undo}
+                            disabled={historyIndex <= 0}
+                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+                            title="Undo (Ctrl+Z)"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={redo}
+                            disabled={historyIndex >= history.length - 1}
+                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+                            title="Redo (Ctrl+Y)"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Bulk Mode Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBulkMode(!bulkMode);
+                            setSelectedRows(new Set());
+                          }}
+                          className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded transition-colors ${
+                            bulkMode ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                          title="Enable bulk selection mode"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          Bulk
+                        </button>
+                      </div>
+
+                      {/* Bulk Operations Toolbar (shown when bulk mode active) */}
+                      {bulkMode && selectedRows.size > 0 && (
+                        <div className="flex items-center gap-2 text-[10px] bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                          <span className="font-medium text-yellow-700">{selectedRows.size} selected</span>
+                          <div className="w-px h-3 bg-yellow-300"></div>
+                          <button
+                            type="button"
+                            onClick={selectAllRows}
+                            className="text-yellow-700 hover:text-yellow-900 font-medium"
+                          >
+                            {selectedRows.size === selectedProducts.length ? 'Deselect All' : 'Select All'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={duplicateSelectedRows}
+                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Duplicate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={copySelectedRows}
+                            className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1"
+                            title="Copy selected rows to clipboard (Ctrl+C)"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={pasteFromClipboard}
+                            className="text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
+                            title="Paste from clipboard (Ctrl+V)"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                            </svg>
+                            Paste
+                          </button>
+                          <button
+                            type="button"
+                            onClick={deleteSelectedRows}
+                            className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                      {/* Subject + VAT + WHT — single compact toolbar */}
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
+                        {/* Subject */}
+                        <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-red-600 tracking-wider shrink-0 text-[9px]">Subject *</span>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 group">
+                            <input
+                              type="text"
+                              value={quotationSubject}
+                              onChange={(e) => setQuotationSubject(e.target.value)}
+                              placeholder="Click to edit subject..."
+                              className="border border-gray-200 bg-white px-2 py-1 rounded text-[11px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
+                            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Contact Person - dropdown selection with editable details */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-blue-600 tracking-wider shrink-0 text-[9px]">Contact Person</span>
+                          <div className="flex flex-col gap-1 flex-1 min-w-0">
+                            {/* Contact Person Dropdown */}
+                            <Select
+                              value={localContactPerson || "__manual__"}
+                              onValueChange={(value) => {
+                                if (value === "__manual__") {
+                                  // Allow manual editing - don't change current values
+                                  return;
+                                }
+                                const selected = availableContacts?.find(c => c.name === value);
+                                if (selected) {
+                                  setLocalContactPerson(selected.name);
+                                  setLocalContactNumber(selected.contact_number);
+                                  setLocalEmailAddress(selected.email_address);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 h-6">
+                                <SelectValue placeholder="Select contact person..." />
+                              </SelectTrigger>
+                              <SelectContent className="text-[10px]">
+                                {availableContacts && availableContacts.length > 0 ? (
+                                  <>
+                                    {availableContacts.map((contact, idx) => (
+                                      <SelectItem key={idx} value={contact.name} className="text-[10px] py-1">
+                                        <span className="font-bold">{contact.name}</span>
+                                      </SelectItem>
+                                    ))}
+                                    <SelectItem value="__manual__" className="text-[10px] py-1 text-blue-600 font-bold">
+                                      ✎ Manual Entry
+                                    </SelectItem>
+                                  </>
+                                ) : (
+                                  <SelectItem value="__manual__" className="text-[10px] py-1">
+                                    Manual Entry
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Editable Contact Details */}
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={localContactNumber}
+                                onChange={(e) => setLocalContactNumber(e.target.value)}
+                                placeholder="Contact number..."
+                                className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                              />
+                              <input
+                                type="text"
+                                value={localEmailAddress}
+                                onChange={(e) => setLocalEmailAddress(e.target.value)}
+                                placeholder="Email address..."
+                                className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                              />
+                            </div>
+                          </div>
                         </div>
 
                         {/* VAT */}
-                        <div className="flex items-center gap-2 px-3 py-6 border-b lg:border-b-0 lg:border-r border-gray-200">
-                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
-                          <RadioGroup value={vatType} onValueChange={setVatType} className="flex gap-2">
-                            {[{ v: "vat_inc", l: "Inc" }, { v: "vat_exe", l: "Exe" }, { v: "zero_rated", l: "0%" }].map(({ v, l }) => (
-                              <div key={v} className="flex items-center gap-0.5">
-                                <RadioGroupItem value={v} id={`vat-${v}`} />
-                                <label htmlFor={`vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                              </div>
+                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                          <span className="font-black uppercase text-gray-400 tracking-wider shrink-0 text-[9px]">VAT</span>
+                          <div className="flex gap-2">
+                            {[
+                              { v: "vat_inc", l: "Inc", desc: "VAT Inclusive", explanation: "Price includes 12% VAT. Client sees: 'VAT Inclusive' on quote.", example: "Unit: ₱500 | VAT: ₱53.57 | Net: ₱446.43" },
+                              { v: "vat_exe", l: "Exe", desc: "VAT Exempt", explanation: "No VAT charged. Common for zero-rated or exempt transactions.", example: "Unit: ₱500 | VAT: ₱0.00 | Net: ₱500.00" },
+                              { v: "zero_rated", l: "0%", desc: "Zero Rated", explanation: "0% VAT rate applies. Common for export or special transactions.", example: "Unit: ₱500 | VAT: 0% | Net: ₱500.00" }
+                            ].map(({ v, l, desc, explanation, example }) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => {
+                                  if (vatType === v) return;
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: `Switch to ${desc}?`,
+                                    description: explanation,
+                                    example: example,
+                                    onConfirm: () => setVatType(v),
+                                    onCancel: () => {}
+                                  });
+                                }}
+                                className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${vatType === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
+                              >
+                                <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${vatType === v ? "border-[#121212]" : "border-gray-300"}`}>
+                                  {vatType === v && <div className="w-1.5 h-1.5 rounded-full bg-[#121212]" />}
+                                </div>
+                                <span className="font-black uppercase text-[10px]">{l}</span>
+                              </button>
                             ))}
-                          </RadioGroup>
+                          </div>
                         </div>
 
                         {/* EWT */}
-                        <div className="flex items-center gap-2 px-3 py-6">
-                          <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
-                          <RadioGroup value={whtType} onValueChange={setWhtType} className="flex gap-2">
-                            {[{ v: "none", l: "None" }, { v: "wht_1", l: "1%" }, { v: "wht_2", l: "2%" }].map(({ v, l }) => (
-                              <div key={v} className="flex items-center gap-0.5">
-                                <RadioGroupItem value={v} id={`wht-${v}`} />
-                                <label htmlFor={`wht-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtType === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                              </div>
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <span className="font-black uppercase text-gray-400 tracking-wider shrink-0 text-[9px]">EWT</span>
+                          <div className="flex gap-2">
+                            {[
+                              { v: "none", l: "None", desc: "No EWT", explanation: "No Expanded Withholding Tax deducted. Full amount paid to supplier.", example: "Total: ₱100,000 | EWT: ₱0 | Pay to Supplier: ₱100,000" },
+                              { v: "wht_1", l: "1%", desc: "1% EWT", explanation: "1% withholding tax deducted. For rent, services, or contractors.", example: "Total: ₱100,000 | EWT (1%): ₱1,000 | Pay to Supplier: ₱99,000" },
+                              { v: "wht_2", l: "2%", desc: "2% EWT", explanation: "2% withholding tax deducted. For regular suppliers of goods.", example: "Total: ₱100,000 | EWT (2%): ₱2,000 | Pay to Supplier: ₱98,000" }
+                            ].map(({ v, l, desc, explanation, example }) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => {
+                                  if (whtType === v) return;
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: `Switch to ${desc}?`,
+                                    description: explanation,
+                                    example: example,
+                                    onConfirm: () => setWhtType(v),
+                                    onCancel: () => {}
+                                  });
+                                }}
+                                className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${whtType === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
+                              >
+                                <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${whtType === v ? "border-[#121212]" : "border-gray-300"}`}>
+                                  {whtType === v && <div className="w-1.5 h-1.5 rounded-full bg-[#121212]" />}
+                                </div>
+                                <span className="font-black uppercase text-[10px]">{l}</span>
+                              </button>
                             ))}
-                          </RadioGroup>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2907,49 +3909,138 @@ ${spec.value}
                         <table className="w-full text-xs table-auto border-collapse border border-gray-300">
                           <thead>
                             <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
-                              <th className="border border-gray-700 p-2 text-center w-7 text-gray-400 select-none" title="Drag to reorder">⠿</th>
-                              <th className="border border-gray-700 p-2 text-center w-8 font-bold">#</th>
-                              <th className="border border-gray-700 p-2 text-center w-10">
-                                <label className="flex items-center justify-center gap-1 cursor-pointer">
+                              {visibleColumns.dragHandle && (
+                                <th className="border border-gray-700 p-2 text-center w-7 text-gray-400 select-none" title="Drag ⠿ to reorder rows">⠿</th>
+                              )}
+                              {bulkMode && (
+                                <th className="border border-gray-700 p-2 text-center w-8" title="Select rows for bulk operations">
                                   <input
                                     type="checkbox"
-                                    checked={selectedProducts.every((p) => p.isDiscounted)}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setSelectedProducts((prev) =>
-                                        prev.map((p) => ({
-                                          ...p,
-                                          isDiscounted: checked,
-                                          discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0,
-                                        }))
-                                      );
-                                    }}
+                                    checked={selectedRows.size === selectedProducts.length && selectedProducts.length > 0}
+                                    onChange={selectAllRows}
+                                    className="w-4 h-4 cursor-pointer"
                                   />
-                                  <span className="font-bold">Disc%</span>
-                                </label>
+                                </th>
+                              )}
+                              {visibleColumns.rowNumber && (
+                                <th className="border border-gray-700 p-2 text-center w-8 font-bold" title="Row number">#</th>
+                              )}
+                              {visibleColumns.discountToggle && (
+                                <th className="border border-gray-700 p-2 text-center w-8" title="Click to apply discount to ALL items">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      const allDiscounted = selectedProducts.every((p) => p.isDiscounted);
+                                      const newValue = !allDiscounted;
+                                      const affectedCount = selectedProducts.length;
+                                      console.log('DISC header clicked, newValue:', newValue, 'affected items:', affectedCount);
+                                      setConfirmDialog({
+                                        isOpen: true,
+                                        title: newValue ? `Enable Discount for ALL ${affectedCount} items?` : `Disable Discount for ALL ${affectedCount} items?`,
+                                        description: newValue
+                                          ? `This will apply a ${vatType === "vat_exe" ? 12 : 0}% discount to ALL ${affectedCount} items in your quotation. Each item will show the discount badge and calculate discounted prices.`
+                                          : `This will remove discounts from ALL ${affectedCount} items. All items will revert to their original prices without discounts.`,
+                                        onConfirm: () => {
+                                          console.log('Confirm DISC all clicked, setting all items to:', newValue);
+                                          setSelectedProducts((prev) =>
+                                            prev.map((p) => ({
+                                              ...p,
+                                              isDiscounted: newValue,
+                                              discount: newValue ? (vatType === "vat_exe" ? 12 : 0) : 0,
+                                              discountAmount: 0,
+                                            }))
+                                          );
+                                        },
+                                        onCancel: () => {
+                                          console.log('Cancel DISC all clicked');
+                                        }
+                                      });
+                                    }}
+                                    className="flex flex-col items-center justify-center gap-0.5 cursor-pointer w-full"
+                                  >
+                                    <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedProducts.every((p) => p.isDiscounted) ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400'}`}>
+                                      {selectedProducts.every((p) => p.isDiscounted) && (
+                                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className="font-bold text-[9px]">Disc</span>
+                                  </button>
+                                </th>
+                              )}
+                              {visibleColumns.promoBadge && (
+                                <th className="border border-gray-700 p-2 text-center w-8" title="Check to show PROMO badge on quote">
+                                  <span className="font-bold text-yellow-300 text-[9px]">Promo</span>
+                                </th>
+                              )}
+                              {visibleColumns.hideDiscount && (
+                                <th className="border border-gray-700 p-2 text-center w-8" title="Check to HIDE discount details on PDF">
+                                  <span className="font-bold text-blue-300 text-[9px]">Hide</span>
+                                </th>
+                              )}
+                              {visibleColumns.displayMode && (
+                                <th className="border border-gray-700 p-2 text-center font-bold w-20 bg-purple-900/20" title="How to display pricing to client">
+                                  <span className="text-purple-300 text-[9px]">Display</span>
+                                </th>
+                              )}
+                              <th className="border border-gray-700 p-2 text-left font-bold min-w-[120px]" title="Click image to preview, click title to edit">Product</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-20" title="Quantity">Qty</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-28" title="Unit price (can be edited)">Unit</th>
+                              {showDiscountColumns && (
+                                <th className="border border-gray-700 p-2 text-center font-bold w-52" title="Discount % and amount per unit">Discount</th>
+                              )}
+                              <th className="border border-gray-700 p-2 text-center font-bold w-24 bg-blue-900/20" title="Net price after discount (editable - changes discount %)">
+                                <span className="text-blue-300">Net</span>
                               </th>
-                              <th className="border border-gray-700 p-2 text-left hidden sm:table-cell font-bold">Remarks</th>
-                              <th className="border border-gray-700 p-2 text-left font-bold">Product</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Qty</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Unit Price</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold">Discount</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold">Subtotal</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold w-24">Actions</th>
+                              {showProfitMargins && (
+                                <>
+                                  <th className="border border-gray-700 p-2 text-center font-bold w-24 bg-green-900/20" title="Cost price (from procurement)">
+                                    <span className="text-green-400">Cost</span>
+                                  </th>
+                                  <th className="border border-gray-700 p-2 text-center font-bold w-20 bg-green-900/20" title="Profit margin % ((Price - Cost) / Price × 100)">
+                                    <span className="text-green-400">Margin</span>
+                                  </th>
+                                </>
+                              )}
+                              <th className="border border-gray-700 p-2 text-center font-bold w-32" title="Total after discount (can be edited)">Total</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-28" title="View details or delete">Act</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {selectedProducts.map((p, idx) => {
-                              const isDiscounted = p.isDiscounted ?? false;
+                            {selectedProducts
+                              .filter((p) => {
+                                if (!productSearchQuery) return true;
+                                const query = productSearchQuery.toLowerCase();
+                                return (
+                                  p.title?.toLowerCase().includes(query) ||
+                                  p.skus?.some((sku) => sku?.toLowerCase().includes(query)) ||
+                                  p.description?.toLowerCase().includes(query) ||
+                                  p.itemRemarks?.toLowerCase().includes(query)
+                                );
+                              })
+                              .map((p, idx) => {
+                                const isDiscounted = p.isDiscounted ?? false;
 
-                              // default discount based on VAT type
-                              const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
-                              const rowDiscount = p.discount ?? defaultDiscount;
+                                // default discount based on VAT type
+                                const defaultDiscount = vatType === "vat_exe" ? 12 : 0;
+                                const rowDiscountPct = p.discount ?? defaultDiscount;
+                                const unitDiscountAmt = isDiscounted
+                                  ? p.discountAmount != null && p.discountAmount > 0
+                                    ? p.discountAmount  // use peso amount if set
+                                    : (p.price * rowDiscountPct) / 100
+                                  : 0;
 
-                              const baseAmount = p.price * p.quantity;
-                              const discountedAmount = isDiscounted ? (baseAmount * rowDiscount) / 100 : 0;
-                              const totalAfterDiscount = baseAmount - discountedAmount;
+                              const discountedUnitPrice = p.price - unitDiscountAmt;
+                              const totalAfterDiscount = discountedUnitPrice * p.quantity;
 
                               const isExpanded = expandedRows[p.uid] ?? false;
+
+                              // Calculate margin alert for row styling
+                              const cost = p.regPrice || p.originalPrice || 0;
+                              const marginAlert = showMarginAlerts ? getMarginAlert(p.price, cost, rowDiscountPct) : null;
 
                               return (
                                 <React.Fragment key={p.uid}>
@@ -2957,7 +4048,13 @@ ${spec.value}
                                     className={`even:bg-gray-50 cursor-pointer transition-all ${dragOverRowUid === p.uid && dragRowUid !== p.uid
                                         ? "border-t-2 border-t-blue-400"
                                         : ""
-                                      } ${dragRowUid === p.uid ? "opacity-40" : ""}`}
+                                      } ${dragRowUid === p.uid ? "opacity-40" : ""} ${
+                                        marginAlert?.severity === 'danger'
+                                          ? 'animate-pulse border-l-4 border-l-red-500'
+                                          : marginAlert?.severity === 'warning'
+                                          ? 'animate-pulse border-l-4 border-l-orange-500'
+                                          : ''
+                                      }`}
                                     draggable
                                     onDragStart={(e) => {
                                       e.dataTransfer.effectAllowed = "move";
@@ -2994,82 +4091,218 @@ ${spec.value}
                                     }}
                                   >
                                     {/* Drag handle */}
-                                    <td className="border border-gray-300 p-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none text-base">
-                                      ⠿
-                                    </td>
-                                    {/* Row order number */}
-                                    <td className="border border-gray-300 p-2 text-center text-gray-400 font-mono font-bold text-[11px]">
-                                      {idx + 1}
-                                    </td>
-                                    <td className="border border-gray-300 p-4">
-                                      <div className="flex items-center justify-start gap-2">
-                                        {/* Styled Checkbox */}
+                                    {visibleColumns.dragHandle && (
+                                      <td className="border border-gray-300 p-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none text-base">
+                                        ⠿
+                                      </td>
+                                    )}
+                                    {bulkMode && (
+                                      <td className="border border-gray-300 p-2 text-center">
                                         <input
                                           type="checkbox"
-                                          checked={isDiscounted}
-                                          onChange={(e) => {
-                                            const checked = e.target.checked;
-                                            setSelectedProducts((prev) => {
-                                              const copy = [...prev];
-                                              copy[idx] = {
-                                                ...copy[idx],
-                                                isDiscounted: checked,
-                                                discount: checked ? (vatType === "vat_exe" ? 12 : 0) : 0, // reset if unchecked
-                                              };
-                                              return copy;
+                                          checked={selectedRows.has(p.uid)}
+                                          onChange={() => toggleRowSelection(p.uid)}
+                                          className="w-4 h-4 cursor-pointer"
+                                        />
+                                      </td>
+                                    )}
+                                    {visibleColumns.rowNumber && (
+                                      <td className="border border-gray-300 p-2 text-center text-gray-400 font-mono font-bold text-[11px]">
+                                        {idx + 1}
+                                      </td>
+                                    )}
+                                    {/* Discount Checkbox */}
+                                    {visibleColumns.discountToggle && (
+                                      <td className="border border-gray-300 p-1">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            const newValue = !isDiscounted;
+                                            setConfirmDialog({
+                                              isOpen: true,
+                                              title: newValue ? `Enable Discount for "${p.title}"?` : `Disable Discount for "${p.title}"?`,
+                                              description: newValue
+                                                ? `This will apply a ${vatType === "vat_exe" ? 12 : 0}% discount to this item. The discount badge will appear on the quote.`
+                                                : `This will remove the discount from this item and revert to original price.`,
+                                              onConfirm: () => {
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[idx] = {
+                                                    ...copy[idx],
+                                                    isDiscounted: newValue,
+                                                    discount: newValue ? (vatType === "vat_exe" ? 12 : 0) : 0,
+                                                    discountAmount: 0,
+                                                  };
+                                                  return copy;
+                                                });
+                                              },
+                                              onCancel: () => {}
                                             });
                                           }}
-                                        />
+                                          className="flex items-center justify-center w-full"
+                                          title="Enable discount"
+                                        >
+                                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isDiscounted ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400'}`}>
+                                            {isDiscounted && (
+                                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </span>
+                                        </button>
+                                      </td>
+                                    )}
+                                    {/* Promo Checkbox */}
+                                    {visibleColumns.promoBadge && (
+                                      <td className="border border-gray-300 p-1">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            const newValue = !(p.isPromo ?? false);
+                                            setConfirmDialog({
+                                              isOpen: true,
+                                              title: newValue ? `Mark "${p.title}" as PROMO?` : `Remove PROMO from "${p.title}"?`,
+                                              description: newValue
+                                                ? 'This item will display a yellow "PROMO" badge on the quotation, highlighting it as a special offer.'
+                                                : 'The PROMO badge will be removed from this item on the quotation.',
+                                              onConfirm: () => {
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[idx] = { ...copy[idx], isPromo: newValue };
+                                                  return copy;
+                                                });
+                                              },
+                                              onCancel: () => {}
+                                            });
+                                          }}
+                                          className="flex items-center justify-center w-full"
+                                          title="Mark as promo item"
+                                        >
+                                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${p.isPromo ? 'bg-yellow-500 border-yellow-500' : 'bg-white border-gray-400'}`}>
+                                            {p.isPromo && (
+                                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </span>
+                                        </button>
+                                      </td>
+                                    )}
+                                    {/* Hide Discount in Preview Checkbox */}
+                                    {visibleColumns.hideDiscount && (
+                                      <td className="border border-gray-300 p-1">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            const newValue = !(p.hideDiscountInPreview ?? false);
+                                            setConfirmDialog({
+                                              isOpen: true,
+                                              title: newValue ? `Hide Discount for "${p.title}"?` : `Show Discount for "${p.title}"?`,
+                                              description: newValue
+                                                ? 'Discount details will be hidden on the PDF. Client sees clean pricing without discount breakdown.'
+                                                : 'Discount details will be visible on the PDF showing savings to client.',
+                                              onConfirm: () => {
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[idx] = { ...copy[idx], hideDiscountInPreview: newValue };
+                                                  return copy;
+                                                });
+                                              },
+                                              onCancel: () => {}
+                                            });
+                                          }}
+                                          className="flex items-center justify-center w-full"
+                                          title="Hide discount in preview"
+                                        >
+                                          <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${p.hideDiscountInPreview ? 'bg-blue-400 border-blue-400' : 'bg-white border-gray-400'}`}>
+                                            {p.hideDiscountInPreview && (
+                                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </span>
+                                        </button>
+                                      </td>
+                                    )}
+                                    {/* Per-Item Display Mode Dropdown */}
+                                    {visibleColumns.displayMode && (
+                                      <td className="border border-gray-300 p-0.5 bg-purple-50/30">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            const displayOptions = [
+                                              { value: 'transparent', label: 'Full', desc: 'Show all pricing details transparently' },
+                                              { value: 'net_only', label: 'Net Only', desc: 'Show only net price, hide unit price' },
+                                              { value: 'value_add', label: 'Show Savings', desc: 'Highlight discount savings to client' },
+                                              { value: 'bundle', label: 'Bundle', desc: 'Show as bundled package pricing' },
+                                              { value: 'request', label: 'On Request', desc: 'Price shown as "Upon Request"' }
+                                            ];
+                                            const currentMode = p.displayMode || 'transparent';
+                                            const nextIndex = (displayOptions.findIndex(o => o.value === currentMode) + 1) % displayOptions.length;
+                                            const nextOption = displayOptions[nextIndex];
+                                            
+                                            setConfirmDialog({
+                                              isOpen: true,
+                                              title: `Change Display for "${p.title}"?`,
+                                              description: `Switch from "${displayOptions.find(o => o.value === currentMode)?.label}" to "${nextOption.label}": ${nextOption.desc}`,
+                                              onConfirm: () => {
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[idx] = { ...copy[idx], displayMode: nextOption.value as SelectedProduct['displayMode'] };
+                                                  return copy;
+                                                });
+                                              },
+                                              onCancel: () => {}
+                                            });
+                                          }}
+                                          className="w-full text-[9px] border border-gray-300 rounded px-1 py-0.5 bg-white text-left hover:bg-purple-100 transition-colors"
+                                          title="How to display pricing to client"
+                                        >
+                                          {p.displayMode === 'net_only' ? 'Net Only' : 
+                                           p.displayMode === 'value_add' ? 'Show Savings' :
+                                           p.displayMode === 'bundle' ? 'Bundle' :
+                                           p.displayMode === 'request' ? 'On Request' : 'Full'}
+                                        </button>
+                                      </td>
+                                    )}
 
-                                        {/* Discount Input */}
-                                        {isDiscounted && (
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            step="0.01"
-                                            value={p.discount ?? 0}
-                                            onChange={(e) => {
-                                              const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                              setSelectedProducts((prev) => {
-                                                const copy = [...prev];
-                                                copy[idx] = { ...copy[idx], discount: val };
-                                                return copy;
-                                              });
-                                            }}
-                                            className="w-15 p-0 border-none rounded-none"
-                                          />
-                                        )}
-                                      </div>
-                                    </td>
-
-                                    <td className="hidden sm:table-cell">
-                                      <Textarea
-                                        value={p.itemRemarks || ""}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          setSelectedProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[idx] = { ...copy[idx], itemRemarks: val };
-                                            return copy;
-                                          });
-                                        }}
-                                        placeholder="Enter any remarks here..."
-                                        rows={3}
-                                        className="capitalize rounded-none text-[10px] w-full p-1"
-                                      />
-                                    </td>
-
-                                    <td className="p-1 sm:p-2">
+                                    <td className="p-0.5">
                                       <div className="flex items-center gap-1 sm:gap-2">
-                                        {/* Product Image */}
-                                        <img
-                                          src={p.images?.[0]?.src || "/Taskflow.png"}
-                                          alt={p.title}
-                                          className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded shrink-0"
-                                        />
+                                        {/* Product Image - Clickable */}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const imgUrl = p.images?.[0]?.src || "/Taskflow.png";
+                                            setPreviewImageUrl(imgUrl);
+                                            setImagePreviewOpen(true);
+                                          }}
+                                          className="w-8 h-8 sm:w-12 sm:h-12 rounded shrink-0 overflow-hidden hover:ring-2 hover:ring-blue-400 transition-all cursor-pointer p-0 border-0 bg-transparent"
+                                          title="Click to preview image"
+                                        >
+                                          <img
+                                            src={p.images?.[0]?.src || "/Taskflow.png"}
+                                            alt={p.title}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        </button>
 
                                         <div className="flex-1 min-w-0">
                                           {/* Product Title (Editable) */}
+                                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                            {p.isPromo && (
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-yellow-400 text-yellow-900 shrink-0 animate-pulse">
+                                                🏷️ PROMO
+                                              </span>
+                                            )}
+                                          </div>
                                           <div
                                             contentEditable
                                             suppressContentEditableWarning
@@ -3100,61 +4333,86 @@ ${spec.value}
                                       </div>
                                     </td>
 
-                                    <td className="border border-gray-300 p-1 sm:p-2">
-                                      <Input
-                                        type="number"
-                                        min={p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1}
-                                        value={p.quantity}
-                                        onChange={(e) => {
-                                          const raw = parseInt(e.target.value, 10) || 1;
-                                          const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
-                                          const val = Math.max(floor, raw);
-                                          setSelectedProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[idx] = { ...copy[idx], quantity: val };
-                                            return copy;
-                                          });
-                                        }}
-                                        className="w-12 sm:w-full p-1 sm:p-2 rounded-none text-xs"
-                                      />
+                                    <td className="border border-gray-300 p-0.5">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
+                                            const newVal = Math.max(floor, p.quantity - 1);
+                                            if (newVal !== p.quantity) {
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[idx] = { ...copy[idx], quantity: newVal };
+                                                return copy;
+                                              });
+                                            }
+                                          }}
+                                          className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all duration-150 ease-in-out"
+                                          disabled={p.quantity <= (p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1)}
+                                          title="Decrease quantity"
+                                        >
+                                          −
+                                        </button>
+                                        <Input
+                                          type="text"
+                                          inputMode="numeric"
+                                          value={p.quantity}
+                                          onChange={(e) => {
+                                            const raw = e.target.value;
+                                            if (raw === '' || /^\d*$/.test(raw)) {
+                                              const val = parseInt(raw, 10) || 1;
+                                              const floor = p.procurementMinQty && p.procurementMinQty > 0 ? p.procurementMinQty : 1;
+                                              const finalVal = Math.max(floor, val);
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[idx] = { ...copy[idx], quantity: finalVal };
+                                                return copy;
+                                              });
+                                            }
+                                          }}
+                                          className="w-10 min-w-[36px] p-0.5 rounded-none text-xs text-center font-medium overflow-hidden text-ellipsis h-6 focus:outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[idx] = { ...copy[idx], quantity: p.quantity + 1 };
+                                              return copy;
+                                            });
+                                          }}
+                                          className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all duration-150 ease-in-out"
+                                          title="Increase quantity"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
                                       {p.procurementMinQty != null && p.procurementMinQty > 0 && (
-                                        <div className="text-[9px] text-gray-500 mt-1">
+                                        <div className="text-[9px] text-gray-500 mt-1 text-center">
                                           Min (PD): <span className="font-bold">{p.procurementMinQty}</span>
                                         </div>
                                       )}
                                     </td>
 
-                                    <td className="border border-gray-300 p-1 sm:p-2">
+                                    <td className="border border-gray-300 p-0.5">
                                       <Input
-                                        type="number"
-                                        min={p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0}
-                                        step="0.01"
-                                        value={p.price}
+                                        type="text"
+                                        inputMode="decimal"
+                                        defaultValue={p.price > 0 ? p.price.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
                                         readOnly={false}
-                                        onChange={(e) => {
-                                          const raw = parseFloat(e.target.value) || 0;
+                                        onBlur={(e) => {
+                                          const raw = e.target.value.replace(/,/g, '');
+                                          const val = parseFloat(raw) || 0;
                                           const minPrice = p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0;
-                                          const val = Math.max(minPrice, raw);
+                                          const finalVal = Math.max(minPrice, val);
                                           setSelectedProducts((prev) => {
                                             const copy = [...prev];
-                                            copy[idx] = { ...copy[idx], price: val };
+                                            copy[idx] = { ...copy[idx], price: finalVal };
                                             return copy;
                                           });
                                         }}
-                                        onBlur={(e) => {
-                                          if (p.procurementLockedPrice) {
-                                            const val = parseFloat(e.target.value) || 0;
-                                            const minPrice = p.originalPrice ?? 0;
-                                            if (val < minPrice) {
-                                              setSelectedProducts((prev) => {
-                                                const copy = [...prev];
-                                                copy[idx] = { ...copy[idx], price: minPrice };
-                                                return copy;
-                                              });
-                                            }
-                                          }
-                                        }}
-                                        className={`w-16 sm:w-full p-1 sm:p-2 rounded-none text-xs ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
+                                        className={`w-full min-w-[70px] p-1 rounded-none text-xs text-right font-medium overflow-hidden text-ellipsis h-6 focus:outline-none ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                       />
                                       {p.procurementLockedPrice && (
                                         <div className="text-[9px] text-gray-500 mt-1">
@@ -3163,38 +4421,251 @@ ${spec.value}
                                       )}
                                     </td>
 
-                                    <td className="border border-gray-300 p-2 font-semibold text-center hidden sm:table-cell">
-                                      {isDiscounted && discountedAmount > 0
-                                        ? `₱${discountedAmount.toFixed(2)}`
-                                        : "₱0.00"}
+                                    {showDiscountColumns && (
+                                      <td className="border border-gray-300 p-0.5">
+                                        {isDiscounted ? (
+                                          <>
+                                            <div className="flex items-center gap-0.5 justify-center mb-0.5">
+                                              {[5, 10, 15, 20].map((preset) => (
+                                                <button
+                                                  key={preset}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setSelectedProducts((prev) => {
+                                                      const copy = [...prev];
+                                                      const price = copy[idx].price;
+                                                      copy[idx] = {
+                                                        ...copy[idx],
+                                                        discount: preset,
+                                                        discountAmount: parseFloat(((price * preset) / 100).toFixed(4)),
+                                                      };
+                                                      return copy;
+                                                    });
+                                                  }}
+                                                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all duration-150 ease-in-out ${
+                                                    rowDiscountPct === preset
+                                                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                                                      : 'bg-white border border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-700'
+                                                  }`}
+                                                  title={`Apply ${preset}% discount`}
+                                                >
+                                                  {preset}%
+                                                </button>
+                                              ))}
+                                            </div>
+                                            <div className="flex items-center gap-1 justify-center">
+                                              <div className="relative">
+                                                <Input
+                                                  type="text"
+                                                  inputMode="decimal"
+                                                  defaultValue={rowDiscountPct > 0 ? rowDiscountPct.toString() : ''}
+                                                  onBlur={(e) => {
+                                                    const val = e.target.value;
+                                                    const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
+                                                    setSelectedProducts((prev) => {
+                                                      const copy = [...prev];
+                                                      const price = copy[idx].price;
+                                                      copy[idx] = {
+                                                        ...copy[idx],
+                                                        discount: pct,
+                                                        discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                                      };
+                                                      return copy;
+                                                    });
+                                                  }}
+                                                  className="w-14 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
+                                                  placeholder="%"
+                                                />
+                                                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-500 font-bold">%</span>
+                                              </div>
+                                              <span className="text-[8px] text-gray-400">|</span>
+                                              <div className="relative">
+                                                <Input
+                                                  type="text"
+                                                  inputMode="decimal"
+                                                  defaultValue={unitDiscountAmt > 0 ? unitDiscountAmt.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                                  onBlur={(e) => {
+                                                    const raw = e.target.value.replace(/,/g, '');
+                                                    const amt = raw === '' || raw === '.' ? 0 : Math.max(0, parseFloat(raw) || 0);
+                                                    setSelectedProducts((prev) => {
+                                                      const copy = [...prev];
+                                                      const price = copy[idx].price;
+                                                      const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
+                                                      copy[idx] = {
+                                                        ...copy[idx],
+                                                        discountAmount: amt,
+                                                        discount: Math.min(100, newPct),
+                                                      };
+                                                      return copy;
+                                                    });
+                                                  }}
+                                                  className="w-16 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
+                                                  placeholder="₱"
+                                                />
+                                                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-500 font-bold">₱</span>
+                                              </div>
+                                            </div>
+                                            <div className="text-[8px] text-gray-400 text-center opacity-0">spacer</div>
+                                          </>
+                                        ) : (
+                                          <span className="text-gray-300 text-center block text-xs">—</span>
+                                        )}
+                                      </td>
+                                    )}
+
+                                    {/* Net Unit Price — editable, changing this syncs discount */}
+                                    <td className="border border-gray-300 p-0.5 bg-blue-50/30">
+                                      {isDiscounted ? (
+                                        <>
+                                          <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            defaultValue={discountedUnitPrice > 0 ? discountedUnitPrice.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                            onBlur={(e) => {
+                                              const raw = e.target.value.replace(/,/g, '');
+                                              const newNetPrice = Math.max(0, parseFloat(raw) || 0);
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                const unitPrice = copy[idx].price;
+                                                if (unitPrice > 0 && newNetPrice < unitPrice) {
+                                                  const discountAmt = unitPrice - newNetPrice;
+                                                  const discountPct = (discountAmt / unitPrice) * 100;
+                                                  copy[idx] = {
+                                                    ...copy[idx],
+                                                    isDiscounted: true,
+                                                    discountAmount: parseFloat(discountAmt.toFixed(4)),
+                                                    discount: parseFloat(Math.min(100, Math.max(0, discountPct)).toFixed(4)),
+                                                  };
+                                                } else if (newNetPrice >= unitPrice) {
+                                                  copy[idx] = {
+                                                    ...copy[idx],
+                                                    isDiscounted: false,
+                                                    discountAmount: 0,
+                                                    discount: 0,
+                                                  };
+                                                }
+                                                return copy;
+                                              });
+                                            }}
+                                            className="w-full min-w-[60px] p-1 rounded-none text-xs text-right font-bold text-blue-700 overflow-hidden text-ellipsis h-6 focus:outline-none"
+                                            placeholder="₱"
+                                          />
+                                          <div className="text-[8px] text-blue-600 mt-0.5 text-center">
+                                            {rowDiscountPct.toFixed(2)}% off
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <span className="text-gray-300 text-center block text-xs">—</span>
+                                      )}
                                     </td>
 
-                                    <td className="border border-gray-300 p-2 font-semibold text-center">
-                                      ₱{totalAfterDiscount.toFixed(2)}
+                                    {/* Profit Margin Columns — INTERNAL ONLY */}
+                                    {showProfitMargins && (
+                                      <>
+                                        <td className="border border-gray-300 p-0.5 bg-green-50/30">
+                                          <div className="text-center">
+                                            <span className="text-[10px] font-medium text-gray-600">
+                                              ₱{(p.regPrice || p.originalPrice || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                        </td>
+                                        <td className="border border-gray-300 p-0.5 bg-green-50/30">
+                                          {(() => {
+                                            const cost = p.regPrice || p.originalPrice || 0;
+                                            const sellingPrice = discountedUnitPrice;
+                                            const margin = sellingPrice > 0 ? ((sellingPrice - cost) / sellingPrice) * 100 : 0;
+                                            const isNegative = margin < 0;
+                                            return (
+                                              <div className="text-center">
+                                                <span className={`text-[10px] font-bold ${isNegative ? 'text-red-600' : 'text-green-600'}`}>
+                                                  {margin.toFixed(1)}%
+                                                </span>
+                                                {isNegative && (
+                                                  <span className="block text-[8px] text-red-500">⚠️ Loss</span>
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
+                                        </td>
+                                      </>
+                                    )}
+                                    {/* Total Amount — editable, changing this back-calculates discount */}
+                                    <td className="border border-gray-300 p-0.5">
+                                      <div className="flex flex-col gap-0.5">
+                                        <Input
+                                          type="text"
+                                          inputMode="decimal"
+                                          defaultValue={totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                          onBlur={(e) => {
+                                            const raw = e.target.value.replace(/,/g, '');
+                                            const newTotal = Math.max(0, parseFloat(raw) || 0);
+                                            setSelectedProducts((prev) => {
+                                              const copy = [...prev];
+                                              const price = copy[idx].price;
+                                              const qty = copy[idx].quantity;
+                                              const gross = price * qty;
+                                              if (gross > 0 && newTotal <= gross && qty > 0) {
+                                                const totalDiscAmt = gross - newTotal;
+                                                const unitDiscAmt = totalDiscAmt / qty;
+                                                const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
+                                                copy[idx] = {
+                                                  ...copy[idx],
+                                                  isDiscounted: true,
+                                                  discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
+                                                  discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
+                                                };
+                                              } else if (newTotal > gross && qty > 0) {
+                                                // Total exceeds gross — increase unit price to match desired total
+                                                const newUnitPrice = newTotal / qty;
+                                                copy[idx] = {
+                                                  ...copy[idx],
+                                                  price: parseFloat(newUnitPrice.toFixed(4)),
+                                                  // Keep discount enabled but zeroed (price already accounts for special rate)
+                                                  isDiscounted: false,
+                                                  discount: 0,
+                                                  discountAmount: 0,
+                                                };
+                                              }
+                                              return copy;
+                                            });
+                                          }}
+                                          className="w-full min-w-[60px] p-1 rounded-none text-xs font-bold text-right overflow-hidden text-ellipsis h-6 focus:outline-none"
+                                          placeholder="₱"
+                                        />
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          {isDiscounted && unitDiscountAmt > 0 && !p.hideDiscountInPreview && (
+                                            <span className="text-[8px] text-green-600 font-semibold whitespace-nowrap">
+                                              save ₱{(unitDiscountAmt * p.quantity).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                            </span>
+                                          )}
+                                          {p.hideDiscountInPreview && isDiscounted && (
+                                            <span className="text-[8px] text-blue-600 font-semibold italic whitespace-nowrap">
+                                              Special Price
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
                                     </td>
 
-                                    <td className="border border-gray-300 text-center">
-                                      <div className="flex items-center justify-center gap-2">
-                                        <Button
-                                          variant="outline"
+                                    <td className="border border-gray-300 p-1">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button
+                                          type="button"
                                           onClick={() => toggleRow(p.uid)}
-                                          className="flex items-center rounded-none gap-1 px-2"
+                                          className="flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all duration-150 ease-in-out"
+                                          title={expandedRows[p.uid] ? "Hide details" : "View details"}
                                         >
                                           {expandedRows[p.uid] ? (
-                                            <>
-                                              <EyeOff className="w-4 h-4" />
-                                              <span className="hidden sm:inline">Hide</span>
-                                            </>
+                                            <EyeOff className="w-3.5 h-3.5 text-gray-600" />
                                           ) : (
-                                            <>
-                                              <Eye className="w-4 h-4" />
-                                              <span className="hidden sm:inline">View</span>
-                                            </>
+                                            <Eye className="w-3.5 h-3.5 text-gray-600" />
                                           )}
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          className="flex items-center rounded-none gap-1"
+                                          <span className="hidden sm:inline text-gray-700">{expandedRows[p.uid] ? "Hide" : "View"}</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="flex items-center justify-center p-1 border border-red-200 bg-white hover:bg-red-50 hover:border-red-300 transition-all duration-150 ease-in-out"
+                                          title="Delete product"
                                           onClick={() => {
                                             if (p.cloudinaryPublicId) {
                                               deleteCloudinaryImage(p.cloudinaryPublicId);
@@ -3209,47 +4680,55 @@ ${spec.value}
                                             });
                                           }}
                                         >
-                                          <Trash className="text-red-600" />
-                                        </Button>
-
+                                          <Trash className="w-3.5 h-3.5 text-red-500" />
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>
-                                  {/* need to fix */}
-                                  {/* <tr className="even:bg-gray-50">
-                              <td colSpan={7} className="border border-gray-300 p-2">
-                                <label className="block text-xs font-medium mb-1">Description:</label>
-                                <div
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  className="w-full max-h-90 overflow-auto border border-gray-300 rounded p-2 text-xs"
-                                  dangerouslySetInnerHTML={{
-                                    __html: extractTableHtml(p.description || ""),
-                                  }}
-                                  onBlur={(e) => {
-                                    const html = e.currentTarget.innerHTML;
-                                    setSelectedProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[idx] = { ...copy[idx], description: html };
-                                      return copy;
-                                    });
-                                  }}
-                                />
-                              </td>
-                            </tr> */}
-                                  {/* SECTION: Product Technical Specifications (Read-Only) */}
                                   {isExpanded && (
                                     <tr className="even:bg-[#F9FAFA]">
-                                      <td colSpan={7} className="border border-gray-300 p-4 align-top">
-                                        <label className="block text-xs font-medium mb-1">Description:</label>
-                                        <div
-                                          className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                          dangerouslySetInnerHTML={{
-                                            __html:
-                                              p.description ||
-                                              '<span class="text-gray-400 italic">No specifications provided.</span>',
-                                          }}
-                                        />
+                                      <td
+                                        colSpan={(() => {
+                                          // Calculate colspan for expanded row (all columns)
+                                          let colspan = 12; // base: drag(1) + #(1) + disc(1) + promo(1) + hide(1) + display(1) + product(1) + qty(1) + unit(1) + net(1) + total(1) + act(1)
+                                          if (bulkMode) colspan += 1;
+                                          if (showProfitMargins && showMarginAlerts) colspan += 1;
+                                          if (showDiscountColumns) colspan += 1;
+                                          if (showProfitMargins) colspan += 2;
+                                          return colspan;
+                                        })()}
+                                        className="border border-gray-300 p-4 align-top"
+                                      >
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                          <div>
+                                            <label className="block text-xs font-bold mb-2 uppercase tracking-wide text-gray-500">Technical Description:</label>
+                                            <div
+                                              className="w-full max-h-60 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                              dangerouslySetInnerHTML={{
+                                                __html:
+                                                  p.description ||
+                                                  '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                              }}
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="block text-xs font-bold mb-2 uppercase tracking-wide text-gray-500">Item Remarks:</label>
+                                            <Textarea
+                                              value={p.itemRemarks || ""}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[idx] = { ...copy[idx], itemRemarks: val };
+                                                  return copy;
+                                                });
+                                              }}
+                                              placeholder="Enter any remarks here..."
+                                              rows={6}
+                                              className="capitalize rounded-sm text-xs w-full p-2 border-gray-200"
+                                            />
+                                          </div>
+                                        </div>
                                       </td>
                                     </tr>
                                   )}
@@ -3260,60 +4739,125 @@ ${spec.value}
                           </tbody>
                           <tfoot className="bg-gray-100 font-bold text-xs">
                             <tr>
-                              <td className="border border-gray-300 p-2 text-center"></td>
-                              <td className="border border-gray-300 p-2 text-center"></td>
-                              <td className="border border-gray-300 p-2 text-center"></td>
-                              <td className="border border-gray-300 p-2 text-center"></td>
-                              <td className="border border-gray-300 p-2"></td>
+                              {/* Empty cells for: drag, bulk, #, disc, promo, hide, display, alert, product */}
+                              <td className="border border-gray-300 p-1"></td>
+                              {bulkMode && <td className="border border-gray-300 p-1"></td>}
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              {showProfitMargins && showMarginAlerts && <td className="border border-gray-300 p-1"></td>}
+                              <td className="border border-gray-300 p-1"></td>
+                              {/* Data cells */}
                               <td className="border border-gray-300 p-2 text-center font-black">
                                 {selectedProducts.reduce((acc, p) => acc + p.quantity, 0)}
                               </td>
                               <td className="border border-gray-300 p-2 text-center font-black">
-                                {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
+                                {selectedProducts.reduce((acc, p) => acc + p.price, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                               </td>
-                              <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
+                              {showDiscountColumns && (
+                                <td className="border border-gray-300 p-2 text-center hidden sm:table-cell text-gray-500">
+                                  -₱{selectedProducts.reduce((acc, p) => {
+                                    const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                    const unitDiscountAmount = (p.price * discount) / 100;
+                                    return acc + (unitDiscountAmount * p.quantity);
+                                  }, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </td>
+                              )}
+                              {/* NET column - sum of net unit prices */}
+                              <td className="border border-gray-300 p-2 text-center font-black text-blue-700">
+                                {selectedProducts.reduce((acc, p) => {
+                                  const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                  const unitDiscountAmount = p.discountAmount != null && p.discountAmount > 0
+                                    ? p.discountAmount
+                                    : (p.price * discount) / 100;
+                                  const netUnitPrice = p.price - unitDiscountAmount;
+                                  return acc + netUnitPrice;
+                                }, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                              </td>
+                              {showProfitMargins && (
+                                <>
+                                  <td className="border border-gray-300 p-2 text-center font-black text-[#121212]">
+                                    ₱{selectedProducts.reduce((acc, p) => {
+                                      const discount = p.isDiscounted ? p.discount ?? 0 : 0;
+                                      const unitDiscountAmount = (p.price * discount) / 100;
+                                      const netUnitPrice = p.price - unitDiscountAmount;
+                                      return acc + (netUnitPrice * p.quantity);
+                                    }, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                  </td>
+                                  <td className="border border-gray-300 p-1"></td>
+                                </>
+                              )}
+                              {/* TOTAL column - sum of total amounts */}
+                              <td className="border border-gray-300 p-2 text-center font-black text-[#121212]">
                                 ₱{selectedProducts.reduce((acc, p) => {
                                   const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                  const unitDiscountAmount = (p.price * discount) / 100;
-                                  return acc + (unitDiscountAmount * p.quantity);
-                                }, 0).toFixed(2)}
-                              </td>
-                              <td className="border border-gray-300 p-2 text-center font-black">
-                                ₱{selectedProducts.reduce((acc, p) => {
-                                  const discount = p.isDiscounted ? p.discount ?? 0 : 0;
-                                  const unitDiscountAmount = (p.price * discount) / 100;
+                                  const unitDiscountAmount = p.discountAmount != null && p.discountAmount > 0
+                                    ? p.discountAmount
+                                    : (p.price * discount) / 100;
                                   const netUnitPrice = p.price - unitDiscountAmount;
                                   return acc + (netUnitPrice * p.quantity);
-                                }, 0).toFixed(2)}
+                                }, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                               </td>
-                              <td className="border border-gray-300 p-2"></td>
                             </tr>
 
                             {/* Delivery & Restocking Fee Row — desktop only inside table */}
-                            <tr className="hidden sm:table-row">
-                              <td colSpan={6} className="border border-gray-300 p-2"></td>
-                              <td colSpan={4} className="border border-gray-300 p-2">
-                                <div className="flex flex-col gap-2">
+                            <tr className="hidden sm:table-row bg-gray-50">
+                              {/* Empty cells for all columns except Total */}
+                              <td className="border border-gray-300 p-1"></td>
+                              {bulkMode && <td className="border border-gray-300 p-1"></td>}
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              {showProfitMargins && showMarginAlerts && <td className="border border-gray-300 p-1"></td>}
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              <td className="border border-gray-300 p-1"></td>
+                              {showDiscountColumns && (
+                                <td className="border border-gray-300 p-1 hidden sm:table-cell"></td>
+                              )}
+                              <td className="border border-gray-300 p-1"></td>
+                              {showProfitMargins && (
+                                <>
+                                  <td className="border border-gray-300 p-1"></td>
+                                  <td className="border border-gray-300 p-1"></td>
+                                </>
+                              )}
+                              <td colSpan={3} className="border border-gray-300 p-1">
+                                <div className="flex flex-col gap-1">
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
                                     <input
-                                      type="number"
+                                      type="text"
                                       inputMode="decimal"
-                                      className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                      className="w-24 text-center border border-gray-300 rounded-none px-1.5 py-0.5 text-xs font-medium"
                                       placeholder="0.00"
                                       value={deliveryFee}
-                                      onChange={(e) => setDeliveryFee(e.target.value)}
+                                      onChange={(e) => {
+                                        const raw = e.target.value.replace(/,/g, '');
+                                        if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                          setDeliveryFee(raw);
+                                        }
+                                      }}
                                     />
                                   </div>
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
                                     <input
-                                      type="number"
+                                      type="text"
                                       inputMode="decimal"
-                                      className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                      className="w-24 text-center border border-gray-300 rounded-none px-1.5 py-0.5 text-xs font-medium"
                                       placeholder="0.00"
                                       value={restockingFee}
-                                      onChange={(e) => setRestockingFee(e.target.value)}
+                                      onChange={(e) => {
+                                        const raw = e.target.value.replace(/,/g, '');
+                                        if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                          setRestockingFee(raw);
+                                        }
+                                      }}
                                     />
                                   </div>
                                 </div>
@@ -3329,23 +4873,33 @@ ${spec.value}
                       <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
                         <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
-                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white font-medium"
                           placeholder="0.00"
                           value={deliveryFee}
-                          onChange={(e) => setDeliveryFee(e.target.value)}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/,/g, '');
+                            if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                              setDeliveryFee(raw);
+                            }
+                          }}
                         />
                       </div>
                       <div className="flex items-center justify-between py-1.5">
                         <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
-                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                          className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white font-medium"
                           placeholder="0.00"
                           value={restockingFee}
-                          onChange={(e) => setRestockingFee(e.target.value)}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/,/g, '');
+                            if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                              setRestockingFee(raw);
+                            }
+                          }}
                         />
                       </div>
                     </div>
@@ -3377,10 +4931,16 @@ ${spec.value}
               {selectedProducts.length > 0 && (
                 <Button
                   className="flex-1 lg:flex-none bg-[#121212] hover:bg-black text-white flex gap-2 items-center rounded-lg h-10 px-6 shadow-md"
-                  onClick={() => setPdfOptionsOpen(true)}
+                  onClick={() => setIsPreviewOpen(true)}
+                  title={hideDiscountInPreview ? "Preview hides discount columns (SRP only)" : showDiscountColumns ? "Preview with discount columns" : "Preview clean format (no discounts)"}
                 >
                   <Eye className="w-4 h-4" />
                   <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
+                  {showDiscountColumns && (
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded ml-1 ${hideDiscountInPreview ? 'bg-purple-500/80' : 'bg-white/20'}`}>
+                      {hideDiscountInPreview ? 'SRP Only' : 'Full Detail'}
+                    </span>
+                  )}
                 </Button>
               )}
               <Button
@@ -3478,14 +5038,16 @@ ${spec.value}
                           <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                           <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
                           <th className="p-3 border-r border-black text-left">PRODUCT DESCRIPTION</th>
-                          <th className={`p-3 border-r border-black text-center ${pdfOption === "with-discount" ? "w-20" : "w-28"}`}>UNIT PRICE</th>
-                          {pdfOption === "with-discount" && (
+                          <th className={`p-3 border-r border-black text-center ${showDiscountColumns && !hideDiscountInPreview ? "w-20" : "w-28"}`}>
+                            {hideDiscountInPreview ? 'SRP' : 'UNIT PRICE'}
+                          </th>
+                          {showDiscountColumns && !hideDiscountInPreview && (
                             <>
-                              <th className="p-3 border-r border-black w-12 text-center">DISC</th>
-                              <th className="p-3 border-r border-black w-24 text-center">DISCOUNT PRICE</th>
+                              <th className="p-3 border-r border-black w-20 text-center">DISC/UNIT</th>
+                              <th className="p-3 border-r border-black w-28 text-center">NET UNIT PRICE</th>
                             </>
                           )}
-                          <th className={`p-3 text-center ${pdfOption === "with-discount" ? "w-20" : "w-28"}`}>TOTAL AMOUNT</th>
+                          <th className={`p-3 text-center ${showDiscountColumns && !hideDiscountInPreview ? "w-24" : "w-28"}`}>TOTAL AMOUNT</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black">
@@ -3501,11 +5063,29 @@ ${spec.value}
                               )}
                             </td>
                             <td className="p-4 border-r border-black align-top">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <p className="font-black text-[#121212] text-xs uppercase">{item.title}</p>
                                 {item.isSpf1 && (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-600 text-white shrink-0">
                                     SPF
+                                  </span>
+                                )}
+                                {item.isPromo && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-yellow-400 text-yellow-900 shrink-0">
+                                    🏷️ PROMO
+                                  </span>
+                                )}
+                                {item.displayMode && item.displayMode !== 'transparent' && (
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0 ${
+                                    item.displayMode === 'request' ? 'bg-gray-600 text-white' :
+                                    item.displayMode === 'bundle' ? 'bg-purple-600 text-white' :
+                                    item.displayMode === 'net_only' ? 'bg-blue-600 text-white' :
+                                    item.displayMode === 'value_add' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'
+                                  }`}>
+                                    {item.displayMode === 'request' ? 'ON REQUEST' :
+                                     item.displayMode === 'bundle' ? 'PACKAGE' :
+                                     item.displayMode === 'net_only' ? 'NET PRICE' :
+                                     item.displayMode === 'value_add' ? 'YOU SAVE' : item.displayMode}
                                   </span>
                                 )}
                               </div>
@@ -3531,37 +5111,94 @@ ${spec.value}
                                 className="text-[10px] text-gray-500 leading-relaxed prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ __html: item.description }}
                               />
-                              <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.itemRemarks}</span>
+                              {item.itemRemarks && <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800 inline-block">{item.itemRemarks}</span>}
                             </td>
-                            <td className={`p-4 text-right border-r border-black align-top font-medium w-28`}>
-                              ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            <td className={`p-4 text-right border-r border-black align-top font-medium w-28 ${
+                              (item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle') ? 'bg-gray-50' : ''
+                            }`}>
+                              {(() => {
+                                const mode = item.displayMode || 'transparent';
+                                if (mode === 'request') {
+                                  return <span className="text-[10px] text-gray-500 italic">Upon request</span>;
+                                }
+                                if (mode === 'net_only' || mode === 'bundle') {
+                                  return <span className="text-[10px] text-gray-400">—</span>;
+                                }
+                                // When hideDiscountInPreview, show discounted amount as SRP
+                                if (hideDiscountInPreview) {
+                                  return `₱${item.discountedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                                }
+                                return `₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                              })()}
                             </td>
-                            {pdfOption === "with-discount" && (
+                            {showDiscountColumns && !hideDiscountInPreview && (
                               <>
-                                <td className="p-4 text-right border-r border-black align-top w-12">
-                                  {item.discount > 0 ? (
+                                {/* Discount amount in peso per unit — accounting standard */}
+                                <td className={`p-4 text-right border-r border-black align-top w-20 ${
+                                  item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? 'bg-gray-50' : ''
+                                }`}>
+                                  {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
+                                    <span className="text-[10px] text-gray-400">—</span>
+                                  ) : item.discountAmount > 0 && !item.hideDiscountInPreview ? (
                                     <div>
-                                      <span className="font-bold">{item.discount}%</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-gray-400">-</span>
-                                  )}
-                                </td>
-                                <td className="p-4 text-right border-r border-black align-top w-24">
-                                  {item.discount > 0 ? (
-                                    <div>
-                                      <div className="font-medium">
-                                        ₱{item.discountedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      <div className="font-bold text-red-600">
+                                        -₱{item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="text-[9px] text-gray-400">
+                                        ({item.discount.toFixed(2)}%)
                                       </div>
                                     </div>
+                                  ) : item.hideDiscountInPreview && item.discountAmount > 0 ? (
+                                    <span className="text-[9px] text-blue-600 italic">Special Price</span>
                                   ) : (
-                                    <span className="font-medium">₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                    <span className="text-[10px] text-gray-400">—</span>
+                                  )}
+                                </td>
+                                {/* Net unit price after discount */}
+                                <td className={`p-4 text-right border-r border-black align-top w-28 ${item.displayMode === 'request' ? 'bg-gray-50' : ''}`}>
+                                  {item.displayMode === 'request' ? (
+                                    <span className="text-[10px] text-gray-400">—</span>
+                                  ) : (
+                                    <div className="font-medium">
+                                      ₱{item.discountedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </div>
+                                  )}
+                                  {item.discountAmount > 0 && !item.hideDiscountInPreview && item.displayMode !== 'net_only' && item.displayMode !== 'bundle' && (
+                                    <div className="text-[9px] text-gray-400 mt-0.5">net/unit</div>
                                   )}
                                 </td>
                               </>
                             )}
-                            <td className={`p-4 text-right font-black align-top text-[#121212] w-28`}>
-                              ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            <td className={`p-4 text-right font-black align-top text-[#121212] w-28 ${item.displayMode === 'request' ? 'bg-gray-50' : ''}`}>
+                              {(() => {
+                                const mode = item.displayMode || 'transparent';
+                                if (mode === 'request') {
+                                  return <span className="text-[11px] text-gray-600 italic">Price on request</span>;
+                                }
+                                if (mode === 'bundle') {
+                                  return (
+                                    <div>
+                                      <div className="font-medium text-[#121212]">
+                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="text-[8px] text-purple-600 mt-0.5">Package Price</div>
+                                    </div>
+                                  );
+                                }
+                                if (mode === 'value_add' && item.totalDiscountAmount > 0) {
+                                  return (
+                                    <div>
+                                      <div className="font-medium text-[#121212]">
+                                        ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="text-[8px] text-green-600 mt-0.5 font-bold">
+                                        YOU SAVE ₱{item.totalDiscountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                              })()}
                             </td>
                           </tr>
                         ))}
@@ -3673,7 +5310,31 @@ ${spec.value}
                             <table className="w-full border-collapse">
                               <tbody className="text-[10px]">
 
-                                {/* Row 1: Net Sales */}
+                                {/* Row 1: Gross Sales (only shown when Show Discount Row is checked) */}
+                                {showSummaryDiscounts && payload.items.some(i => i.discountAmount > 0) && (
+                                  <tr className="border-b border-gray-100">
+                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
+                                      Gross Sales (Before Discount)
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right font-black text-gray-900">
+                                      ₱{(payload.items.reduce((a, i) => a + i.unitPrice * i.qty, 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                )}
+
+                                {/* Row 2: Total Discount (only if any discount exists AND showSummaryDiscounts is true) */}
+                                {showSummaryDiscounts && payload.items.some(i => i.discountAmount > 0) && (
+                                  <tr className="border-b border-gray-100">
+                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-red-500">
+                                      Less: Trade Discount
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right font-black text-red-600">
+                                      -₱{(payload.items.reduce((a, i) => a + (i.totalDiscountAmount || 0), 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                )}
+
+                                {/* Row 3: Net Sales */}
                                 <tr className="border-b border-gray-100">
                                   <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
                                     Net Sales {payload.vatTypeLabel === "VAT Inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
@@ -4011,61 +5672,410 @@ ${spec.value}
         </DialogContent>
       </Dialog>
 
-      {/* PDF Download Options Modal */}
-      <Dialog open={pdfOptionsOpen} onOpenChange={setPdfOptionsOpen}>
-        <DialogContent className="max-w-[400px] w-[90vw] p-6 border-none bg-white shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold uppercase tracking-wider">Review Quotation</DialogTitle>
-            <DialogDescription className="text-sm text-gray-500">
-              Select preview format option
-            </DialogDescription>
+      {/* IMAGE PREVIEW DIALOG */}
+      <Dialog open={imagePreviewOpen} onOpenChange={setImagePreviewOpen}>
+        <DialogContent className="max-w-[800px] w-[95vw] p-0 border-none bg-black/90 shadow-2xl">
+          <DialogHeader className="p-4">
+            <DialogTitle className="text-white text-sm font-bold uppercase tracking-wider">Image Preview</DialogTitle>
           </DialogHeader>
-
-          <div className="py-4">
-            <RadioGroup
-              value={pdfOption}
-              onValueChange={(value) => setPdfOption(value as "with-discount" | "default-only")}
-              className="flex flex-col gap-3"
-            >
-              <div className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${pdfOption === "with-discount" ? "border-yellow-500 bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
-                <RadioGroupItem value="with-discount" id="preview-with-discount" />
-                <label htmlFor="preview-with-discount" className="flex-1 cursor-pointer">
-                  <div className="font-bold text-sm">With Discount</div>
-                  <div className="text-xs text-gray-500">Include discount % and discounted price columns</div>
-                </label>
-              </div>
-
-              <div className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${pdfOption === "default-only" ? "border-yellow-500 bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
-                <RadioGroupItem value="default-only" id="preview-default-only" />
-                <label htmlFor="preview-default-only" className="flex-1 cursor-pointer">
-                  <div className="font-bold text-sm">Default Only</div>
-                  <div className="text-xs text-gray-500">No discount columns - clean standard format</div>
-                </label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <DialogFooter className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPdfOptionsOpen(false)}
-              className="rounded-none flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setPdfOptionsOpen(false);
-                setIsPreviewOpen(true);
+          <div className="flex items-center justify-center p-4">
+            <img
+              src={previewImageUrl}
+              alt="Preview"
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/Taskflow.png";
               }}
-              className="rounded-none flex-1 bg-[#121212] hover:bg-black"
+            />
+          </div>
+          <DialogFooter className="p-4 bg-black/90">
+            <Button
+              onClick={() => setImagePreviewOpen(false)}
+              className="rounded-none bg-white text-black hover:bg-gray-200 font-bold"
             >
-              <Eye className="w-4 h-4 mr-2" />
-              Preview
+              <X className="w-4 h-4 mr-2" />
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* TEMPLATES MODAL */}
+      <Dialog open={showTemplateModal} onOpenChange={setShowTemplateModal}>
+        <DialogContent className="max-w-[500px] w-[95vw] p-0 border-none shadow-2xl">
+          <DialogHeader className="p-4 bg-gradient-to-r from-purple-600 to-blue-600">
+            <DialogTitle className="text-white text-sm font-black uppercase tracking-widest">Quote Templates</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 max-h-[60vh] overflow-y-auto">
+            {/* Save Current Template */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-gray-700 mb-2">Save Current Quote as Template</h4>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Template name (e.g., Standard LED Package)"
+                  className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5"
+                />
+                <button
+                  type="button"
+                  onClick={saveTemplate}
+                  disabled={!templateName.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save
+                </button>
+              </div>
+              <p className="text-[9px] text-gray-400 mt-1">Saves all current products and settings</p>
+            </div>
+
+            {/* Load Template */}
+            <div>
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-gray-700 mb-2">Load Saved Template</h4>
+              {savedTemplates.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No templates saved yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {savedTemplates.map((template, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded hover:border-purple-300 transition-colors">
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">{template.name}</p>
+                        <p className="text-[9px] text-gray-400">{template.products.length} products</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => loadTemplate(template)}
+                          className="px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSavedTemplates(prev => prev.filter((_, i) => i !== idx))}
+                          className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded hover:bg-red-200"
+                        >
+                          <Trash className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-200">
+            <Button
+              onClick={() => setShowTemplateModal(false)}
+              className="rounded-none bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CONFIRMATION DIALOG FOR IMPORTANT TOGGLES */}
+      <Dialog open={confirmDialog?.isOpen || false} onOpenChange={(open) => {
+        if (!open) {
+          confirmDialog?.onCancel();
+          setConfirmDialog(null);
+        }
+      }}>
+        <DialogContent className="max-w-md w-[95vw] p-0 border-none shadow-2xl bg-white">
+          {/* Header */}
+          <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <DialogTitle className="text-white font-bold text-sm uppercase tracking-wider">
+                {confirmDialog?.title}
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+
+          {/* Content */}
+          <div className="p-4 space-y-3">
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {confirmDialog?.description}
+            </p>
+
+            {/* Example Box */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <span className="text-[11px] font-bold text-yellow-700 uppercase tracking-wider">Example</span>
+              </div>
+              
+              {/* Show Discount Columns Example - WITH discount columns */}
+              {confirmDialog?.title?.includes('Discount Columns') && (
+                <div className="overflow-hidden rounded border border-yellow-200">
+                  <table className="w-full text-[9px] border-collapse">
+                    <thead>
+                      <tr className="bg-yellow-100 text-yellow-800 border-b border-yellow-300">
+                        <th className="px-1 py-1 text-center font-bold">ITEM<br/>NO</th>
+                        <th className="px-1 py-1 text-center font-bold">QTY</th>
+                        <th className="px-1 py-1 text-center font-bold">REFERENCE<br/>PHOTO</th>
+                        <th className="px-1 py-1 text-left font-bold">PRODUCT<br/>DESCRIPTION</th>
+                        <th className="px-1 py-1 text-right font-bold">UNIT<br/>PRICE</th>
+                        <th className="px-1 py-1 text-right font-bold text-green-600">DISC/<br/>UNIT</th>
+                        <th className="px-1 py-1 text-right font-bold">NET UNIT<br/>PRICE</th>
+                        <th className="px-1 py-1 text-right font-bold">TOTAL<br/>AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                        <td className="px-1 py-1 text-center">1.</td>
+                        <td className="px-1 py-1 text-center">1</td>
+                        <td className="px-1 py-1 text-center text-gray-400">[IMG]</td>
+                        <td className="px-1 py-1">
+                          <div className="font-bold">BOLLARD FIXTURE E27</div>
+                          <div className="text-[7px] text-gray-500">BLD80CM02</div>
+                        </td>
+                        <td className="px-1 py-1 text-right">₱500.00</td>
+                        <td className="px-1 py-1 text-right text-green-600 font-bold">20%</td>
+                        <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                        <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="bg-yellow-50 p-1.5 text-[8px] text-yellow-700 italic border-t border-yellow-200">
+                    Client sees: DISC/UNIT and NET UNIT PRICE columns with discount details
+                  </div>
+                </div>
+              )}
+              
+              {/* SRP Only PDF Example - NO discount columns */}
+              {confirmDialog?.title?.includes('SRP Only') && (
+                <div className="overflow-hidden rounded border border-yellow-200">
+                  <table className="w-full text-[9px] border-collapse">
+                    <thead>
+                      <tr className="bg-yellow-100 text-yellow-800 border-b border-yellow-300">
+                        <th className="px-1 py-1 text-center font-bold">ITEM<br/>NO</th>
+                        <th className="px-1 py-1 text-center font-bold">QTY</th>
+                        <th className="px-1 py-1 text-center font-bold">REFERENCE<br/>PHOTO</th>
+                        <th className="px-1 py-1 text-left font-bold">PRODUCT<br/>DESCRIPTION</th>
+                        <th className="px-1 py-1 text-right font-bold">UNIT<br/>PRICE</th>
+                        <th className="px-1 py-1 text-right font-bold">TOTAL<br/>AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                        <td className="px-1 py-1 text-center">1.</td>
+                        <td className="px-1 py-1 text-center">1</td>
+                        <td className="px-1 py-1 text-center text-gray-400">[IMG]</td>
+                        <td className="px-1 py-1">
+                          <div className="font-bold">BOLLARD FIXTURE E27</div>
+                          <div className="text-[7px] text-gray-500">BLD80CM02</div>
+                        </td>
+                        <td className="px-1 py-1 text-right font-bold">₱500.00</td>
+                        <td className="px-1 py-1 text-right font-bold">₱500.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="bg-yellow-50 p-1.5 text-[8px] text-yellow-700 italic border-t border-yellow-200">
+                    Client sees: Clean SRP pricing without discount columns. Hidden discount: 20%
+                  </div>
+                </div>
+              )}
+              
+              {/* Show/Hide Discount Row Examples */}
+              {confirmDialog?.title?.includes('Discount Row') && (
+                <div className="overflow-hidden rounded border border-yellow-200">
+                  <div className="bg-yellow-100 px-2 py-1 text-[9px] font-bold text-yellow-800 uppercase border-b border-yellow-300">
+                    Summary Breakdown
+                  </div>
+                  <table className="w-full text-[9px] border-collapse">
+                    <tbody>
+                      {/* When SHOWING (ENABLING) - Include discount row */}
+                      {confirmDialog?.title?.toLowerCase().includes('show') && (
+                        <>
+                          <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                            <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">GROSS SALES (BEFORE DISCOUNT)</td>
+                            <td className="px-2 py-1 text-right font-bold">₱5,000.00</td>
+                          </tr>
+                          <tr className="bg-red-50 text-red-600 border-b border-yellow-100">
+                            <td className="px-2 py-1 text-right font-bold uppercase text-[8px]">LESS: TRADE DISCOUNT (20%)</td>
+                            <td className="px-2 py-1 text-right font-bold">-₱1,000.00</td>
+                          </tr>
+                          <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                            <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">NET SALES (VAT INCLUSIVE)</td>
+                            <td className="px-2 py-1 text-right font-bold">₱4,000.00</td>
+                          </tr>
+                        </>
+                      )}
+                      {/* When HIDING (DISABLING) - Skip from Gross to Net directly */}
+                      {confirmDialog?.title?.toLowerCase().includes('hide') && (
+                        <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                          <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">NET SALES (VAT INCLUSIVE)</td>
+                          <td className="px-2 py-1 text-right font-bold">₱4,000.00</td>
+                        </tr>
+                      )}
+                      <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                        <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">DELIVERY CHARGE</td>
+                        <td className="px-2 py-1 text-right font-bold">₱0.00</td>
+                      </tr>
+                      <tr className="bg-white text-yellow-900 border-b-2 border-yellow-200">
+                        <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">RESTOCKING FEE</td>
+                        <td className="px-2 py-1 text-right font-bold">₱0.00</td>
+                      </tr>
+                      <tr className="bg-yellow-50 text-yellow-900 border-b border-yellow-200">
+                        <td className="px-2 py-1 text-right font-black uppercase text-[10px]">TOTAL INVOICE AMOUNT</td>
+                        <td className="px-2 py-1 text-right font-black text-blue-900">₱4,000.00</td>
+                      </tr>
+                      <tr className="bg-gray-900 text-white">
+                        <td className="px-2 py-1.5 text-right font-black uppercase text-[9px]">TOTAL AMOUNT DUE</td>
+                        <td className="px-2 py-1.5 text-right font-black text-[11px]">₱4,000.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              
+              {/* VAT Example - Matches Review UI Format */}
+              {(confirmDialog?.title?.toLowerCase().includes('vat') || confirmDialog?.title?.toLowerCase().includes('zero') || confirmDialog?.title?.toLowerCase().includes('rated')) && (
+                <div className="overflow-hidden rounded border border-yellow-200">
+                  {/* Tax Type Row - Like Review */}
+                  <div className="bg-white border-b border-yellow-200 p-2">
+                    <div className="flex items-center gap-2 text-[9px]">
+                      <span className="font-bold text-red-600 italic uppercase">Tax Type:</span>
+                      <div className="flex gap-2 font-black uppercase">
+                        <span className={confirmDialog?.title?.toLowerCase().includes('inclusive') ? "text-gray-900" : "text-gray-300"}>
+                          {confirmDialog?.title?.toLowerCase().includes('inclusive') ? "●" : "○"} VAT INC
+                        </span>
+                        <span className={confirmDialog?.title?.toLowerCase().includes('exempt') ? "text-gray-900" : "text-gray-300"}>
+                          {confirmDialog?.title?.toLowerCase().includes('exempt') ? "●" : "○"} VAT EXE
+                        </span>
+                        <span className={(confirmDialog?.title?.toLowerCase().includes('zero') || confirmDialog?.title?.toLowerCase().includes('rated')) ? "text-gray-900" : "text-gray-300"}>
+                          {(confirmDialog?.title?.toLowerCase().includes('zero') || confirmDialog?.title?.toLowerCase().includes('rated')) ? "●" : "○"} ZERO-RATED
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Summary Table - Like Review */}
+                  <table className="w-full text-[10px] border-collapse">
+                    <tbody>
+                      <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                        <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">Net Sales {confirmDialog?.title?.toLowerCase().includes('inclusive') ? "(VAT Inclusive)" : "(Non-VAT)"}</td>
+                        <td className="px-2 py-1 text-right font-bold">₱100,000.00</td>
+                      </tr>
+                      <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                        <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">Delivery Charge</td>
+                        <td className="px-2 py-1 text-right font-bold">₱0.00</td>
+                      </tr>
+                      <tr className="bg-white text-yellow-900 border-b-2 border-yellow-200">
+                        <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[8px]">Restocking Fee</td>
+                        <td className="px-2 py-1 text-right font-bold">₱0.00</td>
+                      </tr>
+                      <tr className="bg-yellow-50 text-yellow-900 border-b border-yellow-200">
+                        <td className="px-2 py-1 text-right font-black uppercase text-[10px]">Total Invoice Amount</td>
+                        <td className="px-2 py-1 text-right font-black text-blue-900">₱100,000.00</td>
+                      </tr>
+                      {/* VAT Breakdown - Only for VAT Inc */}
+                      {confirmDialog?.title?.toLowerCase().includes('inclusive') && (
+                        <>
+                          <tr className="bg-white text-yellow-900 border-b border-yellow-100">
+                            <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[7px]">Less: VAT (12%)</td>
+                            <td className="px-2 py-1 text-right font-bold text-gray-400">₱10,714.29</td>
+                          </tr>
+                          <tr className="bg-white text-yellow-900 border-b-2 border-yellow-200">
+                            <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[7px]">Net of VAT (Tax Base)</td>
+                            <td className="px-2 py-1 text-right font-bold text-gray-400">₱89,285.71</td>
+                          </tr>
+                        </>
+                      )}
+                      {/* Non-VAT Status */}
+                      {(confirmDialog?.title?.toLowerCase().includes('exempt') || confirmDialog?.title?.toLowerCase().includes('zero') || confirmDialog?.title?.toLowerCase().includes('rated')) && (
+                        <tr className="bg-white text-yellow-900 border-b-2 border-yellow-200">
+                          <td className="px-2 py-1 text-right font-bold uppercase text-gray-400 text-[7px]">Tax Status</td>
+                          <td className="px-2 py-1 text-right font-bold text-gray-400 italic">
+                            {confirmDialog?.title?.toLowerCase().includes('exempt') ? "VAT Exempt" : "Zero-Rated"}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Final Total */}
+                      <tr className="bg-gray-900 text-white">
+                        <td className="px-2 py-1.5 text-right font-black uppercase text-[9px]">Total Amount Due</td>
+                        <td className="px-2 py-1.5 text-right font-black text-[11px]">₱100,000.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              
+              {/* EWT Example - Matches Review Format */}
+              {confirmDialog?.title?.includes('EWT') && (
+                <div className="overflow-hidden rounded border border-yellow-200">
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="bg-yellow-100 text-yellow-800">
+                        <th className="px-2 py-1 text-left font-bold">Description</th>
+                        <th className="px-2 py-1 text-right font-bold">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white text-yellow-900">
+                        <td className="px-2 py-1">Net of VAT (Tax Base)</td>
+                        <td className="px-2 py-1 text-right">₱89,285.71</td>
+                      </tr>
+                      {confirmDialog?.title?.includes('1%') && (
+                        <tr className="bg-blue-50 text-blue-800">
+                          <td className="px-2 py-1 font-bold">Less: EWT 1% (Goods)</td>
+                          <td className="px-2 py-1 text-right font-bold">− ₱892.86</td>
+                        </tr>
+                      )}
+                      {confirmDialog?.title?.includes('2%') && (
+                        <tr className="bg-blue-50 text-blue-800">
+                          <td className="px-2 py-1 font-bold">Less: EWT 2% (Services)</td>
+                          <td className="px-2 py-1 text-right font-bold">− ₱1,785.71</td>
+                        </tr>
+                      )}
+                      <tr className="bg-gray-900 text-white">
+                        <td className="px-2 py-1 font-bold">
+                          {confirmDialog?.title?.includes('None') ? 'Total Amount Due' : 'Net Amount to Collect'}
+                        </td>
+                        <td className="px-2 py-1 text-right font-bold">
+                          {confirmDialog?.title?.includes('None') ? '₱100,000' : 
+                           confirmDialog?.title?.includes('1%') ? '₱98,214.29' : '₱97,321.43'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <DialogFooter className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                confirmDialog?.onCancel();
+                setTimeout(() => setConfirmDialog(null), 50);
+              }}
+              className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                confirmDialog?.onConfirm();
+                setTimeout(() => setConfirmDialog(null), 50);
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors shadow-sm"
+            >
+              Confirm & Apply
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </>
   );
 }
