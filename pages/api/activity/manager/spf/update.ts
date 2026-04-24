@@ -11,19 +11,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         // Kunin lamang ang ID at ang dalawang fields na kailangang i-update
-        const { id, status, noted_by, referenceid } = req.body;
+        const { id, status, noted_by, date_approved_sales_head, referenceid } = req.body;
 
         // Validation para sa ID
         if (!id) {
             return res.status(400).json({ error: "Missing SPF id" });
         }
 
+        const updateData: any = {
+            status,
+            noted_by,
+        };
+
+        // Set date_approved_sales_head when Sales Head approves
+        if (status === "Approved by Sales Head") {
+            updateData.date_approved_sales_head = new Date().toISOString();
+        }
+
         const { data, error } = await supabase
             .from("spf_request")
-            .update({
-                status,        // Halimbawa: "Approved" o "Endorsed to Sales Head"
-                noted_by,   // Pangalan ng signatory
-            })
+            .update(updateData)
             .eq("id", id)
             .select()
             .single();

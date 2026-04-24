@@ -31,6 +31,11 @@ import {
   EyeOff,
   ImagePlus,
   Plus,
+  Package,
+  Building2,
+  PanelLeft,
+  HelpCircle,
+  Info,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -77,6 +82,16 @@ interface Completed {
   quotation_subject?: string;
   discounted_priced?: string;
   discounted_amount?: string;
+
+  // Quotation display configuration
+  hide_discount_in_preview?: boolean;
+  show_discount_columns?: boolean;
+  show_summary_discounts?: boolean;
+  show_profit_margins?: boolean;
+  margin_alert_threshold?: number;
+  show_margin_alerts?: boolean;
+  product_view_mode?: string;
+  visible_columns?: any;
 }
 
 interface ProductItem {
@@ -227,6 +242,131 @@ function formatProcurementLeadHtml(lead: string): string {
   return `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">Procurement</div><table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px"><tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><strong>Project lead time</strong></td><td style="border:1px solid #e5e7eb;padding:4px">${escapeHtmlSpf(t)}</td></tr></table>`;
 }
 
+// SPF offer parsing types
+interface SpecItem {
+  key: string;
+  value: string;
+  multiValues: string[];
+}
+
+interface SpecCategory {
+  name: string;
+  items: SpecItem[];
+}
+
+interface OfferProduct {
+  image: string;
+  qty: string;
+  spec: SpecCategory[];
+  unit_cost: string;
+  packaging: string;
+  factory_address: string;
+  port_of_discharge: string;
+  subtotal: string;
+  pcs_per_carton: string;
+  company_name: string;
+  supplier_brand: string;
+  contact_number: string;
+  item_code: string;
+  lead_time: string;
+  final_selling: string;
+}
+
+const parseField2D = (val?: string): string[][] => {
+  if (!val?.trim()) return [[""]];
+  return val.split("|ROW|").map((row) =>
+    row.split("||").map((s) => s.trim()).filter((s) => s.length > 0)
+  );
+};
+
+const parseImageField2D = (val?: string): string[][] => {
+  if (!val?.trim()) return [[""]];
+  return val.split("|ROW|").map((row) =>
+    row.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+  );
+};
+
+const parseSpec = (raw: string): SpecCategory[] => {
+  if (!raw?.trim()) return [];
+  return raw
+    .split("@@")
+    .map((catChunk) => {
+      const [catName, rest] = catChunk.split("~~");
+      if (!catName?.trim()) return null;
+      const items: SpecItem[] = (rest || "")
+        .split(";;")
+        .map((entry) => {
+          const colonIdx = entry.indexOf(":");
+          if (colonIdx === -1) return null;
+          const key = entry.slice(0, colonIdx).trim();
+          const rawVal = entry.slice(colonIdx + 1).trim();
+          const multiValues = rawVal.split("|").map((v) => v.trim()).filter(Boolean);
+          return { key, value: rawVal, multiValues } as SpecItem;
+        })
+        .filter(Boolean) as SpecItem[];
+      return { name: catName.trim(), items } as SpecCategory;
+    })
+    .filter(Boolean) as SpecCategory[];
+};
+
+const parseOfferRows = (row: SpfCreationRow): OfferProduct[][] => {
+  const f = parseField2D;
+  const images = parseImageField2D(row.product_offer_image ?? undefined);
+  const qtys = parseImageField2D(row.product_offer_qty ?? undefined);
+  const specs = f(row.product_offer_technical_specification ?? undefined);
+  const costs = f(row.product_offer_unit_cost ?? undefined);
+  const packs = f(row.product_offer_packaging_details ?? undefined);
+  const factories = f(row.product_offer_factory_address ?? undefined);
+  const ports = f(row.product_offer_port_of_discharge ?? undefined);
+  const subtotals = f(row.product_offer_subtotal ?? undefined);
+  const pcs = f(row.product_offer_pcs_per_carton ?? undefined);
+  const companies = f(row.company_name ?? undefined);
+  const brands = f(row.supplier_brand ?? undefined);
+  const contacts = f(row.contact_number ?? undefined);
+  const codes = parseImageField2D(row.item_code ?? undefined);
+  const leads = parseImageField2D(row.proj_lead_time ?? undefined);
+  const sellings = parseImageField2D(row.final_selling_cost ?? undefined);
+
+  const numRows = Math.max(images.length, qtys.length, specs.length);
+
+  return Array.from({ length: numRows }, (_, ri) => {
+    const rImg = images[ri] ?? [""];
+    const rQty = qtys[ri] ?? [""];
+    const rSpc = specs[ri] ?? [""];
+    const rCst = costs[ri] ?? [""];
+    const rPck = packs[ri] ?? [""];
+    const rFct = factories[ri] ?? [""];
+    const rPrt = ports[ri] ?? [""];
+    const rSub = subtotals[ri] ?? [""];
+    const rPcs = pcs[ri] ?? [""];
+    const rComp = companies[ri] ?? [""];
+    const rBrnd = brands[ri] ?? [""];
+    const rCont = contacts[ri] ?? [""];
+    const rCode = codes[ri] ?? [""];
+    const rLead = leads[ri] ?? [""];
+    const rSell = sellings[ri] ?? [""];
+    const numProds = Math.max(rImg.length, rQty.length, rSpc.length);
+
+    return Array.from({ length: numProds }, (_, pi) => ({
+      image: rImg[pi] ?? "",
+      qty: rQty[pi] ?? "",
+      spec: parseSpec(rSpc[pi] ?? ""),
+      unit_cost: rCst[pi] ?? "",
+      packaging: rPck[pi] ?? "",
+      factory_address: rFct[pi] ?? "",
+      port_of_discharge: rPrt[pi] ?? "",
+      subtotal: rSub[pi] ?? "",
+      pcs_per_carton: rPcs[pi] ?? "",
+      company_name: rComp[pi] ?? "",
+      supplier_brand: rBrnd[pi] ?? "",
+      contact_number: rCont[pi] ?? "",
+      item_code: rCode[pi] ?? "",
+      lead_time: rLead[pi] ?? "",
+      final_selling: rSell[pi] ?? "",
+    }));
+  });
+};
+
 interface Product {
   id: string;
   title: string;
@@ -373,6 +513,15 @@ export default function TaskListEditDialog({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
   const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
+  // NEW: Hide discount columns in preview (for SRP-only quotes)
+  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(item.hide_discount_in_preview ?? false);
+  const [showDiscountColumns, setShowDiscountColumns] = useState(item.show_discount_columns ?? false);
+  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(item.show_summary_discounts ?? false);
+  const [showProfitMargins, setShowProfitMargins] = useState(item.show_profit_margins ?? false);
+  const [marginAlertThreshold, setMarginAlertThreshold] = useState(item.margin_alert_threshold ?? 0);
+  const [showMarginAlerts, setShowMarginAlerts] = useState(item.show_margin_alerts ?? false);
+  const [productViewMode, setProductViewMode] = useState<'list' | 'grid'>('list');
+  const [visibleColumns, setVisibleColumns] = useState(item.visible_columns ?? null);
   const [selectedRevisedQuotation, setSelectedRevisedQuotation] =
     useState<RevisedQuotation | null>(null);
   const [revisedQuotations, setRevisedQuotations] = useState<
@@ -394,6 +543,8 @@ export default function TaskListEditDialog({
   >("shopify");
   const [isSpfMode, setIsSpfMode] = useState(false);
   const [isSpf1Mode, setIsSpf1Mode] = useState(false);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [spf1Loading, setSpf1Loading] = useState(false);
   const [spf1Error, setSpf1Error] = useState<string | null>(null);
   const [spf1Records, setSpf1Records] = useState<SpfCreationRow[]>([]);
@@ -411,6 +562,32 @@ export default function TaskListEditDialog({
   });
   const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+  const [showSpfDetailView, setShowSpfDetailView] = useState(false);
+  const [spfDetailOffers, setSpfDetailOffers] = useState<SpfCreationRow[]>([]);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+
+  const openFullImage = (url: string) => {
+    setFullImageUrl(url);
+    setIsImageDialogOpen(true);
+  };
+
+  const openSpfDetailView = async (spfNumber: string) => {
+    setShowSpfDetailView(true);
+    setSpfDetailOffers([]);
+    try {
+      const { data, error } = await supabase
+        .from("spf_creation")
+        .select("*")
+        .eq("spf_number", spfNumber)
+        .order("id", { ascending: true });
+      if (!error && data) {
+        setSpfDetailOffers(data as SpfCreationRow[]);
+      }
+    } catch (err) {
+      console.error("Failed to load SPF details:", err);
+    }
+  };
 
   const deleteCloudinaryImage = async (publicId: string) => {
     if (!publicId) return;
@@ -733,6 +910,16 @@ export default function TaskListEditDialog({
         address: item.address,
         start_date: startDate,
         end_date: endDate,
+
+        // Quotation display configuration
+        hide_discount_in_preview: hideDiscountInPreview,
+        show_discount_columns: showDiscountColumns,
+        show_summary_discounts: showSummaryDiscounts,
+        show_profit_margins: showProfitMargins,
+        margin_alert_threshold: marginAlertThreshold,
+        show_margin_alerts: showMarginAlerts,
+        product_view_mode: productViewMode,
+        visible_columns: visibleColumns,
       };
 
       const res = await fetch(`/api/act-update-history?id=${item.id}`, {
@@ -1820,42 +2007,86 @@ ${payload.whtType && payload.whtType !== "none"
               </button>
             </div>
           </div>
-
-
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
             <div className="h-full grid gap-0 lg:gap-5 lg:pl-8 lg:pr-4 lg:py-4 p-0 overflow-y-auto grid-cols-1 lg:grid-cols-[minmax(22rem,28rem)_1fr] lg:overflow-hidden">
               {/* Left side: Search + history */}
-              <div className={`flex-col gap-3 overflow-y-auto px-4 pl-5 sm:pl-6 lg:pl-2 lg:pr-3 pt-3 lg:pt-0 h-full min-w-0 ${mobilePanelTab === "products" ? "hidden lg:flex" : "flex"}`}>
-                <div className="flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2">
-                  {/* Source Switcher with SPF + SPF 1 */}
-                  <div className="grid grid-cols-4 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                    {[
-                      { source: "shopify", label: "Shopify", icon: "🛍️" },
-                      // { source: "firebase_shopify", label: "CMS", icon: "📦" },
-                      { source: "firebase_taskflow", label: "DB", icon: "🗄️" },
-                    ].map(({ source: s, label, icon }) => (
-                      <button key={s} type="button"
-                        onClick={() => { setProductSource(s as any); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
-                        className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all ${productSource === s && !isSpfMode && !isSpf1Mode ? "bg-[#121212] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[22rem] min-w-[22rem]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
+                {/* Collapse/Expand Button & Help */}
+                <div className={`flex items-center gap-1 mb-1 ${leftPanelCollapsed ? 'flex-col' : 'justify-between'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                    className="p-1.5 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                    title={leftPanelCollapsed ? "Expand panel" : "Collapse panel"}
+                  >
+                    <PanelLeft className={`w-4 h-4 transition-transform ${leftPanelCollapsed ? 'rotate-180' : ''}`} />
+                  </button>
+                  {!leftPanelCollapsed && (
+                    <>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Product Search</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowHelp(!showHelp)}
+                        className="p-1.5 rounded hover:bg-blue-50 text-blue-500 transition-colors"
+                        title="How to use"
                       >
-                        <span className="text-sm mb-0.5">{icon}</span>
-                        <span>{label}</span>
+                        <HelpCircle className="w-4 h-4" />
                       </button>
-                    ))}
-                    <button type="button"
-                      onClick={() => { setIsSpfMode(true); setIsSpf1Mode(false); setSearchTerm(""); setSearchResults([]); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpfMode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                    </>
+                  )}
+                </div>
+
+                {/* Help Tooltip */}
+                {showHelp && !leftPanelCollapsed && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[10px] text-blue-800 mb-2">
+                    <p className="font-bold mb-1 flex items-center gap-1"><Info className="w-3 h-3" /> How to add products:</p>
+                    <ul className="space-y-1 ml-4 list-disc">
+                      <li>Type product name in search box</li>
+                      <li>Click the <Plus className="w-3 h-3 inline" /> button to add</li>
+                      <li>Or drag the product card to the table</li>
+                      <li>Click product image to preview</li>
+                    </ul>
+                  </div>
+                )}
+
+                <div className={`flex flex-col gap-3 sticky top-0 bg-white z-10 pb-2 ${leftPanelCollapsed ? 'hidden' : ''}`}>
+                  {/* Source Switcher - Premium Pills */}
+                  <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "shopify" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                     >
-                      <span className="text-sm mb-0.5">📋</span>
-                      <span>Services</span>
+                      <span>🛍️</span>
+                      <span className="hidden sm:inline">Shopify</span>
                     </button>
-                    <button type="button"
-                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
-                      className={`flex flex-col items-center justify-center py-2.5 px-1 text-[9px] font-black uppercase tracking-wide transition-all border-l border-gray-200 ${isSpf1Mode ? "bg-red-600 text-white" : "bg-white text-red-500 hover:bg-red-50"}`}
+                    <button
+                      type="button"
+                      onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "firebase_taskflow" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                     >
-                      <span className="text-sm mb-0.5">🧾</span>
-                      <span>SPF</span>
+                      <span>🗄️</span>
+                      <span className="hidden sm:inline">DB</span>
+                    </button>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <button
+                      type="button"
+                      onClick={() => { setIsSpf1Mode(false); setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpfMode ? "bg-green-500 text-white shadow-sm" : "text-gray-500 hover:text-green-600"}`}
+                      title="Service Request Form"
+                    >
+                      <span>🛠️</span>
+                      <span className="hidden sm:inline">SRF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpf1Mode ? "bg-red-500 text-white shadow-sm" : "text-gray-500 hover:text-red-600"}`}
+                      title="Special Price Form"
+                    >
+                      <span>🧾</span>
+                      <span className="hidden sm:inline">SPF</span>
                     </button>
                   </div>
 
@@ -1974,8 +2205,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   <div className="ml-2 border-l-2 border-red-400 pl-3 pr-2 py-2.5 space-y-3">
                                     <div className="text-[10px] text-gray-700 grid grid-cols-2 gap-x-3 gap-y-1.5">
                                       <span className="truncate col-span-2 text-[9px] text-gray-500 font-mono">
-                                        Ref: {r.referenceid || "—"}
-                                      </span>
+                                        Ref: {r.referenceid || "—"}</span>
                                     </div>
                                     <button
                                       type="button"
@@ -1983,6 +2213,13 @@ ${payload.whtType && payload.whtType !== "none"
                                       className="w-full text-left text-[10px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 py-1 border-t border-red-100/80"
                                     >
                                       View selected in quotation list →
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => r.spf_number && openSpfDetailView(r.spf_number)}
+                                      className="w-full text-left text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 py-1 border-t border-blue-100/80"
+                                    >
+                                      View SPF Form Details →
                                     </button>
                                     <div className="space-y-2 pt-1">
                                       <div className="flex items-center justify-between gap-2">
@@ -2063,92 +2300,124 @@ ${payload.whtType && payload.whtType !== "none"
                   ) : (
                     !isManualEntry && (
                       <>
-                        <FieldLabel>Product Name</FieldLabel>
-                        <Input
-                          type="text"
-                          className="uppercase"
-                          value={searchTerm}
-                          placeholder="Search product by Title or SKU..."
-                          onChange={async (e) => {
-                            if (isManualEntry) return;
-                            const rawValue = e.target.value;
-                            setSearchTerm(rawValue);
-                            if (rawValue.length < 2) {
-                              setSearchResults([]);
-                              return;
-                            }
-                            setIsSearching(true);
-                            try {
-                              if (productSource === "shopify") {
-                                const res = await fetch(
-                                  `/api/shopify/products?q=${rawValue.toLowerCase()}`,
-                                );
-                                const data = await res.json();
-                                setSearchResults(data.products || []);
-                              } else {
-                                const searchUpper = rawValue.toUpperCase();
-                                const websiteFilter =
-                                  productSource === "firebase_shopify"
-                                    ? "Shopify"
-                                    : "Taskflow";
-                                const q = query(
-                                  collection(db, "products"),
-                                  where(
-                                    "websites",
-                                    "array-contains",
-                                    websiteFilter,
-                                  ),
-                                );
-                                const querySnapshot = await getDocs(q);
-                                const firebaseResults = querySnapshot.docs
-                                  .map((doc) => {
-                                    const data = doc.data();
-                                    let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                    let rawSpecsText = "";
-                                    if (Array.isArray(data.technicalSpecs)) {
-                                      data.technicalSpecs.forEach((group: any) => {
-                                        rawSpecsText += ` ${group.specGroup}`;
-                                        specsHtml += `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">${group.specGroup}</div>`;
-                                        specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
-                                        group.specs?.forEach((spec: any) => {
-                                          rawSpecsText += ` ${spec.name} ${spec.value}`;
-                                          specsHtml += `<tr><td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%"><b>${spec.name}</b></td><td style="border:1px solid #e5e7eb;padding:4px">${spec.value}</td></tr>`;
-                                        });
-                                        specsHtml += `</table>`;
-                                      });
-                                    }
-                                    return {
-                                      id: doc.id,
-                                      title: data.name || "No Name",
-                                      price:
-                                        data.salePrice || data.regularPrice || 0,
-                                      description: specsHtml,
-                                      images: data.mainImage
-                                        ? [{ src: data.mainImage }]
-                                        : [],
-                                      skus: data.itemCode ? [data.itemCode] : [],
-                                      discount: 0,
-                                      tempSearchMetadata: (
-                                        data.name +
-                                        " " +
-                                        (data.itemCode || "") +
-                                        " " +
-                                        rawSpecsText
-                                      ).toUpperCase(),
-                                    };
-                                  })
-                                  .filter((p) =>
-                                    p.tempSearchMetadata.includes(searchUpper),
-                                  );
-                                setSearchResults(firebaseResults);
-                              }
-                            } catch (err) {
-                              console.error("Search error:", err);
-                            } finally {
-                              setIsSearching(false);
-                            }
-                          }}
-                        />
+                        {/* Premium Search Input with View Mode Switcher */}
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            <Input
+                              type="text"
+                              className="uppercase rounded-lg pl-10 pr-4 py-2.5 border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm w-full"
+                              value={searchTerm}
+                              placeholder="Search product by Title or SKU..."
+                              onChange={async (e) => {
+                                if (isManualEntry) return;
+                                const rawValue = e.target.value;
+                                setSearchTerm(rawValue);
+                                if (rawValue.length < 2) {
+                                  setSearchResults([]);
+                                  return;
+                                }
+                                setIsSearching(true);
+                                try {
+                                  if (productSource === "shopify") {
+                                    const res = await fetch(
+                                      `/api/shopify/products?q=${rawValue.toLowerCase()}`,
+                                    );
+                                    const data = await res.json();
+                                    setSearchResults(data.products || []);
+                                  } else {
+                                    const searchUpper = rawValue.toUpperCase();
+                                    const websiteFilter =
+                                      productSource === "firebase_shopify"
+                                        ? "Shopify"
+                                        : "Taskflow";
+                                    const q = query(
+                                      collection(db, "products"),
+                                      where(
+                                        "websites",
+                                        "array-contains",
+                                        websiteFilter,
+                                      ),
+                                    );
+                                    const querySnapshot = await getDocs(q);
+                                    const firebaseResults = querySnapshot.docs
+                                      .map((doc) => {
+                                        const data = doc.data();
+                                        let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+                                        let rawSpecsText = "";
+                                        if (Array.isArray(data.technicalSpecs)) {
+                                          data.technicalSpecs.forEach((group: any) => {
+                                            rawSpecsText += ` ${group.specGroup}`;
+                                            specsHtml += `<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">${group.specGroup}</div>`;
+                                            specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+                                            group.specs?.forEach((spec: any) => {
+                                              rawSpecsText += ` ${spec.name} ${spec.value}`;
+                                              specsHtml += `<tr><td style="border:1px solid #e5e5eb;padding:4px;background:#f9fafb;width:40%"><b>${spec.name}</b></td><td style="border:1px solid #e5e5eb;padding:4px">${spec.value}</td></tr>`;
+                                            });
+                                            specsHtml += `</table>`;
+                                          });
+                                        }
+                                        return {
+                                          id: doc.id,
+                                          title: data.name || "No Name",
+                                          price:
+                                            data.salePrice || data.regularPrice || 0,
+                                          description: specsHtml,
+                                          images: data.mainImage
+                                            ? [{ src: data.mainImage }]
+                                            : [],
+                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          discount: 0,
+                                          tempSearchMetadata: (
+                                            data.name +
+                                            " " +
+                                            (data.itemCode || "") +
+                                            " " +
+                                            rawSpecsText
+                                          ).toUpperCase(),
+                                        };
+                                      })
+                                      .filter((p) =>
+                                        p.tempSearchMetadata.includes(searchUpper),
+                                      );
+                                    setSearchResults(firebaseResults);
+                                  }
+                                } catch (err) {
+                                  console.error("Search error:", err);
+                                } finally {
+                                  setIsSearching(false);
+                                }
+                              }}
+                            />
+                          </div>
+                          {/* View Mode Switcher - always visible */}
+                          <div className="flex items-center gap-0.5 bg-gray-100 rounded p-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setProductViewMode('list')}
+                              className={`p-1 rounded transition-all ${productViewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              title="List view"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setProductViewMode('grid')}
+                              className={`p-1 rounded transition-all ${productViewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              title="Grid view"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                         {isSearching && (
                           <p className="text-[10px] animate-pulse">
                             Searching Source...
@@ -2166,40 +2435,72 @@ ${payload.whtType && payload.whtType !== "none"
                     <div className="text-xs text-green-600 mb-2">
                       Note: you can choose the same products.
                     </div>
-                    <div className="grid grid-cols-1 gap-3 overflow-auto border rounded p-2 bg-white grow">
+
+                    {/* Helper tip */}
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400 px-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Click image to preview • Drag to add • Click + to add</span>
+                    </div>
+
+                    {/* Premium Product Cards - Respect View Mode */}
+                    <div className={`overflow-x-hidden ${
+                      productViewMode === 'grid' 
+                        ? 'grid grid-cols-2 gap-2' 
+                        : 'flex flex-col gap-2'
+                    }`}>
                       {searchResults.map((product) => (
                         <div
                           key={product.id}
-                          className="cursor-pointer border rounded-sm p-2 hover:shadow-md flex gap-3 items-center bg-white"
+                          className="group bg-white border border-gray-100 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-blue-200 transition-all overflow-hidden min-h-[56px]"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "copy";
+                            e.dataTransfer.setData("application/json", JSON.stringify(product));
+                          }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => handleAddProduct(product)}
-                            className="w-7 h-7 flex items-center justify-center rounded-full bg-[#121212] text-white shrink-0 hover:bg-gray-800"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                          {product.images?.[0]?.src ? (
-                            <img
-                              src={product.images[0].src}
-                              alt={product.title}
-                              className="w-14 h-14 object-contain rounded border shrink-0"
-                            />
-                          ) : (
-                            <div className="w-14 h-14 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-400 shrink-0">
-                              No Image
+                          <div className="grid grid-cols-[40px_1fr_24px] gap-2 items-center h-10">
+                            {/* Product Image */}
+                            <div className="w-10 h-10 flex-shrink-0">
+                              {product.images?.[0]?.src ? (
+                                <img
+                                  src={product.images[0].src}
+                                  alt={product.title}
+                                  className="w-full h-full object-cover rounded-md cursor-pointer"
+                                  onClick={() => product.images?.[0]?.src && openFullImage(product.images[0].src)}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-50 rounded-md flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          <div className="flex flex-col justify-center min-w-0">
-                            <span className="font-semibold text-xs truncate">{product.title}</span>
-                            <span className="text-[10px] text-blue-600 font-bold">
-                              {product.skus?.length ? `ITEM CODE: ${product.skus.join(", ")}` : "No item code"}
-                            </span>
+
+                            {/* Product Info */}
+                            <div className="min-w-0 overflow-hidden">
+                              <h4 className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2">{product.title}</h4>
+                              <p className="text-[9px] text-blue-600 font-bold truncate">
+                                {product.skus?.[0] ? `ITEM CODE: ${product.skus[0]}` : "No item code"}
+                              </p>
+                            </div>
+
+                            {/* Add Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleAddProduct(product)}
+                              className="w-6 h-6 flex items-center justify-center bg-[#121212] text-white rounded-full hover:bg-gray-800 transition-colors shadow-sm"
+                              title="Add to quotation"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </>
+                  </> // Added closing parenthesis here
                 )}
 
                 {/* Empty state when search has no results */}
@@ -2677,7 +2978,20 @@ ${payload.whtType && payload.whtType !== "none"
           </div>
 
           <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2">
+            <div className="flex gap-2 w-full lg:w-auto lg:ml-auto flex-wrap p-2 items-center">
+              {/* Hide Discount in Preview Toggle */}
+              <label className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-3 py-2 rounded transition-colors" title="Hide discount columns in preview - shows SRP only">
+                <input
+                  type="checkbox"
+                  checked={hideDiscountInPreview}
+                  onChange={(e) => setHideDiscountInPreview(e.target.checked)}
+                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                />
+                <span className={`font-medium text-xs ${hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
+                  {hideDiscountInPreview ? '✓ Hide Discounts' : '○ Show Discounts'}
+                </span>
+              </label>
+
               <Button
                 className="flex-1 lg:flex-none bg-[#121212] rounded-none hover:bg-black text-white flex gap-2 items-center h-12 px-6"
                 onClick={() => setIsPreviewOpen(true)}
@@ -2738,6 +3052,14 @@ ${payload.whtType && payload.whtType !== "none"
             payload={getQuotationPayload()}
             quotationType={quotation_type}
             setIsPreviewOpen={setIsPreviewOpen}
+            hideDiscountInPreview={hideDiscountInPreview}
+            showDiscountColumns={showDiscountColumns}
+            showSummaryDiscounts={showSummaryDiscounts}
+            showProfitMargins={showProfitMargins}
+            marginAlertThreshold={marginAlertThreshold}
+            showMarginAlerts={showMarginAlerts}
+            productViewMode={productViewMode}
+            visibleColumns={visibleColumns}
           />
         </DialogContent>
       </Dialog>
@@ -2795,6 +3117,338 @@ ${payload.whtType && payload.whtType !== "none"
               Download
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SPF Detail View Dialog */}
+      <Dialog open={showSpfDetailView} onOpenChange={setShowSpfDetailView}>
+        <DialogContent
+          className="p-0 overflow-hidden"
+          style={{
+            maxWidth: "1280px",
+            width: "100%",
+            borderRadius: "2px",
+            border: "1px solid #d1d5db",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.1)",
+          }}
+        >
+          <div style={{ background: "#f8f7f4", maxHeight: "calc(100vh - 60px)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+              {/* LEFT — SPF Form */}
+              <div style={{ flex: "0 0 490px", minWidth: 0 }}>
+                <div style={{ background: "#fff", margin: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+                  {/* Letterhead */}
+                  <div style={{ borderBottom: "3px solid #1f2937", padding: "16px 22px 12px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "15px", fontWeight: 900, letterSpacing: "0.15em", textTransform: "uppercase", color: "#1f2937", lineHeight: 1 }}>SPF Form</div>
+                      <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.1em", color: "#6b7280", marginTop: "4px", textTransform: "uppercase" }}>Internal Document · For Approval</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#1f2937", padding: "4px 10px" }}>
+                        <FileText style={{ width: "10px", height: "10px", color: "#f9fafb" }} />
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "10px", color: "#f9fafb", fontWeight: 700 }}>{spfDetailOffers[0]?.spf_number || "SPF-PENDING"}</span>
+                      </div>
+                      <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", color: "#9ca3af", marginTop: "5px" }}>{new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })}</div>
+                    </div>
+                  </div>
+
+                  {/* Status badge */}
+                  <div style={{ background: "#f3f4f6", borderBottom: "1px solid #e5e7eb", padding: "5px 22px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "8px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Status:</span>
+                    <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#065f46", fontWeight: 700, background: "#d1fae5", padding: "2px 8px", border: "1px solid #6ee7b7" }}>
+                      Ready for Quotation
+                    </span>
+                  </div>
+
+                  <div style={{ padding: "14px 18px 18px", overflowY: "auto", maxHeight: "70vh" }}>
+                    {/* 01 Customer Info */}
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ background: "#1f2937", padding: "5px 12px", marginBottom: "10px" }}>
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#f9fafb", fontWeight: 700 }}>01 · Customer Information</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "11px 14px", padding: "0 2px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Customer Name</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.customer_name ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.customer_name || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Contact Person</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.contact_name ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.contact_name || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Contact Number</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.contact_number ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.contact_number || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>TIN Number</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.tin_no ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.tin_no || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5", gridColumn: "span 2" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Registered Address</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.registered_address ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.registered_address || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 02 Order Terms */}
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ background: "#1f2937", padding: "5px 12px", marginBottom: "10px" }}>
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#f9fafb", fontWeight: 700 }}>02 · Order Terms</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "11px 14px", padding: "0 2px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Payment Terms</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.payment_terms ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.payment_terms || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Warranty</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.warranty ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.warranty || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Delivery Date</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.delivery_date ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.delivery_date ? new Date(spfDetailOffers[0].delivery_date).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) : "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5", gridColumn: "span 2" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Special Instructions</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.special_instructions ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.special_instructions || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 03 Items */}
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ background: "#1f2937", padding: "5px 12px", marginBottom: "10px" }}>
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#f9fafb", fontWeight: 700 }}>03 · Items ({spfDetailOffers[0]?.item_description?.split(",").length || 0})</span>
+                      </div>
+                      {(!spfDetailOffers[0]?.item_description || spfDetailOffers[0].item_description.split(",").length === 0) ? (
+                        <div style={{ border: "1.5px dashed #d1d5db", padding: "18px", textAlign: "center" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "10px", color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase" }}>No items on record</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "0 2px" }}>
+                          {spfDetailOffers[0]?.item_description?.split(",").map((desc: string, i: number) => {
+                            const photos = spfDetailOffers[0]?.item_photo?.split(",") || [];
+                            return (
+                              <div key={i} style={{ border: "1px solid #e5e7eb", display: "grid", gridTemplateColumns: "76px 1fr" }}>
+                                <div style={{ background: "#f3f4f6", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 6px", gap: "5px" }}>
+                                  <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700 }}>Item</span>
+                                  <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "18px", fontWeight: 900, color: "#374151", lineHeight: 1 }}>{String(i + 1).padStart(2, "0")}</span>
+                                  {photos[i] ? (
+                                    <>
+                                      <div
+                                        style={{ width: "50px", height: "50px", border: "1px solid #d1d5db", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                        onClick={() => openFullImage(photos[i])}
+                                      >
+                                        <img src={photos[i]} alt={`Item ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                      </div>
+                                      <button
+                                        onClick={() => openFullImage(photos[i])}
+                                        style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7px", color: "#1e3a8a", background: "#dbeafe", padding: "2px 6px", border: "1px solid #93c5fd", cursor: "pointer", fontWeight: 600 }}
+                                      >
+                                        View Full
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div style={{ width: "50px", height: "50px", border: "1.5px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                      <span style={{ fontSize: "7px", color: "#d1d5db", fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", textTransform: "uppercase" }}>No Photo</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ padding: "9px 10px" }}>
+                                  <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7.5px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, display: "block", marginBottom: "4px" }}>Description</span>
+                                  <p
+                                    style={{
+                                      fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+                                      fontSize: "11px",
+                                      color: desc ? "#111827" : "#9ca3af",
+                                      margin: 0,
+                                      whiteSpace: "pre-line",
+                                    }}
+                                  >
+                                    {(desc || "No description provided.")
+                                      .replace(/([A-Za-z ]+:\s*)/g, "\n$1")
+                                      .trim()}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 04 Signatories */}
+                    <div>
+                      <div style={{ background: "#1f2937", padding: "5px 12px", marginBottom: "10px" }}>
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#f9fafb", fontWeight: 700 }}>04 · Signatories</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", padding: "0 2px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Sales Person</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.sales_person ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.sales_person || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Prepared By</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.prepared_by ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.prepared_by || "—"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5" }}>
+                          <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Approved By</span>
+                          <div style={{ borderBottom: "1.5px solid #374151", minHeight: "26px", paddingBottom: "2px", paddingTop: "3px", fontSize: "12px", color: spfDetailOffers[0]?.approved_by ? "#111827" : "#d1d5db", letterSpacing: "0.03em" }}>
+                            {spfDetailOffers[0]?.approved_by || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb", padding: "6px 18px", display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "8px", color: "#d1d5db", letterSpacing: "0.08em", textTransform: "uppercase" }}>Confidential · Internal Use Only</span>
+                    <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "8px", color: "#d1d5db" }}>{spfDetailOffers[0]?.spf_number || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT — Product Offers */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ background: "#fff", margin: "16px 16px 16px 0", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", height: "calc(100% - 32px)" }}>
+                  <div style={{ borderBottom: "3px solid #1e3a8a", padding: "16px 20px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0 }}>
+                    <div>
+                      <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "13px", fontWeight: 900, letterSpacing: "0.15em", textTransform: "uppercase", color: "#1e3a8a", lineHeight: 1 }}>Product Offers</div>
+                      <div style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", letterSpacing: "0.1em", color: "#6b7280", marginTop: "3px", textTransform: "uppercase" }}>Procurement Results</div>
+                    </div>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "#1e3a8a", padding: "4px 10px" }}>
+                      <Package style={{ width: "10px", height: "10px", color: "#93c5fd" }} />
+                      <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "10px", color: "#bfdbfe", fontWeight: 700, letterSpacing: "0.08em" }}>
+                        {spfDetailOffers.length} Offer{spfDetailOffers.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
+                    {spfDetailOffers.length === 0 ? (
+                      <div style={{ border: "1.5px dashed #dbeafe", padding: "28px", textAlign: "center" }}>
+                        <Package style={{ width: "26px", height: "26px", color: "#bfdbfe", margin: "0 auto 8px" }} />
+                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "10px", color: "#93c5fd", letterSpacing: "0.08em", textTransform: "uppercase" }}>No offers recorded yet</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        {spfDetailOffers.map((offer, oi) => {
+                          const offerRows = parseOfferRows(offer);
+                          const totalProducts = offerRows.reduce((sum, r) => sum + r.length, 0);
+                          return (
+                            <div key={offer.id} style={{ border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                              <div style={{ background: "#1e3a8a", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                                  <Building2 style={{ width: "11px", height: "11px", color: "#93c5fd", flexShrink: 0 }} />
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "8px", color: "#93c5fd", background: "rgba(255,255,255,0.1)", padding: "2px 7px", border: "1px solid rgba(147,197,253,0.3)" }}>
+                                    {offerRows.length} row{offerRows.length !== 1 ? "s" : ""} · {totalProducts} product{totalProducts !== 1 ? "s" : ""}
+                                  </span>
+                                  <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "10px", color: "#60a5fa", fontWeight: 900 }}>{String(oi + 1).padStart(2, "0")}</span>
+                                </div>
+                              </div>
+
+                              <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                {offerRows.map((rowProducts, ri) => (
+                                  <div key={ri}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "7px" }}>
+                                      <div style={{ background: "#1e3a8a", padding: "2px 8px" }}>
+                                        <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7.5px", color: "#bfdbfe", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Item Row {ri + 1}</span>
+                                      </div>
+                                      <div style={{ flex: 1, height: "1px", background: "#dbeafe" }} />
+                                      <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7.5px", color: "#93c5fd" }}>{rowProducts.length} variant{rowProducts.length !== 1 ? "s" : ""}</span>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: rowProducts.length > 1 ? `repeat(${Math.min(rowProducts.length, 2)}, 1fr)` : "1fr", gap: "8px" }}>
+                                      {rowProducts.map((prod, pi) => (
+                                        <div key={pi} style={{ border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                                          <div style={{ background: "#f0f9ff", borderBottom: "1px solid #dbeafe", padding: "4px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7.5px", color: "#1e40af", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Variant {pi + 1}</span>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                              {prod.image ? (
+                                                <>
+                                                  <div
+                                                    style={{ width: "32px", height: "32px", border: "1px solid #bfdbfe", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                                    onClick={() => openFullImage(prod.image)}
+                                                  >
+                                                    <img src={prod.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                                  </div>
+                                                  <button
+                                                    onClick={() => openFullImage(prod.image)}
+                                                    style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7px", color: "#1e40af", background: "#dbeafe", padding: "2px 6px", border: "1px solid #93c5fd", cursor: "pointer", fontWeight: 600 }}
+                                                  >
+                                                    View
+                                                  </button>
+                                                </>
+                                              ) : (
+                                                <div style={{ width: "32px", height: "32px", border: "1.5px dashed #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                  <span style={{ fontSize: "6px", color: "#bfdbfe", fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", textTransform: "uppercase" }}>No Img</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid #e5e7eb" }}>
+                                            {[
+                                              { label: "Item Code", value: prod.item_code },
+                                              { label: "Lead Time", value: prod.lead_time },
+                                              { label: "Selling Cost", value: prod.final_selling },
+                                              { label: "Qty", value: prod.qty },
+                                            ].map(({ label, value }, mi) => (
+                                              <div key={mi} style={{ padding: "4px 8px", borderRight: mi < 3 ? "1px solid #e5e7eb" : "none" }}>
+                                                <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "7px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#9ca3af", fontWeight: 700, display: "block", marginBottom: "2px" }}>{label}</span>
+                                                <span style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "9px", color: "#374151" }}>{value || "—"}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full Image Dialog */}
+      <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
+        <DialogContent className="max-w-4xl p-0 border-none bg-transparent shadow-2xl">
+          {fullImageUrl && (
+            <img src={fullImageUrl} alt="Full size" className="w-full h-auto object-contain" />
+          )}
         </DialogContent>
       </Dialog>
     </>

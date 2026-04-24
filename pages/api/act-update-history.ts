@@ -82,7 +82,15 @@ export default async function handler(
     "quotation_subject",
     "item_remarks",
     "discounted_priced",
-    "discounted_amount"
+    "discounted_amount",
+    "hide_discount_in_preview",
+    "show_discount_columns",
+    "show_summary_discounts",
+    "show_profit_margins",
+    "margin_alert_threshold",
+    "show_margin_alerts",
+    "product_view_mode",
+    "visible_columns"
   ];
 
   // Filter out empty/null fields

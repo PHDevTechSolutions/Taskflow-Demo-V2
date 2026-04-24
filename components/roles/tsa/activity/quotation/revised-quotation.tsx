@@ -135,6 +135,16 @@ interface Completed {
   delivery_date?: string;
   discounted_priced?: string;
   discounted_amount?: string;
+
+  // Quotation display configuration
+  hide_discount_in_preview?: boolean;
+  show_discount_columns?: boolean;
+  show_summary_discounts?: boolean;
+  show_profit_margins?: boolean;
+  margin_alert_threshold?: number;
+  show_margin_alerts?: boolean;
+  product_view_mode?: string;
+  visible_columns?: any;
 }
 
 interface CompletedProps {

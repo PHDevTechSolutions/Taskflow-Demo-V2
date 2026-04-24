@@ -30,7 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "source",
     "type_activity",
     "call_status",
-    "call_type"
+    "call_type",
+    "hide_discount_in_preview",
+    "show_discount_columns",
+    "show_summary_discounts",
+    "show_profit_margins",
+    "margin_alert_threshold",
+    "show_margin_alerts",
+    "product_view_mode",
+    "visible_columns"
   ];
 
   const filteredData: Record<string, any> = {};

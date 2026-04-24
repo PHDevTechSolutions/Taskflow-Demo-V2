@@ -74,6 +74,16 @@ export default async function handler(
       wht_type,
       quotation_subject,
 
+      // Quotation display configuration
+      hide_discount_in_preview,
+      show_discount_columns,
+      show_summary_discounts,
+      show_profit_margins,
+      margin_alert_threshold,
+      show_margin_alerts,
+      product_view_mode,
+      visible_columns,
+
       // Signatories
       contact,
       email,
@@ -217,6 +227,16 @@ export default async function handler(
         restocking_fee: safe(restocking_fee),
         quotation_vatable: safe(wht_type),
         quotation_subject: safe(quotation_subject),
+
+        // Quotation display configuration
+        hide_discount_in_preview: hide_discount_in_preview ?? false,
+        show_discount_columns: show_discount_columns ?? false,
+        show_summary_discounts: show_summary_discounts ?? false,
+        show_profit_margins: show_profit_margins ?? false,
+        margin_alert_threshold: safe(margin_alert_threshold),
+        show_margin_alerts: show_margin_alerts ?? false,
+        product_view_mode: safe(product_view_mode) || 'list',
+        visible_columns: safe(visible_columns),
       })
       .select();
 
