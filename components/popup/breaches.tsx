@@ -214,26 +214,41 @@ export function BreachesDialog() {
       const res = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      const active: any[] = (data.data || []).filter((a: any) => (a.status || "").toLowerCase() === "active");
       const norm = (val: string) => (val || "").toLowerCase().replace(/\s+/g, "");
 
-      // Deduplicate by company_name (case-insensitive)
-      const uniqueByCompany = Array.from(
-        new Map(active.map(a => [(a.company_name || "").toLowerCase(), a])).values()
-      );
+      // Filter to match Account Management logic
+      const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
+      const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
+      
+      const filteredAccounts: any[] = (data.data || []).filter((a: any) => {
+        const status = (a.status || "").toLowerCase();
+        const typeClient = (a.type_client || "").toLowerCase();
+        
+        // Must have status and type_client
+        if (!a.status || !a.type_client) return false;
+        
+        // Exclude removed/approved for deletion/subject for transfer
+        if (excludedStatuses.includes(status)) return false;
+        
+        // Must be in allowed types
+        if (!allowedTypes.includes(typeClient)) return false;
+        
+        return true;
+      });
 
+      // No deduplication - match Account Management
       setDenominators({
-        total: uniqueByCompany.length,
-        top50: uniqueByCompany.filter((a) => norm(a.type_client) === "top50").length,
-        next30: uniqueByCompany.filter((a) => norm(a.type_client) === "next30").length,
-        bal20: uniqueByCompany.filter((a) => norm(a.type_client) === "balance20").length,
-        csrClient: uniqueByCompany.filter((a) => norm(a.type_client) === "csrclient").length,
-        newClient: uniqueByCompany.filter((a) => norm(a.type_client) === "newclient").length,
-        tsaClient: uniqueByCompany.filter((a) => norm(a.type_client) === "tsaclient").length,
+        total: filteredAccounts.length,
+        top50: filteredAccounts.filter((a) => norm(a.type_client) === "top50").length,
+        next30: filteredAccounts.filter((a) => norm(a.type_client) === "next30").length,
+        bal20: filteredAccounts.filter((a) => norm(a.type_client) === "balance20").length,
+        csrClient: filteredAccounts.filter((a) => norm(a.type_client) === "csrclient").length,
+        newClient: filteredAccounts.filter((a) => norm(a.type_client) === "newclient").length,
+        tsaClient: filteredAccounts.filter((a) => norm(a.type_client) === "tsaclient").length,
       });
 
       setClusterAccounts(
-        active.map((a) => ({
+        filteredAccounts.map((a) => ({
           account_reference_number: a.account_reference_number,
           company_name: a.company_name,
           type_client: norm(a.type_client),
@@ -440,7 +455,7 @@ export function BreachesDialog() {
   // ─── Territory coverage ─────────────────────────────────────────────────
   //
   // Scope: the FULL calendar month of fromDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
+  // - "Covered"     = cluster accounts whose account_reference_number appears in ANY
   //                   activity within that month range
   // - "Not Reached" = the rest
   // - NO source filter — isOutboundTouchbase applies only to the Outbound
@@ -469,12 +484,12 @@ export function BreachesDialog() {
     // DEBUG
     console.log("[DEBUG] fromDate:", fromDate, "monthStart:", new Date(monthStart).toISOString(), "monthEnd:", new Date(monthEnd).toISOString());
 
-    // Step 1 — company names with ANY activity within the calendar month
-    const touchedCompanies = new Set<string>();
+    // Step 1 — account_reference_numbers with ANY activity within the calendar month
+    const touchedAccountRefs = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
     activities.forEach((act) => {
-      if (!act.company_name || !act.date_created) return;
+      if (!act.account_reference_number || !act.date_created) return;
       // Parse date_created as literal date (ignore timezone)
       const dateStr = act.date_created.toString().split('T')[0]; // "2026-03-31" from "2026-03-31T10:30:00Z"
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -489,20 +504,18 @@ export function BreachesDialog() {
       
       if (isNaN(t) || t < monthStart || t > monthEnd) return;
 
-      const companyLower = act.company_name.toLowerCase();
-      
-      // DEBUG: Check for specific company
-      if (companyLower.includes("seventy seven")) {
+      // DEBUG: Check for specific account
+      if (act.account_reference_number?.toLowerCase().includes("seventy")) {
         console.log("[DEBUG] Seventy Seven Seed activity:", {
           date: dateStr,
           parsed: new Date(t).toISOString(),
           inRange: t >= monthStart && t <= monthEnd,
           source: act.source,
-          ref: act.activity_reference_number
+          accRef: act.account_reference_number
         });
       }
       
-      touchedCompanies.add(companyLower);
+      touchedAccountRefs.add(act.account_reference_number);
 
       if (act.activity_reference_number) {
         byActivityRef[act.activity_reference_number] = act;
@@ -511,28 +524,21 @@ export function BreachesDialog() {
 
     setUniqueActivitiesList(Object.values(byActivityRef));
 
-    // Step 2 — covered / uncovered split by company_name
+    // Step 2 — covered / uncovered split by account_reference_number
     const covered = clusterAccounts.filter((acc) =>
-      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
+      acc.account_reference_number && touchedAccountRefs.has(acc.account_reference_number)
     );
     const uncovered = clusterAccounts.filter((acc) =>
-      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
+      !acc.account_reference_number || !touchedAccountRefs.has(acc.account_reference_number)
     );
 
-    // Deduplicate covered/uncovered by company_name (same company = 1 count)
-    const uniqueCovered = Array.from(
-      new Map(covered.map(acc => [(acc.company_name || "").toLowerCase(), acc])).values()
-    );
-    const uniqueUncovered = Array.from(
-      new Map(uncovered.map(acc => [(acc.company_name || "").toLowerCase(), acc])).values()
-    );
+    // No deduplication - match Account Management behavior
+    setCoveredAccounts(covered);
+    setUncoveredAccounts(uncovered);
 
-    setCoveredAccounts(uniqueCovered);
-    setUncoveredAccounts(uniqueUncovered);
-
-    // Step 3 — segment counts from UNIQUE covered cluster accounts
+    // Step 3 — segment counts from covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
-    uniqueCovered.forEach((acc) => {
+    covered.forEach((acc) => {
       const type = acc.type_client ?? "";
       if (type === "top50") seg.top50++;
       else if (type === "next30") seg.next30++;
@@ -542,8 +548,8 @@ export function BreachesDialog() {
       else if (type === "tsaclient") seg.tsaClient++;
     });
 
-    setUniqueClientReach(uniqueCovered.length);
-    setClientSegments({ ...seg, outbound: uniqueCovered.length });
+    setUniqueClientReach(covered.length);
+    setClientSegments({ ...seg, outbound: covered.length });
   }, [activities, clusterAccounts, fromDate]);
 
   // ─── New clients per company ────────────────────────────────────────────

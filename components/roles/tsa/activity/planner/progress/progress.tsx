@@ -8,6 +8,13 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CheckCircle2Icon,
   Trash,
   Check,
@@ -92,6 +99,7 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
+  quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
 
@@ -151,6 +159,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -270,16 +279,22 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
   };
 
-  const allowedStatuses = [
-    "On-Progress",
-    "Assisted",
-    "SO-Done",
-    "Pending",
-    "Cancelled",
-  ];
-
+  // Show all activities EXCEPT:
+  // - Quote-Done with today's scheduled date (goes to Scheduled card)
+  // - Quote-Done with "Pending Client Approval" (goes to Overdue card)
+  // - Completed and Delivered (finished activities)
   const mergedData = activities
-    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => {
+      // Exclude Completed and Delivered statuses
+      if (a.status === "Completed" || a.status === "Delivered") {
+        return false;
+      }
+      // Exclude Quote-Done status with today's scheduled date
+      if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
+        return false;
+      }
+      return true;
+    })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -292,13 +307,30 @@ export const Progress: React.FC<NewTaskProps> = ({
         relatedHistoryItems,
       };
     })
+    // Exclude Quote-Done with "Pending Client Approval" - those go to Overdue
+    .filter((activity) => {
+      if (activity.status === "Quote-Done") {
+        const hasPendingApproval = activity.relatedHistoryItems.some(
+          (h) => h.quotation_status === "Pending Client Approval"
+        );
+        // Exclude if has Pending Client Approval (goes to Overdue instead)
+        return !hasPendingApproval;
+      }
+      return true;
+    })
     .sort(
       (a, b) =>
         new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime(),
     );
 
   const filteredData = mergedData.filter((item) => {
+    // Status filter
+    if (statusFilter !== "all" && item.status !== statusFilter) {
+      return false;
+    }
+    // Search filter
     const lowerSearch = searchTerm.toLowerCase();
+    if (!lowerSearch) return true;
     return (
       (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
       (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
@@ -461,36 +493,60 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   return (
     <>
-      <Input
-        type="search"
-        placeholder="Search..."
-        className="text-xs grow rounded-none mb-2"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        aria-label="Search accounts"
-      />
+      <div className="flex gap-2 mb-2">
+        <Input
+          type="search"
+          placeholder="Search..."
+          className="text-xs grow rounded-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px] text-xs rounded-none">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="Assisted">Assisted</SelectItem>
+            <SelectItem value="On-Progress">On-Progress</SelectItem>
+            <SelectItem value="SO-Done">SO-Done</SelectItem>
+            <SelectItem value="Quote-Done">Quote-Done</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
           {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
+            let cardBgClass = "bg-gray-100"; // default light background
 
             if (item.status === "Assisted" || item.status === "On-Progress") {
               badgeClass = "bg-orange-400 text-white";
+              cardBgClass = "bg-orange-100";
             } else if (item.status === "SO-Done") {
               badgeClass = "bg-yellow-400 text-black";
+              cardBgClass = "bg-yellow-100";
             } else if (item.status === "Quote-Done") {
               badgeClass = "bg-blue-500 text-white";
+              cardBgClass = "bg-blue-100";
+            } else if (item.status === "Pending") {
+              badgeClass = "bg-purple-500 text-white";
+              cardBgClass = "bg-purple-100";
             } else if (item.status === "Cancelled") {
               badgeClass = "bg-red-600 text-white";
+              cardBgClass = "bg-red-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className="w-full border rounded-none bg-orange-100 shadow-sm mt-2"
+                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">

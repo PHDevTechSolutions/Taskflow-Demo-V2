@@ -28,6 +28,7 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 interface Account {
   id: string;
   referenceid: string;
+  account_reference_number: string;
   company_name: string;
   type_client: string;
   date_created: string;
@@ -44,6 +45,7 @@ interface Account {
 interface Activity {
   id?: string;
   company_name?: string;
+  account_reference_number?: string;
   type_activity?: string;
   remarks?: string;
   status?: string;
@@ -455,11 +457,6 @@ function DashboardContent() {
         if (accRes.ok) {
           const accData = await accRes.json();
           let list = Array.isArray(accData) ? accData : accData.data ?? [];
-          // Normalize company names to lowercase for consistent matching
-          list = list.map((account: Account) => ({
-            ...account,
-            company_name: (account.company_name || "").toLowerCase()
-          }));
           setAccounts(list);
         }
 
@@ -484,11 +481,6 @@ function DashboardContent() {
             if (actRes.ok) {
               const actData = await actRes.json();
               let list = Array.isArray(actData) ? actData : actData.data ?? [];
-              // Normalize company names to lowercase for consistent matching
-              list = list.map((activity: Activity) => ({
-                ...activity,
-                company_name: (activity.company_name || "").toLowerCase()
-              }));
               console.log(`Server-side filtered: ${list.length} activities`);
               
               // Check for April 14th in the response
@@ -525,11 +517,6 @@ function DashboardContent() {
           if (actRes.ok) {
             const actData = await actRes.json();
             let list = Array.isArray(actData) ? actData : actData.data ?? [];
-            // Normalize company names to lowercase for consistent matching
-            list = list.map((activity: Activity) => ({
-              ...activity,
-              company_name: (activity.company_name || "").toLowerCase()
-            }));
             console.log(`ALL data fetched via batch processing: ${list.length} activities`);
             
             // Check for April 14th in the full dataset
@@ -553,11 +540,6 @@ function DashboardContent() {
           if (fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
             let list = Array.isArray(fallbackData) ? fallbackData : fallbackData.data ?? [];
-            // Normalize company names to lowercase for consistent matching
-            list = list.map((activity: Activity) => ({
-              ...activity,
-              company_name: (activity.company_name || "").toLowerCase()
-            }));
             return list;
           }
           
@@ -590,17 +572,31 @@ function DashboardContent() {
     fetchData();
   }, [userDetails.referenceid, dateCreatedFilterRange]);
 
-  // ─── Filter to ONLY ACTIVE accounts ───
+  // ─── Filter accounts to match Accounts Table logic ───
+  // Include all accounts with valid type_client that are not excluded
   const activeAccounts = useMemo(() => {
-    return accounts.filter((a) => a.status?.toLowerCase() === "active");
+    const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
+    const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
+    
+    return accounts.filter((a) => {
+      const status = a.status?.toLowerCase() || "";
+      const typeClient = a.type_client?.toLowerCase() || "";
+      
+      // Must have status and type_client
+      if (!a.status || !a.type_client) return false;
+      
+      // Exclude removed/approved for deletion/subject for transfer
+      if (excludedStatuses.includes(status)) return false;
+      
+      // Must be in allowed types (to match Accounts Table)
+      if (!allowedTypes.includes(typeClient)) return false;
+      
+      return true;
+    });
   }, [accounts]);
 
-  // ─── Deduplicate by company_name (case-insensitive) ───
-  const uniqueActiveAccounts = useMemo(() => {
-    return Array.from(
-      new Map(activeAccounts.map(a => [(a.company_name || "").toLowerCase(), a])).values()
-    );
-  }, [activeAccounts]);
+  // ─── Use all active accounts (no deduplication) ───
+  const allActiveAccounts = activeAccounts;
 
   // ─── Filter activities by date range (default: ALL activities) ───
   const filteredActivitiesByDate = useMemo(() => {
@@ -612,36 +608,33 @@ function DashboardContent() {
     });
   }, [activities, dateCreatedFilterRange]);
 
-  // ─── Activity counts based on DATE-FILTERED activities (aggregated by company) ───
+  // ─── Activity counts based on DATE-FILTERED activities (aggregated by account_reference_number) ───
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
     filteredActivitiesByDate.forEach((a) => {
-      if (a.company_name) {
-        const companyName = (a.company_name || "").toLowerCase();
-        m[companyName] = (m[companyName] ?? 0) + 1;
+      if (a.account_reference_number) {
+        const accRef = a.account_reference_number;
+        m[accRef] = (m[accRef] ?? 0) + 1;
       }
     });
     return m;
   }, [filteredActivitiesByDate]);
 
-  // ─── Company to account mapping (for deduplicated display) ───
-  const companyToAccountMap = useMemo(() => {
+  // ─── Account account_reference_number to account mapping (ALL accounts) ───
+  const accountRefToAccountMap = useMemo(() => {
     const m: Record<string, Account> = {};
-    uniqueActiveAccounts.forEach((a) => {
-      const key = a.company_name.toLowerCase();
-      if (!m[key]) {
-        m[key] = a; // Keep first occurrence
-      }
+    allActiveAccounts.forEach((a) => {
+      m[a.account_reference_number] = a; // Each account gets its slot (last wins if duplicates)
     });
     return m;
-  }, [uniqueActiveAccounts]);
+  }, [allActiveAccounts]);
 
-  // ─── Last activity date per company (based on filtered activities) ───
+  // ─── Last activity date per account (based on filtered activities) ───
   const lastActivityDateMap = useMemo(() => {
     const m: Record<string, string> = {};
     filteredActivitiesByDate.forEach((a) => {
-      if (a.company_name) {
-        const key = a.company_name.toLowerCase();
+      if (a.account_reference_number) {
+        const key = a.account_reference_number;
         const date = a.date_created;
         if (date) {
           // Keep the most recent date
@@ -654,12 +647,12 @@ function DashboardContent() {
     return m;
   }, [filteredActivitiesByDate]);
 
-  // ─── Total actual sales per company (based on filtered activities) ───
+  // ─── Total actual sales per account (based on filtered activities) ───
   const totalSalesMap = useMemo(() => {
     const m: Record<string, number> = {};
     filteredActivitiesByDate.forEach((a) => {
-      if (a.company_name) {
-        const key = a.company_name.toLowerCase();
+      if (a.account_reference_number) {
+        const key = a.account_reference_number;
         const sales = a.actual_sales ?? 0;
         m[key] = (m[key] ?? 0) + sales;
       }
@@ -667,24 +660,24 @@ function DashboardContent() {
     return m;
   }, [filteredActivitiesByDate]);
 
-  // ─── Identifier per company: Leads vs Customer ───
+  // ─── Identifier per account: Leads vs Customer ───
   // Leads: Only has Outbound Calls as type_client, OR no activity at all
   // Customer: Has Quotation Preparation, Sales Order Preparation, or Delivered/Closed Transaction
   const identifierMap = useMemo(() => {
     const m: Record<string, "Leads" | "Customer"> = {};
     
-    // Pre-check: which companies have activities at all
-    const companyActivities: Record<string, Activity[]> = {};
+    // Pre-check: which accounts have activities at all
+    const accountActivities: Record<string, Activity[]> = {};
     filteredActivitiesByDate.forEach((a) => {
-      if (a.company_name) {
-        const key = a.company_name.toLowerCase();
-        if (!companyActivities[key]) companyActivities[key] = [];
-        companyActivities[key].push(a);
+      if (a.account_reference_number) {
+        const key = a.account_reference_number;
+        if (!accountActivities[key]) accountActivities[key] = [];
+        accountActivities[key].push(a);
       }
     });
 
-    // Determine identifier for each company
-    Object.entries(companyActivities).forEach(([key, acts]) => {
+    // Determine identifier for each account
+    Object.entries(accountActivities).forEach(([key, acts]) => {
       if (acts.length === 0) {
         m[key] = "Leads";
         return;
@@ -716,13 +709,12 @@ function DashboardContent() {
     return m;
   }, [filteredActivitiesByDate]);
 
-  // ─── Companies with activity (based on filtered activities) ───
-  const companiesWithActivity = useMemo(() => {
+  // ─── Accounts with activity (based on filtered activities) ───
+  const accountsWithActivity = useMemo(() => {
     const s = new Set<string>();
     filteredActivitiesByDate.forEach((a) => { 
-      if (a.company_name) {
-        const companyName = (a.company_name || "").toLowerCase();
-        s.add(companyName);
+      if (a.account_reference_number) {
+        s.add(a.account_reference_number);
       }
     });
     return s;
@@ -734,9 +726,9 @@ function DashboardContent() {
     let leads = 0;
     let totalSales = 0;
 
-    uniqueActiveAccounts.forEach((account) => {
-      const key = account.company_name.toLowerCase();
-      const identifier = identifierMap[key] ?? (companiesWithActivity.has(key) ? "Customer" : "Leads");
+    allActiveAccounts.forEach((account) => {
+      const key = account.account_reference_number;
+      const identifier = identifierMap[key] ?? (accountsWithActivity.has(key) ? "Customer" : "Leads");
       
       if (identifier === "Customer") {
         customers++;
@@ -748,18 +740,18 @@ function DashboardContent() {
     });
 
     return { customerCount: customers, leadsCount: leads, totalSalesAll: totalSales };
-  }, [uniqueActiveAccounts, identifierMap, totalSalesMap, companiesWithActivity]);
+  }, [allActiveAccounts, identifierMap, totalSalesMap, accountsWithActivity]);
 
-  // ─── Filtered accounts (DEDUPLICATED by company name) ───
+  // ─── Filtered accounts (ALL accounts - no deduplication) ───
   const filteredAccounts = useMemo(() => {
-    // Start with unique accounts only
-    let list = uniqueActiveAccounts;
+    // Start with all accounts
+    let list = allActiveAccounts;
 
     // Apply activity filter
     if (activityFilter === "with") {
-      list = list.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase()));
+      list = list.filter((a) => accountsWithActivity.has(a.account_reference_number));
     } else if (activityFilter === "without") {
-      list = list.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase()));
+      list = list.filter((a) => !accountsWithActivity.has(a.account_reference_number));
     }
 
     // Apply type filter
@@ -773,14 +765,14 @@ function DashboardContent() {
       a.contact_person.toLowerCase().includes(q) ||
       a.email_address.toLowerCase().includes(q)
     );
-  }, [uniqueActiveAccounts, search, typeFilter, activityFilter, companiesWithActivity]);
+  }, [allActiveAccounts, search, typeFilter, activityFilter, accountsWithActivity]);
 
   // ─── Type client stats with activity breakdown ───
   const typeClientStats = useMemo(() => {
     const stats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
-    uniqueActiveAccounts.forEach((a) => {
+    allActiveAccounts.forEach((a) => {
       const t = (a.type_client ?? "Unknown").toUpperCase();
-      const hasActivity = companiesWithActivity.has(a.company_name.toLowerCase());
+      const hasActivity = accountsWithActivity.has(a.account_reference_number);
       if (!stats[t]) {
         stats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       }
@@ -794,16 +786,16 @@ function DashboardContent() {
     return Object.entries(stats)
       .map(([type, data]) => ({ type, ...data }))
       .sort((a, b) => b.total - a.total);
-  }, [uniqueActiveAccounts, companiesWithActivity]);
+  }, [allActiveAccounts, accountsWithActivity]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   useEffect(() => setCurrentPage(1), [search, typeFilter, activityFilter]);
 
-  // ─── Counts based on UNIQUE ACTIVE accounts only ───
-  const withActivityCount = uniqueActiveAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
-  const withoutActivityCount = uniqueActiveAccounts.length - withActivityCount;
+  // ─── Counts based on ALL ACTIVE accounts ───
+  const withActivityCount = allActiveAccounts.filter((a) => accountsWithActivity.has(a.account_reference_number)).length;
+  const withoutActivityCount = allActiveAccounts.length - withActivityCount;
 
   // ─── DEBUG: Log counts for verification ───
   useEffect(() => {
@@ -811,30 +803,75 @@ function DashboardContent() {
     console.log("Date Range:", dateCreatedFilterRange?.from ? `${dateCreatedFilterRange.from} to ${dateCreatedFilterRange.to || dateCreatedFilterRange.from}` : "ALL (no filter)");
     console.log("Total Accounts (all):", accounts.length);
     console.log("Active Accounts (raw):", activeAccounts.length);
-    console.log("Active Accounts (unique by company):", uniqueActiveAccounts.length);
+    console.log("Active Accounts (all):", allActiveAccounts.length);
     console.log("Total Activities (all):", activities.length);
     console.log("Filtered Activities (by date):", filteredActivitiesByDate.length);
-    console.log("Unique companies in activities (Set size):", companiesWithActivity.size);
-    console.log("With Activity count (unique companies):", withActivityCount);
-    console.log("No Activity count (unique companies):", withoutActivityCount);
-    console.log("Sample companies with activity:", Array.from(companiesWithActivity).slice(0, 10));
-    console.log("Sample covered accounts:", uniqueActiveAccounts.filter(a => companiesWithActivity.has(a.company_name.toLowerCase())).map(a => a.company_name).slice(0, 10));
-    console.log("Sample uncovered accounts:", uniqueActiveAccounts.filter(a => !companiesWithActivity.has(a.company_name.toLowerCase())).map(a => a.company_name).slice(0, 10));
+    console.log("Unique accounts with activity (Set size):", accountsWithActivity.size);
+    console.log("With Activity count:", withActivityCount);
+    console.log("No Activity count:", withoutActivityCount);
+    
+    // Detailed breakdown of all active accounts
+    console.log("=== DETAILED ACCOUNT BREAKDOWN ===");
+    const allAccountDetails = allActiveAccounts.map(account => {
+      const accRef = account.account_reference_number;
+      const hasActivity = accountsWithActivity.has(accRef);
+      const activityCount = activityCountMap[accRef] ?? 0;
+      return {
+        company_name: account.company_name,
+        account_reference_number: account.account_reference_number,
+        referenceid: account.referenceid,
+        status: account.status,
+        type_client: account.type_client,
+        hasActivity,
+        activityCount,
+        lastActivity: lastActivityDateMap[accRef]
+      };
+    });
+    
+    console.log("All unique active accounts:", allAccountDetails);
+    
+    const accountsWithoutActivityList = allAccountDetails.filter((a: typeof allAccountDetails[0]) => !a.hasActivity);
+    const accountsWithActivityList = allAccountDetails.filter((a: typeof allAccountDetails[0]) => a.hasActivity);
+    
+    console.log(`Accounts WITHOUT activity (${accountsWithoutActivityList.length}):`, accountsWithoutActivityList.map((a: typeof allAccountDetails[0]) => a.company_name));
+    console.log(`Accounts WITH activity (${accountsWithActivityList.length}):`, accountsWithActivityList.map((a: typeof allAccountDetails[0]) => ({ company: a.company_name, count: a.activityCount })));
+    
+    // Check for any data issues
+    console.log("=== DATA VALIDATION ===");
+    const duplicateCompanies = allActiveAccounts.filter((account, index, self) => 
+      self.findIndex(a => a.company_name.toLowerCase() === account.company_name.toLowerCase()) !== index
+    );
+    if (duplicateCompanies.length > 0) {
+      console.log("WARNING: Found duplicate company names:", duplicateCompanies.map(a => a.company_name));
+    }
+    
+    // Check activities for missing company names
+    const activitiesWithoutCompany = activities.filter(a => !a.company_name);
+    if (activitiesWithoutCompany.length > 0) {
+      console.log("WARNING: Found activities without company names:", activitiesWithoutCompany.length);
+    }
+    
+    // Check for activities with account_reference_number that don't match any account
+    const activityAccountsNotFound = Array.from(accountsWithActivity).filter(accRef => 
+      !allActiveAccounts.some(account => account.account_reference_number === accRef)
+    );
+    if (activityAccountsNotFound.length > 0) {
+      console.log("WARNING: Activity accounts not found in accounts:", activityAccountsNotFound);
+    }
+    
     console.log("============================");
-  }, [accounts.length, activeAccounts.length, uniqueActiveAccounts.length, activities.length, filteredActivitiesByDate.length, dateCreatedFilterRange?.from?.toString(), dateCreatedFilterRange?.to?.toString(), companiesWithActivity.size, withActivityCount, withoutActivityCount]);
+  }, [accounts.length, activeAccounts.length, allActiveAccounts.length, activities.length, filteredActivitiesByDate.length, dateCreatedFilterRange?.from?.toString(), dateCreatedFilterRange?.to?.toString(), accountsWithActivity.size, withActivityCount, withoutActivityCount, activityCountMap, lastActivityDateMap]);
 
-  const openHistory = (companyName: string) => {
-    // Find the first account with this company name for display
-    const acct = accounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
-    setHistoryCompany(companyName);
-    setHistoryAccount(acct);
+  const openHistory = (account: Account) => {
+    // Use the account directly for display
+    setHistoryCompany(account.company_name);
+    setHistoryAccount(account);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    // Filter by company (case-insensitive) AND date range (if selected)
-    // This will include ALL activities for this company regardless of account variant
+    // Filter by account_reference_number AND date range (if selected)
     const records = activities.filter((a) => {
-      const matchCompany = (a.company_name ?? "").toLowerCase() === companyName.toLowerCase();
-      if (!matchCompany) return false;
+      const matchAccount = a.account_reference_number === account.account_reference_number;
+      if (!matchAccount) return false;
       // Apply date filter if exists
       if (!dateCreatedFilterRange?.from) return true; // No date filter
       const dateToCheck = a.date_created;
@@ -888,19 +925,20 @@ function DashboardContent() {
 
                 {/* Stats - Clickable Cards for Filtering */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  <StatCard
+                  {/*<StatCard
                     label="Total Sales"
                     value={totalSalesAll.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
                     accent="#059669"
                     sublabel={`${customerCount} Customers / ${leadsCount} Leads`}
-                  />
+                  />*/}
+                  
                   <StatCard
                     label="Total Accounts"
-                    value={uniqueActiveAccounts.length}
+                    value={allActiveAccounts.length}
                     accent="#1e293b"
                     onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
                     isActive={activityFilter === "all" && !typeFilter}
-                    sublabel="unique companies"
+                    sublabel="valid type_client accounts"
                   />
                   <StatCard
                     label="With Activity"
@@ -908,7 +946,7 @@ function DashboardContent() {
                     accent="#10b981"
                     onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")}
                     isActive={activityFilter === "with"}
-                    showFraction={{ count: withActivityCount, total: uniqueActiveAccounts.length }}
+                    showFraction={{ count: withActivityCount, total: allActiveAccounts.length }}
                     sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
                   />
                   <StatCard
@@ -918,7 +956,7 @@ function DashboardContent() {
                     onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")}
                     isActive={activityFilter === "without"}
                     isNegative
-                    showFraction={{ count: withoutActivityCount, total: uniqueActiveAccounts.length }}
+                    showFraction={{ count: withoutActivityCount, total: allActiveAccounts.length }}
                     sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
                   />
                   {typeClientStats.map((stat, i) => (
@@ -978,7 +1016,7 @@ function DashboardContent() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50 border-b border-gray-100">
-                          {["Actions", "Activities", "Last Touch", "Company", "Type", "Total Sales", "Identifier"].map((h) => (
+                          {["Actions", "Activities", "Last Touch", "Company", "Type"].map((h) => (
                             <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                           ))}
                         </TableRow>
@@ -992,24 +1030,24 @@ function DashboardContent() {
                           </TableRow>
                         ) : (
                           paginatedAccounts.map((account) => {
-                            const actCount = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+                            const actCount = activityCountMap[account.account_reference_number] ?? 0;
                             const hasAct = actCount > 0;
                             const typeStyle = getTypeClientStyle(account.type_client);
-                            const totalSales = totalSalesMap[account.company_name.toLowerCase()] ?? 0;
-                            const identifier = identifierMap[account.company_name.toLowerCase()] ?? (hasAct ? "Customer" : "Leads");
+                            const totalSales = totalSalesMap[account.account_reference_number] ?? 0;
+                            const identifier = identifierMap[account.account_reference_number] ?? (hasAct ? "Customer" : "Leads");
                             const identifierStyle = identifier === "Customer"
                               ? { pill: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" }
                               : { pill: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" };
                             return (
                               <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors">
                                 <TableCell>
-                                  <button onClick={() => openHistory(account.company_name)} className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700">
+                                  <button onClick={() => openHistory(account)} className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700">
                                     <History size={11} /> history
                                   </button>
                                 </TableCell>
                                 <TableCell>
                                   <button 
-                                    onClick={() => openHistory(account.company_name)}
+                                    onClick={() => openHistory(account)}
                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}
                                   >
                                     <FileText size={9} /> {actCount}
@@ -1017,7 +1055,7 @@ function DashboardContent() {
                                 </TableCell>
                                 <TableCell>
                                   {(() => {
-                                    const lastActDate = lastActivityDateMap[account.company_name.toLowerCase()];
+                                    const lastActDate = lastActivityDateMap[account.account_reference_number];
                                     const fallbackDate = account.date_created;
                                     const hasActivity = !!lastActDate;
                                     const displayDate = hasActivity ? lastActDate : fallbackDate;
@@ -1038,7 +1076,7 @@ function DashboardContent() {
                                     <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} /> {account.type_client?.toUpperCase()}
                                   </span>
                                 </TableCell>
-                                <TableCell>
+                                {/*<TableCell>
                                   <span className={`text-[10px] font-mono font-semibold ${totalSales > 0 ? "text-emerald-600" : "text-slate-400"}`}>
                                     {totalSales > 0
                                       ? totalSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })
@@ -1049,7 +1087,8 @@ function DashboardContent() {
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${identifierStyle.pill}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${identifierStyle.dot}`} /> {identifier}
                                   </span>
-                                </TableCell>
+                                </TableCell>*/}
+                                
                               </TableRow>
                             );
                           })

@@ -15,13 +15,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { referenceid } = req.query;
+    const { manager } = req.query;
 
-    if (!referenceid || typeof referenceid !== "string") {
-      return res.status(400).json({ success: false, error: "Missing referenceid" });
+    if (!manager || typeof manager !== "string") {
+      return res.status(400).json({ success: false, error: "Missing manager" });
     }
 
-    // Fetch all accounts for the referenceid
+    // Fetch all accounts for the manager
     const accounts = await sql`
       SELECT 
         id,
@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status,
         account_reference_number
       FROM accounts
-      WHERE referenceid = ${referenceid}
+      WHERE manager = ${manager}
       ORDER BY date_created DESC
     `;
 
