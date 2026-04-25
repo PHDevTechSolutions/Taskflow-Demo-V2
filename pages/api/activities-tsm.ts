@@ -16,13 +16,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ success: false, error: "Missing tsm" });
     }
 
-    console.log("=== API ACTIVITIES DEBUG ===");
-    console.log("tsm:", tsm);
-    console.log("From param:", from);
-    console.log("To param:", to);
-    console.log("Company param:", company_name);
-    console.log("Fetch all param:", fetchAll);
-
     // If fetchAll=true, use batch processing for large datasets
     if (fetchAll === "true") {
       return await fetchAllActivities(req, res, tsm, from, to, company_name);
@@ -63,13 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .range(pageOffset, pageOffset + pageLimit - 1);
 
     if (error) {
-      console.error("Supabase error:", error);
       return res.status(500).json({ success: false, error: "Failed to fetch activities" });
     }
-
-    console.log("API returning", activities?.length || 0, "activities");
-    console.log("Total count:", count);
-    console.log("Has more records:", (count || 0) > pageOffset + pageLimit);
 
     return res.status(200).json({
       success: true,
@@ -82,7 +70,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (error: any) {
-    console.error("Activities API error:", error);
     return res.status(500).json({ success: false, error: "Failed to fetch activities" });
   }
 }
@@ -104,12 +91,6 @@ async function fetchAllActivities(
   const startTime = Date.now();
   const MAX_RUNTIME = 55000; // 55 seconds max to avoid timeout
 
-  console.log("=== BATCH FETCH DEBUG ===");
-  console.log("Starting batch fetch for ALL activities...");
-  console.log("FROM parameter:", from);
-  console.log("TO parameter:", to);
-  console.log("tsm:", tsm);
-
   while (hasMore) {
     // Build query for this batch
     let query = supabase
@@ -119,15 +100,12 @@ async function fetchAllActivities(
 
     // Apply date filters if provided
     if (from && typeof from === "string") {
-      console.log(`Applying FROM filter: ${from}`);
       query = query.gte("date_created", from);
     }
     if (to && typeof to === "string") {
       const toDate = new Date(to);
       toDate.setHours(23, 59, 59, 999);
-      const toISOString = toDate.toISOString();
-      console.log(`Applying TO filter: ${to} -> ${toISOString}`);
-      query = query.lte("date_created", toISOString);
+      query = query.lte("date_created", toDate.toISOString());
     }
 
     // Apply company filter if provided
@@ -141,65 +119,29 @@ async function fetchAllActivities(
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (error) {
-      console.error(`Batch fetch error at offset ${offset}:`, error);
       break;
     }
 
     if (batch && batch.length > 0) {
-      console.log(`Batch ${Math.floor(offset/BATCH_SIZE) + 1}: ${batch.length} records`);
-      
-      // Check for April 14th records in this batch
-      const april14Records = batch.filter(record => {
-        const date = record.date_created;
-        return date && (date.includes('2025-04-14') || date.includes('2026-04-14'));
-      });
-      
-      if (april14Records.length > 0) {
-        console.log(`FOUND ${april14Records.length} APRIL 14TH RECORDS:`, april14Records.map(r => ({ 
-          company: r.company_name, 
-          date: r.date_created, 
-          activity: r.type_activity 
-        })));
-      }
-      
-      // Show sample records from this batch
-      console.log(`Sample records from batch:`, batch.slice(0, 3).map(r => ({
-        company: r.company_name,
-        date: r.date_created,
-        activity: r.type_activity
-      })));
-      
       allActivities = [...allActivities, ...batch];
       totalProcessed += batch.length;
       offset += BATCH_SIZE;
       hasMore = (count || 0) > offset;
-
-      console.log(`Total processed so far: ${totalProcessed}, hasMore: ${hasMore}`);
 
       // Safety check to prevent infinite loops
       if (batch.length < BATCH_SIZE) {
         hasMore = false;
       }
     } else {
-      console.log(`No records returned at offset ${offset}`);
       hasMore = false;
     }
 
     // Check for timeout to prevent API timeout
     const elapsedTime = Date.now() - startTime;
     if (elapsedTime > MAX_RUNTIME) {
-      console.warn(`Approaching timeout limit (${elapsedTime}ms). Processed ${totalProcessed} records so far.`);
-      console.log(`Returning ${allActivities.length} records to prevent timeout.`);
       break;
     }
-    
-    // Continue fetching ALL records - progress tracking
-    if (hasMore && totalProcessed > 0 && totalProcessed % 10000 === 0) {
-      console.log(`Progress: ${totalProcessed} records processed (${Math.round(elapsedTime/1000)}s elapsed), continuing...`);
-    }
   }
-
-  console.log(`Batch fetch completed. Total activities: ${allActivities.length}`);
 
   return res.status(200).json({
     success: true,

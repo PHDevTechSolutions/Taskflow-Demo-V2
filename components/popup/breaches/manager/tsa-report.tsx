@@ -213,7 +213,7 @@ export default function TSAReports() {
         setAgents(active);
         if (active.length > 0 && !selectedRefId) setSelectedRefId(active[0].ReferenceID);
       })
-      .catch(() => console.error("Failed to fetch agents"))
+      .catch(() => { /* silent */ })
       .finally(() => setLoadingAgents(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [managerDetails.referenceid]);
@@ -349,7 +349,6 @@ export default function TSAReports() {
       setAvgQuotationHT(qCount ? qTotal / qCount : 0);
       setAvgSpfHT(spfCount ? spfTotal / spfCount : 0);
     } catch (err) {
-      console.error("CSR metrics error:", err);
       sileo.error({
         title: "Error",
         description: "Failed to fetch CSR metrics.",
@@ -461,7 +460,7 @@ export default function TSAReports() {
   // ── Territory coverage ────────────────────────────────────────────────────
   //
   // Scope: the FULL calendar month of fromDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
+  // - "Covered"     = cluster accounts whose account_reference_number appears in ANY
   //                   activity within that month range
   // - "Not Reached" = the rest
   // - NO source filter — isOutboundTouchbase applies only to the Outbound
@@ -478,21 +477,31 @@ export default function TSAReports() {
       return;
     }
 
-    // Explicit month bounds from fromDate
-    const fromDateObj = new Date(fromDate);
-    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    // Explicit month bounds from fromDate (use UTC to avoid timezone issues)
+    const fromDateObj = new Date(fromDate + "T00:00:00Z"); // Treat as UTC
+    const year = fromDateObj.getUTCFullYear();
+    const month = fromDateObj.getUTCMonth();
+    // Month start: 1st of month at 00:00:00 UTC
+    const monthStart = Date.UTC(year, month, 1, 0, 0, 0, 0);
+    // Month end: last day of month at 23:59:59.999 UTC
+    const monthEnd = Date.UTC(year, month + 1, 0, 23, 59, 59, 999);
 
-    // Step 1 — company names with ANY activity within the calendar month
-    const touchedCompanies = new Set<string>();
+    // Step 1 — account_reference_numbers with ANY activity within calendar month
+    const touchedAccountRefs = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
     activities.forEach((act) => {
-      if (!act.company_name || !act.date_created) return;
-      const t = new Date(act.date_created).getTime();
+      if (!act.account_reference_number || !act.date_created) return;
+      // Parse date_created as literal date (ignore timezone)
+      const dateStr = act.date_created.toString().split('T')[0]; // "2026-03-31" from "2026-03-31T10:30:00Z"
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return;
+      // Create UTC timestamp from literal date components (treat as midnight UTC)
+      const t = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+      
       if (isNaN(t) || t < monthStart || t > monthEnd) return;
 
-      touchedCompanies.add(act.company_name.toLowerCase());
+      touchedAccountRefs.add(act.account_reference_number);
 
       if (act.activity_reference_number) {
         byActivityRef[act.activity_reference_number] = act;
@@ -501,12 +510,12 @@ export default function TSAReports() {
 
     setUniqueActivitiesList(Object.values(byActivityRef));
 
-    // Step 2 — covered / uncovered split by company_name
+    // Step 2 — covered / uncovered split by account_reference_number
     const covered = clusterAccounts.filter((acc) =>
-      acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase())
+      acc.account_reference_number && touchedAccountRefs.has(acc.account_reference_number)
     );
     const uncovered = clusterAccounts.filter((acc) =>
-      !acc.company_name || !touchedCompanies.has(acc.company_name.toLowerCase())
+      !acc.account_reference_number || !touchedAccountRefs.has(acc.account_reference_number)
     );
 
     setCoveredAccounts(covered);
@@ -741,6 +750,23 @@ export default function TSAReports() {
                   className="h-full bg-blue-600 transition-all duration-500"
                   style={{ width: denominators.total ? `${Math.min(100, (uniqueClientReach / denominators.total) * 100)}%` : "0%" }}
                 />
+              </div>
+              {/* Activity Status */}
+              <div className="grid grid-cols-2 gap-2 py-2 border-y border-gray-100">
+                <div className="text-center">
+                  <p className="text-[9px] text-gray-400 uppercase mb-1">With Activity</p>
+                  <p className="text-[16px] font-black text-emerald-600">{uniqueClientReach}</p>
+                  <p className="text-[9px] text-gray-400">
+                    {denominators.total ? Math.round((uniqueClientReach / denominators.total) * 100) : 0}% of total
+                  </p>
+                </div>
+                <div className="text-center border-l border-gray-100">
+                  <p className="text-[9px] text-gray-400 uppercase mb-1">No Activity</p>
+                  <p className="text-[16px] font-black text-amber-600">{denominators.total - uniqueClientReach}</p>
+                  <p className="text-[9px] text-gray-400">
+                    {denominators.total ? Math.round(((denominators.total - uniqueClientReach) / denominators.total) * 100) : 0}% of total
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[

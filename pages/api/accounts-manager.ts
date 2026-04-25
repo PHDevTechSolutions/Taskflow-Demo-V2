@@ -26,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       SELECT 
         id,
         referenceid,
+        tsm,
         company_name,
         type_client,
         date_created,
@@ -40,6 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         account_reference_number
       FROM accounts
       WHERE manager = ${manager}
+        AND LOWER(status) = 'active'
       ORDER BY date_created DESC
     `;
 
@@ -47,8 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       data: accounts || [],
     });
-  } catch (error: any) {
-    console.error("Accounts API error:", error);
+  } catch (error: unknown) {
     return res.status(500).json({ success: false, error: "Failed to fetch accounts" });
   }
 }

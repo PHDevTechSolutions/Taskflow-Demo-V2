@@ -28,6 +28,7 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 interface Account {
   id: string;
   referenceid: string;
+  tsm?: string;
   account_reference_number: string;
   company_name: string;
   type_client: string;
@@ -78,6 +79,21 @@ interface UserDetails {
   lastname?: string;
 }
 
+interface TSM {
+  ReferenceID: string;
+  FirstName?: string;
+  LastName?: string;
+  Email?: string;
+  referenceid?: string;
+}
+
+interface TSMWithStats extends TSM {
+  totalAccounts: number;
+  withActivity: number;
+  withoutActivity: number;
+  isUnassigned?: boolean;
+}
+
 interface Agent {
   ReferenceID: string;
   FirstName?: string;
@@ -90,28 +106,15 @@ interface AgentWithStats extends Agent {
   totalAccounts: number;
   withActivity: number;
   withoutActivity: number;
-}
-
-interface TSM {
-  ReferenceID: string;
-  FirstName?: string;
-  LastName?: string;
-  Email?: string;
-  Firstname?: string;
-  Lastname?: string;
-  Role?: string;
-}
-
-interface TsmWithStats extends TSM {
-  totalAccounts: number;
-  withActivity: number;
-  withoutActivity: number;
-  agentCount: number;
+  isUnassigned?: boolean;
 }
 
 /* ─── Helpers ───────────────────────────────────────────────────────── */
 
 const ITEMS_PER_PAGE = 20;
+const LAZY_BATCH_SIZE = 10;
+const UNASSIGNED_TSM_REFERENCE = "__UNASSIGNED_TSM__";
+const UNASSIGNED_AGENT_REFERENCE = "__UNASSIGNED_AGENT__";
 const EXCLUDED_STATUSES = ["removed", "approved for deletion", "subject for transfer"];
 const ALLOWED_TYPES = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
 
@@ -156,6 +159,18 @@ const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean =
   to.setHours(23, 59, 59, 999);
   return date >= from && date <= to;
 };
+
+const pickFirstString = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === "string") return value;
+  }
+  return "";
+};
+
+const normalizeReference = (value?: string | null): string => (value ?? "").trim().toLowerCase();
+
+const getDisplayName = (firstName?: string, lastName?: string, fallback?: string): string =>
+  `${firstName || ""} ${lastName || ""}`.trim() || fallback || "";
 
 /* ─── Type client color map ───────────────────────────────────────── */
 
@@ -213,12 +228,12 @@ function StatCard({
   );
 }
 
-/* ─── Agent Card ──────────────────────────────────────────────────── */
+/* ─── TSM Card ──────────────────────────────────────────────────── */
 
-function AgentCard({ agent, onClick }: { agent: AgentWithStats; onClick: () => void }) {
-  const withPct    = agent.totalAccounts > 0 ? Math.round((agent.withActivity    / agent.totalAccounts) * 100) : 0;
-  const withoutPct = agent.totalAccounts > 0 ? Math.round((agent.withoutActivity / agent.totalAccounts) * 100) : 0;
-  const fullName   = `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID;
+function TSMCard({ tsm, onClick }: { tsm: TSMWithStats; onClick: () => void }) {
+  const withPct    = tsm.totalAccounts > 0 ? Math.round((tsm.withActivity    / tsm.totalAccounts) * 100) : 0;
+  const withoutPct = tsm.totalAccounts > 0 ? Math.round((tsm.withoutActivity / tsm.totalAccounts) * 100) : 0;
+  const fullName   = `${tsm.FirstName || ""} ${tsm.LastName || ""}`.trim() || tsm.ReferenceID;
 
   return (
     <div
@@ -231,58 +246,13 @@ function AgentCard({ agent, onClick }: { agent: AgentWithStats; onClick: () => v
         </div>
         <div className="min-w-0">
           <p className="text-sm font-bold text-slate-800 capitalize leading-snug truncate">{fullName}</p>
-          <span className="text-[10px] font-mono text-slate-400">{agent.ReferenceID}</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-4 shrink-0">
-        <div className="text-right">
-          <p className="text-lg font-bold text-slate-800 tabular-nums">{agent.totalAccounts.toLocaleString()}</p>
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide">accounts</p>
-        </div>
-        <div className="flex flex-col items-end gap-0.5">
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            {agent.withActivity} ({withPct}%)
-          </span>
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            {agent.withoutActivity} ({withoutPct}%)
-          </span>
-        </div>
-        <div className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
-          <span className="text-slate-400 group-hover:text-indigo-600 text-xs">→</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── TSM Card ───────────────────────────────────────────────────── */
-
-function TsmCard({ tsm, onClick }: { tsm: TsmWithStats; onClick: () => void }) {
-  const withPct    = tsm.totalAccounts > 0 ? Math.round((tsm.withActivity    / tsm.totalAccounts) * 100) : 0;
-  const withoutPct = tsm.totalAccounts > 0 ? Math.round((tsm.withoutActivity / tsm.totalAccounts) * 100) : 0;
-  const fullName   = `${tsm.FirstName || tsm.Firstname || ""} ${tsm.LastName || tsm.Lastname || ""}`.trim() || tsm.ReferenceID;
-
-  return (
-    <div
-      onClick={onClick}
-      className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all duration-150 group"
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0">
-          <User size={16} className="text-indigo-500" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-800 capitalize leading-snug truncate">{fullName}</p>
           <span className="text-[10px] font-mono text-slate-400">{tsm.ReferenceID}</span>
-          <p className="text-[10px] text-slate-400 mt-0.5">{tsm.agentCount} agents</p>
         </div>
       </div>
       <div className="flex items-center gap-4 shrink-0">
         <div className="text-right">
           <p className="text-lg font-bold text-slate-800 tabular-nums">{tsm.totalAccounts.toLocaleString()}</p>
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide">team accounts</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">accounts</p>
         </div>
         <div className="flex flex-col items-end gap-0.5">
           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
@@ -500,37 +470,44 @@ function DashboardContent() {
   const [userDetails, setUserDetails] = useState<UserDetails>({
     referenceid: "", tsm: "", manager: "",
   });
-  // TSM-level data (for agents overview)
-  const [accounts,    setAccounts]    = useState<Account[]>([]);
-  const [activities,  setActivities]  = useState<Activity[]>([]);
-  // Agent-level data (for drill-down — fetched fresh per agent)
-  const [agentAccounts,   setAgentAccounts]   = useState<Account[]>([]);
+  // Manager-level data (for TSMs overview)
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  // TSM-level data (for drill-down — fetched fresh per TSM)
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [tsmAccounts, setTsmAccounts] = useState<Account[]>([]);
+  const [tsmActivities, setTsmActivities] = useState<Activity[]>([]);
+  const [loadingTsmData, setLoadingTsmData] = useState(false);
+  const [agentAccounts, setAgentAccounts] = useState<Account[]>([]);
   const [agentActivities, setAgentActivities] = useState<Activity[]>([]);
   const [loadingAgentData, setLoadingAgentData] = useState(false);
 
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
-  const [search,      setSearch]      = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [typeFilter,  setTypeFilter]  = useState<string | null>(null);
+  const [accountsVisibleCount, setAccountsVisibleCount] = useState(LAZY_BATCH_SIZE);
+  const [tsmSearch, setTsmSearch] = useState("");
+  const [tsmCurrentPage, setTsmCurrentPage] = useState(1);
+  const [tsmVisibleCount, setTsmVisibleCount] = useState(LAZY_BATCH_SIZE);
+  const [agentSearch, setAgentSearch] = useState("");
+  const [agentCurrentPage, setAgentCurrentPage] = useState(1);
+  const [agentVisibleCount, setAgentVisibleCount] = useState(LAZY_BATCH_SIZE);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<"all" | "with" | "without">("all");
-  const [historyOpen,    setHistoryOpen]    = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
   const [historyAccount, setHistoryAccount] = useState<Account | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<Activity[]>([]);
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
-  const [tsms,             setTsms]             = useState<TSM[]>([]);
-  const [agents,           setAgents]           = useState<Agent[]>([]);
-  const [drillLevel,       setDrillLevel]       = useState<"tsms" | "agents" | "accounts">("tsms");
-  const [selectedTsmId,    setSelectedTsmId]    = useState<string | null>(null);
-  const [selectedTsmName,  setSelectedTsmName]  = useState<string | null>(null);
-  const [selectedAgentId,  setSelectedAgentId]  = useState<string | null>(null);
-  const [selectedAgentName,setSelectedAgentName]= useState<string | null>(null);
-  const [tsmAccountsMap,   setTsmAccountsMap]   = useState<Record<string, Account[]>>({});
-  const [tsmActivitiesMap, setTsmActivitiesMap] = useState<Record<string, Activity[]>>({});
-  const [loadingTsmData,    setLoadingTsmData]   = useState(false);
+  const [tsms, setTsms] = useState<TSM[]>([]);
+  const [drillLevel, setDrillLevel] = useState<"tsms" | "agents" | "accounts">("tsms");
+  const [selectedTsmId, setSelectedTsmId] = useState<string | null>(null);
+  const [selectedTsmName, setSelectedTsmName] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
 
   const queryUserId = searchParams?.get("id") ?? "";
 
@@ -564,7 +541,7 @@ function DashboardContent() {
     fetchUserData();
   }, [userId]);
 
-  // ─── TSM-level fetch (agents overview) ───
+  // ─── Manager-level fetch (TSMs overview) ───
   useEffect(() => {
     if (!userDetails.referenceid) return;
     const fetchData = async () => {
@@ -576,18 +553,18 @@ function DashboardContent() {
           setAccounts(Array.isArray(accData) ? accData : accData.data ?? []);
         }
 
-        const agentsRes = await fetch(`/api/fetch-all-user-manager?id=${encodeURIComponent(userDetails.referenceid)}`);
-        if (agentsRes.ok) {
-          const agentsData = await agentsRes.json();
-          const raw = Array.isArray(agentsData) ? agentsData : [];
-          // ✅ Fix 1: normalize all possible field-name casings from the API
-          const normalized = raw.map((a: any) => ({
-            ...a,
-            ReferenceID: a.ReferenceID || a.referenceid || "",
-            FirstName:   a.FirstName   || a.Firstname   || a.firstname   || a.first_name || "",
-            LastName:    a.LastName    || a.Lastname     || a.lastname    || a.last_name  || "",
+        const tsmsRes = await fetch(`/api/fetch-tsm-by-manager?id=${encodeURIComponent(userDetails.referenceid)}`);
+        if (tsmsRes.ok) {
+          const tsmsData = await tsmsRes.json();
+          const raw = Array.isArray(tsmsData) ? tsmsData : [];
+          // ✅ Normalize field names from the API
+          const normalized = raw.map((t: Record<string, unknown>) => ({
+            ...t,
+            ReferenceID: pickFirstString(t.ReferenceID, t.referenceid),
+            FirstName: pickFirstString(t.FirstName, t.Firstname, t.firstname, t.first_name),
+            LastName: pickFirstString(t.LastName, t.Lastname, t.lastname, t.last_name),
           }));
-          setAgents(normalized);
+          setTsms(normalized);
         }
 
         const fetchActivitiesSmart = async () => {
@@ -632,33 +609,149 @@ function DashboardContent() {
     return activities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
   }, [activities, dateCreatedFilterRange]);
 
-  // ─── Agent stats (TSM overview) ───
-  const agentStats = useMemo(() => {
-    return agents.map((agent) => {
-      // ✅ Fix 2: case-insensitive match — DB stores referenceid lowercase, API returns uppercase
-      const agentAccs = allActiveAccounts.filter(
-        (a) => a.referenceid?.toLowerCase() === agent.ReferenceID?.toLowerCase()
+  // ─── TSM stats (Manager overview) ───
+  const tsmStats = useMemo(() => {
+    const activityRefs = new Set(
+      filteredActivitiesByDate
+        .map((act) => act.account_reference_number)
+        .filter((ref): ref is string => Boolean(ref))
+    );
+    const tsmRefs = new Set(
+      tsms
+        .map((tsm) => normalizeReference(tsm.ReferenceID || tsm.referenceid))
+        .filter(Boolean)
+    );
+    const tsmBuckets = new Map<string, Account[]>();
+    const unassignedAccounts: Account[] = [];
+
+    allActiveAccounts.forEach((account) => {
+      const directTsmRef = normalizeReference(account.tsm);
+      const legacyRef = normalizeReference(account.referenceid);
+      const resolvedTsmRef = tsmRefs.has(directTsmRef)
+        ? directTsmRef
+        : tsmRefs.has(legacyRef)
+          ? legacyRef
+          : "";
+
+      if (!resolvedTsmRef) {
+        unassignedAccounts.push(account);
+        return;
+      }
+
+      const existing = tsmBuckets.get(resolvedTsmRef);
+      if (existing) existing.push(account);
+      else tsmBuckets.set(resolvedTsmRef, [account]);
+    });
+
+    const stats: TSMWithStats[] = tsms.map((tsm) => {
+      const tsmRef = normalizeReference(tsm.ReferenceID || tsm.referenceid);
+      const tsmAccs = tsmBuckets.get(tsmRef) ?? [];
+      const withActivity = tsmAccs.reduce(
+        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        0
       );
-      const agentAccRefs    = new Set(agentAccs.map((a) => a.account_reference_number));
-      const withActivitySet = new Set(
-        filteredActivitiesByDate
-          .filter((act) => act.account_reference_number && agentAccRefs.has(act.account_reference_number))
-          .map((act) => act.account_reference_number as string)
+      return {
+        ...tsm,
+        totalAccounts: tsmAccs.length,
+        withActivity,
+        withoutActivity: tsmAccs.length - withActivity,
+      };
+    });
+
+    if (unassignedAccounts.length > 0) {
+      const withActivity = unassignedAccounts.reduce(
+        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        0
       );
-      const withActivity = agentAccs.filter((a) => withActivitySet.has(a.account_reference_number)).length;
+      stats.push({
+        ReferenceID: UNASSIGNED_TSM_REFERENCE,
+        FirstName: "Unassigned",
+        LastName: "TSM",
+        totalAccounts: unassignedAccounts.length,
+        withActivity,
+        withoutActivity: unassignedAccounts.length - withActivity,
+        isUnassigned: true,
+      });
+    }
+
+    return stats.sort((a, b) => b.totalAccounts - a.totalAccounts);
+  }, [tsms, allActiveAccounts, filteredActivitiesByDate]);
+
+  const selectedTsmActivitiesByDate = useMemo(() => {
+    if (!dateCreatedFilterRange?.from) return tsmActivities;
+    return tsmActivities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
+  }, [tsmActivities, dateCreatedFilterRange]);
+
+  const agentStats = useMemo<AgentWithStats[]>(() => {
+    const activityRefs = new Set(
+      selectedTsmActivitiesByDate
+        .map((act) => act.account_reference_number)
+        .filter((ref): ref is string => Boolean(ref))
+    );
+    const agentRefs = new Set(
+      agents
+        .map((agent) => normalizeReference(agent.ReferenceID || agent.referenceid))
+        .filter(Boolean)
+    );
+    const agentBuckets = new Map<string, Account[]>();
+    const unassignedAccounts: Account[] = [];
+
+    tsmAccounts.forEach((account) => {
+      const accountRef = normalizeReference(account.referenceid);
+      if (!accountRef || !agentRefs.has(accountRef)) {
+        unassignedAccounts.push(account);
+        return;
+      }
+      const existing = agentBuckets.get(accountRef);
+      if (existing) existing.push(account);
+      else agentBuckets.set(accountRef, [account]);
+    });
+
+    const stats: AgentWithStats[] = agents.map((agent) => {
+      const agentRef = normalizeReference(agent.ReferenceID || agent.referenceid);
+      const agentAccs = agentBuckets.get(agentRef) ?? [];
+      const withActivity = agentAccs.reduce(
+        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        0
+      );
       return {
         ...agent,
-        totalAccounts:   agentAccs.length,
+        totalAccounts: agentAccs.length,
         withActivity,
         withoutActivity: agentAccs.length - withActivity,
       };
-    }).sort((a, b) => b.totalAccounts - a.totalAccounts);
-  }, [agents, allActiveAccounts, filteredActivitiesByDate]);
+    });
+
+    if (unassignedAccounts.length > 0) {
+      const withActivity = unassignedAccounts.reduce(
+        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        0
+      );
+      stats.push({
+        ReferenceID: UNASSIGNED_AGENT_REFERENCE,
+        FirstName: "Unassigned",
+        LastName: "TSA",
+        totalAccounts: unassignedAccounts.length,
+        withActivity,
+        withoutActivity: unassignedAccounts.length - withActivity,
+        isUnassigned: true,
+      });
+    }
+
+    return stats.sort((a, b) => b.totalAccounts - a.totalAccounts);
+  }, [agents, tsmAccounts, selectedTsmActivitiesByDate]);
 
   // ─── TSM-level stat card totals ───
   const tsmStatCards = useMemo(() => {
+    const tableTotals = tsmStats.reduce(
+      (totals, row) => ({
+        total: totals.total + row.totalAccounts,
+        withActivity: totals.withActivity + row.withActivity,
+        withoutActivity: totals.withoutActivity + row.withoutActivity,
+      }),
+      { total: 0, withActivity: 0, withoutActivity: 0 }
+    );
     const activitySet  = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number));
-    const withActivity = allActiveAccounts.filter((a) => activitySet.has(a.account_reference_number)).length;
     const typeStats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     allActiveAccounts.forEach((a) => {
       const t      = (a.type_client ?? "Unknown").toUpperCase();
@@ -669,26 +762,30 @@ function DashboardContent() {
       else        typeStats[t].withoutActivity += 1;
     });
     return {
-      total: allActiveAccounts.length,
-      withActivity,
-      withoutActivity: allActiveAccounts.length - withActivity,
+      total: tableTotals.total,
+      withActivity: tableTotals.withActivity,
+      withoutActivity: tableTotals.withoutActivity,
       typeStats: Object.entries(typeStats)
         .map(([type, data]) => ({ type, ...data }))
         .sort((a, b) => b.total - a.total),
     };
-  }, [allActiveAccounts, filteredActivitiesByDate]);
+  }, [allActiveAccounts, filteredActivitiesByDate, tsmStats]);
 
-  // ─── Agent drill-down scoped data ───
+  // ─── TSM drill-down scoped data ───
   const scopedActivities = useMemo(() => {
-    if (drillLevel !== "accounts") return filteredActivitiesByDate;
-    if (!dateCreatedFilterRange?.from) return agentActivities;
-    return agentActivities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
-  }, [drillLevel, agentActivities, filteredActivitiesByDate, dateCreatedFilterRange]);
+    if (drillLevel === "accounts") {
+      if (!dateCreatedFilterRange?.from) return agentActivities;
+      return agentActivities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
+    }
+    if (drillLevel === "agents") return selectedTsmActivitiesByDate;
+    return filteredActivitiesByDate;
+  }, [drillLevel, agentActivities, selectedTsmActivitiesByDate, filteredActivitiesByDate, dateCreatedFilterRange]);
 
   const scopedAccounts = useMemo(() => {
-    if (drillLevel !== "accounts") return allActiveAccounts;
-    return agentAccounts;
-  }, [drillLevel, agentAccounts, allActiveAccounts]);
+    if (drillLevel === "accounts") return agentAccounts;
+    if (drillLevel === "agents") return tsmAccounts;
+    return allActiveAccounts;
+  }, [drillLevel, agentAccounts, tsmAccounts, allActiveAccounts]);
 
   const scopedAccountsWithActivity = useMemo(() => {
     const s = new Set<string>();
@@ -745,20 +842,94 @@ function DashboardContent() {
     );
   }, [scopedAccounts, search, typeFilter, activityFilter, scopedAccountsWithActivity]);
 
-  const withActivityCount    = scopedAccounts.filter((a) =>  scopedAccountsWithActivity.has(a.account_reference_number)).length;
+  const filteredTsmStats = useMemo(() => {
+    const q = tsmSearch.trim().toLowerCase();
+    if (!q) return tsmStats;
+    return tsmStats.filter((tsm) => {
+      const fullName = getDisplayName(tsm.FirstName, tsm.LastName, tsm.ReferenceID).toLowerCase();
+      const ref = (tsm.ReferenceID ?? "").toLowerCase();
+      return fullName.includes(q) || ref.includes(q);
+    });
+  }, [tsmStats, tsmSearch]);
+
+  const tsmTotalPages = Math.max(1, Math.ceil(filteredTsmStats.length / ITEMS_PER_PAGE));
+  const paginatedTsmStats = filteredTsmStats.slice((tsmCurrentPage - 1) * ITEMS_PER_PAGE, tsmCurrentPage * ITEMS_PER_PAGE);
+  const visibleTsmStats = paginatedTsmStats.slice(0, tsmVisibleCount);
+  const hasMoreTsmRowsInPage = visibleTsmStats.length < paginatedTsmStats.length;
+
+  const filteredAgentStats = useMemo(() => {
+    const q = agentSearch.trim().toLowerCase();
+    if (!q) return agentStats;
+    return agentStats.filter((agent) => {
+      const fullName = getDisplayName(agent.FirstName, agent.LastName, agent.ReferenceID).toLowerCase();
+      const ref = (agent.ReferenceID ?? "").toLowerCase();
+      return fullName.includes(q) || ref.includes(q);
+    });
+  }, [agentStats, agentSearch]);
+
+  const agentTotalPages = Math.max(1, Math.ceil(filteredAgentStats.length / ITEMS_PER_PAGE));
+  const paginatedAgentStats = filteredAgentStats.slice((agentCurrentPage - 1) * ITEMS_PER_PAGE, agentCurrentPage * ITEMS_PER_PAGE);
+  const visibleAgentStats = paginatedAgentStats.slice(0, agentVisibleCount);
+  const hasMoreAgentRowsInPage = visibleAgentStats.length < paginatedAgentStats.length;
+
+  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number)).length;
   const withoutActivityCount = scopedAccounts.length - withActivityCount;
 
-  const totalPages       = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
-  const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const agentCardTotals = useMemo(
+    () => agentStats.reduce(
+      (totals, agent) => ({
+        total: totals.total + agent.totalAccounts,
+        withActivity: totals.withActivity + agent.withActivity,
+        withoutActivity: totals.withoutActivity + agent.withoutActivity,
+      }),
+      { total: 0, withActivity: 0, withoutActivity: 0 }
+    ),
+    [agentStats]
+  );
 
-  useEffect(() => setCurrentPage(1), [search, typeFilter, activityFilter, drillLevel, selectedAgentId]);
+  const statCardTotals = drillLevel === "agents"
+    ? agentCardTotals
+    : { total: scopedAccounts.length, withActivity: withActivityCount, withoutActivity: withoutActivityCount };
+
+  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
+  const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const visiblePaginatedAccounts = paginatedAccounts.slice(0, accountsVisibleCount);
+  const hasMoreAccountRowsInPage = visiblePaginatedAccounts.length < paginatedAccounts.length;
+
+  useEffect(() => setCurrentPage(1), [search, typeFilter, activityFilter, drillLevel, selectedTsmId, selectedAgentId]);
+  useEffect(() => setTsmCurrentPage(1), [tsmSearch]);
+  useEffect(() => setAgentCurrentPage(1), [agentSearch]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+  useEffect(() => {
+    if (tsmCurrentPage > tsmTotalPages) setTsmCurrentPage(tsmTotalPages);
+  }, [tsmCurrentPage, tsmTotalPages]);
+  useEffect(() => {
+    if (agentCurrentPage > agentTotalPages) setAgentCurrentPage(agentTotalPages);
+  }, [agentCurrentPage, agentTotalPages]);
+
+  useEffect(() => {
+    setAccountsVisibleCount(Math.min(LAZY_BATCH_SIZE, paginatedAccounts.length));
+  }, [paginatedAccounts.length, currentPage, drillLevel]);
+  useEffect(() => {
+    setTsmVisibleCount(Math.min(LAZY_BATCH_SIZE, paginatedTsmStats.length));
+  }, [paginatedTsmStats.length, tsmCurrentPage]);
+  useEffect(() => {
+    setAgentVisibleCount(Math.min(LAZY_BATCH_SIZE, paginatedAgentStats.length));
+  }, [paginatedAgentStats.length, agentCurrentPage]);
 
   const openHistory = (account: Account) => {
     setHistoryCompany(account.company_name);
     setHistoryAccount(account);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    const sourceActivities = drillLevel === "accounts" ? agentActivities : activities;
+    const sourceActivities = drillLevel === "accounts"
+      ? agentActivities
+      : drillLevel === "agents"
+        ? tsmActivities
+        : activities;
     const records = sourceActivities.filter((a) => {
       if (a.account_reference_number !== account.account_reference_number) return false;
       if (!dateCreatedFilterRange?.from) return true;
@@ -772,15 +943,130 @@ function DashboardContent() {
   const accentColors = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
   const loading = loadingUser || loadingData;
 
+  const goToTsms = () => {
+    setDrillLevel("tsms");
+    setSelectedTsmId(null);
+    setSelectedTsmName(null);
+    setSelectedAgentId(null);
+    setSelectedAgentName(null);
+    setAgents([]);
+    setTsmAccounts([]);
+    setTsmActivities([]);
+    setLoadingTsmData(false);
+    setAgentAccounts([]);
+    setAgentActivities([]);
+    setLoadingAgentData(false);
+    setSearch("");
+    setTsmSearch("");
+    setAgentSearch("");
+    setCurrentPage(1);
+    setTsmCurrentPage(1);
+    setAgentCurrentPage(1);
+    setActivityFilter("all");
+    setTypeFilter(null);
+  };
+
   const goToAgents = () => {
     setDrillLevel("agents");
     setSelectedAgentId(null);
     setSelectedAgentName(null);
     setAgentAccounts([]);
     setAgentActivities([]);
+    setLoadingAgentData(false);
     setSearch("");
+    setAgentSearch("");
+    setCurrentPage(1);
+    setAgentCurrentPage(1);
     setActivityFilter("all");
     setTypeFilter(null);
+  };
+
+  const selectTsm = async (tsmId: string, tsmName: string) => {
+    setSelectedTsmId(tsmId);
+    setSelectedTsmName(tsmName);
+    setDrillLevel("agents");
+    setSelectedAgentId(null);
+    setSelectedAgentName(null);
+    setAgents([]);
+    setAgentAccounts([]);
+    setAgentActivities([]);
+    setSearch("");
+    setAgentSearch("");
+    setCurrentPage(1);
+    setAgentCurrentPage(1);
+    setActivityFilter("all");
+    setTypeFilter(null);
+
+    if (tsmId === UNASSIGNED_TSM_REFERENCE) {
+      const knownTsmRefs = new Set(
+        tsms
+          .map((tsm) => normalizeReference(tsm.ReferenceID || tsm.referenceid))
+          .filter(Boolean)
+      );
+      const unassignedAccounts = allActiveAccounts.filter((account) => {
+        const directTsmRef = normalizeReference(account.tsm);
+        const legacyRef = normalizeReference(account.referenceid);
+        return !knownTsmRefs.has(directTsmRef) && !knownTsmRefs.has(legacyRef);
+      });
+      const unassignedAccRefs = new Set(unassignedAccounts.map((account) => account.account_reference_number));
+      const unassignedActivities = filteredActivitiesByDate.filter(
+        (activity) => activity.account_reference_number && unassignedAccRefs.has(activity.account_reference_number)
+      );
+      setLoadingTsmData(false);
+      setAgents([]);
+      setTsmAccounts(unassignedAccounts);
+      setTsmActivities(unassignedActivities);
+      return;
+    }
+
+    setLoadingTsmData(true);
+    try {
+      const dateParams = dateCreatedFilterRange?.from
+        ? `&from=${dateCreatedFilterRange.from.toISOString().split("T")[0]}&to=${(dateCreatedFilterRange.to ?? dateCreatedFilterRange.from).toISOString().split("T")[0]}`
+        : "";
+
+      const [agentsRes, accRes, actRes] = await Promise.all([
+        fetch(`/api/fetch-all-user?id=${encodeURIComponent(tsmId)}`),
+        fetch(`/api/accounts-tsm?tsm=${encodeURIComponent(tsmId)}`),
+        fetch(`/api/activities-tsm?tsm=${encodeURIComponent(tsmId)}&fetchAll=true${dateParams}`),
+      ]);
+
+      if (agentsRes.ok) {
+        const agentsData = await agentsRes.json();
+        const raw = Array.isArray(agentsData) ? agentsData : [];
+        const normalized = raw.map((a: Record<string, unknown>) => ({
+          ...a,
+          ReferenceID: pickFirstString(a.ReferenceID, a.referenceid),
+          FirstName: pickFirstString(a.FirstName, a.Firstname, a.firstname, a.first_name),
+          LastName: pickFirstString(a.LastName, a.Lastname, a.lastname, a.last_name),
+        }));
+        setAgents(normalized);
+      } else {
+        setAgents([]);
+      }
+
+      if (accRes.ok) {
+        const accData = await accRes.json();
+        const raw = Array.isArray(accData) ? accData : accData.data ?? [];
+        setTsmAccounts(filterActiveAccounts(raw));
+      } else {
+        setTsmAccounts([]);
+      }
+
+      if (actRes.ok) {
+        const actData = await actRes.json();
+        setTsmActivities(Array.isArray(actData) ? actData : actData.data ?? []);
+      } else {
+        setTsmActivities([]);
+      }
+    } catch (err) {
+      console.error("TSM data fetch error:", err);
+      setAgents([]);
+      setTsmAccounts([]);
+      setTsmActivities([]);
+    } finally {
+      setLoadingTsmData(false);
+    }
   };
 
   const selectAgent = async (agentId: string, agentName: string) => {
@@ -791,6 +1077,27 @@ function DashboardContent() {
     setCurrentPage(1);
     setActivityFilter("all");
     setTypeFilter(null);
+
+    if (agentId === UNASSIGNED_AGENT_REFERENCE) {
+      const knownAgentRefs = new Set(
+        agents
+          .map((agent) => normalizeReference(agent.ReferenceID || agent.referenceid))
+          .filter(Boolean)
+      );
+      const unassignedAccounts = tsmAccounts.filter((account) => {
+        const accountRef = normalizeReference(account.referenceid);
+        return !accountRef || !knownAgentRefs.has(accountRef);
+      });
+      const unassignedAccRefs = new Set(unassignedAccounts.map((account) => account.account_reference_number));
+      const unassignedActivities = selectedTsmActivitiesByDate.filter(
+        (activity) => activity.account_reference_number && unassignedAccRefs.has(activity.account_reference_number)
+      );
+      setLoadingAgentData(false);
+      setAgentAccounts(unassignedAccounts);
+      setAgentActivities(unassignedActivities);
+      return;
+    }
+
     setLoadingAgentData(true);
     try {
       const dateParams = dateCreatedFilterRange?.from
@@ -806,14 +1113,20 @@ function DashboardContent() {
         const accData = await accRes.json();
         const raw = Array.isArray(accData) ? accData : accData.data ?? [];
         setAgentAccounts(filterActiveAccounts(raw));
+      } else {
+        setAgentAccounts([]);
       }
 
       if (actRes.ok) {
         const actData = await actRes.json();
         setAgentActivities(Array.isArray(actData) ? actData : actData.data ?? []);
+      } else {
+        setAgentActivities([]);
       }
     } catch (err) {
       console.error("Agent data fetch error:", err);
+      setAgentAccounts([]);
+      setAgentActivities([]);
     } finally {
       setLoadingAgentData(false);
     }
@@ -853,39 +1166,59 @@ function DashboardContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                      {drillLevel === "accounts" && selectedAgentName ? (
+                      {drillLevel === "accounts" && selectedTsmName && selectedAgentName ? (
                         <>
+                          <button onClick={goToTsms} className="hover:text-indigo-600">
+                            <span className="hover:underline">All TSMs</span>
+                            <span className="text-gray-400 ml-1">/</span>
+                          </button>
                           <button onClick={goToAgents} className="hover:text-indigo-600">
-                            <span className="hover:underline">All Agents</span>
+                            <span className="hover:underline">{selectedTsmName}</span>
                             <span className="text-gray-400 ml-1">/</span>
                           </button>
                           <span className="font-semibold text-gray-800">{selectedAgentName}</span>
                         </>
+                      ) : drillLevel === "agents" && selectedTsmName ? (
+                        <>
+                          <button onClick={goToTsms} className="hover:text-indigo-600">
+                            <span className="hover:underline">All TSMs</span>
+                            <span className="text-gray-400 ml-1">/</span>
+                          </button>
+                          <span className="font-semibold text-gray-800">{selectedTsmName}</span>
+                        </>
                       ) : (
-                        <span className="font-semibold text-gray-800">All Agents</span>
+                        <span className="font-semibold text-gray-800">All TSMs</span>
                       )}
                     </div>
                     <h1 className="text-lg font-bold text-gray-900">
                       {drillLevel === "accounts" && selectedAgentName
                         ? `${selectedAgentName}'s Accounts`
-                        : "My Account Management"}
+                        : drillLevel === "agents" && selectedTsmName
+                          ? `${selectedTsmName}'s TSAs`
+                          : "My Account Management"}
                     </h1>
                     <p className="text-xs text-gray-500">
                       {drillLevel === "accounts" && selectedAgentName
                         ? `Viewing accounts assigned to ${selectedAgentName}`
-                        : "Manage your assigned accounts and view activity history"}
+                        : drillLevel === "agents" && selectedTsmName
+                          ? `Viewing TSAs under ${selectedTsmName}`
+                          : "Manage your assigned accounts and view activity history"}
                     </p>
                   </div>
-                  {drillLevel === "accounts" && (
+                  {drillLevel === "accounts" ? (
                     <button onClick={goToAgents} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                      <X size={12} /> Back to Agents
+                      <X size={12} /> Back to TSAs
                     </button>
-                  )}
+                  ) : drillLevel === "agents" ? (
+                    <button onClick={goToTsms} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                      <X size={12} /> Back to TSMs
+                    </button>
+                  ) : null}
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {drillLevel === "agents" ? (
+                  {drillLevel === "tsms" ? (
                     <>
                       <StatCard label="Total Accounts" value={tsmStatCards.total} accent="#1e293b"
                         onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
@@ -906,20 +1239,20 @@ function DashboardContent() {
                     </>
                   ) : (
                     <>
-                      <StatCard label="Total Accounts" value={scopedAccounts.length} accent="#1e293b"
+                      <StatCard label="Total Accounts" value={statCardTotals.total} accent="#1e293b"
                         onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
                         isActive={activityFilter === "all" && !typeFilter}
-                        sublabel={`assigned to ${selectedAgentName}`} />
-                      <StatCard label="With Activity" value={withActivityCount} accent="#10b981"
+                        sublabel={`assigned to ${drillLevel === "accounts" ? selectedAgentName : selectedTsmName}`} />
+                      <StatCard label="With Activity" value={statCardTotals.withActivity} accent="#10b981"
                         onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")}
                         isActive={activityFilter === "with"}
-                        showFraction={{ count: withActivityCount, total: scopedAccounts.length }}
+                        showFraction={{ count: statCardTotals.withActivity, total: statCardTotals.total }}
                         sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
-                      <StatCard label="No Activity" value={withoutActivityCount} accent="#f59e0b"
+                      <StatCard label="No Activity" value={statCardTotals.withoutActivity} accent="#f59e0b"
                         onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")}
                         isActive={activityFilter === "without"}
                         isNegative
-                        showFraction={{ count: withoutActivityCount, total: scopedAccounts.length }}
+                        showFraction={{ count: statCardTotals.withoutActivity, total: statCardTotals.total }}
                         sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
                       {typeClientStats.map((stat, i) => (
                         <StatCard key={stat.type} label={stat.type} value={stat.total}
@@ -964,32 +1297,172 @@ function DashboardContent() {
                   </div>
                 )}
 
-                {/* Agents List or Accounts Table */}
-                {drillLevel === "agents" ? (
+                {/* TSMs List or Accounts Table */}
+                {drillLevel === "tsms" ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500">Click on an agent to view their accounts</p>
-                      <span className="text-xs text-gray-400">{agentStats.length} agents</span>
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+                      <Search size={13} className="text-slate-400" />
+                      <input type="text" placeholder="Search TSM name or reference..."
+                        value={tsmSearch} onChange={(e) => setTsmSearch(e.target.value)}
+                        className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
+                      {tsmSearch && <button onClick={() => setTsmSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
                     </div>
-                    {agentStats.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
-                        <User size={32} strokeWidth={1} />
-                        <p className="text-sm font-medium">No agents found</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-3">
-                        {agentStats.map((agent) => (
-                          <AgentCard
-                            key={agent.ReferenceID}
-                            agent={agent}
-                            onClick={() => selectAgent(
-                              agent.ReferenceID,
-                              `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID
-                            )}
-                          />
-                        ))}
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 border-b border-gray-100">
+                            {["TSM", "Total Accounts", "Action"].map((h) => (
+                              <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredTsmStats.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
+                                {tsmSearch ? "No TSMs match your search" : "No TSMs found"}
+                              </TableCell>
+                            </TableRow>
+                          ) : visibleTsmStats.map((tsm) => {
+                            const fullName = getDisplayName(tsm.FirstName, tsm.LastName, tsm.ReferenceID);
+                            return (
+                              <TableRow key={`${tsm.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
+                                <TableCell className="font-semibold text-gray-800">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`text-sm ${tsm.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{tsm.ReferenceID}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm font-bold text-gray-800">{tsm.totalAccounts.toLocaleString()}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <button onClick={() => selectTsm(tsm.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
+                                    View TSAs <span className="text-indigo-400">→</span>
+                                  </button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {hasMoreTsmRowsInPage && (
+                      <div className="border-t px-4 py-2 flex justify-center">
+                        <button
+                          onClick={() => setTsmVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedTsmStats.length))}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                        >
+                          Load more rows
+                        </button>
                       </div>
                     )}
+
+                    {filteredTsmStats.length > 0 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
+                        <span>
+                          Showing <span className="font-semibold">{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredTsmStats.length)}-{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + visibleTsmStats.length, filteredTsmStats.length)}</span> of <span className="font-semibold">{filteredTsmStats.length}</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setTsmCurrentPage((p) => Math.max(p - 1, 1))} disabled={tsmCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
+                          {Array.from({ length: Math.min(tsmTotalPages, 5) }, (_, i) => {
+                            const page = Math.max(1, Math.min(tsmCurrentPage - 2, tsmTotalPages - 4)) + i;
+                            return page <= tsmTotalPages ? (
+                              <button key={page} onClick={() => setTsmCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === tsmCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
+                            ) : null;
+                          })}
+                          <button onClick={() => setTsmCurrentPage((p) => Math.min(p + 1, tsmTotalPages))} disabled={tsmCurrentPage === tsmTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                ) : loadingTsmData ? (
+                  <div className="flex justify-center items-center py-16">
+                    <Spinner className="size-8" />
+                  </div>
+                ) : drillLevel === "agents" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+                      <Search size={13} className="text-slate-400" />
+                      <input type="text" placeholder="Search TSA name or reference..."
+                        value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)}
+                        className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
+                      {agentSearch && <button onClick={() => setAgentSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
+                    </div>
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 border-b border-gray-100">
+                            {["TSA", "Total Accounts", "Action"].map((h) => (
+                              <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAgentStats.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
+                                {agentSearch ? "No TSAs match your search" : "No TSAs found"}
+                              </TableCell>
+                            </TableRow>
+                          ) : visibleAgentStats.map((agent) => {
+                            const fullName = getDisplayName(agent.FirstName, agent.LastName, agent.ReferenceID);
+                            return (
+                              <TableRow key={`${agent.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
+                                <TableCell className="font-semibold text-gray-800">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`text-sm ${agent.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{agent.ReferenceID}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm font-bold text-gray-800">{agent.totalAccounts.toLocaleString()}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <button onClick={() => selectAgent(agent.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
+                                    View Accounts <span className="text-indigo-400">→</span>
+                                  </button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {hasMoreAgentRowsInPage && (
+                      <div className="border-t px-4 py-2 flex justify-center">
+                        <button
+                          onClick={() => setAgentVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedAgentStats.length))}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                        >
+                          Load more rows
+                        </button>
+                      </div>
+                    )}
+
+                    {filteredAgentStats.length > 0 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
+                        <span>
+                          Showing <span className="font-semibold">{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredAgentStats.length)}-{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + visibleAgentStats.length, filteredAgentStats.length)}</span> of <span className="font-semibold">{filteredAgentStats.length}</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setAgentCurrentPage((p) => Math.max(p - 1, 1))} disabled={agentCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
+                          {Array.from({ length: Math.min(agentTotalPages, 5) }, (_, i) => {
+                            const page = Math.max(1, Math.min(agentCurrentPage - 2, agentTotalPages - 4)) + i;
+                            return page <= agentTotalPages ? (
+                              <button key={page} onClick={() => setAgentCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === agentCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
+                            ) : null;
+                          })}
+                          <button onClick={() => setAgentCurrentPage((p) => Math.min(p + 1, agentTotalPages))} disabled={agentCurrentPage === agentTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   </div>
                 ) : loadingAgentData ? (
                   <div className="flex justify-center items-center py-16">
@@ -1024,7 +1497,7 @@ function DashboardContent() {
                                   {search || typeFilter ? "No accounts match your filters" : "No accounts found"}
                                 </TableCell>
                               </TableRow>
-                            ) : paginatedAccounts.map((account) => {
+                            ) : visiblePaginatedAccounts.map((account) => {
                               const actCount  = activityCountMap[account.account_reference_number] ?? 0;
                               const hasAct    = actCount > 0;
                               const typeStyle = getTypeClientStyle(account.type_client);
@@ -1068,9 +1541,20 @@ function DashboardContent() {
                         </Table>
                       </div>
 
+                      {hasMoreAccountRowsInPage && (
+                        <div className="border-t px-4 py-2 flex justify-center">
+                          <button
+                            onClick={() => setAccountsVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedAccounts.length))}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                          >
+                            Load more rows
+                          </button>
+                        </div>
+                      )}
+
                       {filteredAccounts.length > 0 && (
                         <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
-                          <span>Showing <span className="font-semibold">{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredAccounts.length)}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredAccounts.length)}</span> of <span className="font-semibold">{filteredAccounts.length}</span></span>
+                          <span>Showing <span className="font-semibold">{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredAccounts.length)}-{Math.min((currentPage - 1) * ITEMS_PER_PAGE + visiblePaginatedAccounts.length, filteredAccounts.length)}</span> of <span className="font-semibold">{filteredAccounts.length}</span></span>
                           <div className="flex items-center gap-1">
                             <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
                             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {

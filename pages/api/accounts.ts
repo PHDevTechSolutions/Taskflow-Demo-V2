@@ -40,6 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         account_reference_number
       FROM accounts
       WHERE referenceid = ${referenceid}
+        AND LOWER(status) = 'active'
       ORDER BY date_created DESC
     `;
 
@@ -48,7 +49,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: accounts || [],
     });
   } catch (error: any) {
-    console.error("Accounts API error:", error);
     return res.status(500).json({ success: false, error: "Failed to fetch accounts" });
   }
 }

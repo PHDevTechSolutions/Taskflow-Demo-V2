@@ -20,6 +20,7 @@ interface HistoryItem {
   type_activity: string;
   actual_sales?: number | string;
   quotation_amount?: number | string;
+  so_amount?: number | string;
   start_date: string;
   end_date: string;
   date_created: string;
@@ -190,7 +191,32 @@ export function OutboundCallsTableCard({
         });
       });
 
-      // ── 5. Conversions
+      // ── 5. Calculate SO Amount & Actual Sales (from SO-Done and Delivered activities)
+      let soAmount = 0;
+      let actualSales = 0;
+      obRefNums.forEach((refNum) => {
+        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
+        activitiesOnRef.forEach((act) => {
+          if (act.status === "SO-Done" && act.so_amount) {
+            const amount = typeof act.so_amount === "string"
+              ? parseFloat(act.so_amount)
+              : act.so_amount;
+            if (!isNaN(amount)) {
+              soAmount += amount;
+            }
+          }
+          if (act.type_activity === "Delivered / Closed Transaction" && act.actual_sales) {
+            const amount = typeof act.actual_sales === "string"
+              ? parseFloat(act.actual_sales)
+              : act.actual_sales;
+            if (!isNaN(amount)) {
+              actualSales += amount;
+            }
+          }
+        });
+      });
+
+      // ── 6. Conversions
       const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
       // Calls → Quote: how many of the OB call refs eventually got a Quote
       const callsToQuote = pct(numQuotes, totalCalls);
@@ -206,6 +232,8 @@ export function OutboundCallsTableCard({
         numSO,
         numSI,
         quoteAmount,
+        soAmount,
+        actualSales,
         achievement,
         callsToQuote,
         quoteToSO,
@@ -221,12 +249,16 @@ export function OutboundCallsTableCard({
     const numSO = statsByAgent.reduce((s, a) => s + a.numSO, 0);
     const numSI = statsByAgent.reduce((s, a) => s + a.numSI, 0);
     const totalQuoteAmount = statsByAgent.reduce((s, a) => s + a.quoteAmount, 0);
+    const totalSoAmount = statsByAgent.reduce((s, a) => s + a.soAmount, 0);
+    const totalActualSales = statsByAgent.reduce((s, a) => s + a.actualSales, 0);
     return {
       totalCalls,
       numQuotes,
       numSO,
       numSI,
       totalQuoteAmount,
+      totalSoAmount,
+      totalActualSales,
       achievement: pct(totalCalls, obTarget * statsByAgent.length || 1),
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO: pct(numSO, numQuotes),
@@ -252,8 +284,10 @@ export function OutboundCallsTableCard({
         { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
         { header: "Quote Amount", key: "quoteAmount", width: 18 },
         { header: "SO (Based on OB)", key: "so", width: 20 },
+        { header: "SO Amount", key: "soAmount", width: 18 },
         { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
         { header: "SI (Based on OB)", key: "si", width: 20 },
+        { header: "Actual Sales", key: "actualSales", width: 18 },
         { header: "SO → SI (%)", key: "soToSI", width: 15 },
       ];
 
@@ -279,8 +313,10 @@ export function OutboundCallsTableCard({
           callsToQuote: parseFloat(stat.callsToQuote) / 100,
           quoteAmount: stat.quoteAmount,
           so: stat.numSO,
+          soAmount: stat.soAmount,
           quoteToSO: parseFloat(stat.quoteToSO) / 100,
           si: stat.numSI,
+          actualSales: stat.actualSales,
           soToSI: parseFloat(stat.soToSI) / 100,
         });
       });
@@ -295,8 +331,10 @@ export function OutboundCallsTableCard({
         callsToQuote: parseFloat(totals.callsToQuote) / 100,
         quoteAmount: totals.totalQuoteAmount,
         so: totals.numSO,
+        soAmount: totals.totalSoAmount,
         quoteToSO: parseFloat(totals.quoteToSO) / 100,
         si: totals.numSI,
+        actualSales: totals.totalActualSales,
         soToSI: parseFloat(totals.soToSI) / 100,
       });
       totalRow.font = { bold: true };
@@ -305,12 +343,12 @@ export function OutboundCallsTableCard({
       worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
           if (rowNumber > 1) {
-            // Percentages: Achievement, Conversions
-            if ([4, 6, 9, 11].includes(colNumber)) {
+            // Percentages: Achievement (4), Calls→Quote (6), Quote→SO (9), SO→SI (12)
+            if ([4, 6, 9, 12].includes(colNumber)) {
               cell.numFmt = '0.00%';
             }
-            // Currency: Quote Amount
-            if ([7].includes(colNumber)) {
+            // Currency: Quote Amount (7), SO Amount (8), Actual Sales (11)
+            if ([7, 8, 11].includes(colNumber)) {
               cell.numFmt = '₱#,##0.00';
             }
           }
@@ -338,7 +376,7 @@ export function OutboundCallsTableCard({
       window.URL.revokeObjectURL(url);
 
     } catch (err) {
-      console.error("Export failed:", err);
+      // Export failed silently
     }
   };
 
@@ -395,8 +433,10 @@ export function OutboundCallsTableCard({
                   <TableHead className="text-gray-500 text-center">Calls → Quote<span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span></TableHead>
                   <TableHead className="text-gray-500 text-center">Quote Amount</TableHead>
                   <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SO Based on OB Successful</TableHead>
+                  <TableHead className="text-gray-500 text-center">SO Amount</TableHead>
                   <TableHead className="text-gray-500 text-center">Quote → SO<span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span></TableHead>
                   <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SI Based on OB Successful</TableHead>
+                  <TableHead className="text-gray-500 text-center">SI Amount</TableHead>
                   <TableHead className="text-gray-500 text-center">SO → SI<span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span></TableHead>
                 </TableRow>
               </TableHeader>
@@ -454,7 +494,12 @@ export function OutboundCallsTableCard({
                       </TableCell>
 
                       <TableCell className="text-center font-bold">
-                      {convBadge(stat.numSO)}
+                        {convBadge(stat.numSO)}
+                      </TableCell>
+
+                      {/* SO Amount */}
+                      <TableCell className="text-center font-semibold text-blue-600">
+                        ₱{stat.soAmount.toLocaleString()}
                       </TableCell>
 
                       {/* Quote → SO */}
@@ -463,7 +508,12 @@ export function OutboundCallsTableCard({
                       </TableCell>
 
                       <TableCell className="text-center font-bold">
-                      {convBadge(stat.numSI)}
+                        {convBadge(stat.numSI)}
+                      </TableCell>
+
+                      {/* Actual Sales */}
+                      <TableCell className="text-center font-semibold text-emerald-600">
+                        ₱{stat.actualSales.toLocaleString()}
                       </TableCell>
 
                       {/* SO → SI */}
@@ -487,8 +537,10 @@ export function OutboundCallsTableCard({
                   <TableCell className="text-center">{totals.callsToQuote}</TableCell>
                   <TableCell className="text-center font-semibold">{totals.totalQuoteAmount.toLocaleString()}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numSO)}</TableCell>
+                  <TableCell className="text-center font-semibold text-blue-600">₱{totals.totalSoAmount.toLocaleString()}</TableCell>
                   <TableCell className="text-center">{totals.quoteToSO}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numSI)}</TableCell>
+                  <TableCell className="text-center font-semibold text-emerald-600">₱{totals.totalActualSales.toLocaleString()}</TableCell>
                   <TableCell className="text-center">{totals.soToSI}</TableCell>
                 </TableRow>
               </TableFooter>

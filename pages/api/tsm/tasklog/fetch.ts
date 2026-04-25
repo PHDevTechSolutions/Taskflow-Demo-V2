@@ -78,22 +78,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Filter TaskLog by ReferenceID (agents under this TSM)
     filter.ReferenceID = { $in: agentReferenceIds };
 
-    // Query TaskLog collection - fetch all fields to debug
+    // Query TaskLog collection
     const taskLogs = await db
       .collection("TaskLog")
       .find(filter)
       .sort({ date_created: -1 })
-      .limit(10) // Limit for debugging
       .toArray();
-
-    // Debug: Log raw data from MongoDB
-    console.log("Raw TaskLog count:", taskLogs.length);
-    if (taskLogs.length > 0) {
-      console.log("Raw first entry:", JSON.stringify(taskLogs[0], null, 2));
-      console.log("Available fields:", Object.keys(taskLogs[0]));
-      console.log("SiteVisitAccount value:", taskLogs[0].SiteVisitAccount);
-      console.log("siteVisitAccount value:", taskLogs[0].siteVisitAccount);
-    }
 
     // Map to expected format - handle all possible field name variations
     const formattedLogs = taskLogs.map(log => {
@@ -121,14 +111,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Debug: Log formatted data
-    if (formattedLogs.length > 0) {
-      console.log("Formatted sample:", formattedLogs.slice(0, 3));
-    }
-
     res.status(200).json({ taskLogs: formattedLogs });
   } catch (error) {
-    console.error("Error fetching task logs:", error);
+    // Error occurred but don't log to console
     res.status(500).json({ error: "Server error fetching task logs" });
   }
 }

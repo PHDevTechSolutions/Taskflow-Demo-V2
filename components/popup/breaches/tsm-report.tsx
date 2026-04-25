@@ -465,7 +465,7 @@ export default function TSMReports() {
   // ── Territory coverage ────────────────────────────────────────────────────
   //
   // Scope: the FULL calendar month of fromDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
+  // - "Covered"     = cluster accounts whose account_reference_number appears in ANY
   //                   activity within that month range
   // - "Not Reached" = the rest
   // - NO source filter — isOutboundTouchbase applies only to the Outbound
@@ -486,32 +486,31 @@ export default function TSMReports() {
     const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
     const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    // Step 1 — Normalize cluster company names
-    const clusterCompanyMap = new Map<string, Activity>();
-    clusterAccounts.forEach(acc => {
-      if (acc.company_name) clusterCompanyMap.set(acc.company_name.toLowerCase(), acc);
+    // Step 1 — account_reference_numbers with ANY activity within the calendar month
+    const touchedAccountRefs = new Set<string>();
+    const byActivityRef: Record<string, any> = {};
+
+    activities.forEach((act) => {
+      if (!act.account_reference_number || !act.date_created) return;
+      const t = new Date(act.date_created).getTime();
+      if (isNaN(t) || t < monthStart || t > monthEnd) return;
+
+      touchedAccountRefs.add(act.account_reference_number);
+
+      if (act.activity_reference_number) {
+        byActivityRef[act.activity_reference_number] = act;
+      }
     });
 
-    // Step 2 — Filter activities to only include cluster companies
-    const clusterActivities = activities.filter(act =>
-      act.company_name &&
-      clusterCompanyMap.has(act.company_name.toLowerCase()) &&
-      act.date_created &&
-      new Date(act.date_created).getTime() >= monthStart &&
-      new Date(act.date_created).getTime() <= monthEnd
+    setUniqueActivitiesList(Object.values(byActivityRef));
+
+    // Step 2 — covered / uncovered split by account_reference_number
+    const covered = clusterAccounts.filter((acc) =>
+      acc.account_reference_number && touchedAccountRefs.has(acc.account_reference_number)
     );
-
-    // Step 3 — Unique activities by reference number
-    const uniqueByRef: Record<string, Activity> = {};
-    clusterActivities.forEach(act => {
-      if (act.activity_reference_number) uniqueByRef[act.activity_reference_number] = act;
-    });
-    setUniqueActivitiesList(Object.values(uniqueByRef));
-
-    // Step 4 — Covered vs Uncovered
-    const touchedCompanies = new Set(clusterActivities.map(a => a.company_name!.toLowerCase()));
-    const covered = clusterAccounts.filter(acc => acc.company_name && touchedCompanies.has(acc.company_name.toLowerCase()));
-    const uncovered = clusterAccounts.filter(acc => acc.company_name && !touchedCompanies.has(acc.company_name.toLowerCase()));
+    const uncovered = clusterAccounts.filter((acc) =>
+      !acc.account_reference_number || !touchedAccountRefs.has(acc.account_reference_number)
+    );
 
     setCoveredAccounts(covered);
     setUncoveredAccounts(uncovered);
@@ -717,7 +716,6 @@ export default function TSMReports() {
                   <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
                   <p className="font-black text-[12px] text-gray-800">
                     {value}
-                    
                   </p>
                 </div>
               ))}
@@ -725,50 +723,56 @@ export default function TSMReports() {
           </SectionCard>
 
           {/* Database Coverage */}
-          <SectionCard
-            title="Database Coverage"
-          > {/*badge={
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCoverageDialogSource("covered")}
-                  className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold hover:underline"
-                >
-                  <List size={10} />
-                  Covered
-                </button>
-                <span className="text-gray-300 text-[9px]">·</span>
-                <button
-                  onClick={() => setCoverageDialogSource("uncovered")}
-                  className="flex items-center gap-1 text-[9px] text-amber-600 font-semibold hover:underline"
-                >
-                  Not Reached
-                </button>
-              </div>
-            }*/}
+          <SectionCard title="Database Coverage">
             <div className="space-y-2">
+              {/* With Activity / Total */}
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
+                <span className="text-[14px] font-black text-blue-700">{coveredAccounts.length}</span>
                 <span className="text-[10px] text-gray-400">of {denominators.total} accounts</span>
               </div>
               <div className="h-1.5 bg-gray-100 w-full overflow-hidden">
                 <div
                   className="h-full bg-blue-600 transition-all duration-500"
-                  style={{ width: denominators.total ? `${Math.min(100, (uniqueClientReach / denominators.total) * 100)}%` : "0%" }}
+                  style={{
+                    width: denominators.total
+                      ? `${Math.min(100, (coveredAccounts.length / denominators.total) * 100)}%` 
+                      : "0%",
+                  }}
                 />
               </div>
+
+              {/* Activity Status */}
+              <div className="grid grid-cols-2 gap-2 py-2 border-y border-gray-100">
+                <div className="text-center">
+                  <p className="text-[9px] text-gray-400 uppercase mb-1">With Activity</p>
+                  <p className="text-[16px] font-black text-emerald-600">{coveredAccounts.length}</p>
+                  <p className="text-[9px] text-gray-400">
+                    {denominators.total ? Math.round((coveredAccounts.length / denominators.total) * 100) : 0}% of total
+                  </p>
+                </div>
+                <div className="text-center border-l border-gray-100">
+                  <p className="text-[9px] text-gray-400 uppercase mb-1">No Activity</p>
+                  <p className="text-[16px] font-black text-amber-600">{uncoveredAccounts.length}</p>
+                  <p className="text-[9px] text-gray-400">
+                    {denominators.total ? Math.round((uncoveredAccounts.length / denominators.total) * 100) : 0}% of total
+                  </p>
+                </div>
+              </div>
+
+              {/* Type Client Grid - Covered/Total format */}
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[
-                  { label: "Top 50", val: clientSegments.top50, denom: denominators.top50 },
-                  { label: "Next 30", val: clientSegments.next30, denom: denominators.next30 },
-                  { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
-                  { label: "CSR", val: clientSegments.csrClient, denom: denominators.csrClient },
-                  { label: "New", val: clientSegments.newClient, denom: denominators.newClient },
-                  { label: "TSA", val: clientSegments.tsaClient, denom: denominators.tsaClient },
-                ].map(({ label, val, denom }) => (
+                  { label: "Top 50", key: "top50", covered: clientSegments.top50, total: denominators.top50 },
+                  { label: "Next 30", key: "next30", covered: clientSegments.next30, total: denominators.next30 },
+                  { label: "Bal 20", key: "balance20", covered: clientSegments.balance20, total: denominators.bal20 },
+                  { label: "CSR", key: "csrclient", covered: clientSegments.csrClient, total: denominators.csrClient },
+                  { label: "New", key: "newclient", covered: clientSegments.newClient, total: denominators.newClient },
+                  { label: "TSA", key: "tsaclient", covered: clientSegments.tsaClient, total: denominators.tsaClient },
+                ].map(({ label, key, covered, total }) => (
                   <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                     <p className="text-[8px] text-gray-400 uppercase">{label}</p>
                     <p className="text-[10px] font-black text-gray-700">
-                      {val}<span className="text-gray-400 font-normal">/{denom}</span>
+                      {covered}<span className="text-gray-400 font-normal">/{total}</span>
                     </p>
                   </div>
                 ))}

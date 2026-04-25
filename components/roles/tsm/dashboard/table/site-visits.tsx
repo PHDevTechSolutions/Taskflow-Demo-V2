@@ -73,31 +73,28 @@ export const SiteVisits: React.FC<SiteVisitsProps> = ({
       setError(null);
 
       try {
-        const from = dateCreatedFilterRange?.from
-          ? new Date(dateCreatedFilterRange.from).toISOString()
-          : new Date().toISOString();
-        const to = dateCreatedFilterRange?.to
-          ? new Date(dateCreatedFilterRange.to).toISOString()
-          : from;
-
         const url = new URL("/api/tsm/tasklog/fetch", window.location.origin);
         if (isManager) {
           url.searchParams.append("manager", referenceid);
         } else {
           url.searchParams.append("tsm", referenceid);
         }
-        url.searchParams.append("type", "Site Visit");
-        url.searchParams.append("from", from);
-        url.searchParams.append("to", to);
+        url.searchParams.append("type", "Client Visit");
+        
+        // Only add date params if filter is set
+        if (dateCreatedFilterRange?.from) {
+          url.searchParams.append("from", new Date(dateCreatedFilterRange.from).toISOString());
+        }
+        if (dateCreatedFilterRange?.to) {
+          url.searchParams.append("to", new Date(dateCreatedFilterRange.to).toISOString());
+        }
 
+        console.log("[Frontend] Fetching from:", url.toString());
         const res = await fetch(url.toString());
         if (!res.ok) throw new Error("Failed to fetch task logs");
         
         const data = await res.json();
-        console.log("Frontend received taskLogs:", data.taskLogs);
-        if (data.taskLogs?.length > 0) {
-          console.log("First entry SiteVisitAccount:", data.taskLogs[0].SiteVisitAccount);
-        }
+        console.log("[Frontend] Received taskLogs:", data.taskLogs?.length, data.taskLogs);
         setTaskLogs(data.taskLogs || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error fetching task logs");

@@ -386,13 +386,6 @@ function EditTimeDialog({ open, onClose, item, onSaved, onAutoUpdateStatus }: Ed
     setError(null);
     
     try {
-      // Debug: Log what we're sending
-      console.log("Updating time:", { 
-        id: item.id, 
-        start_date: start.toISOString(), 
-        end_date: end.toISOString() 
-      });
-
       const res = await fetch("/api/activity/tsa/historical/update-history-time", {
         method: "PUT",
         headers: { 
@@ -420,7 +413,6 @@ function EditTimeDialog({ open, onClose, item, onSaved, onAutoUpdateStatus }: Ed
       
       onClose();
     } catch (err: any) {
-      console.error("Edit time error:", err);
       setError(err.message ?? "Something went wrong.");
     } finally {
       setSaving(false);
@@ -631,7 +623,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         fetchActivities();
       }
     } catch (error: any) {
-      console.error('Auto status update failed:', error);
       sileo.error({
         title: 'Auto-Update Failed',
         description: error?.message || 'Could not auto-update status',
@@ -715,7 +706,6 @@ export const TaskList: React.FC<CompletedProps> = ({
       });
       fetchActivities();
     } catch (error: any) {
-      console.error("Inline update failed:", error);
       sileo.error({
         title: "Update Failed",
         description: error?.message || "Could not update the record.",
@@ -780,7 +770,6 @@ export const TaskList: React.FC<CompletedProps> = ({
       });
       fetchActivities();
     } catch (error: any) {
-      console.error("Quotation status update failed:", error);
       sileo.error({
         title: "Update Failed",
         description: error?.message || "Could not update the quotation status.",
@@ -832,7 +821,6 @@ export const TaskList: React.FC<CompletedProps> = ({
       const data = await res.json();
       setActivities(Array.isArray(data.activities) ? data.activities : []);
     } catch (err: any) {
-      console.error("Fetch activities failed:", err);
       setError(err.message || "Failed to fetch activities");
       setActivities([]);
     } finally {
@@ -863,7 +851,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             .subscribe();
         }
       } catch (err) {
-        console.error("Failed to initialize supabase channel:", err);
+        // Silent fail - subscription is optional
       }
     };
     
@@ -872,7 +860,7 @@ export const TaskList: React.FC<CompletedProps> = ({
     return () => {
       mounted = false;
       if (channel) {
-        supabase.removeChannel(channel).catch(console.error);
+        supabase.removeChannel(channel).catch(() => {});
       }
     };
   }, [referenceid, fetchActivities]);
@@ -1024,7 +1012,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         styles: { title: "text-white!", description: "text-white" },
       });
     } catch (err: any) {
-      console.error("Delete failed:", err);
       sileo.error({
         title: "Delete Failed",
         description: err?.message || "Could not delete items.",
@@ -1087,7 +1074,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         styles: { title: "text-white!", description: "text-white" },
       });
     } catch (err: any) {
-      console.error("Failed to update SO", err);
       sileo.error({
         title: "Update Failed",
         description: err?.message || "Could not update Sales Order.",
@@ -1228,17 +1214,6 @@ export const TaskList: React.FC<CompletedProps> = ({
         <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-60">
           <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
           <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">Retrieving Records...</p>
-        </div>
-      )}
-
-      {/* ── Table ────────────────────────────────────────────────────────── */}
-      {!loading && filteredActivities.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 bg-zinc-50/50 border border-dashed border-zinc-200">
-          <AlertCircleIcon className="h-8 w-8 text-zinc-300" />
-          <div className="text-center">
-            <p className="text-sm font-bold text-zinc-500">No records found</p>
-            <p className="text-[11px] text-zinc-400">Try adjusting your filters or search terms.</p>
-          </div>
         </div>
       )}
 

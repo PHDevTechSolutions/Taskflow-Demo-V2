@@ -1,0 +1,12 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\components",
+    "\\components\\roles",
+    "\\components\\roles\\manager",
+    "\\components\\roles\\manager\\accounts",
+    "\\components\\roles\\manager\\accounts\\table"
+  ],
+  "SelectedNode": "\\components\\roles\\manager\\accounts\\table\\all.tsx",
+  "PreviewInSolutionExplorer": false
+}

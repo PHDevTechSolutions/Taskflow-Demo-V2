@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import {
   Item,
@@ -186,8 +186,12 @@ function TSMRow({
   const summedTQ  = tsaUnder.reduce((sum, a) => sum + (Number(a.TargetQuota) || 0), 0);
 
   function handleTSMClick() {
-    setExpanded((v) => !v);
     onSelectAgent(isTSMSelected ? "all" : tsm.ReferenceID);
+  }
+
+  function handleToggleExpand(e: React.MouseEvent) {
+    e.stopPropagation();
+    setExpanded((v) => !v);
   }
 
   function handleAgentClick(agentId: string) {
@@ -254,10 +258,16 @@ function TSMRow({
             <Users size={11} />
             {tsaUnder.length} agent{tsaUnder.length !== 1 ? "s" : ""}
           </div>
-          {expanded
-            ? <ChevronDown size={16} className="text-green-600" />
-            : <ChevronRight size={16} className="text-gray-400" />
-          }
+          <button
+            type="button"
+            onClick={handleToggleExpand}
+            className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+          >
+            {expanded
+              ? <ChevronDown size={16} className="text-green-600" />
+              : <ChevronRight size={16} className="text-gray-400" />
+            }
+          </button>
         </div>
       </button>
 
@@ -269,7 +279,7 @@ function TSMRow({
               No agents under this TSM.
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
               {tsaUnder.map((agent) => (
                 <AgentItem
                   key={agent.ReferenceID}
@@ -326,24 +336,22 @@ export function AgentActivityLogs({
 
         {/* TSMs with their TSA agents */}
         {tsmAgents.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide col-span-full">
               Territory Sales Managers
             </h4>
-            <div className="flex flex-col gap-3">
-              {tsmAgents.map((tsm) => {
-                const tsaUnder = tsaAgents.filter((tsa) => isSame(tsa.TSM, tsm.ReferenceID));
-                return (
-                  <TSMRow
-                    key={tsm.ReferenceID}
-                    tsm={tsm}
-                    tsaUnder={tsaUnder}
-                    selectedAgent={safeSelected}
-                    onSelectAgent={handleSelect}
-                  />
-                );
-              })}
-            </div>
+            {tsmAgents.map((tsm) => {
+              const tsaUnder = tsaAgents.filter((tsa) => isSame(tsa.TSM, tsm.ReferenceID));
+              return (
+                <TSMRow
+                  key={tsm.ReferenceID}
+                  tsm={tsm}
+                  tsaUnder={tsaUnder}
+                  selectedAgent={safeSelected}
+                  onSelectAgent={handleSelect}
+                />
+              );
+            })}
           </section>
         )}
 
@@ -353,7 +361,7 @@ export function AgentActivityLogs({
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Territory Sales Associates (Unassigned)
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {orphanedTSAs.map((agent) => (
                 <AgentItem
                   key={agent.ReferenceID}

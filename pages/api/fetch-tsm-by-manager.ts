@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .collection("users")
       .find({
         Manager: referenceId,
-        Role: "TSM",
+        Role: "Territory Sales Manager",
         Status: { $nin: ["Resigned", "Terminated"] },
       })
       .project({

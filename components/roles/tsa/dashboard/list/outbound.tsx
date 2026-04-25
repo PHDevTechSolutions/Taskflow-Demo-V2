@@ -45,7 +45,7 @@ const pct = (num: number, den: number) =>
   den > 0 ? ((num / den) * 100).toFixed(2) + "%" : "0.00%";
 
 const convBadge = (count: number) => (
-  <span className="ml-1 text-green-600 text-[10px] font-medium">({count})</span>
+  <span className="ml-1 text-green-600 text-xs font-medium">{count}</span>
 );
 
 /* ================= COMPONENT ================= */
@@ -163,6 +163,34 @@ export function OutboundCallsCard({
       });
     });
 
+    // Calculate SO Amount (sum of so_amount from SO-Done activities)
+    let soAmount = 0;
+    obRefNums.forEach((refNum) => {
+      const acts = historyByRefNum.get(refNum) ?? [];
+      acts.forEach((act) => {
+        if (act.status === "SO-Done" && act.so_amount) {
+          const amount = parseFloat(act.so_amount);
+          if (!isNaN(amount)) {
+            soAmount += amount;
+          }
+        }
+      });
+    });
+
+    // Calculate Actual Sales (sum of actual_sales from Delivered/Closed activities)
+    let actualSales = 0;
+    obRefNums.forEach((refNum) => {
+      const acts = historyByRefNum.get(refNum) ?? [];
+      acts.forEach((act) => {
+        if (act.type_activity === "Delivered / Closed Transaction" && act.actual_sales) {
+          const amount = parseFloat(act.actual_sales);
+          if (!isNaN(amount)) {
+            actualSales += amount;
+          }
+        }
+      });
+    });
+
     const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
 
     const totalSales = history.reduce((sum, h) => {
@@ -176,6 +204,8 @@ export function OutboundCallsCard({
       numSO,
       numSI,
       quoteAmount,
+      soAmount,
+      actualSales,
       achievement,
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO: pct(numSO, numQuotes),
@@ -211,11 +241,15 @@ export function OutboundCallsCard({
                 <TableHead className="text-center">OB Target</TableHead>
                 <TableHead className="text-center">Successful OB</TableHead>
                 <TableHead className="text-center">Achievement</TableHead>
+                <TableHead className="text-center">Quote Based on OB Successful</TableHead>
                 <TableHead className="text-center">Calls → Quote</TableHead>
                 <TableHead className="text-center">Quote Amount</TableHead>
+                <TableHead className="text-center">SO Based on OB Successful</TableHead>
                 <TableHead className="text-center">Quote → SO</TableHead>
+                <TableHead className="text-center">SI Based on OB Successful</TableHead>
+                <TableHead className="text-center">SO Amount</TableHead>
                 <TableHead className="text-center">SO → SI</TableHead>
-                <TableHead className="text-center">Total Sales</TableHead>
+                <TableHead className="text-center">SI Amount</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -225,19 +259,31 @@ export function OutboundCallsCard({
                 <TableCell className="text-center font-semibold">{stats.totalCalls}</TableCell>
                 <TableCell className="text-center">{stats.achievement.toFixed(2)}%</TableCell>
                 <TableCell className="text-center">
-                  {stats.callsToQuote} {convBadge(stats.numQuotes)}
+                  {convBadge(stats.numQuotes)}
+                </TableCell>
+                <TableCell className="text-center">
+                  {stats.callsToQuote}
+                </TableCell>
+                <TableCell className="text-center">
+                  {convBadge(stats.numSO)}
                 </TableCell>
                 <TableCell className="text-center font-semibold text-green-600">
                   ₱{stats.quoteAmount.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-center">
-                  {stats.quoteToSO} {convBadge(stats.numSO)}
+                  {stats.quoteToSO}
                 </TableCell>
                 <TableCell className="text-center">
-                  {stats.soToSI} {convBadge(stats.numSI)}
+                  {convBadge(stats.numSI)}
                 </TableCell>
-                <TableCell className="text-center font-semibold">
-                  {stats.totalSales.toLocaleString()}
+                <TableCell className="text-center font-semibold text-blue-600">
+                  ₱{stats.soAmount.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-center">
+                  {stats.soToSI}
+                </TableCell>
+                <TableCell className="text-center font-semibold text-emerald-600">
+                  ₱{stats.actualSales.toLocaleString()}
                 </TableCell>
               </TableRow>
             </TableBody>
