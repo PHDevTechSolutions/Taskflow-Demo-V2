@@ -5384,7 +5384,7 @@ ${spec.value}
                           {showDiscountColumns && !hideDiscountInPreview && (
                             <>
                               <th className="p-3 border-r border-black w-20 text-center">DISC/UNIT</th>
-                              <th className="p-3 border-r border-black w-28 text-center">NET UNIT PRICE</th>
+                              <th className="p-3 border-r border-black w-28 text-center">DISCOUNTED PRICE</th>
                             </>
                           )}
                           <th className={`p-3 text-center ${showDiscountColumns && !hideDiscountInPreview ? "w-24" : "w-28"}`}>TOTAL AMOUNT</th>
