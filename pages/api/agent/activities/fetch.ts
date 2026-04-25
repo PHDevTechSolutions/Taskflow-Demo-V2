@@ -1,22 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextApiRequest, NextApiResponse } from "next";
 
-export async function GET(request: NextRequest) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const agentReferenceId = searchParams.get("referenceid");
-    const companyName = searchParams.get("company");
+    const { referenceid: agentReferenceId, company: companyName } = req.query;
 
-    if (!agentReferenceId) {
-      return NextResponse.json(
-        { error: "Agent reference ID is required" },
-        { status: 400 }
-      );
+    if (!agentReferenceId || typeof agentReferenceId !== "string") {
+      return res.status(400).json({
+        error: "Agent reference ID is required",
+      });
     }
 
     // Use the same logic as the existing reports/tsm/fetch endpoint
     // but filter by agent reference ID instead of TSM reference ID
     const activitiesUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/activities?select=*&referenceid=eq.${encodeURIComponent(agentReferenceId)}`;
-    
+
     const response = await fetch(activitiesUrl, {
       method: "GET",
       headers: {
@@ -34,13 +35,13 @@ export async function GET(request: NextRequest) {
 
     // If company name is provided, filter by company
     let filteredActivities = activities || [];
-    if (companyName) {
+    if (companyName && typeof companyName === "string") {
       filteredActivities = activities.filter((activity: any) =>
         activity.company_name?.toLowerCase() === companyName.toLowerCase()
       );
     }
 
-    return NextResponse.json({
+    return res.status(200).json({
       success: true,
       activities: filteredActivities,
       total: filteredActivities.length,
@@ -48,13 +49,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("Error fetching agent activities:", error);
-    return NextResponse.json(
-      { 
-        error: "Failed to fetch activities",
-        activities: [],
-        total: 0 
-      },
-      { status: 500 }
-    );
+    return res.status(500).json({
+      error: "Failed to fetch activities",
+      activities: [],
+      total: 0
+    });
   }
 }

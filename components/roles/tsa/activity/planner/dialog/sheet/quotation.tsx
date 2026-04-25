@@ -403,6 +403,9 @@ export function QuotationSheet(props: Props) {
   const [open, setOpen] = useState(false);
   const [discount, setDiscount] = React.useState(0);
 
+  // Track raw input values for smooth decimal typing (keyed by product uid + field)
+  const [rawInputValues, setRawInputValues] = useState<Record<string, string>>({});
+
   const [useToday, setUseToday] = useState(false);
 
   const [showQuotationAlert, setShowQuotationAlert] = useState(false);
@@ -4622,13 +4625,15 @@ ${spec.value}
                                       <Input
                                         type="text"
                                         inputMode="decimal"
-                                        value={p.price > 0 ? p.price.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                        value={rawInputValues[`${p.uid}-price`] ?? (p.price > 0 ? p.price.toFixed(2) : '')}
                                         readOnly={false}
                                         onChange={(e) => {
-                                          const raw = e.target.value.replace(/,/g, '');
-                                          // Allow empty, digits, or one decimal point with up to 2 digits
-                                          if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
-                                            const val = parseFloat(raw) || 0;
+                                          const inputVal = e.target.value;
+                                          const raw = inputVal.replace(/,/g, '');
+                                          // Allow: empty, digits, one decimal point with up to 2 digits, or just a decimal point
+                                          if (raw === '' || raw === '.' || /^\d+\.?$/.test(raw) || /^\d+\.\d{0,2}$/.test(raw) || /^\d+\.\d{0,2}$/.test(raw)) {
+                                            setRawInputValues(prev => ({ ...prev, [`${p.uid}-price`]: inputVal }));
+                                            const val = raw === '' || raw === '.' ? 0 : parseFloat(raw) || 0;
                                             const minPrice = p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0;
                                             const finalVal = Math.max(minPrice, val);
                                             setSelectedProducts((prev) => {
@@ -4637,6 +4642,13 @@ ${spec.value}
                                               return copy;
                                             });
                                           }
+                                        }}
+                                        onBlur={() => {
+                                          setRawInputValues(prev => {
+                                            const copy = { ...prev };
+                                            delete copy[`${p.uid}-price`];
+                                            return copy;
+                                          });
                                         }}
                                         className={`w-full min-w-[70px] p-1 rounded-none text-xs text-right font-medium overflow-hidden text-ellipsis h-6 focus:outline-none ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                       />
@@ -4684,11 +4696,12 @@ ${spec.value}
                                                 <Input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  value={rowDiscountPct > 0 ? rowDiscountPct.toString() : ''}
+                                                  value={rawInputValues[`${p.uid}-discount`] ?? (rowDiscountPct > 0 ? rowDiscountPct.toString() : '')}
                                                   onChange={(e) => {
                                                     const val = e.target.value;
-                                                    // Allow empty, digits, or one decimal point with up to 2 digits
-                                                    if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                                    // Allow: empty, digits, one decimal point with up to 2 digits, or just a decimal point
+                                                    if (val === '' || val === '.' || /^\d+\.?$/.test(val) || /^\d+\.\d{0,2}$/.test(val)) {
+                                                      setRawInputValues(prev => ({ ...prev, [`${p.uid}-discount`]: val }));
                                                       const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
                                                       setSelectedProducts((prev) => {
                                                         const copy = [...prev];
@@ -4702,6 +4715,13 @@ ${spec.value}
                                                       });
                                                     }
                                                   }}
+                                                  onBlur={() => {
+                                                    setRawInputValues(prev => {
+                                                      const copy = { ...prev };
+                                                      delete copy[`${p.uid}-discount`];
+                                                      return copy;
+                                                    });
+                                                  }}
                                                   className="w-14 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
                                                   placeholder="%"
                                                 />
@@ -4712,11 +4732,13 @@ ${spec.value}
                                                 <Input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  value={unitDiscountAmt > 0 ? unitDiscountAmt.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                                  value={rawInputValues[`${p.uid}-discountAmt`] ?? (unitDiscountAmt > 0 ? unitDiscountAmt.toFixed(2) : '')}
                                                   onChange={(e) => {
-                                                    const raw = e.target.value.replace(/,/g, '');
-                                                    // Allow empty, digits, one decimal point, or just a decimal point
-                                                    if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                                    const inputVal = e.target.value;
+                                                    const raw = inputVal.replace(/,/g, '');
+                                                    // Allow: empty, digits, one decimal point with up to 2 digits, or just a decimal point
+                                                    if (raw === '' || raw === '.' || /^\d+\.?$/.test(raw) || /^\d+\.\d{0,2}$/.test(raw)) {
+                                                      setRawInputValues(prev => ({ ...prev, [`${p.uid}-discountAmt`]: inputVal }));
                                                       const amt = raw === '' || raw === '.' ? 0 : Math.max(0, parseFloat(raw) || 0);
                                                       setSelectedProducts((prev) => {
                                                         const copy = [...prev];
@@ -4730,6 +4752,13 @@ ${spec.value}
                                                         return copy;
                                                       });
                                                     }
+                                                  }}
+                                                  onBlur={() => {
+                                                    setRawInputValues(prev => {
+                                                      const copy = { ...prev };
+                                                      delete copy[`${p.uid}-discountAmt`];
+                                                      return copy;
+                                                    });
                                                   }}
                                                   className="w-16 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
                                                   placeholder="₱"
@@ -4752,11 +4781,13 @@ ${spec.value}
                                           <Input
                                             type="text"
                                             inputMode="decimal"
-                                            value={discountedUnitPrice > 0 ? discountedUnitPrice.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                            value={rawInputValues[`${p.uid}-net`] ?? (discountedUnitPrice > 0 ? discountedUnitPrice.toFixed(2) : '')}
                                             onChange={(e) => {
-                                              const raw = e.target.value.replace(/,/g, '');
+                                              const inputVal = e.target.value;
+                                              const raw = inputVal.replace(/,/g, '');
                                               // Allow empty, digits, one decimal point, or just a decimal point
-                                              if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                              if (raw === '' || raw === '.' || /^\d+\.?$/.test(raw) || /^\d+\.\d{0,2}$/.test(raw)) {
+                                                setRawInputValues(prev => ({ ...prev, [`${p.uid}-net`]: inputVal }));
                                                 const newNetPrice = Math.max(0, parseFloat(raw) || 0);
                                                 setSelectedProducts((prev) => {
                                                   const copy = [...prev];
@@ -4781,6 +4812,13 @@ ${spec.value}
                                                   return copy;
                                                 });
                                               }
+                                            }}
+                                            onBlur={() => {
+                                              setRawInputValues(prev => {
+                                                const copy = { ...prev };
+                                                delete copy[`${p.uid}-net`];
+                                                return copy;
+                                              });
                                             }}
                                             className="w-full min-w-[60px] p-1 rounded-none text-xs text-right font-bold text-blue-700 overflow-hidden text-ellipsis h-6 focus:outline-none"
                                             placeholder="₱"
@@ -4830,11 +4868,13 @@ ${spec.value}
                                         <Input
                                           type="text"
                                           inputMode="decimal"
-                                          value={totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                          value={rawInputValues[`${p.uid}-total`] ?? (totalAfterDiscount > 0 ? totalAfterDiscount.toFixed(2) : '')}
                                           onChange={(e) => {
-                                            const raw = e.target.value.replace(/,/g, '');
+                                            const inputVal = e.target.value;
+                                            const raw = inputVal.replace(/,/g, '');
                                             // Allow empty, digits, one decimal point, or just a decimal point
-                                            if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                            if (raw === '' || raw === '.' || /^\d+\.?$/.test(raw) || /^\d+\.\d{0,2}$/.test(raw)) {
+                                              setRawInputValues(prev => ({ ...prev, [`${p.uid}-total`]: inputVal }));
                                               const newTotal = Math.max(0, parseFloat(raw) || 0);
                                               setSelectedProducts((prev) => {
                                                 const copy = [...prev];
@@ -4866,6 +4906,13 @@ ${spec.value}
                                                 return copy;
                                               });
                                             }
+                                          }}
+                                          onBlur={() => {
+                                            setRawInputValues(prev => {
+                                              const copy = { ...prev };
+                                              delete copy[`${p.uid}-total`];
+                                              return copy;
+                                            });
                                           }}
                                           className="w-full min-w-[60px] p-1 rounded-none text-xs font-bold text-right overflow-hidden text-ellipsis h-6 focus:outline-none"
                                           placeholder="₱"
