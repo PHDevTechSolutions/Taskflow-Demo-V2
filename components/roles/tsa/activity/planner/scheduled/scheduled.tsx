@@ -328,6 +328,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   };
 
   const firstAvailableCluster = getFirstNonEmptyCluster(groupedNull, clusterOrder);
+  const firstTodayCluster = getFirstNonEmptyCluster(groupedToday, clusterOrder);
 
   // Factory function to create handler for cluster accounts
   const createActivityHandler = (account: Account) => async () => {
@@ -592,6 +593,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   function getBadgeProps(status: string, isFutureDate: boolean) {
     switch (status) {
       case "Assisted":
+        return { variant: "secondary" as const, className: "bg-orange-500 text-white" };
       case "On-Progress":
         return { variant: "secondary" as const, className: "bg-orange-500 text-white" };
       case "SO-Done":
@@ -608,6 +610,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   function getStatusStyles(status: string, isFutureDate: boolean) {
     switch (status) {
       case "Assisted":
+        return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
       case "On-Progress":
         return { badgeClass: "bg-orange-500 text-white", bgClass: "bg-orange-100" };
       case "SO-Done":
@@ -674,73 +677,65 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
       <div className="max-h-[70vh] overflow-auto space-y-6 custom-scrollbar">
         {/* ─── OB Calls Account for Today (Cluster Series) ───────────────── */}
-        {totalTodayCount > 0 && (
+        {totalTodayCount > 0 && firstTodayCluster && (
           <section>
-            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({totalTodayCount})</h2>
-            {clusterOrder.map((cluster) => {
-              const clusterAccounts = groupedToday[cluster];
-              if (!clusterAccounts || clusterAccounts.length === 0) return null;
+            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({groupedToday[firstTodayCluster].length})</h2>
 
-              return (
-                <div key={cluster} className="mb-4">
-                  <Alert className="font-mono rounded-xl shadow-lg mb-2">
-                    <CheckCircle2 />
-                    <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {cluster.toUpperCase()}</AlertTitle>
-                    <AlertDescription className="text-xs italic">
-                      {clusterAccounts.length} account{clusterAccounts.length !== 1 ? "s" : ""} scheduled for today
-                    </AlertDescription>
-                  </Alert>
+            <Alert className="font-mono rounded-xl shadow-lg mb-2">
+              <CheckCircle2 />
+              <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstTodayCluster.toUpperCase()}</AlertTitle>
+              <AlertDescription className="text-xs italic">
+                {groupedToday[firstTodayCluster].length} account{groupedToday[firstTodayCluster].length !== 1 ? "s" : ""} scheduled for today
+              </AlertDescription>
+            </Alert>
 
-                  <Accordion type="single" collapsible className="w-full">
-                    {clusterAccounts.map((account) => (
-                      <AccordionItem key={account.id} value={account.id} className="border border-green-300 rounded-sm mb-2 uppercase">
-                        <div className="flex justify-between items-center p-2 select-none">
-                          <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
-                            {account.company_name}
-                          </AccordionTrigger>
-                          <div className="flex gap-2 ml-4">
-                            <CreateActivityDialog
-                              firstname={firstname}
-                              lastname={lastname}
-                              target_quota={target_quota}
-                              email={email}
-                              contact={contact}
-                              tsmname={tsmname}
-                              managername={managername}
-                              referenceid={referenceid}
-                              tsm={account.tsm}
-                              manager={account.manager}
-                              type_client={account.type_client}
-                              contact_number={account.contact_number}
-                              email_address={account.email_address}
-                              activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
-                              ticket_reference_number="-"
-                              agent={`${firstname} ${lastname}`}
-                              company_name={account.company_name}
-                              contact_person={account.contact_person}
-                              address={account.address}
-                              accountReferenceNumber={account.account_reference_number}
-                              onCreated={createActivityHandler(account)}
-                              managerDetails={managerDetails ?? null}
-                              tsmDetails={tsmDetails ?? null}
-                              signature={signature}
-                            />
-                          </div>
-                        </div>
+            <Accordion type="single" collapsible className="w-full">
+              {groupedToday[firstTodayCluster].map((account) => (
+                <AccordionItem key={account.id} value={account.id} className="border border-green-300 rounded-sm mb-2 uppercase">
+                  <div className="flex justify-between items-center p-2 select-none">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
+                      {account.company_name}
+                    </AccordionTrigger>
+                    <div className="flex gap-2 ml-4">
+                      <CreateActivityDialog
+                        firstname={firstname}
+                        lastname={lastname}
+                        target_quota={target_quota}
+                        email={email}
+                        contact={contact}
+                        tsmname={tsmname}
+                        managername={managername}
+                        referenceid={referenceid}
+                        tsm={account.tsm}
+                        manager={account.manager}
+                        type_client={account.type_client}
+                        contact_number={account.contact_number}
+                        email_address={account.email_address}
+                        activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
+                        ticket_reference_number="-"
+                        agent={`${firstname} ${lastname}`}
+                        company_name={account.company_name}
+                        contact_person={account.contact_person}
+                        address={account.address}
+                        accountReferenceNumber={account.account_reference_number}
+                        onCreated={createActivityHandler(account)}
+                        managerDetails={managerDetails ?? null}
+                        tsmDetails={tsmDetails ?? null}
+                        signature={signature}
+                      />
+                    </div>
+                  </div>
 
-                        <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
-                          <p><strong>Contact:</strong> {account.contact_number}</p>
-                          <p><strong>Email:</strong> {account.email_address}</p>
-                          <p><strong>Client Type:</strong> {account.type_client}</p>
-                          <p><strong>Address:</strong> {account.address}</p>
-                          <p className="text-[8px]">{account.account_reference_number}</p>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                </div>
-              );
-            })}
+                  <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
+                    <p><strong>Contact:</strong> {account.contact_number}</p>
+                    <p><strong>Email:</strong> {account.email_address}</p>
+                    <p><strong>Client Type:</strong> {account.type_client}</p>
+                    <p><strong>Address:</strong> {account.address}</p>
+                    <p className="text-[8px]">{account.account_reference_number}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </section>
         )}
 

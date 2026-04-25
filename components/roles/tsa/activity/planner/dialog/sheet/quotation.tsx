@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { sileo } from "sileo";
 import { Separator } from "@/components/ui/separator"
@@ -164,13 +165,74 @@ interface Product {
   description?: string;
   itemRemarks?: string;
   brand?: string;
+  itemCodes?: Record<string, string>;
+  itemCodeVariants?: Array<{
+    label: string;
+    code: string;
+  }>;
+  requiresItemCodeSelection?: boolean;
   images?: Array<{
     src: string;
   }>;
   skus?: string[];
   price?: number;
   regPrice?: number;
+  discount?: number;
 }
+
+const normalizeItemCodeVariants = (
+  rawItemCodes: unknown,
+  fallbackItemCode?: string | null
+): Array<{ label: string; code: string }> => {
+  const variants: Array<{ label: string; code: string }> = [];
+
+  const pushVariant = (rawLabel: unknown, rawCode: unknown, indexHint: number) => {
+    const code = String(rawCode ?? "").trim();
+    if (!code) return;
+
+    const label = String(rawLabel ?? "").trim() || `CODE ${indexHint + 1}`;
+    const exists = variants.some((v) => v.code.toUpperCase() === code.toUpperCase());
+    if (exists) return;
+
+    variants.push({
+      label: label.toUpperCase(),
+      code,
+    });
+  };
+
+  if (rawItemCodes && typeof rawItemCodes === "object" && !Array.isArray(rawItemCodes)) {
+    Object.entries(rawItemCodes as Record<string, unknown>).forEach(([label, code], index) => {
+      pushVariant(label, code, index);
+    });
+  } else if (Array.isArray(rawItemCodes)) {
+    rawItemCodes.forEach((entry, index) => {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>;
+        pushVariant(obj.label ?? obj.brand ?? `CODE ${index + 1}`, obj.code ?? obj.itemCode ?? obj.value, index);
+      } else {
+        pushVariant(`CODE ${index + 1}`, entry, index);
+      }
+    });
+  } else if (typeof rawItemCodes === "string" && rawItemCodes.trim().length > 0) {
+    const text = rawItemCodes.trim();
+    try {
+      const parsed = JSON.parse(text);
+      return normalizeItemCodeVariants(parsed, fallbackItemCode);
+    } catch {
+      text
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .forEach((code, index) => pushVariant(`CODE ${index + 1}`, code, index));
+    }
+  }
+
+  if (variants.length === 0 && fallbackItemCode && fallbackItemCode.trim().length > 0) {
+    pushVariant("DEFAULT", fallbackItemCode.trim(), 0);
+  }
+
+  return variants;
+};
 
 interface SelectedProduct extends Product {
   uid: string;
@@ -429,6 +491,8 @@ export function QuotationSheet(props: Props) {
   const [spf1Search, setSpf1Search] = useState("");
   const [spf1Selected, setSpf1Selected] = useState<SpfCreationRow | null>(null);
   const [spfUploading, setSpfUploading] = useState(false);
+  const [itemCodeDropDialogOpen, setItemCodeDropDialogOpen] = useState(false);
+  const [pendingDropProduct, setPendingDropProduct] = useState<Product | null>(null);
   const [spfManualProduct, setSpfManualProduct] = useState({
     title: "",
     sku: "",
@@ -641,6 +705,66 @@ export function QuotationSheet(props: Props) {
     setSelectedProducts((prev) => [...prev, newProduct]);
     addToRecentProducts(newProduct);
   }, []);
+
+  const addSearchResultProduct = (
+    item: Product,
+    forcedSku?: string,
+    actionLabel = "Add product"
+  ) => {
+    const resolvedSku = (forcedSku || item.skus?.[0] || "").trim();
+
+    if (item.requiresItemCodeSelection && !resolvedSku) {
+      toast.error("Select an item code variant first.");
+      return;
+    }
+
+    saveToHistory(actionLabel);
+
+    const newProduct: SelectedProduct = {
+      id: item.id,
+      title: item.title,
+      description: item.description || "",
+      itemRemarks: item.itemRemarks,
+      brand: item.brand,
+      images: item.images,
+      skus: resolvedSku ? [resolvedSku] : [],
+      uid: crypto.randomUUID(),
+      quantity: 1,
+      price: item.price ?? 0,
+      discount: 0,
+      regPrice: item.regPrice || 0,
+    };
+
+    setSelectedProducts((prev) => [...prev, newProduct]);
+    addToRecentProducts(newProduct);
+    setMobilePanelTab("products");
+  };
+
+  const closeItemCodeDropDialog = () => {
+    setItemCodeDropDialogOpen(false);
+    setPendingDropProduct(null);
+  };
+
+  const handleSearchProductDrop = (item: Product) => {
+    const droppedSku = (item.skus?.[0] || "").trim();
+    const variants = item.itemCodeVariants || [];
+    const needsVariantSelection =
+      item.requiresItemCodeSelection &&
+      variants.length > 1 &&
+      !droppedSku;
+
+    if (needsVariantSelection) {
+      setPendingDropProduct(item);
+      setItemCodeDropDialogOpen(true);
+      return;
+    }
+
+    addSearchResultProduct(
+      item,
+      droppedSku,
+      droppedSku ? `Add product (${droppedSku})` : "Add product (drag-drop)"
+    );
+  };
 
   // ==================== USER PREFERENCES PERSISTENCE ====================
   useEffect(() => {
@@ -2572,7 +2696,7 @@ Procurement
             >
 
               {/* Left side: Search + checkbox selected */}
-              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[22rem] min-w-[22rem]'} ${mobilePanelTab === "products" && selectedProducts.length > 0 ? "hidden lg:flex" : "flex"}`}>
+              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-88 min-w-88'} ${mobilePanelTab === "products" && selectedProducts.length > 0 ? "hidden lg:flex" : "flex"}`}>
                 {/* Collapse/Expand Button & Help */}
                 <div className={`flex items-center gap-1 mb-1 ${leftPanelCollapsed ? 'flex-col' : 'justify-between'}`}>
                   <button
@@ -3018,6 +3142,7 @@ Procurement
                                     productSource === "firebase_taskflow"
                                   ) {
                                     const searchUpper = rawValue.toUpperCase();
+                                    const isDbSource = productSource === "firebase_taskflow";
 
                                     const websiteFilter =
                                       productSource === "firebase_shopify"
@@ -3032,7 +3157,7 @@ Procurement
                                     const querySnapshot = await getDocs(q);
 
                                     const firebaseResults = querySnapshot.docs
-                                      .map(doc => {
+                                      .map((doc): Product | null => {
                                         const data = doc.data();
 
                                         let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
@@ -3067,6 +3192,40 @@ ${spec.value}
                                           });
                                         }
 
+                                        const itemCodeVariants = normalizeItemCodeVariants(
+                                          data.itemCodes,
+                                          data.itemCode
+                                        );
+                                        const matchedCodeVariants = itemCodeVariants.filter((variant) =>
+                                          variant.code.toUpperCase().includes(searchUpper)
+                                        );
+                                        const matchesNameOrSpecs = `${data.name || ""} ${rawSpecsText}`
+                                          .toUpperCase()
+                                          .includes(searchUpper);
+
+                                        if (!matchesNameOrSpecs && matchedCodeVariants.length === 0) {
+                                          return null;
+                                        }
+
+                                        const variantsForResult =
+                                          isDbSource && matchedCodeVariants.length > 0
+                                            ? matchedCodeVariants
+                                            : itemCodeVariants;
+
+                                        const itemCodes = variantsForResult.reduce<Record<string, string>>(
+                                          (acc, variant) => {
+                                            acc[variant.label] = variant.code;
+                                            return acc;
+                                          },
+                                          {}
+                                        );
+
+                                        const requiresItemCodeSelection =
+                                          isDbSource && variantsForResult.length > 1;
+                                        const defaultSku = requiresItemCodeSelection
+                                          ? ""
+                                          : variantsForResult[0]?.code || "";
+
                                         return {
                                           id: doc.id,
                                           title: data.name || "No Name",
@@ -3074,18 +3233,14 @@ ${spec.value}
                                           regPrice: data.regularPrice || 0,
                                           description: specsHtml,
                                           images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          itemCodes,
+                                          itemCodeVariants: variantsForResult,
+                                          requiresItemCodeSelection,
+                                          skus: defaultSku ? [defaultSku] : [],
                                           discount: 0,
-                                          tempSearchMetadata: (
-                                            data.name +
-                                            " " +
-                                            (data.itemCode || "") +
-                                            " " +
-                                            rawSpecsText
-                                          ).toUpperCase()
                                         };
                                       })
-                                      .filter(p => p.tempSearchMetadata.includes(searchUpper));
+                                      .filter((p): p is Product => Boolean(p));
 
                                     setSearchResults(firebaseResults);
                                   }
@@ -3130,85 +3285,142 @@ ${spec.value}
                 {/* Search Results — only shown when not in SPF mode */}
                 {!isSpfMode && !isSpf1Mode && !isManualEntry && searchResults.length > 0 && (
                   <>
-                    {/* Helper tip */}
-                    <div className="flex items-center gap-2 text-[10px] text-gray-400 px-1">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>Click image to preview • Drag to add • Click + to add</span>
-                    </div>
-
                     {/* Premium Product Cards - Respect View Mode */}
                     <div className={`overflow-x-hidden ${
                       productViewMode === 'grid' 
                         ? 'grid grid-cols-2 gap-2' 
                         : 'flex flex-col gap-2'
                     }`}>
-                      {searchResults.map((item) => (
-                        <div
-                          key={item.id}
-                          className="group bg-white border border-gray-100 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-blue-200 transition-all overflow-hidden min-h-[56px]"
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.effectAllowed = "copy";
-                            e.dataTransfer.setData("application/json", JSON.stringify(item));
-                          }}
-                        >
-                          <div className="grid grid-cols-[40px_1fr_24px] gap-2 items-center h-10">
-                            {/* Product Image */}
-                            <div className="w-10 h-10 flex-shrink-0">
-                              {item.images?.[0]?.src ? (
-                                <img
-                                  src={item.images[0].src}
-                                  alt={item.title}
-                                  className="w-full h-full object-cover rounded-md"
-                                  onClick={() => {
-                                    setPreviewImageUrl(item.images?.[0]?.src || "");
-                                    setImagePreviewOpen(true);
-                                  }}
-                                />
+                      {searchResults.map((item) => {
+                        const isDbSource = productSource === "firebase_taskflow";
+                        const variantOptions = item.itemCodeVariants || [];
+                        const showVariantSelector =
+                          isDbSource &&
+                          item.requiresItemCodeSelection &&
+                          variantOptions.length > 0;
+                        const quickSku = item.skus?.[0] || variantOptions[0]?.code || "";
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="group bg-white border border-gray-100 rounded-lg px-2 py-1.5 hover:shadow-md hover:border-blue-200 transition-all overflow-hidden min-h-14 cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={(e) => {
+                              const dragSku = showVariantSelector ? "" : quickSku;
+                              const dragPayload: Product = {
+                                ...item,
+                                skus: dragSku ? [dragSku] : [],
+                              };
+                              e.dataTransfer.effectAllowed = "copy";
+                              e.dataTransfer.setData("application/json", JSON.stringify(dragPayload));
+                            }}
+                          >
+                            <div className="grid grid-cols-[40px_1fr_24px] gap-2 items-center">
+                              {/* Product Image */}
+                              <div className="w-10 h-10 shrink-0">
+                                {item.images?.[0]?.src ? (
+                                  <img
+                                    src={item.images[0].src}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover rounded-md"
+                                    onClick={() => {
+                                      setPreviewImageUrl(item.images?.[0]?.src || "");
+                                      setImagePreviewOpen(true);
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-50 rounded-md flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Product Info */}
+                              <div className="min-w-0 overflow-hidden">
+                                <h4 className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2">{item.title}</h4>
+                                <p className="text-[9px] text-gray-400 truncate">
+                                  {showVariantSelector ? "Multiple item codes available" : (quickSku || "No SKU")}
+                                </p>
+                              </div>
+
+                              {/* Add Button */}
+                              {showVariantSelector ? (
+                                <DropdownMenu modal={false}>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="w-6 h-6 flex items-center justify-center bg-[#121212] text-white rounded-full hover:bg-gray-800 transition-colors shadow-sm"
+                                      title="Select item code variant"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56 p-1.5">
+                                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-gray-500 px-1.5 py-1">
+                                      Item Codes
+                                    </DropdownMenuLabel>
+                                    <div className="flex flex-col gap-1">
+                                      {variantOptions.map((variant, index) => (
+                                        <div
+                                          key={`${item.id}-${variant.label}-${variant.code}-${index}`}
+                                          role="button"
+                                          tabIndex={0}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            const variantPayload: Product = {
+                                              ...item,
+                                              skus: [variant.code],
+                                            };
+                                            e.dataTransfer.effectAllowed = "copy";
+                                            e.dataTransfer.setData("application/json", JSON.stringify(variantPayload));
+                                          }}
+                                          onClick={() =>
+                                            addSearchResultProduct(
+                                              item,
+                                              variant.code,
+                                              `Add product (${variant.code})`
+                                            )
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              addSearchResultProduct(
+                                                item,
+                                                variant.code,
+                                                `Add product (${variant.code})`
+                                              );
+                                            }
+                                          }}
+                                          className="flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing rounded-md border border-blue-100 bg-blue-50 px-2 py-1.5 hover:bg-blue-100 transition-colors"
+                                          title="Click to add or drag this item code variant"
+                                        >
+                                          <span className="text-[9px] font-semibold text-blue-800 uppercase">
+                                            {variant.label}
+                                          </span>
+                                          <span className="text-[9px] text-blue-700 font-medium truncate">
+                                            {variant.code}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               ) : (
-                                <div className="w-full h-full bg-gray-50 rounded-md flex items-center justify-center">
-                                  <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => addSearchResultProduct(item, quickSku)}
+                                  className="w-6 h-6 flex items-center justify-center text-white rounded-full transition-colors bg-[#121212] hover:bg-gray-800 shadow-sm"
+                                  title="Add to quotation"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
                               )}
                             </div>
-                            
-                            {/* Product Info */}
-                            <div className="min-w-0 overflow-hidden">
-                              <h4 className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2">{item.title}</h4>
-                              <p className="text-[9px] text-gray-400 truncate">{item.skus?.[0] || "No SKU"}</p>
-                            </div>
-                            
-                            {/* Add Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                saveToHistory('Add product');
-                                const { price: _, ...itemWithoutPrice } = item;
-                                const newProduct = {
-                                  ...itemWithoutPrice,
-                                  uid: crypto.randomUUID(),
-                                  quantity: 1,
-                                  price: item.price ?? 0,
-                                  discount: 0,
-                                  description: item.description || "",
-                                  regPrice: item.regPrice || 0,
-                                };
-                                setSelectedProducts((prev) => [...prev, newProduct]);
-                                addToRecentProducts(newProduct);
-                                setMobilePanelTab("products");
-                              }}
-                              className="w-6 h-6 flex items-center justify-center bg-[#121212] text-white rounded-full hover:bg-gray-800 transition-colors shadow-sm"
-                              title="Add to quotation"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -3228,7 +3440,7 @@ ${spec.value}
                           onClick={() => reAddRecentProduct(product)}
                           title="Click to add again"
                         >
-                          <div className="w-6 h-6 flex-shrink-0">
+                          <div className="w-6 h-6 shrink-0">
                             {product.images?.[0]?.src ? (
                               <img
                                 src={product.images[0].src}
@@ -3315,20 +3527,8 @@ ${spec.value}
                   try {
                     const raw = e.dataTransfer.getData("application/json");
                     if (!raw) return;
-                    saveToHistory('Add product (drag-drop)');
                     const item = JSON.parse(raw) as Product;
-                    const { price: _p, ...itemWithoutPrice } = item;
-                    const newProduct = {
-                      ...itemWithoutPrice,
-                      uid: crypto.randomUUID(),
-                      quantity: 1,
-                      price: item.price ?? 0,
-                      discount: 0,
-                      description: item.description || "",
-                    };
-                    setSelectedProducts((prev) => [...prev, newProduct]);
-                    addToRecentProducts(newProduct);
-                    setMobilePanelTab("products");
+                    handleSearchProductDrop(item);
                   } catch (err) {
                     console.error("Drop failed:", err);
                   }
@@ -4311,7 +4511,7 @@ ${spec.value}
                                           <div
                                             contentEditable
                                             suppressContentEditableWarning
-                                            className="outline-none text-[10px] sm:text-xs break-words"
+                                            className="outline-none text-[10px] sm:text-xs wrap-break-word"
                                             onBlur={(e) => {
                                               const html = e.currentTarget.innerHTML; // keep HTML
                                               setSelectedProducts((prev) => {
@@ -4376,7 +4576,7 @@ ${spec.value}
                                               });
                                             }
                                           }}
-                                          className="w-10 min-w-[36px] p-0.5 rounded-none text-xs text-center font-medium overflow-hidden text-ellipsis h-6 focus:outline-none"
+                                          className="w-10 min-w-9 p-0.5 rounded-none text-xs text-center font-medium overflow-hidden text-ellipsis h-6 focus:outline-none"
                                         />
                                         <button
                                           type="button"
@@ -4449,7 +4649,7 @@ ${spec.value}
                                                   }}
                                                   className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all duration-150 ease-in-out ${
                                                     rowDiscountPct === preset
-                                                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                                                      ? 'bg-linear-to-r from-blue-600 to-blue-700 text-white'
                                                       : 'bg-white border border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-700'
                                                   }`}
                                                   title={`Apply ${preset}% discount`}
@@ -4960,12 +5160,67 @@ ${spec.value}
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={itemCodeDropDialogOpen}
+        onOpenChange={(isOpen) => {
+          setItemCodeDropDialogOpen(isOpen);
+          if (!isOpen) {
+            setPendingDropProduct(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md w-[95vw] rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="font-black text-sm uppercase tracking-wider">
+              Select Item Code
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Choose which item code will be used in quotation for{" "}
+              <span className="font-semibold text-gray-700">{pendingDropProduct?.title || "this product"}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[50vh] overflow-y-auto pr-1 space-y-1.5">
+            {(pendingDropProduct?.itemCodeVariants || []).map((variant, index) => (
+              <button
+                key={`drop-variant-${variant.label}-${variant.code}-${index}`}
+                type="button"
+                className="w-full flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left hover:bg-blue-100 transition-colors"
+                onClick={() => {
+                  if (!pendingDropProduct) return;
+                  addSearchResultProduct(
+                    pendingDropProduct,
+                    variant.code,
+                    `Add product (${variant.code})`
+                  );
+                  closeItemCodeDropDialog();
+                }}
+              >
+                <span className="text-[10px] font-black uppercase tracking-wide text-blue-800">
+                  {variant.label}
+                </span>
+                <span className="text-[11px] font-semibold text-blue-700 truncate">
+                  {variant.code}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeItemCodeDropDialog}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* PREVIEW QUOTATION MODAL */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent
           className="max-w-[1000px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 border-none bg-[#F9FAFA] shadow-2xl"
           style={{ maxWidth: "950px", width: "100vw" }}
         >
+          <DialogTitle className="sr-only">Quotation Preview</DialogTitle>
           {(() => {
             return (
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
@@ -5038,7 +5293,7 @@ ${spec.value}
                   <div className="border border-black overflow-hidden shadow-sm">
                     <table className="w-full text-[12px] border-collapse">
                       <thead>
-                        <tr className="bg-[#F9FAFA] border-b border-black font-black font-black uppercase text-[#121212]">
+                        <tr className="bg-[#F9FAFA] border-b border-black font-black uppercase text-[#121212]">
                           <th className="p-3 border-r border-black w-16 text-center">ITEM NO</th>
                           <th className="p-3 border-r border-black w-16 text-center">QTY</th>
                           <th className="p-3 border-r border-black w-32 text-center">REFERENCE PHOTO</th>
@@ -5708,7 +5963,7 @@ ${spec.value}
       {/* TEMPLATES MODAL */}
       <Dialog open={showTemplateModal} onOpenChange={setShowTemplateModal}>
         <DialogContent className="max-w-[500px] w-[95vw] p-0 border-none shadow-2xl">
-          <DialogHeader className="p-4 bg-gradient-to-r from-purple-600 to-blue-600">
+          <DialogHeader className="p-4 bg-linear-to-r from-purple-600 to-blue-600">
             <DialogTitle className="text-white text-sm font-black uppercase tracking-widest">Quote Templates</DialogTitle>
           </DialogHeader>
           <div className="p-4 max-h-[60vh] overflow-y-auto">
@@ -5790,7 +6045,7 @@ ${spec.value}
       }}>
         <DialogContent className="max-w-md w-[95vw] p-0 border-none shadow-2xl bg-white">
           {/* Header */}
-          <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
+          <DialogHeader className="bg-linear-to-r from-blue-600 to-blue-700 p-4">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
