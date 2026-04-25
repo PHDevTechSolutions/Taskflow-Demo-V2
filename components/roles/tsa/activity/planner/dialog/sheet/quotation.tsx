@@ -52,6 +52,12 @@ interface Props {
   setProductDiscountedPrice: (v: string) => void;
   productDiscountedAmount: string; // comma separated calculated discount amounts
   setProductDiscountedAmount: (v: string) => void;
+  productIsPromo: string; // comma separated "1"/"0" flags
+  setProductIsPromo: (v: string) => void;
+  productIsHidden: string; // comma separated "1"/"0" flags
+  setProductIsHidden: (v: string) => void;
+  productRowDisplayMode: string; // comma separated "full"/"compact" values
+  setProductRowDisplayMode: (v: string) => void;
   projectType: string;
   setProjectType: (v: string) => void;
   projectName: string;
@@ -242,6 +248,8 @@ interface SelectedProduct extends Product {
   discountAmount?: number;    // discount as peso amount per unit (synced with discount %)
   isDiscounted?: boolean;
   isPromo?: boolean;          // promo flag — shows "PROMO" badge on quotation
+  isHidden?: boolean;        // hidden price flag
+  rowDisplayMode?: 'full' | 'compact'; // display mode for product row (full/compact)
   hideDiscountInPreview?: boolean; // hide discount details in preview - shows as "Special Price"
   cloudinaryPublicId?: string;
   /** Minimum order qty from PD/procurement — sales may enter equal or higher */
@@ -325,6 +333,9 @@ export function QuotationSheet(props: Props) {
     productTitle, setProductTitle,
     productDiscountedPrice, setProductDiscountedPrice,
     productDiscountedAmount, setProductDiscountedAmount,
+    productIsPromo, setProductIsPromo,
+    productIsHidden, setProductIsHidden,
+    productRowDisplayMode, setProductRowDisplayMode,
     projectType, setProjectType,
     projectName, setProjectName,
     quotationNumber, setQuotationNumber,
@@ -1225,20 +1236,24 @@ Procurement
       const isDiscounted = p.isDiscounted ?? false;
       if (!isDiscounted) return "0";
       const unitDiscountAmount = (p.price * (p.discount ?? 0)) / 100;
-      const totalDiscountAmount = unitDiscountAmount * p.quantity;
+      const qty = p.quantity ?? 1;
+      const totalDiscountAmount = unitDiscountAmount * qty;
       return totalDiscountAmount.toFixed(2);
     });
 
-    setProductCat(ids.join(","));
-    setProductQuantity(quantities.join(","));
-    setProductAmount(amounts.join(","));
-    setProductDescription(descriptions.join(" || ")); // <-- buong description
-    setProductPhoto(photos.join(","));
+    // Save product flags
+    const isPromoFlags = selectedProducts.map((p) => (p.isPromo ? "1" : "0"));
+    const isHiddenFlags = selectedProducts.map((p) => (p.isHidden ? "1" : "0"));
+    const rowDisplayModes = selectedProducts.map((p) => p.rowDisplayMode || "full");
+
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
     setItemRemarks(remarks.join(","));
     setProductDiscountedPrice(discountedPrices.join(","));
     setProductDiscountedAmount(discountedAmounts.join(","));
+    setProductIsPromo(isPromoFlags.join(","));
+    setProductIsHidden(isHiddenFlags.join(","));
+    setProductRowDisplayMode(rowDisplayModes.join(","));
   }, [
     selectedProducts,
     setProductCat,
@@ -1251,6 +1266,9 @@ Procurement
     setItemRemarks,
     setProductDiscountedPrice,
     setProductDiscountedAmount,
+    setProductIsPromo,
+    setProductIsHidden,
+    setProductRowDisplayMode,
   ]);
 
   // Save handler with validation
@@ -4604,18 +4622,21 @@ ${spec.value}
                                       <Input
                                         type="text"
                                         inputMode="decimal"
-                                        defaultValue={p.price > 0 ? p.price.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                        value={p.price > 0 ? p.price.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
                                         readOnly={false}
-                                        onBlur={(e) => {
+                                        onChange={(e) => {
                                           const raw = e.target.value.replace(/,/g, '');
-                                          const val = parseFloat(raw) || 0;
-                                          const minPrice = p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0;
-                                          const finalVal = Math.max(minPrice, val);
-                                          setSelectedProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[idx] = { ...copy[idx], price: finalVal };
-                                            return copy;
-                                          });
+                                          // Allow empty, digits, or one decimal point with up to 2 digits
+                                          if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                            const val = parseFloat(raw) || 0;
+                                            const minPrice = p.procurementLockedPrice ? (p.originalPrice ?? 0) : 0;
+                                            const finalVal = Math.max(minPrice, val);
+                                            setSelectedProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[idx] = { ...copy[idx], price: finalVal };
+                                              return copy;
+                                            });
+                                          }
                                         }}
                                         className={`w-full min-w-[70px] p-1 rounded-none text-xs text-right font-medium overflow-hidden text-ellipsis h-6 focus:outline-none ${p.procurementLockedPrice ? "bg-gray-50 font-bold" : ""}`}
                                       />
@@ -4663,20 +4684,23 @@ ${spec.value}
                                                 <Input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  defaultValue={rowDiscountPct > 0 ? rowDiscountPct.toString() : ''}
-                                                  onBlur={(e) => {
+                                                  value={rowDiscountPct > 0 ? rowDiscountPct.toString() : ''}
+                                                  onChange={(e) => {
                                                     const val = e.target.value;
-                                                    const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
-                                                    setSelectedProducts((prev) => {
-                                                      const copy = [...prev];
-                                                      const price = copy[idx].price;
-                                                      copy[idx] = {
-                                                        ...copy[idx],
-                                                        discount: pct,
-                                                        discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
-                                                      };
-                                                      return copy;
-                                                    });
+                                                    // Allow empty, digits, or one decimal point with up to 2 digits
+                                                    if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                                      const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
+                                                      setSelectedProducts((prev) => {
+                                                        const copy = [...prev];
+                                                        const price = copy[idx].price;
+                                                        copy[idx] = {
+                                                          ...copy[idx],
+                                                          discount: pct,
+                                                          discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                                        };
+                                                        return copy;
+                                                      });
+                                                    }
                                                   }}
                                                   className="w-14 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
                                                   placeholder="%"
@@ -4688,21 +4712,24 @@ ${spec.value}
                                                 <Input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  defaultValue={unitDiscountAmt > 0 ? unitDiscountAmt.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
-                                                  onBlur={(e) => {
+                                                  value={unitDiscountAmt > 0 ? unitDiscountAmt.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                                  onChange={(e) => {
                                                     const raw = e.target.value.replace(/,/g, '');
-                                                    const amt = raw === '' || raw === '.' ? 0 : Math.max(0, parseFloat(raw) || 0);
-                                                    setSelectedProducts((prev) => {
-                                                      const copy = [...prev];
-                                                      const price = copy[idx].price;
-                                                      const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
-                                                      copy[idx] = {
-                                                        ...copy[idx],
-                                                        discountAmount: amt,
-                                                        discount: Math.min(100, newPct),
-                                                      };
-                                                      return copy;
-                                                    });
+                                                    // Allow empty, digits, one decimal point, or just a decimal point
+                                                    if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                                      const amt = raw === '' || raw === '.' ? 0 : Math.max(0, parseFloat(raw) || 0);
+                                                      setSelectedProducts((prev) => {
+                                                        const copy = [...prev];
+                                                        const price = copy[idx].price;
+                                                        const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
+                                                        copy[idx] = {
+                                                          ...copy[idx],
+                                                          discountAmount: amt,
+                                                          discount: Math.min(100, newPct),
+                                                        };
+                                                        return copy;
+                                                      });
+                                                    }
                                                   }}
                                                   className="w-16 p-0.5 pr-4 rounded-none text-xs text-center font-medium overflow-hidden border-gray-300 h-6 focus:outline-none"
                                                   placeholder="₱"
@@ -4725,32 +4752,35 @@ ${spec.value}
                                           <Input
                                             type="text"
                                             inputMode="decimal"
-                                            defaultValue={discountedUnitPrice > 0 ? discountedUnitPrice.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
-                                            onBlur={(e) => {
+                                            value={discountedUnitPrice > 0 ? discountedUnitPrice.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                            onChange={(e) => {
                                               const raw = e.target.value.replace(/,/g, '');
-                                              const newNetPrice = Math.max(0, parseFloat(raw) || 0);
-                                              setSelectedProducts((prev) => {
-                                                const copy = [...prev];
-                                                const unitPrice = copy[idx].price;
-                                                if (unitPrice > 0 && newNetPrice < unitPrice) {
-                                                  const discountAmt = unitPrice - newNetPrice;
-                                                  const discountPct = (discountAmt / unitPrice) * 100;
-                                                  copy[idx] = {
-                                                    ...copy[idx],
-                                                    isDiscounted: true,
-                                                    discountAmount: parseFloat(discountAmt.toFixed(4)),
-                                                    discount: parseFloat(Math.min(100, Math.max(0, discountPct)).toFixed(4)),
-                                                  };
-                                                } else if (newNetPrice >= unitPrice) {
-                                                  copy[idx] = {
-                                                    ...copy[idx],
-                                                    isDiscounted: false,
-                                                    discountAmount: 0,
-                                                    discount: 0,
-                                                  };
-                                                }
-                                                return copy;
-                                              });
+                                              // Allow empty, digits, one decimal point, or just a decimal point
+                                              if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                                const newNetPrice = Math.max(0, parseFloat(raw) || 0);
+                                                setSelectedProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  const unitPrice = copy[idx].price;
+                                                  if (unitPrice > 0 && newNetPrice < unitPrice) {
+                                                    const discountAmt = unitPrice - newNetPrice;
+                                                    const discountPct = (discountAmt / unitPrice) * 100;
+                                                    copy[idx] = {
+                                                      ...copy[idx],
+                                                      isDiscounted: true,
+                                                      discountAmount: parseFloat(discountAmt.toFixed(4)),
+                                                      discount: parseFloat(Math.min(100, Math.max(0, discountPct)).toFixed(4)),
+                                                    };
+                                                  } else if (newNetPrice >= unitPrice) {
+                                                    copy[idx] = {
+                                                      ...copy[idx],
+                                                      isDiscounted: false,
+                                                      discountAmount: 0,
+                                                      discount: 0,
+                                                    };
+                                                  }
+                                                  return copy;
+                                                });
+                                              }
                                             }}
                                             className="w-full min-w-[60px] p-1 rounded-none text-xs text-right font-bold text-blue-700 overflow-hidden text-ellipsis h-6 focus:outline-none"
                                             placeholder="₱"
@@ -4800,39 +4830,42 @@ ${spec.value}
                                         <Input
                                           type="text"
                                           inputMode="decimal"
-                                          defaultValue={totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
-                                          onBlur={(e) => {
+                                          value={totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : ''}
+                                          onChange={(e) => {
                                             const raw = e.target.value.replace(/,/g, '');
-                                            const newTotal = Math.max(0, parseFloat(raw) || 0);
-                                            setSelectedProducts((prev) => {
-                                              const copy = [...prev];
-                                              const price = copy[idx].price;
-                                              const qty = copy[idx].quantity;
-                                              const gross = price * qty;
-                                              if (gross > 0 && newTotal <= gross && qty > 0) {
-                                                const totalDiscAmt = gross - newTotal;
-                                                const unitDiscAmt = totalDiscAmt / qty;
-                                                const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
-                                                copy[idx] = {
-                                                  ...copy[idx],
-                                                  isDiscounted: true,
-                                                  discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
-                                                  discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
-                                                };
-                                              } else if (newTotal > gross && qty > 0) {
-                                                // Total exceeds gross — increase unit price to match desired total
-                                                const newUnitPrice = newTotal / qty;
-                                                copy[idx] = {
-                                                  ...copy[idx],
-                                                  price: parseFloat(newUnitPrice.toFixed(4)),
-                                                  // Keep discount enabled but zeroed (price already accounts for special rate)
-                                                  isDiscounted: false,
-                                                  discount: 0,
-                                                  discountAmount: 0,
-                                                };
-                                              }
-                                              return copy;
-                                            });
+                                            // Allow empty, digits, one decimal point, or just a decimal point
+                                            if (raw === '' || raw === '.' || /^\d*\.?\d{0,2}$/.test(raw)) {
+                                              const newTotal = Math.max(0, parseFloat(raw) || 0);
+                                              setSelectedProducts((prev) => {
+                                                const copy = [...prev];
+                                                const price = copy[idx].price;
+                                                const qty = copy[idx].quantity;
+                                                const gross = price * qty;
+                                                if (gross > 0 && newTotal <= gross && qty > 0) {
+                                                  const totalDiscAmt = gross - newTotal;
+                                                  const unitDiscAmt = totalDiscAmt / qty;
+                                                  const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
+                                                  copy[idx] = {
+                                                    ...copy[idx],
+                                                    isDiscounted: true,
+                                                    discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
+                                                    discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
+                                                  };
+                                                } else if (newTotal > gross && qty > 0) {
+                                                  // Total exceeds gross — increase unit price to match desired total
+                                                  const newUnitPrice = newTotal / qty;
+                                                  copy[idx] = {
+                                                    ...copy[idx],
+                                                    price: parseFloat(newUnitPrice.toFixed(4)),
+                                                    // Keep discount enabled but zeroed (price already accounts for special rate)
+                                                    isDiscounted: false,
+                                                    discount: 0,
+                                                    discountAmount: 0,
+                                                  };
+                                                }
+                                                return copy;
+                                              });
+                                            }
                                           }}
                                           className="w-full min-w-[60px] p-1 rounded-none text-xs font-bold text-right overflow-hidden text-ellipsis h-6 focus:outline-none"
                                           placeholder="₱"
