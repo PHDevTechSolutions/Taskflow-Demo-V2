@@ -67,6 +67,9 @@ interface Activity {
     product_title?: string;
     discounted_priced?: string;
     discounted_amount?: string;
+    product_is_promo?: string;
+    product_is_hidden?: string;
+    product_display_mode?: string;
     vat_type: string;
     delivery_fee: string;
     restocking_fee?: string;
@@ -220,6 +223,9 @@ export function CreateActivityDialog({
     const [productTitle, setProductTitle] = useState("");
     const [productDiscountedPrice, setProductDiscountedPrice] = useState("");
     const [productDiscountedAmount, setProductDiscountedAmount] = useState("");
+    const [productIsPromo, setProductIsPromo] = useState("");
+    const [productIsHidden, setProductIsHidden] = useState("");
+    const [productRowDisplayMode, setProductRowDisplayMode] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
     const [restockingFee, setRestockingFee] = useState("");
@@ -506,6 +512,9 @@ export function CreateActivityDialog({
             product_title: productTitle || undefined,
             discounted_priced: productDiscountedPrice || undefined,
             discounted_amount: productDiscountedAmount || undefined,
+            product_is_promo: productIsPromo || undefined,
+            product_is_hidden: productIsHidden || undefined,
+            product_display_mode: productRowDisplayMode || undefined,
             vat_type: vatType,
             delivery_fee: deliveryFee,
             restocking_fee: restockingFee,
@@ -1068,6 +1077,12 @@ export function CreateActivityDialog({
                                     setProductDiscountedPrice={setProductDiscountedPrice}
                                     productDiscountedAmount={productDiscountedAmount}
                                     setProductDiscountedAmount={setProductDiscountedAmount}
+                                    productIsPromo={productIsPromo}
+                                    setProductIsPromo={setProductIsPromo}
+                                    productIsHidden={productIsHidden}
+                                    setProductIsHidden={setProductIsHidden}
+                                    productRowDisplayMode={productRowDisplayMode}
+                                    setProductRowDisplayMode={setProductRowDisplayMode}
                                     projectType={projectType}
                                     setProjectType={setProjectType}
                                     projectName={projectName}

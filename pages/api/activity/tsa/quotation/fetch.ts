@@ -27,6 +27,30 @@ async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDa
   }
 }
 
+// Generator for revised quotations batches
+async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: string, toDate?: string) {
+  let lastId: number | null = null;
+
+  while (true) {
+    let query = supabase
+      .from("revised_quotations")
+      .select("*")
+      .eq("referenceid", referenceid)
+      .order("id", { ascending: true })
+      .limit(BATCH_SIZE);
+
+    if (lastId) query = query.gt("id", lastId);
+    if (fromDate && toDate) query = query.gte("date_created", fromDate).lte("date_created", toDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    yield data;
+    lastId = data[data.length - 1].id;
+  }
+}
+
 // Generator for signatories batches
 async function* fetchSignatoriesBatches(referenceid: string, quotationNumbers: string[]) {
   if (!quotationNumbers.length) return;
@@ -60,13 +84,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.write(`{"activities":[`); // start JSON array
     let firstHistory = true;
     const allQuotationNumbers: string[] = [];
+    const revisedQuotationsMap = new Map<string, any>();
+
+    // First, fetch revised quotations to get PDF config
+    for await (const revisedBatch of fetchRevisedQuotationsBatches(referenceid, from as string, to as string)) {
+      for (const r of revisedBatch) {
+        revisedQuotationsMap.set(r.activity_reference_number || r.quotation_number, r);
+      }
+    }
 
     // ---------------- Stream history ----------------
     const mergedActivities: any[] = [];
     for await (const historyBatch of fetchHistoryBatches(referenceid, from as string, to as string)) {
       for (const h of historyBatch) {
         allQuotationNumbers.push(h.quotation_number);
-        mergedActivities.push({ ...h }); // placeholder, signatures will be added later
+        // Merge with revised quotation data if available (for PDF config)
+        const revised = revisedQuotationsMap.get(h.activity_reference_number || h.quotation_number);
+        mergedActivities.push({
+          ...h,
+          // PDF configuration from revised_quotations takes precedence
+          hide_discount_in_preview: revised?.hide_discount_in_preview ?? h.hide_discount_in_preview ?? false,
+          show_discount_columns: revised?.show_discount_columns ?? h.show_discount_columns ?? false,
+          show_summary_discounts: revised?.show_summary_discounts ?? h.show_summary_discounts ?? false,
+          show_profit_margins: revised?.show_profit_margins ?? h.show_profit_margins ?? false,
+          margin_alert_threshold: revised?.margin_alert_threshold ?? h.margin_alert_threshold ?? 0,
+          show_margin_alerts: revised?.show_margin_alerts ?? h.show_margin_alerts ?? false,
+          product_view_mode: revised?.product_view_mode ?? h.product_view_mode ?? 'list',
+          visible_columns: revised?.visible_columns ?? h.visible_columns ?? null,
+        });
       }
     }
 
