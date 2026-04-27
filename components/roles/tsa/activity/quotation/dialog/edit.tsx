@@ -411,6 +411,11 @@ interface RevisedQuotation {
   product_photo: string;
   product_sku: string;
   item_remarks: string;
+  discounted_priced?: string;
+  discounted_amount?: string;
+  product_is_promo?: string;
+  product_is_hidden?: string;
+  product_display_mode?: string;
 }
 
 interface TaskListEditDialogProps {
@@ -530,6 +535,18 @@ export default function TaskListEditDialog({
   const [quotationSubjectState, setQuotationSubjectState] = useState<string>(
     quotationSubject ?? "For Quotation",
   );
+
+  // Contact details state (editable in revision)
+  const [contactPersonState, setContactPersonState] = useState<string>(
+    item.contact_person || company?.contact_person || "",
+  );
+  const [contactNumberState, setContactNumberState] = useState<string>(
+    item.contact_number || company?.contact_number || "",
+  );
+  const [emailAddressState, setEmailAddressState] = useState<string>(
+    item.email_address || company?.email_address || "",
+  );
+
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -559,7 +576,7 @@ export default function TaskListEditDialog({
   const [history, setHistory] = useState<ProductItem[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [lastHistoryAction, setLastHistoryAction] = useState<string>("");
-  const [savedTemplates, setSavedTemplates] = useState<Array<{name: string; products: ProductItem[]}>>([]);
+  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; products: ProductItem[] }>>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -673,7 +690,9 @@ export default function TaskListEditDialog({
   }, [liveTime]);
 
   const company_name = company?.company_name || "";
-  const contact_number = company?.contact_number || "";
+  const contact_number = item.contact_number || company?.contact_number || "";
+  const email_address = item.email_address || company?.email_address || "";
+  const contact_person = item.contact_person || company?.contact_person || "";
   const quotation_type = item.quotation_type;
   const quotationNumber = item.quotation_number || "";
   const quotationAmountNum = quotationAmount;
@@ -684,9 +703,7 @@ export default function TaskListEditDialog({
   const productSku = item.product_sku || "";
   const productDescription = item.product_description || "";
   const itemRemarks = item.item_remarks || "";
-  const address = company?.address || "";
-  const email_address = company?.email_address || "";
-  const contact_person = company?.contact_person || "";
+  const address = item.address || company?.address || "";
   const quotation_number = quotationNumber;
   const activityRef = "";
   const formattedDate = new Date().toLocaleDateString();
@@ -705,6 +722,16 @@ export default function TaskListEditDialog({
     const promoFlags = splitAndTrim(item.product_is_promo);
     const hiddenFlags = splitAndTrim(item.product_is_hidden);
     const displayModes = splitAndTrim(item.product_display_mode);
+
+    // Debug logging
+    console.log("[Edit] Loading product flags from item:", {
+      product_is_promo: item.product_is_promo,
+      product_is_hidden: item.product_is_hidden,
+      product_display_mode: item.product_display_mode,
+      promoFlags,
+      hiddenFlags,
+      displayModes,
+    });
 
     const maxLen = Math.max(
       quantities.length,
@@ -824,8 +851,8 @@ export default function TaskListEditDialog({
       const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
       let unitDiscountAmt = isDiscounted
         ? (p.discountAmount != null && p.discountAmount > 0
-            ? p.discountAmount
-            : (amt * rowDiscount) / 100)
+          ? p.discountAmount
+          : (amt * rowDiscount) / 100)
         : 0;
       // Normalize: if discountAmount >= unit price, it's likely a total for all qty
       if (unitDiscountAmt >= amt && qty > 1) {
@@ -1010,7 +1037,7 @@ export default function TaskListEditDialog({
   }, []);
 
   const reAddRecentProduct = useCallback((product: ProductItem) => {
-    setProducts(prev => [...prev, {...product}]);
+    setProducts(prev => [...prev, { ...product }]);
     saveToHistory('Re-add recent product');
   }, []);
 
@@ -1049,7 +1076,7 @@ export default function TaskListEditDialog({
     alert('Template saved successfully!');
   };
 
-  const loadTemplate = (template: {name: string; products: ProductItem[]}) => {
+  const loadTemplate = (template: { name: string; products: ProductItem[] }) => {
     setProducts([...template.products]);
     setShowTemplateModal(false);
     saveToHistory('Load template');
@@ -1179,9 +1206,9 @@ export default function TaskListEditDialog({
       // Calculate EWT deduction if applicable
       const whtAmount = whtTypeState !== "none"
         ? (vatTypeState === "vat_inc"
-            ? totalPriceWithDelivery / 1.12
-            : totalPriceWithDelivery
-          ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+          ? totalPriceWithDelivery / 1.12
+          : totalPriceWithDelivery
+        ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
         : 0;
       const totalQuotationAmount = totalPriceWithDelivery - whtAmount;
 
@@ -1211,9 +1238,9 @@ export default function TaskListEditDialog({
         tsm: item.tsm,
         manager: item.manager,
         company_name: item.company_name,
-        contact_person: item.contact_person,
-        contact_number: item.contact_number,
-        email_address: item.email_address,
+        contact_person: contactPersonState,
+        contact_number: contactNumberState,
+        email_address: emailAddressState,
         address: item.address,
         start_date: startDate,
         end_date: endDate,
@@ -1290,8 +1317,8 @@ export default function TaskListEditDialog({
       // Prefer stored peso amount; fall back to percent-derived
       let unitDiscountAmount = isDiscounted
         ? (p.discountAmount != null && p.discountAmount > 0
-            ? p.discountAmount
-            : (unitPrice * rowDiscount) / 100)
+          ? p.discountAmount
+          : (unitPrice * rowDiscount) / 100)
         : 0;
       // Normalize: if discountAmount >= unit price, it's likely a total for all qty
       if (unitDiscountAmount >= unitPrice && qty > 1) {
@@ -1373,17 +1400,17 @@ export default function TaskListEditDialog({
       whtAmount:
         whtTypeState !== "none"
           ? (vatTypeState === "vat_inc"
-              ? totalPriceWithDelivery / 1.12
-              : totalPriceWithDelivery
-            ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+            ? totalPriceWithDelivery / 1.12
+            : totalPriceWithDelivery
+          ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
           : 0,
       netAmountToCollect:
         totalPriceWithDelivery - (
           whtTypeState !== "none"
             ? (vatTypeState === "vat_inc"
-                ? totalPriceWithDelivery / 1.12
-                : totalPriceWithDelivery
-              ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+              ? totalPriceWithDelivery / 1.12
+              : totalPriceWithDelivery
+            ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
             : 0
         ),
       agentSignature: agentSignature ?? null,
@@ -1568,6 +1595,11 @@ export default function TaskListEditDialog({
       const photos = splitAndTrim(selectedRevisedQuotation.product_photo);
       const sku = splitAndTrim(selectedRevisedQuotation.product_sku);
       const remarks = splitAndTrim(selectedRevisedQuotation.item_remarks);
+      const discountedPrices = splitAndTrim(selectedRevisedQuotation.discounted_priced);
+      const discountedAmounts = splitAndTrim(selectedRevisedQuotation.discounted_amount);
+      const promoFlags = splitAndTrim(selectedRevisedQuotation.product_is_promo);
+      const hiddenFlags = splitAndTrim(selectedRevisedQuotation.product_is_hidden);
+      const displayModes = splitAndTrim(selectedRevisedQuotation.product_display_mode);
       const maxLen = Math.max(
         quantities.length,
         amounts.length,
@@ -1579,6 +1611,14 @@ export default function TaskListEditDialog({
       );
       const arr: ProductItem[] = [];
       for (let i = 0; i < maxLen; i++) {
+        const discountPct = parseFloat(discountedPrices[i] ?? "0") || 0;
+        const isDiscounted = discountPct > 0;
+        const unitPrice = parseFloat(amounts[i] ?? "0") || 0;
+        const savedDiscountAmt = parseFloat(discountedAmounts[i] ?? "0") || 0;
+        const unitDiscountAmount = savedDiscountAmt > 0
+          ? savedDiscountAmt
+          : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
+        const rawDisplayMode = displayModes[i] ?? "";
         arr.push({
           uid: `revised-${Date.now()}-${i}`,
           product_quantity: quantities[i] ?? "",
@@ -1588,13 +1628,25 @@ export default function TaskListEditDialog({
           product_photo: photos[i] ?? "",
           product_sku: sku[i] ?? "",
           item_remarks: remarks[i] ?? "",
-          quantity: 0,
-          description: "",
-          skus: [],
-          title: "",
-          images: [],
-          isDiscounted: false,
-          price: 0,
+          quantity: parseFloat(quantities[i] ?? "0") || 0,
+          description: descriptions[i] ?? "",
+          skus: sku[i] ? [sku[i]] : [],
+          title: titles[i] ?? "",
+          images: photos[i] ? [{ src: photos[i] }] : [],
+          isDiscounted,
+          discount: discountPct,
+          discountAmount: unitDiscountAmount,
+          price: unitPrice,
+          isPromo: promoFlags[i] === "1",
+          isHidden: hiddenFlags[i] === "1",
+          displayMode: (() => {
+            if (rawDisplayMode === 'full' || rawDisplayMode === 'transparent') return 'transparent';
+            if (rawDisplayMode === 'compact' || rawDisplayMode === 'net_only') return 'net_only';
+            if (rawDisplayMode === 'value_add') return 'value_add';
+            if (rawDisplayMode === 'bundle') return 'bundle';
+            if (rawDisplayMode === 'request') return 'request';
+            return 'transparent';
+          })(),
         });
       }
       setProducts(arr);
@@ -1909,7 +1961,7 @@ export default function TaskListEditDialog({
 
       const initiateNewPage = async () => {
         const banner = await renderBlock(
-          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo}<br/>DATE: ${payload.date}</div></div>`,
+          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo} | ${payload.companyName}<br/>DATE: ${payload.date}</div></div>`,
         );
         pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
         return banner.h;
@@ -2273,7 +2325,8 @@ ${payload.whtType && payload.whtType !== "none"
         stampPdfSecurityFooter(pdf, qrDataUrl, payload.referenceNo, issuedAt, p, totalPages, pdfWidth, pdfHeight);
       }
 
-      pdf.save(`QUOTATION_${payload.referenceNo}.pdf`);
+      const safeCompanyName = (payload.companyName || company_name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      pdf.save(`QUOTATION_${payload.referenceNo}_${safeCompanyName}.pdf`);
       document.body.removeChild(iframe);
     } catch (error) {
       console.error("Critical Export Error:", error);
@@ -2300,6 +2353,20 @@ ${payload.whtType && payload.whtType !== "none"
   useEffect(() => {
     setQuotationAmount(subtotal);
   }, [subtotal]);
+
+  // Calculate display total with EWT deduction (matching planner behavior)
+  const displayTotal = React.useMemo(() => {
+    const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
+    const restockingFeeNum = parseFloat(restockingFeeState) || 0;
+    const totalWithFees = subtotal + deliveryFeeNum + restockingFeeNum;
+    const whtAmount = whtTypeState !== "none"
+      ? (vatTypeState === "vat_inc"
+        ? totalWithFees / 1.12
+        : totalWithFees
+      ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+      : 0;
+    return Math.round((totalWithFees - whtAmount) * 100) / 100;
+  }, [subtotal, deliveryFeeState, restockingFeeState, whtTypeState, vatTypeState]);
 
   return (
     <>
@@ -2348,7 +2415,7 @@ ${payload.whtType && payload.whtType !== "none"
                   <div className="hidden lg:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5">
                     <span className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">Total</span>
                     <span className="font-black text-lg text-[#121212] tabular-nums">
-                      PHP {Number(quotationAmount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      PHP {Number(displayTotal).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 )}
@@ -2362,15 +2429,13 @@ ${payload.whtType && payload.whtType !== "none"
               </button>
               <button type="button" onClick={() => setMobilePanelTab("products")}
                 className={`flex-1 py-2.5 border-b-2 transition-colors ${mobilePanelTab === "products" ? "border-[#121212] text-[#121212] bg-white" : "border-transparent text-gray-400 bg-gray-50"}`}>
-                🛒 Products ({products.length})
+                &#x1F6D2; Products ({products.length})
               </button>
             </div>
           </div>
           {/* BODY */}
           <div className="flex-1 overflow-hidden">
-            <div
-              className={`h-full flex flex-col lg:flex-row gap-0 lg:gap-3 lg:pl-3 lg:pr-3 lg:py-3 p-0 overflow-hidden`}
-            >
+            <div className="h-full flex flex-col lg:flex-row gap-0 lg:gap-3 lg:pl-3 lg:pr-3 lg:py-3 p-0 overflow-hidden">
               {/* Left side: Search + history */}
               <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[30rem] min-w-[30rem]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
                 {/* Collapse/Expand Button & Help */}
@@ -2458,12 +2523,12 @@ ${payload.whtType && payload.whtType !== "none"
                         <span className="text-[10px] font-black uppercase text-red-600 tracking-widest">SRF</span>
                         <span className="text-[9px] text-red-400 italic">— Service Request Form</span>
                       </div>
-                      
+
                       <div className="flex flex-col gap-0.5">
                         <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Service Name *</label>
                         <Input type="text" placeholder="Enter product name..." value={spfManualProduct.title} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, title: e.target.value }))} className="rounded-none text-xs uppercase" />
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-1.5">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
@@ -2802,11 +2867,10 @@ ${payload.whtType && payload.whtType !== "none"
                     </div>
 
                     {/* Premium Product Cards - Respect View Mode */}
-                    <div className={`overflow-x-hidden ${
-                      productViewMode === 'grid' 
-                        ? 'grid grid-cols-2 gap-2' 
-                        : 'flex flex-col gap-2'
-                    }`}>
+                    <div className={`overflow-x-hidden ${productViewMode === 'grid'
+                      ? 'grid grid-cols-2 gap-2'
+                      : 'flex flex-col gap-2'
+                      }`}>
                       {searchResults.map((product) => (
                         <div
                           key={product.id}
@@ -2855,7 +2919,7 @@ ${payload.whtType && payload.whtType !== "none"
                         </div>
                       ))}
                     </div>
-                  </> 
+                  </>
                 )}
 
                 {/* Empty state when search has no results */}
@@ -3097,7 +3161,7 @@ ${payload.whtType && payload.whtType !== "none"
                             if (newValue) setShowSummaryDiscounts(true);
                             saveToHistory(newValue ? 'Show discount columns' : 'Hide discount columns');
                           },
-                          onCancel: () => {},
+                          onCancel: () => { },
                         });
                       }}
                       className="flex items-center gap-1.5 cursor-pointer hover:bg-blue-100/50 px-1.5 py-0.5 rounded transition-colors shrink-0"
@@ -3137,7 +3201,7 @@ ${payload.whtType && payload.whtType !== "none"
                             setHideDiscountInPreview(newValue);
                             saveToHistory(newValue ? 'SRP Only PDF mode' : 'Full Detail PDF mode');
                           },
-                          onCancel: () => {},
+                          onCancel: () => { },
                         });
                       }}
                       className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-1.5 py-0.5 rounded transition-colors shrink-0"
@@ -3178,7 +3242,7 @@ ${payload.whtType && payload.whtType !== "none"
                             setShowSummaryDiscounts(newValue);
                             saveToHistory(newValue ? 'Show discount row' : 'Hide discount row');
                           },
-                          onCancel: () => {},
+                          onCancel: () => { },
                         });
                       }}
                       className="flex items-center gap-1.5 cursor-pointer hover:bg-red-100/50 px-1.5 py-0.5 rounded transition-colors shrink-0"
@@ -3215,7 +3279,7 @@ ${payload.whtType && payload.whtType !== "none"
                             setShowMarginAlerts(newValue);
                             saveToHistory(newValue ? 'Enable margin alerts' : 'Disable margin alerts');
                           },
-                          onCancel: () => {},
+                          onCancel: () => { },
                         });
                       }}
                       className="flex items-center gap-1.5 cursor-pointer hover:bg-orange-100/50 px-1.5 py-0.5 rounded transition-colors shrink-0"
@@ -3282,9 +3346,8 @@ ${payload.whtType && payload.whtType !== "none"
                         setBulkMode(!bulkMode);
                         setSelectedRows(new Set());
                       }}
-                      className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded transition-colors shrink-0 ${
-                        bulkMode ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
-                      }`}
+                      className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded transition-colors shrink-0 ${bulkMode ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                        }`}
                       title="Enable bulk selection mode"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3320,7 +3383,7 @@ ${payload.whtType && payload.whtType !== "none"
                         onClick={() => {
                           const selectedIndices = Array.from(selectedRows).map(Number);
                           const selectedProducts = selectedIndices.map(idx => products[idx]);
-                          const duplicatedProducts = selectedProducts.map(p => ({...p}));
+                          const duplicatedProducts = selectedProducts.map(p => ({ ...p }));
                           setProducts([...products, ...duplicatedProducts]);
                           setSelectedRows(new Set());
                           saveToHistory('Bulk duplicate');
@@ -3353,49 +3416,47 @@ ${payload.whtType && payload.whtType !== "none"
                     </div>
                   )}
 
-                  {/* Contact Person + Subject row */}
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-white border border-gray-200 rounded-lg overflow-hidden text-[10px] mb-2">
+                  {/* Subject + Contact Person + VAT + EWT - all in one row */}
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
                     {/* Subject */}
                     <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                      <span className="font-black uppercase text-red-500 tracking-widest shrink-0">Subject *</span>
-                      <input
-                        type="text"
-                        value={quotationSubjectState}
-                        onChange={(e) => setQuotationSubjectState(e.target.value)}
-                        placeholder="For Quotation"
-                        className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
-                      />
+                      <span className="font-black uppercase text-red-600 tracking-wider shrink-0 text-[9px]">Subject *</span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0 group">
+                        <input
+                          type="text"
+                          value={quotationSubjectState}
+                          onChange={(e) => setQuotationSubjectState(e.target.value)}
+                          placeholder="For Quotation"
+                          className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                        />
+                      </div>
                     </div>
-                    {/* Contact Person */}
-                    <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                      <span className="font-black uppercase text-blue-500 tracking-widest shrink-0">Contact Person</span>
-                      <input
-                        type="text"
-                        placeholder="Mr. Test"
-                        className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0">
-                      <input
-                        type="text"
-                        placeholder="test"
-                        className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
-                      />
-                    </div>
-                  </div>
-
-                  {/* VAT + EWT toolbar */}
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
-                    {/* Subject */}
-                    <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
-                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">Subject</span>
-                      <input
-                        type="text"
-                        value={quotationSubjectState}
-                        onChange={(e) => setQuotationSubjectState(e.target.value)}
-                        placeholder="For Quotation"
-                        className="border-0 bg-transparent px-0 py-0 text-[10px] font-bold uppercase flex-1 min-w-0 focus:outline-none placeholder-gray-300"
-                      />
+                    {/* Contact Person - with all editable fields inline */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
+                      <span className="font-black uppercase text-blue-600 tracking-wider shrink-0 text-[9px]">Contact Person</span>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={contactPersonState}
+                          onChange={(e) => setContactPersonState(e.target.value)}
+                          placeholder="Name"
+                          className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                        />
+                        <input
+                          type="text"
+                          value={contactNumberState}
+                          onChange={(e) => setContactNumberState(e.target.value)}
+                          placeholder="Number"
+                          className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-24 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                        />
+                        <input
+                          type="text"
+                          value={emailAddressState}
+                          onChange={(e) => setEmailAddressState(e.target.value)}
+                          placeholder="Email"
+                          className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-32 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                        />
+                      </div>
                     </div>
                     {/* VAT */}
                     <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
@@ -3426,771 +3487,771 @@ ${payload.whtType && payload.whtType !== "none"
                       </RadioGroup>
                     </div>
                   </div>
-                </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs table-auto border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
-                        {/* Drag Handle Column */}
-                        <th className="border border-gray-700 p-1 text-center w-6" title="Drag to reorder">
-                          <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                          </svg>
-                        </th>
-                        {bulkMode && (
-                          <th className="border border-gray-700 p-2 text-center w-8" title="Select rows for bulk operations">
-                            <input
-                              type="checkbox"
-                              checked={selectedRows.size === products.length && products.length > 0}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedRows(new Set(products.map((_, idx) => idx.toString())));
-                                } else {
-                                  setSelectedRows(new Set());
-                                }
-                              }}
-                              className="w-4 h-4 accent-blue-500"
-                            />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
+                          {/* Drag Handle Column */}
+                          <th className="border border-gray-700 p-1 text-center w-6" title="Drag to reorder">
+                            <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                            </svg>
                           </th>
-                        )}
-                        <th className="border border-gray-700 p-1 text-center w-6 font-bold">#</th>
-                        <th className="border border-gray-700 p-1 text-center w-8">
-                          <span className="font-bold">Disc</span>
-                        </th>
-                        <th className="border border-gray-700 p-1 text-center w-8">
-                          <span className="font-bold text-yellow-400">Promo</span>
-                        </th>
-                        <th className="border border-gray-700 p-1 text-center w-8">
-                          <span className="font-bold text-blue-400">Hide</span>
-                        </th>
-                        <th className="border border-gray-700 p-1 text-center w-10">
-                          <span className="font-bold">Display</span>
-                        </th>
-                        <th className="border border-gray-700 p-1 text-left hidden sm:table-cell font-bold">Remarks</th>
-                        <th className="border border-gray-700 p-1 text-left font-bold">Product</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-24">Qty</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-16">Unit</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-20">Discount</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-20">Net</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-20">Total</th>
-                        <th className="border border-gray-700 p-1 text-center font-bold w-16">Act</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products.length === 0 && (
-                        <tr>
-                          <td colSpan={bulkMode ? 15 : 14} className="text-center p-4 text-xs text-gray-400 italic">
-                            No products found.
-                          </td>
+                          {bulkMode && (
+                            <th className="border border-gray-700 p-2 text-center w-8" title="Select rows for bulk operations">
+                              <input
+                                type="checkbox"
+                                checked={selectedRows.size === products.length && products.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedRows(new Set(products.map((_, idx) => idx.toString())));
+                                  } else {
+                                    setSelectedRows(new Set());
+                                  }
+                                }}
+                                className="w-4 h-4 accent-blue-500"
+                              />
+                            </th>
+                          )}
+                          <th className="border border-gray-700 p-1 text-center w-6 font-bold">#</th>
+                          <th className="border border-gray-700 p-1 text-center w-8">
+                            <span className="font-bold">Disc</span>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center w-8">
+                            <span className="font-bold text-yellow-400">Promo</span>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center w-8">
+                            <span className="font-bold text-blue-400">Hide</span>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center w-10">
+                            <span className="font-bold">Display</span>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-left font-bold">Product</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-24">Qty</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-16">Unit</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Discount</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Net</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Total</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-16">Act</th>
                         </tr>
-                      )}
-                      {products
-                        .filter((product) => {
-                          if (!productSearchQuery.trim()) return true;
-                          const query = productSearchQuery.toLowerCase();
-                          const title = (product.title || product.product_title || '').toLowerCase();
-                          const sku = (product.product_sku || '').toLowerCase();
-                          return title.includes(query) || sku.includes(query);
-                        })
-                        .map((product, index) => {
-                        const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
-                        const amt = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                        const isDiscounted = product.isDiscounted ?? false;
-                        const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
-                        const rowDiscountPct = isDiscounted
-                          ? (product.discount ?? defaultDiscount)
-                          : 0;
-                        // Prefer explicit peso amount; fall back to % calculation
-                        // If discountAmount looks like a total (>= unit price), convert to per-unit
-                        let unitDiscountAmt = isDiscounted
-                          ? (product.discountAmount != null && product.discountAmount > 0
-                              ? product.discountAmount
-                              : (amt * rowDiscountPct) / 100)
-                          : 0;
-                        // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                        if (unitDiscountAmt >= amt && qty > 1) {
-                          unitDiscountAmt = unitDiscountAmt / qty;
-                        }
-                        const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                        const totalAfterDiscount = discountedUnitPrice * qty;
-                        return (
-                          <React.Fragment key={index}>
-                            <tr
-                              className={`even:bg-gray-50 align-middle cursor-move ${dragRowUid === index.toString() ? 'opacity-50' : ''} ${dragOverRowUid === index.toString() ? 'border-t-2 border-blue-500' : ''}`}
-                              draggable
-                              onDragStart={() => setDragRowUid(index.toString())}
-                              onDragEnd={() => {
-                                setDragRowUid(null);
-                                setDragOverRowUid(null);
-                              }}
-                              onDragOver={(e) => {
-                                e.preventDefault();
-                                if (dragRowUid !== null && dragRowUid !== index.toString()) {
-                                  setDragOverRowUid(index.toString());
-                                }
-                              }}
-                              onDrop={(e) => {
-                                e.preventDefault();
-                                if (dragRowUid !== null && dragRowUid !== index.toString()) {
-                                  const fromIndex = parseInt(dragRowUid);
-                                  const toIndex = index;
-                                  const newProducts = [...products];
-                                  const [movedItem] = newProducts.splice(fromIndex, 1);
-                                  newProducts.splice(toIndex, 0, movedItem);
-                                  setProducts(newProducts);
-                                  saveToHistory('Reorder rows');
-                                }
-                                setDragRowUid(null);
-                                setDragOverRowUid(null);
-                              }}
-                            >
-                              {/* Drag Handle */}
-                              <td className="border border-gray-300 p-1 text-center cursor-grab active:cursor-grabbing">
-                                <svg className="w-4 h-4 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                                </svg>
-                              </td>
-                              {/* Bulk Selection Checkbox */}
-                              {bulkMode && (
-                                <td className="border border-gray-300 p-1 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRows.has(index.toString())}
-                                    onChange={(e) => {
-                                      const newSelectedRows = new Set(selectedRows);
-                                      if (e.target.checked) {
-                                        newSelectedRows.add(index.toString());
-                                      } else {
-                                        newSelectedRows.delete(index.toString());
-                                      }
-                                      setSelectedRows(newSelectedRows);
-                                    }}
-                                    className="w-4 h-4 accent-blue-500"
-                                  />
-                                </td>
-                              )}
-
-                              {/* Row Number */}
-                              <td className="border border-gray-300 p-1 text-center text-[10px] font-medium text-gray-500">
-                                {index + 1}
-                              </td>
-
-                              {/* Disc Checkbox */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={product.isDiscounted}
-                                  onChange={(e) => {
-                                    const newVal = e.target.checked;
-                                    setProducts((prev) => {
-                                      const copy = [...prev];
-                                      const defaultDisc = vatTypeState === "vat_exe" ? 12 : 0;
-                                      copy[index] = {
-                                        ...copy[index],
-                                        isDiscounted: newVal,
-                                        discount: newVal ? defaultDisc : 0,
-                                        discountAmount: newVal
-                                          ? ((copy[index].price || parseFloat(copy[index].product_amount ?? "0") || 0) * defaultDisc) / 100
-                                          : 0,
-                                      };
-                                      return copy;
-                                    });
-                                    saveToHistory(newVal ? 'Enable discount' : 'Disable discount');
+                      </thead>
+                      <tbody>
+                        {products.length === 0 && (
+                          <tr>
+                            <td colSpan={bulkMode ? 13 : 12} className="text-center p-4 text-xs text-gray-400 italic">
+                              No products found.
+                            </td>
+                          </tr>
+                        )}
+                        {products
+                          .filter((product) => {
+                            if (!productSearchQuery.trim()) return true;
+                            const query = productSearchQuery.toLowerCase();
+                            const title = (product.title || product.product_title || '').toLowerCase();
+                            const sku = (product.product_sku || product.skus?.[0] || '').toLowerCase();
+                            return title.includes(query) || sku.includes(query);
+                          })
+                          .map((product, index) => {
+                            const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
+                            const amt = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                            const isDiscounted = product.isDiscounted ?? false;
+                            const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
+                            const rowDiscountPct = isDiscounted
+                              ? (product.discount ?? defaultDiscount)
+                              : 0;
+                            // Prefer explicit peso amount; fall back to % calculation
+                            // If discountAmount looks like a total (>= unit price), convert to per-unit
+                            let unitDiscountAmt = isDiscounted
+                              ? (product.discountAmount != null && product.discountAmount > 0
+                                ? product.discountAmount
+                                : (amt * rowDiscountPct) / 100)
+                              : 0;
+                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                            if (unitDiscountAmt >= amt && qty > 1) {
+                              unitDiscountAmt = unitDiscountAmt / qty;
+                            }
+                            const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
+                            const totalAfterDiscount = discountedUnitPrice * qty;
+                            return (
+                              <React.Fragment key={index}>
+                                <tr
+                                  className={`even:bg-gray-50 align-middle cursor-move ${dragRowUid === index.toString() ? 'opacity-50' : ''} ${dragOverRowUid === index.toString() ? 'border-t-2 border-blue-500' : ''}`}
+                                  draggable
+                                  onDragStart={() => setDragRowUid(index.toString())}
+                                  onDragEnd={() => {
+                                    setDragRowUid(null);
+                                    setDragOverRowUid(null);
                                   }}
-                                  className="w-4 h-4 accent-blue-500"
-                                />
-                              </td>
-
-                              {/* Promo Checkbox */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={product.isPromo || false}
-                                  onChange={(e) => {
-                                    setProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[index] = { ...copy[index], isPromo: e.target.checked };
-                                      return copy;
-                                    });
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    if (dragRowUid !== null && dragRowUid !== index.toString()) {
+                                      setDragOverRowUid(index.toString());
+                                    }
                                   }}
-                                  className="w-4 h-4 accent-yellow-500"
-                                />
-                              </td>
-
-                              {/* Hide Checkbox */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={product.isHidden || false}
-                                  onChange={(e) => {
-                                    setProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[index] = { ...copy[index], isHidden: e.target.checked };
-                                      return copy;
-                                    });
-                                  }}
-                                  className="w-4 h-4 accent-blue-400"
-                                />
-                              </td>
-
-                              {/* Display Mode — proper Select dropdown (Full / Net Only / Savings / Bundle / On Request) */}
-                              <td className="border border-gray-300 p-0.5 bg-purple-50/30">
-                                <Select
-                                  value={product.displayMode || 'transparent'}
-                                  onValueChange={(value) => {
-                                    setProducts((prev) => {
-                                      const copy = [...prev];
-                                      copy[index] = { ...copy[index], displayMode: value as ProductItem['displayMode'] };
-                                      return copy;
-                                    });
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (dragRowUid !== null && dragRowUid !== index.toString()) {
+                                      const fromIndex = parseInt(dragRowUid);
+                                      const toIndex = index;
+                                      const newProducts = [...products];
+                                      const [movedItem] = newProducts.splice(fromIndex, 1);
+                                      newProducts.splice(toIndex, 0, movedItem);
+                                      setProducts(newProducts);
+                                      saveToHistory('Reorder rows');
+                                    }
+                                    setDragRowUid(null);
+                                    setDragOverRowUid(null);
                                   }}
                                 >
-                                  <SelectTrigger className="w-20 text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-6 focus:ring-1 focus:ring-purple-500">
-                                    <SelectValue placeholder="Full" />
-                                  </SelectTrigger>
-                                  <SelectContent className="min-w-[110px]">
-                                    <SelectItem value="transparent" className="text-xs py-1">Full</SelectItem>
-                                    <SelectItem value="net_only" className="text-xs py-1">Net Only</SelectItem>
-                                    <SelectItem value="value_add" className="text-xs py-1">Savings</SelectItem>
-                                    <SelectItem value="bundle" className="text-xs py-1">Bundle</SelectItem>
-                                    <SelectItem value="request" className="text-xs py-1">On Request</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-
-                              {/* Remarks (item_remarks editable inline) */}
-                              <td className="hidden sm:table-cell border border-gray-300 p-1">
-                                <input
-                                  type="text"
-                                  value={product.item_remarks ?? ""}
-                                  onChange={(e) => handleProductChange(index, "item_remarks", e.target.value)}
-                                  placeholder="Remarks…"
-                                  className="w-full text-[9px] bg-transparent outline-none placeholder-gray-300"
-                                />
-                              </td>
-
-                              {/* Product */}
-                              <td className="p-1 sm:p-2">
-                                <div className="flex items-center gap-1 sm:gap-2">
-                                  {(product.product_photo || product.images?.[0]?.src) ? (
-                                    <img
-                                      src={product.product_photo || product.images?.[0]?.src}
-                                      alt={`Product ${index + 1}`}
-                                      className="w-8 h-8 sm:w-12 sm:h-12 object-contain rounded shrink-0 border border-gray-100"
-                                    />
-                                  ) : (
-                                    <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-50 border border-gray-200 rounded shrink-0 flex items-center justify-center">
-                                      <span className="text-[8px] text-gray-300">IMG</span>
-                                    </div>
+                                  {/* Drag Handle */}
+                                  <td className="border border-gray-300 p-1 text-center cursor-grab active:cursor-grabbing">
+                                    <svg className="w-4 h-4 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                                    </svg>
+                                  </td>
+                                  {/* Bulk Selection Checkbox */}
+                                  {bulkMode && (
+                                    <td className="border border-gray-300 p-1 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedRows.has(index.toString())}
+                                        onChange={(e) => {
+                                          const newSelectedRows = new Set(selectedRows);
+                                          if (e.target.checked) {
+                                            newSelectedRows.add(index.toString());
+                                          } else {
+                                            newSelectedRows.delete(index.toString());
+                                          }
+                                          setSelectedRows(newSelectedRows);
+                                        }}
+                                        className="w-4 h-4 accent-blue-500"
+                                      />
+                                    </td>
                                   )}
-                                  <div className="flex-1 min-w-0">
-                                    {/* Promo Badge */}
-                                    {product.isPromo && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-yellow-400 text-yellow-900 shrink-0 animate-pulse mb-0.5">
-                                        🏷️ PROMO
-                                      </span>
-                                    )}
-                                    <div
-                                      contentEditable
-                                      suppressContentEditableWarning
-                                      className="outline-none text-[10px] sm:text-xs min-w-0 break-words font-semibold"
-                                      onBlur={(e) => {
-                                        handleProductChange(index, "product_title", e.currentTarget.innerText);
-                                      }}
-                                      dangerouslySetInnerHTML={{ __html: product.product_title ?? "" }}
-                                    />
-                                    {(product.product_sku || product.skus?.[0]) && (
-                                      <div className="text-[9px] text-blue-600 font-medium mt-0.5">
-                                        ITEM CODE: {product.product_sku || product.skus?.[0]}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
 
-                              {/* Qty with +/- buttons */}
-                              <td className="border border-gray-300 p-1">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    type="button"
-                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
-                                    onClick={() => {
-                                      const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
-                                      const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
-                                      const newQty = Math.max(floor, currentQty - 1);
-                                      setProducts(prev => {
-                                        const copy = [...prev];
-                                        copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
-                                        return copy;
-                                      });
-                                    }}
-                                    disabled={(product.quantity || parseFloat(product.product_quantity ?? "1")) <= (product.procurementMinQty || 1)}
-                                  >−</button>
-                                  <Input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={product.quantity || product.product_quantity || ""}
-                                    onChange={(e) => {
-                                      const raw = e.target.value;
-                                      if (raw === '' || /^\d*$/.test(raw)) {
-                                        const val = parseInt(raw, 10) || 1;
-                                        const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
-                                        const finalVal = Math.max(floor, val);
-                                        setProducts(prev => {
-                                          const copy = [...prev];
-                                          copy[index] = { ...copy[index], quantity: finalVal, product_quantity: String(finalVal) };
-                                          return copy;
-                                        });
-                                      }
-                                    }}
-                                    className="w-10 p-0 rounded-none text-xs text-center border-none shadow-none focus:outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
-                                    onClick={() => {
-                                      const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
-                                      const newQty = currentQty + 1;
-                                      setProducts(prev => {
-                                        const copy = [...prev];
-                                        copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
-                                        return copy;
-                                      });
-                                    }}
-                                  >+</button>
-                                </div>
-                                {product.procurementMinQty != null && product.procurementMinQty > 0 && (
-                                  <div className="text-[8px] text-gray-400 mt-0.5 text-center">
-                                    Min: <span className="font-bold">{product.procurementMinQty}</span>
-                                  </div>
-                                )}
-                              </td>
+                                  {/* Row Number */}
+                                  <td className="border border-gray-300 p-1 text-center text-[10px] font-medium text-gray-500">
+                                    {index + 1}
+                                  </td>
 
-                              {/* Unit Price — editable, syncs price and re-derives discountAmount */}
-                              <td className="border border-gray-300 p-1">
-                                <div className="flex items-center justify-center gap-0.5">
-                                  <span className="text-[9px] text-gray-400">₱</span>
-                                  <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={rawInputValues[`${product.uid}-price`] ?? (product.price > 0 ? product.price.toFixed(2) : (product.product_amount || '0.00'))}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      const raw = val.replace(/,/g, '');
-                                      if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
-                                        setRawInputValues(prev => ({ ...prev, [`${product.uid}-price`]: val }));
-                                        const num = parseFloat(raw) || 0;
-                                        const locked = product.procurementLockedPrice;
-                                        const original = product.originalPrice ?? 0;
-                                        const finalPrice = locked && original > 0 ? Math.max(original, num) : num;
+                                  {/* Disc Checkbox */}
+                                  <td className="border border-gray-300 p-1 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={product.isDiscounted}
+                                      onChange={(e) => {
+                                        const newVal = e.target.checked;
                                         setProducts((prev) => {
                                           const copy = [...prev];
-                                          const prod = copy[index];
-                                          if (!prod) return prev;
-                                          const newDiscAmt = prod.isDiscounted && prod.discount != null
-                                            ? parseFloat(((finalPrice * prod.discount) / 100).toFixed(4))
-                                            : prod.discountAmount ?? 0;
+                                          const defaultDisc = vatTypeState === "vat_exe" ? 12 : 0;
                                           copy[index] = {
-                                            ...prod,
-                                            price: finalPrice,
-                                            product_amount: String(finalPrice),
-                                            discountAmount: newDiscAmt,
+                                            ...copy[index],
+                                            isDiscounted: newVal,
+                                            discount: newVal ? defaultDisc : 0,
+                                            discountAmount: newVal
+                                              ? ((copy[index].price || parseFloat(copy[index].product_amount ?? "0") || 0) * defaultDisc) / 100
+                                              : 0,
                                           };
                                           return copy;
                                         });
-                                      }
-                                    }}
-                                    onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-price`]; return c; })}
-                                    className={`w-full min-w-[70px] p-0.5 rounded-none text-[10px] text-right font-medium border-gray-300 h-6 focus:outline-none ${product.procurementLockedPrice ? 'bg-gray-50 font-bold' : ''}`}
-                                  />
-                                </div>
-                                {product.procurementLockedPrice && product.originalPrice != null && (
-                                  <div className="text-[8px] text-orange-600 mt-0.5 text-center">
-                                    Min: ₱{product.originalPrice.toFixed(2)}
-                                  </div>
-                                )}
-                              </td>
+                                        saveToHistory(newVal ? 'Enable discount' : 'Disable discount');
+                                      }}
+                                      className="w-4 h-4 accent-blue-500"
+                                    />
+                                  </td>
 
-                              {/* Discount column — preset buttons + % input + ₱ input (bidirectional) */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                {isDiscounted ? (
-                                  <div className="flex flex-col gap-1">
-                                    {/* Preset discount buttons */}
-                                    <div className="flex justify-center gap-0.5">
-                                      {[5, 10, 15, 20].map((pct) => (
-                                        <button
-                                          key={pct}
-                                          type="button"
-                                          onClick={() => {
-                                            const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                                            setProducts((prev) => {
+                                  {/* Promo Checkbox */}
+                                  <td className="border border-gray-300 p-1 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={product.isPromo || false}
+                                      onChange={(e) => {
+                                        setProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[index] = { ...copy[index], isPromo: e.target.checked };
+                                          return copy;
+                                        });
+                                      }}
+                                      className="w-4 h-4 accent-yellow-500"
+                                    />
+                                  </td>
+
+                                  {/* Hide Checkbox */}
+                                  <td className="border border-gray-300 p-1 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={product.isHidden || false}
+                                      onChange={(e) => {
+                                        setProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[index] = { ...copy[index], isHidden: e.target.checked };
+                                          return copy;
+                                        });
+                                      }}
+                                      className="w-4 h-4 accent-blue-400"
+                                    />
+                                  </td>
+
+                                  {/* Display Mode — proper Select dropdown (Full / Net Only / Savings / Bundle / On Request) */}
+                                  <td className="border border-gray-300 p-0.5 bg-purple-50/30">
+                                    <Select
+                                      value={product.displayMode || 'transparent'}
+                                      onValueChange={(value) => {
+                                        setProducts((prev) => {
+                                          const copy = [...prev];
+                                          copy[index] = { ...copy[index], displayMode: value as ProductItem['displayMode'] };
+                                          return copy;
+                                        });
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-20 text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-6 focus:ring-1 focus:ring-purple-500">
+                                        <SelectValue placeholder="Full" />
+                                      </SelectTrigger>
+                                      <SelectContent className="min-w-[110px]">
+                                        <SelectItem value="transparent" className="text-xs py-1">Full</SelectItem>
+                                        <SelectItem value="net_only" className="text-xs py-1">Net Only</SelectItem>
+                                        <SelectItem value="value_add" className="text-xs py-1">Savings</SelectItem>
+                                        <SelectItem value="bundle" className="text-xs py-1">Bundle</SelectItem>
+                                        <SelectItem value="request" className="text-xs py-1">On Request</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+
+                                  {/* Product */}
+                                  <td className="p-1 sm:p-2">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                      {(product.product_photo || product.images?.[0]?.src) ? (
+                                        <img
+                                          src={product.product_photo || product.images?.[0]?.src}
+                                          alt={`Product ${index + 1}`}
+                                          className="w-8 h-8 sm:w-12 sm:h-12 object-contain rounded shrink-0 border border-gray-100"
+                                        />
+                                      ) : (
+                                        <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-50 border border-gray-200 rounded shrink-0 flex items-center justify-center">
+                                          <span className="text-[8px] text-gray-300">IMG</span>
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        {/* Promo Badge */}
+                                        {product.isPromo && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-yellow-400 text-yellow-900 shrink-0 animate-pulse mb-0.5">
+                                            🏷️ PROMO
+                                          </span>
+                                        )}
+                                        <div
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          className="outline-none text-[10px] sm:text-xs min-w-0 break-words font-semibold"
+                                          onBlur={(e) => {
+                                            handleProductChange(index, "product_title", e.currentTarget.innerText);
+                                          }}
+                                          dangerouslySetInnerHTML={{ __html: product.product_title ?? "" }}
+                                        />
+                                        {(product.product_sku || product.skus?.[0]) && (
+                                          <div className="text-[9px] text-blue-600 font-medium mt-0.5">
+                                            ITEM CODE: {product.product_sku || product.skus?.[0]}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Qty with +/- buttons */}
+                                  <td className="border border-gray-300 p-1">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
+                                        onClick={() => {
+                                          const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
+                                          const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
+                                          const newQty = Math.max(floor, currentQty - 1);
+                                          setProducts(prev => {
+                                            const copy = [...prev];
+                                            copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
+                                            return copy;
+                                          });
+                                        }}
+                                        disabled={(product.quantity || parseFloat(product.product_quantity ?? "1")) <= (product.procurementMinQty || 1)}
+                                      >−</button>
+                                      <Input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={product.quantity || product.product_quantity || ""}
+                                        onChange={(e) => {
+                                          const raw = e.target.value;
+                                          if (raw === '' || /^\d*$/.test(raw)) {
+                                            const val = parseInt(raw, 10) || 1;
+                                            const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
+                                            const finalVal = Math.max(floor, val);
+                                            setProducts(prev => {
                                               const copy = [...prev];
-                                              copy[index] = {
-                                                ...copy[index],
-                                                discount: pct,
-                                                discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
-                                              };
+                                              copy[index] = { ...copy[index], quantity: finalVal, product_quantity: String(finalVal) };
                                               return copy;
                                             });
-                                          }}
-                                          className={`text-[8px] px-1 py-0.5 rounded font-bold transition-all ${rowDiscountPct === pct ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                        >
-                                          {pct}%
-                                        </button>
-                                      ))}
+                                          }
+                                        }}
+                                        className="w-10 p-0 rounded-none text-xs text-center border-none shadow-none focus:outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
+                                        onClick={() => {
+                                          const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
+                                          const newQty = currentQty + 1;
+                                          setProducts(prev => {
+                                            const copy = [...prev];
+                                            copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
+                                            return copy;
+                                          });
+                                        }}
+                                      >+</button>
                                     </div>
-                                    {/* Discount % input */}
-                                    <div className="flex items-center justify-center gap-1">
-                                      <div className="relative">
-                                        <Input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={rawInputValues[`${product.uid}-disc`] ?? rowDiscountPct.toString()}
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === '' || val === '.' || /^\d+\.?\d{0,2}$/.test(val)) {
-                                              setRawInputValues(prev => ({ ...prev, [`${product.uid}-disc`]: val }));
-                                              const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
-                                              const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                                              setProducts((prev) => {
-                                                const copy = [...prev];
-                                                copy[index] = {
-                                                  ...copy[index],
-                                                  discount: pct,
-                                                  discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
-                                                };
-                                                return copy;
-                                              });
-                                            }
-                                          }}
-                                          onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-disc`]; return c; })}
-                                          className="w-12 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
-                                          placeholder="%"
-                                        />
-                                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">%</span>
+                                    {product.procurementMinQty != null && product.procurementMinQty > 0 && (
+                                      <div className="text-[8px] text-gray-400 mt-0.5 text-center">
+                                        Min: <span className="font-bold">{product.procurementMinQty}</span>
                                       </div>
-                                      <span className="text-[8px] text-gray-400">|</span>
-                                      {/* Discount ₱ amount input — bidirectional */}
-                                      <div className="relative">
-                                        <Input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={rawInputValues[`${product.uid}-discAmt`] ?? unitDiscountAmt.toFixed(2)}
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            const raw = val.replace(/,/g, '');
-                                            if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
-                                              setRawInputValues(prev => ({ ...prev, [`${product.uid}-discAmt`]: val }));
-                                              const amt = Math.max(0, parseFloat(raw) || 0);
-                                              const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                                              const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
-                                              setProducts((prev) => {
-                                                const copy = [...prev];
-                                                copy[index] = {
-                                                  ...copy[index],
-                                                  discountAmount: amt,
-                                                  discount: Math.min(100, newPct),
-                                                };
-                                                return copy;
-                                              });
-                                            }
-                                          }}
-                                          onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-discAmt`]; return c; })}
-                                          className="w-16 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
-                                          placeholder="₱"
-                                        />
-                                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">₱</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-gray-300">—</span>
-                                )}
-                              </td>
+                                    )}
+                                  </td>
 
-                              {/* Net — editable, back-calculates discount */}
-                              <td className="border border-gray-300 p-1 text-center bg-blue-50/30">
-                                {isDiscounted ? (
-                                  <div className="flex flex-col gap-0.5">
+                                  {/* Unit Price — editable, syncs price and re-derives discountAmount */}
+                                  <td className="border border-gray-300 p-1">
                                     <div className="flex items-center justify-center gap-0.5">
                                       <span className="text-[9px] text-gray-400">₱</span>
                                       <Input
                                         type="text"
                                         inputMode="decimal"
-                                        value={rawInputValues[`${product.uid}-net`] ?? discountedUnitPrice.toFixed(2)}
+                                        value={rawInputValues[`${product.uid}-price`] ?? (product.price > 0 ? product.price.toFixed(2) : (product.product_amount || '0.00'))}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           const raw = val.replace(/,/g, '');
                                           if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
-                                            setRawInputValues(prev => ({ ...prev, [`${product.uid}-net`]: val }));
-                                            const newNet = Math.max(0, parseFloat(raw) || 0);
+                                            setRawInputValues(prev => ({ ...prev, [`${product.uid}-price`]: val }));
+                                            const num = parseFloat(raw) || 0;
+                                            const locked = product.procurementLockedPrice;
+                                            const original = product.originalPrice ?? 0;
+                                            const finalPrice = locked && original > 0 ? Math.max(original, num) : num;
+                                            setProducts((prev) => {
+                                              const copy = [...prev];
+                                              const prod = copy[index];
+                                              if (!prod) return prev;
+                                              const newDiscAmt = prod.isDiscounted && prod.discount != null
+                                                ? parseFloat(((finalPrice * prod.discount) / 100).toFixed(4))
+                                                : prod.discountAmount ?? 0;
+                                              copy[index] = {
+                                                ...prod,
+                                                price: finalPrice,
+                                                product_amount: String(finalPrice),
+                                                discountAmount: newDiscAmt,
+                                              };
+                                              return copy;
+                                            });
+                                          }
+                                        }}
+                                        onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-price`]; return c; })}
+                                        className={`w-full min-w-[70px] p-0.5 rounded-none text-[10px] text-right font-medium border-gray-300 h-6 focus:outline-none ${product.procurementLockedPrice ? 'bg-gray-50 font-bold' : ''}`}
+                                      />
+                                    </div>
+                                    {product.procurementLockedPrice && product.originalPrice != null && (
+                                      <div className="text-[8px] text-orange-600 mt-0.5 text-center">
+                                        Min: ₱{product.originalPrice.toFixed(2)}
+                                      </div>
+                                    )}
+                                  </td>
+
+                                  {/* Discount column — preset buttons + % input + ₱ input (bidirectional) */}
+                                  <td className="border border-gray-300 p-1 text-center">
+                                    {isDiscounted ? (
+                                      <div className="flex flex-col gap-1">
+                                        {/* Preset discount buttons */}
+                                        <div className="flex justify-center gap-0.5">
+                                          {[5, 10, 15, 20].map((pct) => (
+                                            <button
+                                              key={pct}
+                                              type="button"
+                                              onClick={() => {
+                                                const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                                setProducts((prev) => {
+                                                  const copy = [...prev];
+                                                  copy[index] = {
+                                                    ...copy[index],
+                                                    discount: pct,
+                                                    discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                                  };
+                                                  return copy;
+                                                });
+                                              }}
+                                              className={`text-[8px] px-1 py-0.5 rounded font-bold transition-all ${rowDiscountPct === pct ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                            >
+                                              {pct}%
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {/* Discount % input */}
+                                        <div className="flex items-center justify-center gap-1">
+                                          <div className="relative">
+                                            <Input
+                                              type="text"
+                                              inputMode="decimal"
+                                              value={rawInputValues[`${product.uid}-disc`] ?? rowDiscountPct.toString()}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || val === '.' || /^\d+\.?\d{0,2}$/.test(val)) {
+                                                  setRawInputValues(prev => ({ ...prev, [`${product.uid}-disc`]: val }));
+                                                  const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
+                                                  const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                                  setProducts((prev) => {
+                                                    const copy = [...prev];
+                                                    copy[index] = {
+                                                      ...copy[index],
+                                                      discount: pct,
+                                                      discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                                    };
+                                                    return copy;
+                                                  });
+                                                }
+                                              }}
+                                              onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-disc`]; return c; })}
+                                              className="w-12 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                              placeholder="%"
+                                            />
+                                            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">%</span>
+                                          </div>
+                                          <span className="text-[8px] text-gray-400">|</span>
+                                          {/* Discount ₱ amount input — bidirectional */}
+                                          <div className="relative">
+                                            <Input
+                                              type="text"
+                                              inputMode="decimal"
+                                              value={rawInputValues[`${product.uid}-discAmt`] ?? unitDiscountAmt.toFixed(2)}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const raw = val.replace(/,/g, '');
+                                                if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                                  setRawInputValues(prev => ({ ...prev, [`${product.uid}-discAmt`]: val }));
+                                                  const amt = Math.max(0, parseFloat(raw) || 0);
+                                                  const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                                  const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
+                                                  setProducts((prev) => {
+                                                    const copy = [...prev];
+                                                    copy[index] = {
+                                                      ...copy[index],
+                                                      discountAmount: amt,
+                                                      discount: Math.min(100, newPct),
+                                                    };
+                                                    return copy;
+                                                  });
+                                                }
+                                              }}
+                                              onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-discAmt`]; return c; })}
+                                              className="w-16 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                              placeholder="₱"
+                                            />
+                                            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">₱</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-gray-300">—</span>
+                                    )}
+                                  </td>
+
+                                  {/* Net — editable, back-calculates discount */}
+                                  <td className="border border-gray-300 p-1 text-center bg-blue-50/30">
+                                    {isDiscounted ? (
+                                      <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center justify-center gap-0.5">
+                                          <span className="text-[9px] text-gray-400">₱</span>
+                                          <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={rawInputValues[`${product.uid}-net`] ?? discountedUnitPrice.toFixed(2)}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              const raw = val.replace(/,/g, '');
+                                              if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                                setRawInputValues(prev => ({ ...prev, [`${product.uid}-net`]: val }));
+                                                const newNet = Math.max(0, parseFloat(raw) || 0);
+                                                const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                                if (price > 0 && newNet < price) {
+                                                  const discAmt = price - newNet;
+                                                  const discPct = (discAmt / price) * 100;
+                                                  setProducts((prev) => {
+                                                    const copy = [...prev];
+                                                    copy[index] = {
+                                                      ...copy[index],
+                                                      isDiscounted: true,
+                                                      discountAmount: parseFloat(discAmt.toFixed(4)),
+                                                      discount: parseFloat(Math.min(100, Math.max(0, discPct)).toFixed(4)),
+                                                    };
+                                                    return copy;
+                                                  });
+                                                } else if (newNet >= price) {
+                                                  setProducts((prev) => {
+                                                    const copy = [...prev];
+                                                    copy[index] = { ...copy[index], isDiscounted: false, discountAmount: 0, discount: 0 };
+                                                    return copy;
+                                                  });
+                                                }
+                                              }
+                                            }}
+                                            onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-net`]; return c; })}
+                                            className="w-14 p-0.5 rounded-none text-[10px] text-right font-bold text-blue-700 border-gray-300 h-6 focus:outline-none"
+                                            placeholder="₱"
+                                          />
+                                        </div>
+                                        <div className="text-[8px] text-blue-600 text-center">
+                                          {rowDiscountPct.toFixed(2)}% off
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-gray-300">—</span>
+                                    )}
+                                  </td>
+
+                                  {/* Total — editable, back-calculates discount from total */}
+                                  <td className="border border-gray-300 p-1 text-center">
+                                    <div className="flex flex-col gap-0.5">
+                                      <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={rawInputValues[`${product.uid}-total`] ?? totalAfterDiscount.toFixed(2)}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const raw = val.replace(/,/g, '');
+                                          if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                            setRawInputValues(prev => ({ ...prev, [`${product.uid}-total`]: val }));
+                                            const newTotal = Math.max(0, parseFloat(raw) || 0);
                                             const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                                            if (price > 0 && newNet < price) {
-                                              const discAmt = price - newNet;
-                                              const discPct = (discAmt / price) * 100;
+                                            const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
+                                            const gross = price * qty;
+                                            if (gross > 0 && newTotal <= gross && qty > 0) {
+                                              const totalDiscAmt = gross - newTotal;
+                                              const unitDiscAmt = totalDiscAmt / qty;
+                                              const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
                                               setProducts((prev) => {
                                                 const copy = [...prev];
                                                 copy[index] = {
                                                   ...copy[index],
                                                   isDiscounted: true,
-                                                  discountAmount: parseFloat(discAmt.toFixed(4)),
-                                                  discount: parseFloat(Math.min(100, Math.max(0, discPct)).toFixed(4)),
+                                                  discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
+                                                  discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
                                                 };
                                                 return copy;
                                               });
-                                            } else if (newNet >= price) {
+                                            } else if (newTotal > gross && qty > 0) {
+                                              // Total exceeds gross — increase unit price
+                                              const newUnitPrice = newTotal / qty;
                                               setProducts((prev) => {
                                                 const copy = [...prev];
-                                                copy[index] = { ...copy[index], isDiscounted: false, discountAmount: 0, discount: 0 };
+                                                copy[index] = {
+                                                  ...copy[index],
+                                                  price: parseFloat(newUnitPrice.toFixed(4)),
+                                                  product_amount: newUnitPrice.toFixed(2),
+                                                  isDiscounted: false,
+                                                  discount: 0,
+                                                  discountAmount: 0,
+                                                };
                                                 return copy;
                                               });
                                             }
                                           }
                                         }}
-                                        onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-net`]; return c; })}
-                                        className="w-14 p-0.5 rounded-none text-[10px] text-right font-bold text-blue-700 border-gray-300 h-6 focus:outline-none"
+                                        onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-total`]; return c; })}
+                                        className="w-full min-w-[60px] p-0.5 rounded-none text-[10px] font-bold text-right border-gray-300 h-6 focus:outline-none"
                                         placeholder="₱"
                                       />
+                                      {isDiscounted && unitDiscountAmt > 0 && !(product.isHidden || product.hideDiscountInPreview) && (
+                                        <span className="text-[8px] text-green-600 font-semibold text-right whitespace-nowrap">
+                                          save ₱{(unitDiscountAmt * qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        </span>
+                                      )}
+                                      {(product.isHidden || product.hideDiscountInPreview) && isDiscounted && (
+                                        <span className="text-[8px] text-blue-500 font-semibold italic text-right whitespace-nowrap">
+                                          hidden
+                                        </span>
+                                      )}
                                     </div>
-                                    <div className="text-[8px] text-blue-600 text-center">
-                                      {rowDiscountPct.toFixed(2)}% off
+                                  </td>
+
+                                  {/* Actions */}
+                                  <td className="border border-gray-300 text-center p-1">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => toggleDescription(index)}
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRemoveRow(index)}
+                                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                      >
+                                        <Trash className="w-3 h-3" />
+                                      </Button>
                                     </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-gray-300">—</span>
+                                  </td>
+                                </tr>
+
+                                {openDescription[index] && (
+                                  <tr className="even:bg-[#F9FAFA]">
+                                    <td colSpan={bulkMode ? 13 : 12} className="border border-gray-300 p-4 align-top">
+                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {/* Technical Description */}
+                                        <div>
+                                          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Technical Description:</label>
+                                          <div
+                                            className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
+                                            dangerouslySetInnerHTML={{
+                                              __html:
+                                                product.description ||
+                                                product.product_description ||
+                                                '<span class="text-gray-400 italic">No specifications provided.</span>',
+                                            }}
+                                          />
+                                        </div>
+                                        {/* Item Remarks */}
+                                        <div>
+                                          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Item Remarks:</label>
+                                          <textarea
+                                            value={product.item_remarks || ""}
+                                            onChange={(e) => handleProductChange(index, "item_remarks", e.target.value)}
+                                            placeholder="Enter remarks..."
+                                            className="w-full h-32 resize-y border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                          />
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
                                 )}
-                              </td>
+                              </React.Fragment>
+                            );
+                          })}
+                      </tbody>
+                      <tfoot className="bg-gray-100 font-bold text-xs">
+                        <tr>
+                          {/* Drag Handle */}
+                          <td className="border border-gray-300 p-2"></td>
+                          {/* Row Number */}
+                          <td className="border border-gray-300 p-2"></td>
+                          {/* Disc, Promo, Hide, Display checkboxes - 4 empty cells */}
+                          <td className="border border-gray-300 p-2"></td>
+                          <td className="border border-gray-300 p-2"></td>
+                          <td className="border border-gray-300 p-2"></td>
+                          <td className="border border-gray-300 p-2"></td>
+                          {/* Product */}
+                          <td className="border border-gray-300 p-2"></td>
+                          {/* Qty total */}
+                          <td className="border border-gray-300 p-2 text-center font-black">
+                            {products.reduce((acc, p) => acc + (parseFloat(p.product_quantity ?? "0") || 0), 0)}
+                          </td>
+                          {/* Unit price total */}
+                          <td className="border border-gray-300 p-2 text-center font-black">
+                            {products.reduce((acc, p) => acc + (parseFloat(p.product_amount ?? "0") || 0), 0).toFixed(2)}
+                          </td>
+                          {/* Discount - empty */}
+                          <td className="border border-gray-300 p-2"></td>
+                          {/* Net total */}
+                          <td className="border border-gray-300 p-2 text-center font-black">
+                            ₱{products.reduce((acc, p) => {
+                              const qty = parseFloat(p.product_quantity ?? "0") || 0;
+                              const amt = parseFloat(p.product_amount ?? "0") || 0;
+                              let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
+                              // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                              if (unitDiscountAmt >= amt && qty > 1) {
+                                unitDiscountAmt = unitDiscountAmt / qty;
+                              }
+                              const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
+                              return acc + (discountedUnitPrice * qty);
+                            }, 0).toFixed(2)}
+                          </td>
+                          {/* Total */}
+                          <td className="border border-gray-300 p-2 text-center font-black">
+                            ₱{products.reduce((acc, p) => {
+                              const qty = parseFloat(p.product_quantity ?? "0") || 0;
+                              const amt = parseFloat(p.product_amount ?? "0") || 0;
+                              let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
+                              // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                              if (unitDiscountAmt >= amt && qty > 1) {
+                                unitDiscountAmt = unitDiscountAmt / qty;
+                              }
+                              const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
+                              return acc + (discountedUnitPrice * qty);
+                            }, 0).toFixed(2)}
+                          </td>
+                          {/* Actions */}
+                          <td className="border border-gray-300 p-2"></td>
+                        </tr>
 
-                              {/* Total — editable, back-calculates discount from total */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <div className="flex flex-col gap-0.5">
-                                  <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={rawInputValues[`${product.uid}-total`] ?? totalAfterDiscount.toFixed(2)}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      const raw = val.replace(/,/g, '');
-                                      if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
-                                        setRawInputValues(prev => ({ ...prev, [`${product.uid}-total`]: val }));
-                                        const newTotal = Math.max(0, parseFloat(raw) || 0);
-                                        const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
-                                        const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
-                                        const gross = price * qty;
-                                        if (gross > 0 && newTotal <= gross && qty > 0) {
-                                          const totalDiscAmt = gross - newTotal;
-                                          const unitDiscAmt = totalDiscAmt / qty;
-                                          const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
-                                          setProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[index] = {
-                                              ...copy[index],
-                                              isDiscounted: true,
-                                              discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
-                                              discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
-                                            };
-                                            return copy;
-                                          });
-                                        } else if (newTotal > gross && qty > 0) {
-                                          // Total exceeds gross — increase unit price
-                                          const newUnitPrice = newTotal / qty;
-                                          setProducts((prev) => {
-                                            const copy = [...prev];
-                                            copy[index] = {
-                                              ...copy[index],
-                                              price: parseFloat(newUnitPrice.toFixed(4)),
-                                              product_amount: newUnitPrice.toFixed(2),
-                                              isDiscounted: false,
-                                              discount: 0,
-                                              discountAmount: 0,
-                                            };
-                                            return copy;
-                                          });
-                                        }
-                                      }
-                                    }}
-                                    onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-total`]; return c; })}
-                                    className="w-full min-w-[60px] p-0.5 rounded-none text-[10px] font-bold text-right border-gray-300 h-6 focus:outline-none"
-                                    placeholder="₱"
-                                  />
-                                  {isDiscounted && unitDiscountAmt > 0 && !(product.isHidden || product.hideDiscountInPreview) && (
-                                    <span className="text-[8px] text-green-600 font-semibold text-right whitespace-nowrap">
-                                      save ₱{(unitDiscountAmt * qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                    </span>
-                                  )}
-                                  {(product.isHidden || product.hideDiscountInPreview) && isDiscounted && (
-                                    <span className="text-[8px] text-blue-500 font-semibold italic text-right whitespace-nowrap">
-                                      hidden
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-
-                              {/* Actions */}
-                              <td className="border border-gray-300 text-center p-1">
-                                <div className="flex items-center justify-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => toggleDescription(index)}
-                                    className="h-6 w-6 p-0"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleRemoveRow(index)}
-                                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                                  >
-                                    <Trash className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {openDescription[index] && (
-                              <tr className="even:bg-[#F9FAFA]">
-                                <td colSpan={bulkMode ? 15 : 14} className="border border-gray-300 p-4 align-top">
-                                  <label className="block text-xs font-medium mb-1">Description:</label>
-                                  <div
-                                    className="w-full max-h-90 overflow-auto border border-gray-200 rounded-sm bg-white p-3 text-xs leading-relaxed"
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        product.description ||
-                                        product.product_description ||
-                                        '<span class="text-gray-400 italic">No specifications provided.</span>',
-                                    }}
-                                  />
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-gray-100 font-bold text-xs">
-                      <tr>
-                        {/* Drag Handle */}
-                        <td className="border border-gray-300 p-2"></td>
-                        {/* Row Number */}
-                        <td className="border border-gray-300 p-2"></td>
-                        {/* Disc, Promo, Hide, Display checkboxes - 4 empty cells */}
-                        <td className="border border-gray-300 p-2"></td>
-                        <td className="border border-gray-300 p-2"></td>
-                        <td className="border border-gray-300 p-2"></td>
-                        <td className="border border-gray-300 p-2"></td>
-                        {/* Remarks - hidden sm */}
-                        <td className="border border-gray-300 p-2 hidden sm:table-cell"></td>
-                        {/* Product */}
-                        <td className="border border-gray-300 p-2"></td>
-                        {/* Qty total */}
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          {products.reduce((acc, p) => acc + (parseFloat(p.product_quantity ?? "0") || 0), 0)}
-                        </td>
-                        {/* Unit price total */}
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          {products.reduce((acc, p) => acc + (parseFloat(p.product_amount ?? "0") || 0), 0).toFixed(2)}
-                        </td>
-                        {/* Discount - empty */}
-                        <td className="border border-gray-300 p-2"></td>
-                        {/* Net total */}
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          ₱{products.reduce((acc, p) => {
-                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-                            const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                            if (unitDiscountAmt >= amt && qty > 1) {
-                              unitDiscountAmt = unitDiscountAmt / qty;
-                            }
-                            const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                            return acc + (discountedUnitPrice * qty);
-                          }, 0).toFixed(2)}
-                        </td>
-                        {/* Total */}
-                        <td className="border border-gray-300 p-2 text-center font-black">
-                          ₱{products.reduce((acc, p) => {
-                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-                            const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                            if (unitDiscountAmt >= amt && qty > 1) {
-                              unitDiscountAmt = unitDiscountAmt / qty;
-                            }
-                            const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                            return acc + (discountedUnitPrice * qty);
-                          }, 0).toFixed(2)}
-                        </td>
-                        {/* Actions */}
-                        <td className="border border-gray-300 p-2"></td>
-                      </tr>
-
-                      {/* Delivery & Restocking Fee — desktop inside table */}
-                      <tr className="hidden sm:table-row">
-                        <td colSpan={9} className="border border-gray-300 p-2"></td>
-                        <td colSpan={4} className="border border-gray-300 p-2">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                placeholder="0.00"
-                                value={deliveryFeeState}
-                                onChange={(e) => setDeliveryFeeState(e.target.value)}
-                              />
+                        {/* Delivery & Restocking Fee — desktop inside table */}
+                        <tr className="hidden sm:table-row">
+                          <td colSpan={8} className="border border-gray-300 p-2"></td>
+                          <td colSpan={4} className="border border-gray-300 p-2">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs whitespace-nowrap font-bold">Delivery Fee:</span>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                  placeholder="0.00"
+                                  value={deliveryFeeState}
+                                  onChange={(e) => setDeliveryFeeState(e.target.value)}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
+                                  placeholder="0.00"
+                                  value={restockingFeeState}
+                                  onChange={(e) => setRestockingFeeState(e.target.value)}
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs whitespace-nowrap font-bold">Restocking Fee:</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                className="w-24 text-center border border-gray-300 rounded-none px-2 py-1 text-xs"
-                                placeholder="0.00"
-                                value={restockingFeeState}
-                                onChange={(e) => setRestockingFeeState(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="border border-gray-300 p-2"></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Delivery & Restocking Fee — mobile only */}
-                <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
-                    <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
-                      placeholder="0.00"
-                      value={deliveryFeeState}
-                      onChange={(e) => setDeliveryFeeState(e.target.value)}
-                    />
+                          </td>
+                          <td className="border border-gray-300 p-2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
-                  <div className="flex items-center justify-between py-1.5">
-                    <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
-                      placeholder="0.00"
-                      value={restockingFeeState}
-                      onChange={(e) => setRestockingFeeState(e.target.value)}
-                    />
-                  </div>
-                </div>
 
+                  {/* Delivery & Restocking Fee — mobile only */}
+                  <div className="sm:hidden border border-gray-200 bg-gray-50 p-3 mt-1">
+                    <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
+                      <span className="text-xs font-bold uppercase text-gray-600">Delivery Fee</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                        placeholder="0.00"
+                        value={deliveryFeeState}
+                        onChange={(e) => setDeliveryFeeState(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="text-xs font-bold uppercase text-gray-600">Restocking Fee</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        className="w-28 text-right border border-gray-300 rounded-none px-2 py-1 text-xs bg-white"
+                        placeholder="0.00"
+                        value={restockingFeeState}
+                        onChange={(e) => setRestockingFeeState(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                </div>
               </div>
             </div>
-
           </div>{/* end BODY */}
 
           {/* Note bar */}
@@ -4244,9 +4305,9 @@ ${payload.whtType && payload.whtType !== "none"
               <Button variant="outline" className="rounded-none h-12 px-6 border-2" onClick={onClose}>
                 Cancel
               </Button>
-                <Button onClick={onClickSave} className="rounded-none h-12 px-6">
-                  Save
-                </Button>
+              <Button onClick={onClickSave} className="rounded-none h-12 px-6">
+                Save
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -4752,7 +4813,7 @@ ${payload.whtType && payload.whtType !== "none"
             {confirmDialog?.example && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p>
-                <p className="text-[11px] text-gray-700 font-mono leading-snug">{confirmDialog.example}</p>
+                <p className="text-[11px] text-gray-700 font-mono leading-snug">{confirmDialog?.example}</p>
               </div>
             )}
 

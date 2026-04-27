@@ -124,6 +124,11 @@ interface Props {
     email_address: string;
   }>;
 
+  // --- CONTACT SETTERS (for local edits) ---
+  setContactPerson?: (value: string) => void;
+  setContactNumber?: (value: string) => void;
+  setEmailAddress?: (value: string) => void;
+
   // --- SUPERVISOR & TRACEABILITY ---
   salesManagerContact?: string;
   salesManagerEmail?: string;
@@ -383,6 +388,11 @@ export function QuotationSheet(props: Props) {
     // --- AVAILABLE CONTACTS ---
     availableContacts = [],
 
+    // --- CONTACT SETTERS ---
+    setContactPerson,
+    setContactNumber,
+    setEmailAddress,
+
     // --- SUPERVISOR & TRACEABILITY ---
     salesManagerContact,
     salesManagerEmail,
@@ -464,6 +474,18 @@ export function QuotationSheet(props: Props) {
 
   // NEW: Search filter for product table
   const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [quotationSubjectState, setQuotationSubjectState] = useState<string>(
+    quotationSubject ?? "For Quotation",
+  );
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    example?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
 
   // Confirmation dialog for important toggles
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -687,6 +709,9 @@ export function QuotationSheet(props: Props) {
           discountAmount,
           description: '',
           isDiscounted: discount > 0 || discountAmount > 0,
+          isPromo: false,
+          isHidden: false,
+          displayMode: 'transparent',
         } as SelectedProduct);
       });
       
@@ -711,10 +736,13 @@ export function QuotationSheet(props: Props) {
 
   const reAddRecentProduct = useCallback((product: SelectedProduct) => {
     saveToHistory('Re-add recent product');
-    const newProduct = {
+    const newProduct: SelectedProduct = {
       ...product,
       uid: crypto.randomUUID(),
       quantity: 1,
+      isPromo: product.isPromo ?? false,
+      isHidden: product.isHidden ?? false,
+      displayMode: product.displayMode ?? 'transparent',
     };
     setSelectedProducts((prev) => [...prev, newProduct]);
     addToRecentProducts(newProduct);
@@ -747,6 +775,10 @@ export function QuotationSheet(props: Props) {
       price: item.price ?? 0,
       discount: 0,
       regPrice: item.regPrice || 0,
+      isPromo: false,
+      isHidden: false,
+      isDiscounted: false,
+      displayMode: 'transparent',
     };
 
     setSelectedProducts((prev) => [...prev, newProduct]);
@@ -1209,6 +1241,19 @@ Procurement
     if (email_address) setLocalEmailAddress(email_address);
   }, [contact_person, contact_number, email_address]);
 
+  // Pass local edits back to parent
+  useEffect(() => {
+    if (setContactPerson) setContactPerson(localContactPerson);
+  }, [localContactPerson, setContactPerson]);
+
+  useEffect(() => {
+    if (setContactNumber) setContactNumber(localContactNumber);
+  }, [localContactNumber, setContactNumber]);
+
+  useEffect(() => {
+    if (setEmailAddress) setEmailAddress(localEmailAddress);
+  }, [localEmailAddress, setEmailAddress]);
+
   useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
     const quantities = selectedProducts.map((p) => p.quantity.toString());
@@ -1249,6 +1294,13 @@ Procurement
     const isHiddenFlags = selectedProducts.map((p) => (p.isHidden ? "1" : "0"));
     const rowDisplayModes = selectedProducts.map((p) => p.rowDisplayMode || "full");
 
+    // Debug logging
+    console.log("[Quotation] Serializing product flags:", {
+      isPromoFlags,
+      isPromoJoined: isPromoFlags.join(","),
+      selectedProducts: selectedProducts.map(p => ({ title: p.title, isPromo: p.isPromo })),
+    });
+
     setProductCat(ids.join(","));
     setProductQuantity(quantities.join(","));
     setProductAmount(amounts.join(","));
@@ -1262,14 +1314,6 @@ Procurement
     setProductIsPromo(isPromoFlags.join(","));
     setProductIsHidden(isHiddenFlags.join(","));
     setProductRowDisplayMode(rowDisplayModes.join(","));
-
-    // productCat: JSON string of selected product ids, quantities, and prices
-    const productCatData = selectedProducts.map((p) => ({
-      id: p.id,
-      quantity: p.quantity,
-      price: p.price,
-    }));
-    setProductCat(JSON.stringify(productCatData));
   }, [
     selectedProducts,
     setProductCat,

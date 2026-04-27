@@ -1021,16 +1021,21 @@ function DashboardContent() {
 
     setLoadingTsmData(true);
     try {
-      const dateParams = dateCreatedFilterRange?.from
-        ? `&from=${dateCreatedFilterRange.from.toISOString().split("T")[0]}&to=${(dateCreatedFilterRange.to ?? dateCreatedFilterRange.from).toISOString().split("T")[0]}`
-        : "";
+      // Use the same matching logic as manager-level stats calculation
+      const tsmRef = normalizeReference(tsmId);
+      const tsmAccounts = allActiveAccounts.filter((account) => {
+        const directTsmRef = normalizeReference(account.tsm);
+        const legacyRef = normalizeReference(account.referenceid);
+        return directTsmRef === tsmRef || legacyRef === tsmRef;
+      });
 
-      const [agentsRes, accRes, actRes] = await Promise.all([
-        fetch(`/api/fetch-all-user?id=${encodeURIComponent(tsmId)}`),
-        fetch(`/api/accounts-tsm?tsm=${encodeURIComponent(tsmId)}`),
-        fetch(`/api/activities-tsm?tsm=${encodeURIComponent(tsmId)}&fetchAll=true${dateParams}`),
-      ]);
+      const tsmAccRefs = new Set(tsmAccounts.map((account) => account.account_reference_number));
+      const tsmActivities = filteredActivitiesByDate.filter(
+        (activity) => activity.account_reference_number && tsmAccRefs.has(activity.account_reference_number)
+      );
 
+      // Fetch agents for this TSM
+      const agentsRes = await fetch(`/api/fetch-all-user?id=${encodeURIComponent(tsmId)}`);
       if (agentsRes.ok) {
         const agentsData = await agentsRes.json();
         const raw = Array.isArray(agentsData) ? agentsData : [];
@@ -1045,20 +1050,8 @@ function DashboardContent() {
         setAgents([]);
       }
 
-      if (accRes.ok) {
-        const accData = await accRes.json();
-        const raw = Array.isArray(accData) ? accData : accData.data ?? [];
-        setTsmAccounts(filterActiveAccounts(raw));
-      } else {
-        setTsmAccounts([]);
-      }
-
-      if (actRes.ok) {
-        const actData = await actRes.json();
-        setTsmActivities(Array.isArray(actData) ? actData : actData.data ?? []);
-      } else {
-        setTsmActivities([]);
-      }
+      setTsmAccounts(tsmAccounts);
+      setTsmActivities(tsmActivities);
     } catch (err) {
       console.error("TSM data fetch error:", err);
       setAgents([]);
@@ -1100,29 +1093,20 @@ function DashboardContent() {
 
     setLoadingAgentData(true);
     try {
-      const dateParams = dateCreatedFilterRange?.from
-        ? `&from=${dateCreatedFilterRange.from.toISOString().split("T")[0]}&to=${(dateCreatedFilterRange.to ?? dateCreatedFilterRange.from).toISOString().split("T")[0]}`
-        : "";
+      // Use the same matching logic as TSM-level stats calculation
+      const agentRef = normalizeReference(agentId);
+      const agentAccounts = tsmAccounts.filter((account) => {
+        const accountRef = normalizeReference(account.referenceid);
+        return accountRef === agentRef;
+      });
 
-      const [accRes, actRes] = await Promise.all([
-        fetch(`/api/accounts?referenceid=${encodeURIComponent(agentId)}`),
-        fetch(`/api/activities?referenceid=${encodeURIComponent(agentId)}&fetchAll=true${dateParams}`),
-      ]);
+      const agentAccRefs = new Set(agentAccounts.map((account) => account.account_reference_number));
+      const agentActivities = selectedTsmActivitiesByDate.filter(
+        (activity) => activity.account_reference_number && agentAccRefs.has(activity.account_reference_number)
+      );
 
-      if (accRes.ok) {
-        const accData = await accRes.json();
-        const raw = Array.isArray(accData) ? accData : accData.data ?? [];
-        setAgentAccounts(filterActiveAccounts(raw));
-      } else {
-        setAgentAccounts([]);
-      }
-
-      if (actRes.ok) {
-        const actData = await actRes.json();
-        setAgentActivities(Array.isArray(actData) ? actData : actData.data ?? []);
-      } else {
-        setAgentActivities([]);
-      }
+      setAgentAccounts(agentAccounts);
+      setAgentActivities(agentActivities);
     } catch (err) {
       console.error("Agent data fetch error:", err);
       setAgentAccounts([]);
