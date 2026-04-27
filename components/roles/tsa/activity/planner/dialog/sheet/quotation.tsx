@@ -1249,6 +1249,10 @@ Procurement
     const isHiddenFlags = selectedProducts.map((p) => (p.isHidden ? "1" : "0"));
     const rowDisplayModes = selectedProducts.map((p) => p.rowDisplayMode || "full");
 
+    setProductQuantity(quantities.join(","));
+    setProductAmount(amounts.join(","));
+    setProductDescription(descriptions.join("|ROW|"));
+    setProductPhoto(photos.join(","));
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
     setItemRemarks(remarks.join(","));
@@ -1257,6 +1261,14 @@ Procurement
     setProductIsPromo(isPromoFlags.join(","));
     setProductIsHidden(isHiddenFlags.join(","));
     setProductRowDisplayMode(rowDisplayModes.join(","));
+
+    // productCat: JSON string of selected product ids, quantities, and prices
+    const productCatData = selectedProducts.map((p) => ({
+      id: p.id,
+      quantity: p.quantity,
+      price: p.price,
+    }));
+    setProductCat(JSON.stringify(productCatData));
   }, [
     selectedProducts,
     setProductCat,
