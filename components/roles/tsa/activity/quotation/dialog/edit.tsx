@@ -3528,11 +3528,126 @@ ${payload.whtType && payload.whtType !== "none"
                             <span className="font-bold">Display</span>
                           </th>
                           <th className="border border-gray-700 p-1 text-left font-bold">Product</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-24">Qty</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-16">Unit</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Discount</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Net</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Total</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-24">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Qty</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Quantity Column',
+                                    description: 'The number of items or units being ordered. This multiplies by the Unit Price to calculate the line total before discounts.',
+                                    example: 'Formula: Line Total = Quantity × Unit Price\n\nExample: 10 × ₱500 = ₱5,000',
+                                    onConfirm: () => setConfirmDialog(null),
+                                    onCancel: () => setConfirmDialog(null),
+                                  });
+                                }}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-16">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Unit</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Unit Price Column',
+                                    description: 'The original price per item before any discounts are applied. This is the base price that clients would normally pay without any special pricing.',
+                                    example: 'Formula: Unit Price = Original Product Price\n\nExample: LED Bulb = ₱500.00 per unit',
+                                    onConfirm: () => setConfirmDialog(null),
+                                    onCancel: () => setConfirmDialog(null),
+                                  });
+                                }}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Discount</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Discount Column',
+                                    description: 'Shows both the discount percentage and discount amount per unit. The discount reduces the Unit Price to calculate the Net Price.',
+                                    example: 'Formula: Discount Amount = Unit Price × (Discount % ÷ 100)\n\nExample: ₱500 × (20% ÷ 100) = ₱100 discount\n\nNet Price = Unit Price − Discount Amount\nNet Price = ₱500 − ₱100 = ₱400',
+                                    onConfirm: () => setConfirmDialog(null),
+                                    onCancel: () => setConfirmDialog(null),
+                                  });
+                                }}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20 bg-blue-900/20">
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="text-blue-300">Net</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Net Price Column',
+                                    description: 'The price per unit after discount has been applied. This is calculated by subtracting the discount amount from the Unit Price.',
+                                    example: 'Formula: Net Price = Unit Price − Discount Amount\n\nExample: ₱500 − ₱100 = ₱400 net price per unit',
+                                    onConfirm: () => setConfirmDialog(null),
+                                    onCancel: () => setConfirmDialog(null),
+                                  });
+                                }}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Total</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Total Column',
+                                    description: 'The final line total after discount, calculated by multiplying Net Price by Quantity. This is the amount the client pays for this line item.',
+                                    example: 'Formula: Total = Net Price × Quantity\n\nExample: ₱400 × 10 = ₱4,000 total',
+                                    onConfirm: () => setConfirmDialog(null),
+                                    onCancel: () => setConfirmDialog(null),
+                                  });
+                                }}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </th>
                           <th className="border border-gray-700 p-1 text-center font-bold w-16">Act</th>
                         </tr>
                       </thead>
