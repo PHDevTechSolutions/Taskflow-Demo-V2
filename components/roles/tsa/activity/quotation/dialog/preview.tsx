@@ -13,13 +13,20 @@ type Item = {
     product_description: string;
     unitPrice: number;
     discount?: number;
-    discountedAmount?: number;
+    discountAmount?: number;        // Per-unit peso discount amount
+    discountedAmount?: number;      // Net unit price after discount
     totalAmount: number;
     remarks: string;
     /** True when this item originates from an SPF 1 (procurement-approved) record */
     isSpf1?: boolean;
-    /** Lead time string from procurement — shown as a badge below the SKU for SPF 1 items */
+    /** Lead time string from procurement */
     procurementLeadTime?: string;
+    /** True when this item is marked as PROMO — shows yellow badge */
+    isPromo?: boolean;
+    /** Per-item flag: hide discount details for this specific item */
+    hideDiscountInPreview?: boolean;
+    /** Per-item display mode */
+    displayMode?: 'transparent' | 'net_only' | 'value_add' | 'bundle' | 'request';
 };
 
 type Payload = {
@@ -81,6 +88,8 @@ export const Preview: React.FC<PreviewProps> = ({
     quotationType,
     setIsPreviewOpen,
     hideDiscountInPreview = false,
+    showDiscountColumns = false,
+    showSummaryDiscounts = false,
 }) => {
     const isEcoshift = quotationType === "Ecoshift Corporation";
     const headerImagePath = isEcoshift
@@ -268,7 +277,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                 <th className={`p-3 border-r border-black w-20 text-center`}>
                                     {hideDiscountInPreview ? 'SRP' : 'UNIT PRICE'}
                                 </th>
-                                {!hideDiscountInPreview && (
+                                {!hideDiscountInPreview && showDiscountColumns && (
                                     <>
                                         <th className="p-3 border-r border-black w-14 text-center">DISC</th>
                                         <th className="p-3 border-r border-black w-20 text-center">DISCOUNT PRICE</th>
@@ -292,6 +301,11 @@ export const Preview: React.FC<PreviewProps> = ({
                                     <td className="p-4 border-r border-black align-top">
                                         <div className="flex items-center gap-2 mb-1">
                                             <p className="font-black text-[#121212] text-xs uppercase">{item.title}</p>
+                                            {item.isPromo && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-yellow-400 text-yellow-900 shrink-0 animate-pulse">
+                                                    PROMO
+                                                </span>
+                                            )}
                                             {item.isSpf1 && (
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-600 text-white shrink-0">
                                                     SPF
@@ -313,26 +327,54 @@ export const Preview: React.FC<PreviewProps> = ({
                                         />
                                         <span className="bg-orange-400 mt-2 p-1 capitalize text-red-800">{item.remarks}</span>
                                     </td>
-                                    <td className="p-4 text-right border-r border-black align-top font-medium">
-                                        {hideDiscountInPreview ? (
-                                            // Show NET price as UNIT price when hiding discounts
-                                            <span>₱{Number(item.discountedAmount !== undefined && item.discountedAmount > 0 ? item.discountedAmount : item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        ) : (
-                                            // Show regular unit price
-                                            <span>₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        )}
+                                    <td className={`p-4 text-right border-r border-black align-top font-medium w-28 ${
+                                        (item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle') ? 'bg-gray-50' : ''
+                                    }`}>
+                                        {(() => {
+                                            const mode = item.displayMode || 'transparent';
+                                            if (mode === 'request') return <span className="text-[10px] text-gray-500 italic">Upon request</span>;
+                                            if (mode === 'net_only' || mode === 'bundle') return <span className="text-[10px] text-gray-400">—</span>;
+                                            // Global hideDiscountInPreview OR per-item flag: show net price as SRP
+                                            const effectiveHide = hideDiscountInPreview || item.hideDiscountInPreview;
+                                            if (effectiveHide) {
+                                                const displayPrice = item.discountedAmount != null && item.discountedAmount > 0
+                                                    ? item.discountedAmount
+                                                    : item.unitPrice;
+                                                return <span>₱{Number(displayPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>;
+                                            }
+                                            return <span>₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>;
+                                        })()}
                                     </td>
-                                    {!hideDiscountInPreview && (
+                                    {!hideDiscountInPreview && showDiscountColumns && !item.hideDiscountInPreview && (
                                         <>
-                                            <td className="p-4 text-center border-r border-black align-top">
-                                                {item.discount && item.discount > 0 ? (
-                                                    <span className="font-bold text-[#121212]">{item.discount}%</span>
+                                            <td className={`p-4 text-right border-r border-black align-top w-20 ${
+                                                item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? 'bg-gray-50' : ''
+                                            }`}>
+                                                {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
+                                                    <span className="text-[10px] text-gray-400">—</span>
+                                                ) : item.discountAmount != null && item.discountAmount > 0 ? (
+                                                    <div>
+                                                        <div className="font-bold text-red-600 text-[10px]">
+                                                            −₱{item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </div>
+                                                        {item.discount != null && item.discount > 0 && (
+                                                            <div className="text-[9px] text-gray-400">
+                                                                ({item.discount.toFixed(2)}%)
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : item.discount != null && item.discount > 0 ? (
+                                                    <span className="font-bold text-red-600 text-[10px]">{item.discount.toFixed(2)}%</span>
                                                 ) : (
-                                                    <span className="text-gray-400">-</span>
+                                                    <span className="text-gray-300 text-[10px]">—</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-center border-r border-black align-top font-medium">
-                                                {item.discount && item.discount > 0 && item.discountedAmount !== undefined ? (
+                                            <td className={`p-4 text-right border-r border-black align-top w-28 font-medium ${
+                                                item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? 'bg-gray-50' : ''
+                                            }`}>
+                                                {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
+                                                    <span className="text-[10px] text-gray-400">—</span>
+                                                ) : item.discountedAmount != null ? (
                                                     <span>₱{Number(item.discountedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                                 ) : (
                                                     <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -340,8 +382,30 @@ export const Preview: React.FC<PreviewProps> = ({
                                             </td>
                                         </>
                                     )}
-                                    <td className="p-4 text-center font-black align-top text-[#121212]">
-                                        ₱{(item.totalAmount !== undefined ? Number(item.totalAmount) : Number(item.qty) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    {/* When showDiscountColumns is on but per-item hide is on — show placeholder cells to keep alignment */}
+                                    {!hideDiscountInPreview && showDiscountColumns && item.hideDiscountInPreview && (
+                                        <>
+                                            <td className="p-4 border-r border-black align-top bg-gray-50/50">
+                                                <span className="text-[8px] text-blue-400 italic">hidden</span>
+                                            </td>
+                                            <td className="p-4 border-r border-black align-top bg-gray-50/50">
+                                                <span className="text-[8px] text-blue-400 italic">hidden</span>
+                                            </td>
+                                        </>
+                                    )}
+                                    <td className="p-4 text-right font-black align-top text-[#121212]">
+                                        {item.displayMode === 'request' ? (
+                                            <span className="text-[10px] text-gray-500 italic">Upon request</span>
+                                        ) : (
+                                            <>
+                                                ₱{(item.totalAmount !== undefined ? Number(item.totalAmount) : Number(item.qty) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                {item.displayMode === 'value_add' && item.discountAmount != null && item.discountAmount > 0 && (
+                                                    <div className="text-[8px] text-green-600 font-semibold mt-0.5 text-right">
+                                                        save ₱{(item.discountAmount * Number(item.qty)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -372,20 +436,49 @@ export const Preview: React.FC<PreviewProps> = ({
                                     </div>
                                 </td>
 
-                                <td colSpan={hideDiscountInPreview ? 2 : 4} className="p-0 align-top">
+                                <td colSpan={hideDiscountInPreview ? 2 : (showDiscountColumns ? 4 : 2)} className="p-0 align-top">
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
 
-                                            {/* Net Sales */}
+                                            {/* Gross Sales (shown as "Net Sales" when no discount row, or "Gross Sales" when discount row is shown) */}
                                             <tr className="border-b border-gray-100">
                                                 <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
-                                                    Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
+                                                    {showSummaryDiscounts ? "Gross Sales" : `Net Sales ${payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}`}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
                                                     ₱{((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0))
                                                         .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
+
+                                            {/* Less: Trade Discount — only shown when showSummaryDiscounts is enabled */}
+                                            {showSummaryDiscounts && (() => {
+                                                const totalDiscount = (payload.items || []).reduce((acc, item) => {
+                                                    const disc = (item as any).discountAmount ?? 0;
+                                                    return acc + (disc * Number(item.qty));
+                                                }, 0);
+                                                return totalDiscount > 0 ? (
+                                                    <>
+                                                        <tr className="border-b border-yellow-200 bg-yellow-50">
+                                                            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-yellow-700 text-[9px]">
+                                                                Less: Trade Discount
+                                                            </td>
+                                                            <td className="px-3 py-1.5 text-right font-black tabular-nums text-yellow-700">
+                                                                −₱{totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                        <tr className="border-b border-gray-100">
+                                                            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                                Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
+                                                            </td>
+                                                            <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                                ₱{(((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0)) - totalDiscount)
+                                                                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    </>
+                                                ) : null;
+                                            })()}
 
                                             {/* Delivery Fee */}
                                             <tr className="border-b border-gray-100">

@@ -15,6 +15,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { sileo } from "sileo";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Item,
   ItemActions,
   ItemContent,
@@ -100,12 +107,14 @@ interface Completed {
 }
 
 interface ProductItem {
+  uid: string; // Unique identifier for rawInputValues keys
   description: string;
   skus: any;
   title: string;
   isPromo?: boolean;
   isHidden?: boolean;
-  displayMode?: 'full' | 'compact';
+  hideDiscountInPreview?: boolean;
+  displayMode?: 'transparent' | 'net_only' | 'value_add' | 'bundle' | 'request';
   images: any;
   isDiscounted: boolean;
   price: number;
@@ -118,6 +127,7 @@ interface ProductItem {
   product_sku?: string;
   item_remarks?: string;
   discount?: number;
+  discountAmount?: number; // Per-unit discount amount in pesos (synced with discount %)
   procurementMinQty?: number;
   procurementLeadTime?: string;
   procurementLockedPrice?: boolean;
@@ -554,6 +564,8 @@ export default function TaskListEditDialog({
   const [templateName, setTemplateName] = useState("");
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [dragRowUid, setDragRowUid] = useState<string | null>(null);
+  // Track raw input values for smooth decimal typing (keyed by product uid + field)
+  const [rawInputValues, setRawInputValues] = useState<Record<string, string>>({});
   const [dragOverRowUid, setDragOverRowUid] = useState<string | null>(null);
   const [selectedRevisedQuotation, setSelectedRevisedQuotation] =
     useState<RevisedQuotation | null>(null);
@@ -723,13 +735,21 @@ export default function TaskListEditDialog({
       const amt = amounts[i] ?? "";
       const leadTime = parseLeadTime(desc);
       const isSpf1 = isSpf1Desc(desc);
-      const discountValue = parseFloat(discountedPrices[i] ?? "0") || 0;
-      const isDiscounted = discountValue > 0;
+      const discountPct = parseFloat(discountedPrices[i] ?? "0") || 0;
+      const isDiscounted = discountPct > 0;
       if (isDiscounted) {
         newCheckedRows[i] = true;
       }
+      const unitPrice = parseFloat(amt) || 0;
+      // discounted_amount stores per-unit peso discount
+      const discountedAmountArr = splitAndTrim(item.discounted_amount);
+      const savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      const unitDiscountAmount = savedDiscountAmt > 0
+        ? savedDiscountAmt
+        : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
 
       arr.push({
+        uid: `product-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         product_quantity: qty,
         product_amount: amt,
         product_title: titles[i] ?? "",
@@ -738,21 +758,30 @@ export default function TaskListEditDialog({
         product_sku: sku[i] ?? "",
         item_remarks: remarks[i] ?? "",
         quantity: parseFloat(qty) || 0,
+        price: unitPrice,
         description: desc,
         skus: sku[i] ? [sku[i]] : undefined,
         title: titles[i] ?? "",
         images: photos[i] ? [{ src: photos[i] }] : undefined,
-        isDiscounted: isDiscounted,
-        discount: discountValue,
-        price: parseFloat(amt) || 0,
+        isDiscounted,
+        discount: discountPct,
+        discountAmount: unitDiscountAmount,
+        hideDiscountInPreview: hiddenFlags[i] === "1",
         procurementLeadTime: leadTime || undefined,
         procurementMinQty: isSpf1 ? (parseFloat(qty) || undefined) : undefined,
         procurementLockedPrice: isSpf1 ? true : undefined,
-        originalPrice: isSpf1 ? (parseFloat(amt) || 0) : undefined,
-        // Product flags from database
+        originalPrice: isSpf1 ? unitPrice : undefined,
         isPromo: promoFlags[i] === "1",
         isHidden: hiddenFlags[i] === "1",
-        displayMode: (displayModes[i] as 'full' | 'compact') || 'full',
+        displayMode: (() => {
+          const raw = displayModes[i] ?? "";
+          if (raw === 'full' || raw === 'transparent') return 'transparent';
+          if (raw === 'compact' || raw === 'net_only') return 'net_only';
+          if (raw === 'value_add') return 'value_add';
+          if (raw === 'bundle') return 'bundle';
+          if (raw === 'request') return 'request';
+          return 'transparent';
+        })(),
       });
     }
     setProducts(arr);
@@ -787,20 +816,23 @@ export default function TaskListEditDialog({
 
   useEffect(() => {
     let total = 0;
-    products.forEach((p, idx) => {
-      const qty = parseFloat(p.product_quantity ?? "0") || 0;
-      const amt = parseFloat(p.product_amount ?? "0") || 0;
-      const isChecked = checkedRows[idx] ?? false;
-      const rowDiscount = isChecked
-        ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+    products.forEach((p) => {
+      const qty = p.quantity || parseFloat(p.product_quantity ?? "0") || 0;
+      const amt = p.price || parseFloat(p.product_amount ?? "0") || 0;
+      const isDiscounted = p.isDiscounted ?? false;
+      const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
+      const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
+      const unitDiscountAmt = isDiscounted
+        ? (p.discountAmount != null && p.discountAmount > 0
+            ? p.discountAmount
+            : (amt * rowDiscount) / 100)
         : 0;
-      const unitDiscountAmount = (amt * rowDiscount) / 100;
-      const discountedUnitPrice = amt - unitDiscountAmount;
+      const discountedUnitPrice = amt - unitDiscountAmt;
       const lineTotal = discountedUnitPrice * qty;
       total += lineTotal;
     });
     setQuotationAmount(total);
-  }, [products, checkedRows, vatTypeState]);
+  }, [products, vatTypeState]);
 
   const handleProductChange = (
     index: number,
@@ -809,7 +841,18 @@ export default function TaskListEditDialog({
   ) => {
     setProducts((prev) => {
       const newProducts = [...prev];
-      newProducts[index] = { ...newProducts[index], [field]: value };
+      const updated: ProductItem = { ...newProducts[index], [field]: value };
+      // Keep numeric mirrors in sync
+      if (field === "product_quantity") updated.quantity = parseFloat(value) || 0;
+      if (field === "product_amount") {
+        const newPrice = parseFloat(value) || 0;
+        updated.price = newPrice;
+        // Re-derive discountAmount from % if no explicit peso amount was set
+        if (updated.isDiscounted && updated.discount != null && updated.discountAmount == null) {
+          updated.discountAmount = (newPrice * updated.discount) / 100;
+        }
+      }
+      newProducts[index] = updated;
       return newProducts;
     });
   };
@@ -909,7 +952,6 @@ export default function TaskListEditDialog({
 
       for (let i = 1; i < lines.length; i++) {
         const cells = lines[i].includes('\t') ? lines[i].split('\t') : lines[i].split(',');
-
         const title = cells[0]?.trim() || 'New Product';
         const quantity = parseInt(cells[1]) || 1;
         const price = parseFloat(cells[2]) || 0;
@@ -917,14 +959,15 @@ export default function TaskListEditDialog({
         const discountAmount = parseFloat(cells[4]) || 0;
 
         newProducts.push({
+          uid: `pasted-${Date.now()}-${i}`,
           title,
           product_title: title,
           product_quantity: quantity.toString(),
           product_amount: price.toString(),
           discount,
-          discounted_amount: discountAmount.toString(),
+          discountAmount: discountAmount,
           description: '',
-          skus: {},
+          skus: [],
           product_sku: '',
           product_photo: '',
           item_remarks: '',
@@ -1089,23 +1132,24 @@ export default function TaskListEditDialog({
       // Serialize discount percentages for each product
       const discounted_priced = serializeArrayFixed(
         products.map((p, idx) => {
-          const isChecked = checkedRows[idx] ?? false;
+          const isChecked = p.isDiscounted ?? false;
           if (!isChecked) return "0";
           return String(p.discount ?? 0);
         }),
       );
 
-      // Serialize calculated discount amounts for each product
+      // Serialize calculated discount amounts for each product (per-unit, matching getQuotationPayload)
       const discounted_amount = serializeArrayFixed(
-        products.map((p, idx) => {
-          const isChecked = checkedRows[idx] ?? false;
+        products.map((p) => {
+          const isChecked = p.isDiscounted ?? false;
           if (!isChecked) return "0";
-          const qty = parseFloat(p.product_quantity ?? "0") || 0;
-          const amt = parseFloat(p.product_amount ?? "0") || 0;
-          const baseAmount = qty * amt;
+          const amt = p.price || parseFloat(p.product_amount ?? "0") || 0;
           const discountPercent = p.discount ?? 0;
-          const discountValue = (baseAmount * discountPercent) / 100;
-          return discountValue.toFixed(2);
+          // Prefer explicit peso amount stored on product; fall back to % calc
+          const unitDiscountValue = p.discountAmount != null && p.discountAmount > 0
+            ? p.discountAmount
+            : (amt * discountPercent) / 100;
+          return unitDiscountValue.toFixed(2);
         }),
       );
 
@@ -1117,7 +1161,7 @@ export default function TaskListEditDialog({
         products.map((p) => (p.isHidden ? "1" : "0")),
       );
       const product_display_mode = serializeArrayFixed(
-        products.map((p) => p.displayMode || "full"),
+        products.map((p) => p.displayMode || "transparent"),
       );
 
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
@@ -1125,7 +1169,10 @@ export default function TaskListEditDialog({
       const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
       // Calculate EWT deduction if applicable
       const whtAmount = whtTypeState !== "none"
-        ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+        ? (vatTypeState === "vat_inc"
+            ? totalPriceWithDelivery / 1.12
+            : totalPriceWithDelivery
+          ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
         : 0;
       const totalQuotationAmount = totalPriceWithDelivery - whtAmount;
 
@@ -1226,20 +1273,25 @@ export default function TaskListEditDialog({
       emailUsername && emailDomain ? `${emailUsername}@${emailDomain}` : "";
 
     const items = products.map((p: ProductItem, index: number) => {
-      const qty = parseFloat(p.product_quantity ?? "0") || 0;
-      const unitPrice = parseFloat(p.product_amount ?? "0") || 0;
-      const isDiscounted = checkedRows[index] ?? false;
-      const rowDiscount = isDiscounted ? (p.discount ?? (vatTypeState === "vat_exe" ? 12 : 0)) : 0;
-      const baseAmount = qty * unitPrice;
-      const unitDiscountAmount = isDiscounted && rowDiscount > 0 ? (unitPrice * rowDiscount) / 100 : 0;
-      const discountedAmount = unitPrice - unitDiscountAmount; // Unit price after discount
-      const totalAmount = discountedAmount * qty; // Total amount after discount
+      const qty = p.quantity || parseFloat(p.product_quantity ?? "0") || 0;
+      const unitPrice = p.price || parseFloat(p.product_amount ?? "0") || 0;
+      const isDiscounted = p.isDiscounted ?? false;
+      const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
+      const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
+      // Prefer stored peso amount; fall back to percent-derived
+      const unitDiscountAmount = isDiscounted
+        ? (p.discountAmount != null && p.discountAmount > 0
+            ? p.discountAmount
+            : (unitPrice * rowDiscount) / 100)
+        : 0;
+      const discountedAmount = unitPrice - unitDiscountAmount; // net unit price
+      const totalAmount = discountedAmount * qty;
 
       return {
         itemNo: index + 1,
         qty,
         photo: p.product_photo ?? p.images?.[0]?.src ?? "",
-        title: p.product_title ?? "",
+        title: p.product_title ?? p.title ?? "",
         sku: p.product_sku ?? p.skus?.[0] ?? "",
         itemRemarks: p.item_remarks ?? "",
         product_description: p.description?.trim()
@@ -1247,9 +1299,12 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
-        discountAmount: unitDiscountAmount, // Amount of discount per unit
+        discountAmount: unitDiscountAmount,
         discountedAmount,
         totalAmount,
+        isPromo: p.isPromo ?? false,
+        hideDiscountInPreview: p.isHidden ?? p.hideDiscountInPreview ?? false,
+        displayMode: p.displayMode ?? 'transparent',
         isSpf1: !!(p.procurementLockedPrice || p.procurementLeadTime || (() => {
           const rawD = p.product_description || p.description || "";
           return rawD.includes("Project lead time");
@@ -1279,9 +1334,9 @@ export default function TaskListEditDialog({
       subject: quotationSubjectState || "For Quotation",
       items,
       vatTypeLabel:
-        vatType === "vat_inc"
+        vatTypeState === "vat_inc"
           ? "VAT Inc"
-          : vatType === "vat_exe"
+          : vatTypeState === "vat_exe"
             ? "VAT Exe"
             : "Zero-Rated",
       totalPrice: totalPriceWithDelivery,
@@ -1304,12 +1359,18 @@ export default function TaskListEditDialog({
         : totalPriceWithDelivery,
       whtAmount:
         whtTypeState !== "none"
-          ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+          ? (vatTypeState === "vat_inc"
+              ? totalPriceWithDelivery / 1.12
+              : totalPriceWithDelivery
+            ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
           : 0,
       netAmountToCollect:
         totalPriceWithDelivery - (
           whtTypeState !== "none"
-            ? (totalPriceWithDelivery / 1.12) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
+            ? (vatTypeState === "vat_inc"
+                ? totalPriceWithDelivery / 1.12
+                : totalPriceWithDelivery
+              ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
             : 0
         ),
       agentSignature: agentSignature ?? null,
@@ -1430,6 +1491,7 @@ export default function TaskListEditDialog({
     setProducts((prev) => [
       ...prev,
       {
+        uid: `added-${Date.now()}`,
         product_quantity: "1",
         product_amount: product.price || "0",
         product_title: product.title,
@@ -1463,7 +1525,8 @@ export default function TaskListEditDialog({
     }
     if (Array.isArray(productsArray) && productsArray.length > 0) {
       setProducts(
-        productsArray.map((p) => ({
+        productsArray.map((p, idx) => ({
+          uid: `revised-${Date.now()}-${idx}`,
           description: p.description || "",
           skus: p.skus || [],
           title: p.title,
@@ -1504,6 +1567,7 @@ export default function TaskListEditDialog({
       const arr: ProductItem[] = [];
       for (let i = 0; i < maxLen; i++) {
         arr.push({
+          uid: `revised-${Date.now()}-${i}`,
           product_quantity: quantities[i] ?? "",
           product_amount: amounts[i] ?? "",
           product_title: titles[i] ?? "",
@@ -1821,9 +1885,7 @@ export default function TaskListEditDialog({
       // totalPages will be updated retroactively after all pages are known;
       // we stamp footers at the very end in a second pass, so we track page
       // positions and stamp once complete. For simplicity, we stamp each page
-      // immediately using a placeholder total that we resolve at save-time.
-      // Because jsPDF can't go back to previous pages easily at arbitrary Y,
-      // we use a known total-pages approach: stamp immediately and accept
+      // immediately using a known total-pages approach: stamp immediately and accept
       // "Page N" without a "of X" if we don't know total yet — OR we make two
       // passes. The cleanest approach for this codebase: stamp each page with
       // watermark + footer right before moving to the next page.
@@ -2213,14 +2275,14 @@ ${payload.whtType && payload.whtType !== "none"
       const qty = parseFloat(product.product_quantity ?? "0") || 0;
       const amt = parseFloat(product.product_amount ?? "0") || 0;
       const lineTotal = qty * amt;
-      const isChecked = checkedRows[index] ?? false;
+      const isChecked = product.isDiscounted ?? false;
       if (isChecked) {
         const disc = product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0);
         return acc + lineTotal * (1 - disc / 100);
       }
       return acc + lineTotal;
     }, 0);
-  }, [products, checkedRows, vatTypeState]);
+  }, [products, vatTypeState]);
 
   useEffect(() => {
     setQuotationAmount(subtotal);
@@ -2245,36 +2307,6 @@ ${payload.whtType && payload.whtType !== "none"
                 </DialogTitle>
                 <span className="hidden sm:inline text-gray-300">|</span>
                 <span className="hidden sm:inline text-xs text-gray-500 truncate">{item.quotation_type}</span>
-                {ApprovedStatus && (
-                  <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider shadow-sm ${
-                    ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head"
-                      ? "bg-green-100 text-green-800 border border-green-300"
-                      : ApprovedStatus === "Pending"
-                      ? "bg-amber-100 text-amber-800 border border-amber-300"
-                      : ApprovedStatus === "Cancelled" || ApprovedStatus === "Rejected"
-                      ? "bg-red-100 text-red-800 border border-red-300"
-                      : "bg-gray-100 text-gray-800 border border-gray-300"
-                  }`}>
-                    {ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head" ? (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    ) : ApprovedStatus === "Pending" ? (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    ) : ApprovedStatus === "Cancelled" || ApprovedStatus === "Rejected" ? (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                    {ApprovedStatus}
-                  </span>
-                )}
                 {products.length > 0 && (
                   <span className="inline-flex items-center justify-center bg-[#121212] text-white text-[10px] font-black rounded-full w-5 h-5 ml-1">
                     {products.length}
@@ -2508,7 +2540,7 @@ ${payload.whtType && payload.whtType !== "none"
                                 }}
                                 className="w-full text-left px-3 py-2.5 hover:bg-red-50/70 transition flex items-center justify-between gap-2"
                               >
-                                <div className="font-black text-[11px] uppercase tracking-widest text-gray-800 truncate">
+                                <div className="font-black text-[11px] uppercase tracking-wider text-gray-800 truncate">
                                   {r.spf_number || `SPF #${r.id}`}
                                 </div>
                                 <span className="text-[10px] font-black text-red-500 tabular-nums w-4 text-center shrink-0">
@@ -2785,7 +2817,7 @@ ${payload.whtType && payload.whtType !== "none"
                               ) : (
                                 <div className="w-full h-full bg-gray-50 rounded-md flex items-center justify-center">
                                   <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4 4L19 7" />
                                   </svg>
                                 </div>
                               )}
@@ -3199,7 +3231,7 @@ ${payload.whtType && payload.whtType !== "none"
                       title="Save/Load quote templates"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 002-2h6M8 7H6a2 2 0 00-2 2v6a2 2 0 002 2h2M8 7v-2a2 2 0 002-2h2m0 5a2 2 0 002 2v2m0-4a2 2 0 002 2h2m-4 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-4a2 2 0 012-2h2m0-1a1 1 0 000-2h-1a1 1 0 01-1-1V7a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 001 1h1a1 1 0 001 1v1a2 2 0 01-2 2z" />
                       </svg>
                       Templates
                     </button>
@@ -3405,7 +3437,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   setSelectedRows(new Set());
                                 }
                               }}
-                              className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                              className="w-4 h-4 accent-blue-500"
                             />
                           </th>
                         )}
@@ -3449,16 +3481,21 @@ ${payload.whtType && payload.whtType !== "none"
                           return title.includes(query) || sku.includes(query);
                         })
                         .map((product, index) => {
-                        const qty = parseFloat(product.product_quantity ?? "0") || 0;
-                        const amt = parseFloat(product.product_amount ?? "0") || 0;
-                        const baseAmount = qty * amt;
-                        const isChecked = checkedRows[index] || false;
-                        const rowDiscount = isChecked
-                          ? (product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0))
+                        const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
+                        const amt = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                        const isDiscounted = product.isDiscounted ?? false;
+                        const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
+                        const rowDiscountPct = isDiscounted
+                          ? (product.discount ?? defaultDiscount)
                           : 0;
-                        const unitDiscountAmount = isChecked ? (amt * rowDiscount) / 100 : 0;
-                        const discountedAmount = amt - unitDiscountAmount;
-                        const totalAfterDiscount = discountedAmount * qty;
+                        // Prefer explicit peso amount; fall back to % calculation
+                        const unitDiscountAmt = isDiscounted
+                          ? (product.discountAmount != null && product.discountAmount > 0
+                              ? product.discountAmount
+                              : (amt * rowDiscountPct) / 100)
+                          : 0;
+                        const discountedUnitPrice = amt - unitDiscountAmt;
+                        const totalAfterDiscount = discountedUnitPrice * qty;
                         return (
                           <React.Fragment key={index}>
                             <tr
@@ -3525,8 +3562,24 @@ ${payload.whtType && payload.whtType !== "none"
                               <td className="border border-gray-300 p-1 text-center">
                                 <input
                                   type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => setCheckedRows((prev) => ({ ...prev, [index]: e.target.checked }))}
+                                  checked={product.isDiscounted}
+                                  onChange={(e) => {
+                                    const newVal = e.target.checked;
+                                    setProducts((prev) => {
+                                      const copy = [...prev];
+                                      const defaultDisc = vatTypeState === "vat_exe" ? 12 : 0;
+                                      copy[index] = {
+                                        ...copy[index],
+                                        isDiscounted: newVal,
+                                        discount: newVal ? defaultDisc : 0,
+                                        discountAmount: newVal
+                                          ? ((copy[index].price || parseFloat(copy[index].product_amount ?? "0") || 0) * defaultDisc) / 100
+                                          : 0,
+                                      };
+                                      return copy;
+                                    });
+                                    saveToHistory(newVal ? 'Enable discount' : 'Disable discount');
+                                  }}
                                   className="w-4 h-4 accent-blue-500"
                                 />
                               </td>
@@ -3563,27 +3616,40 @@ ${payload.whtType && payload.whtType !== "none"
                                 />
                               </td>
 
-                              {/* Display Checkbox */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={product.displayMode !== 'compact'}
-                                  onChange={(e) => {
+                              {/* Display Mode — proper Select dropdown (Full / Net Only / Savings / Bundle / On Request) */}
+                              <td className="border border-gray-300 p-0.5 bg-purple-50/30">
+                                <Select
+                                  value={product.displayMode || 'transparent'}
+                                  onValueChange={(value) => {
                                     setProducts((prev) => {
                                       const copy = [...prev];
-                                      copy[index] = { ...copy[index], displayMode: e.target.checked ? 'full' : 'compact' };
+                                      copy[index] = { ...copy[index], displayMode: value as ProductItem['displayMode'] };
                                       return copy;
                                     });
                                   }}
-                                  className="w-4 h-4 accent-gray-500"
-                                />
+                                >
+                                  <SelectTrigger className="w-20 text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-6 focus:ring-1 focus:ring-purple-500">
+                                    <SelectValue placeholder="Full" />
+                                  </SelectTrigger>
+                                  <SelectContent className="min-w-[110px]">
+                                    <SelectItem value="transparent" className="text-xs py-1">Full</SelectItem>
+                                    <SelectItem value="net_only" className="text-xs py-1">Net Only</SelectItem>
+                                    <SelectItem value="value_add" className="text-xs py-1">Savings</SelectItem>
+                                    <SelectItem value="bundle" className="text-xs py-1">Bundle</SelectItem>
+                                    <SelectItem value="request" className="text-xs py-1">On Request</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </td>
 
-                              {/* Remarks */}
+                              {/* Remarks (item_remarks editable inline) */}
                               <td className="hidden sm:table-cell border border-gray-300 p-1">
-                                <div className="flex items-center justify-center">
-                                  <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">Full</span>
-                                </div>
+                                <input
+                                  type="text"
+                                  value={product.item_remarks ?? ""}
+                                  onChange={(e) => handleProductChange(index, "item_remarks", e.target.value)}
+                                  placeholder="Remarks…"
+                                  className="w-full text-[9px] bg-transparent outline-none placeholder-gray-300"
+                                />
                               </td>
 
                               {/* Product */}
@@ -3630,87 +3696,316 @@ ${payload.whtType && payload.whtType !== "none"
                                 <div className="flex items-center justify-center gap-1">
                                   <button
                                     type="button"
-                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold"
+                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
                                     onClick={() => {
-                                      const currentQty = parseFloat(product.product_quantity ?? "1") || 1;
+                                      const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
                                       const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
-                                      if (currentQty > floor) {
-                                        handleProductChange(index, "product_quantity", String(currentQty - 1));
+                                      const newQty = Math.max(floor, currentQty - 1);
+                                      setProducts(prev => {
+                                        const copy = [...prev];
+                                        copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
+                                        return copy;
+                                      });
+                                    }}
+                                    disabled={(product.quantity || parseFloat(product.product_quantity ?? "1")) <= (product.procurementMinQty || 1)}
+                                  >−</button>
+                                  <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={product.quantity || product.product_quantity || ""}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      if (raw === '' || /^\d*$/.test(raw)) {
+                                        const val = parseInt(raw, 10) || 1;
+                                        const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
+                                        const finalVal = Math.max(floor, val);
+                                        setProducts(prev => {
+                                          const copy = [...prev];
+                                          copy[index] = { ...copy[index], quantity: finalVal, product_quantity: String(finalVal) };
+                                          return copy;
+                                        });
                                       }
                                     }}
-                                  >
-                                    -
-                                  </button>
-                                  <Input
-                                    type="number"
-                                    min={product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1}
-                                    step="any"
-                                    value={product.product_quantity ?? ""}
-                                    onChange={(e) => {
-                                      const raw = parseFloat(e.target.value) || 1;
-                                      const floor = product.procurementMinQty && product.procurementMinQty > 0 ? product.procurementMinQty : 1;
-                                      handleProductChange(index, "product_quantity", String(Math.max(floor, raw)));
-                                    }}
-                                    className="w-10 p-0 rounded-none text-xs text-center border-none shadow-none"
+                                    className="w-10 p-0 rounded-none text-xs text-center border-none shadow-none focus:outline-none"
                                   />
                                   <button
                                     type="button"
-                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold"
+                                    className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 text-xs font-bold transition-all"
                                     onClick={() => {
-                                      const currentQty = parseFloat(product.product_quantity ?? "1") || 1;
-                                      handleProductChange(index, "product_quantity", String(currentQty + 1));
+                                      const currentQty = product.quantity || parseFloat(product.product_quantity ?? "1") || 1;
+                                      const newQty = currentQty + 1;
+                                      setProducts(prev => {
+                                        const copy = [...prev];
+                                        copy[index] = { ...copy[index], quantity: newQty, product_quantity: String(newQty) };
+                                        return copy;
+                                      });
                                     }}
-                                  >
-                                    +
-                                  </button>
+                                  >+</button>
                                 </div>
-                              </td>
-
-                              {/* Unit Price */}
-                              <td className="border border-gray-300 p-1">
-                                <div className="text-center text-[10px] font-medium">
-                                  {parseFloat(product.product_amount ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </div>
-                              </td>
-
-                              {/* Discount */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                {isChecked && rowDiscount > 0 ? (
-                                  <div className="flex items-center justify-center gap-1">
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      max={100}
-                                      step="0.01"
-                                      value={rowDiscount}
-                                      onChange={(e) => {
-                                        const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
-                                        setProducts((prev) => {
-                                          const copy = [...prev];
-                                          copy[index] = { ...copy[index], discount: val };
-                                          return copy;
-                                        });
-                                      }}
-                                      className="w-12 p-0 border border-gray-200 rounded text-[10px] text-center"
-                                    />
-                                    <span className="text-[10px]">%</span>
+                                {product.procurementMinQty != null && product.procurementMinQty > 0 && (
+                                  <div className="text-[8px] text-gray-400 mt-0.5 text-center">
+                                    Min: <span className="font-bold">{product.procurementMinQty}</span>
                                   </div>
-                                ) : (
-                                  <span className="text-[10px] text-gray-400">-</span>
                                 )}
                               </td>
 
-                              {/* Net */}
-                              <td className="border border-gray-300 p-1 text-center">
-                                <div className="text-[10px] font-medium">
-                                  {isChecked ? `₱${discountedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                              {/* Unit Price — editable, syncs price and re-derives discountAmount */}
+                              <td className="border border-gray-300 p-1">
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <span className="text-[9px] text-gray-400">₱</span>
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={rawInputValues[`${product.uid}-price`] ?? (product.price > 0 ? product.price.toFixed(2) : (product.product_amount ?? ''))}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const raw = val.replace(/,/g, '');
+                                      if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                        setRawInputValues(prev => ({ ...prev, [`${product.uid}-price`]: val }));
+                                        const num = parseFloat(raw) || 0;
+                                        const locked = product.procurementLockedPrice;
+                                        const original = product.originalPrice ?? 0;
+                                        const finalPrice = locked && original > 0 ? Math.max(original, num) : num;
+                                        setProducts((prev) => {
+                                          const copy = [...prev];
+                                          const prod = copy[index];
+                                          if (!prod) return prev;
+                                          const newDiscAmt = prod.isDiscounted && prod.discount != null
+                                            ? parseFloat(((finalPrice * prod.discount) / 100).toFixed(4))
+                                            : prod.discountAmount ?? 0;
+                                          copy[index] = {
+                                            ...prod,
+                                            price: finalPrice,
+                                            product_amount: String(finalPrice),
+                                            discountAmount: newDiscAmt,
+                                          };
+                                          return copy;
+                                        });
+                                      }
+                                    }}
+                                    onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-price`]; return c; })}
+                                    className={`w-full min-w-[70px] p-0.5 rounded-none text-[10px] text-right font-medium border-gray-300 h-6 focus:outline-none ${product.procurementLockedPrice ? 'bg-gray-50 font-bold' : ''}`}
+                                  />
                                 </div>
+                                {product.procurementLockedPrice && product.originalPrice != null && (
+                                  <div className="text-[8px] text-orange-600 mt-0.5 text-center">
+                                    Min: ₱{product.originalPrice.toFixed(2)}
+                                  </div>
+                                )}
                               </td>
 
-                              {/* Total */}
+                              {/* Discount column — preset buttons + % input + ₱ input (bidirectional) */}
                               <td className="border border-gray-300 p-1 text-center">
-                                <div className="text-[10px] font-bold">
-                                  ₱{totalAfterDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {isDiscounted ? (
+                                  <div className="flex flex-col gap-1">
+                                    {/* Preset discount buttons */}
+                                    <div className="flex justify-center gap-0.5">
+                                      {[5, 10, 15, 20].map((pct) => (
+                                        <button
+                                          key={pct}
+                                          type="button"
+                                          onClick={() => {
+                                            const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                            setProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[index] = {
+                                                ...copy[index],
+                                                discount: pct,
+                                                discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                              };
+                                              return copy;
+                                            });
+                                          }}
+                                          className={`text-[8px] px-1 py-0.5 rounded font-bold transition-all ${rowDiscountPct === pct ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                        >
+                                          {pct}%
+                                        </button>
+                                      ))}
+                                    </div>
+                                    {/* Discount % input */}
+                                    <div className="flex items-center justify-center gap-1">
+                                      <div className="relative">
+                                        <Input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={rawInputValues[`${product.uid}-disc`] ?? (rowDiscountPct > 0 ? rowDiscountPct.toString() : '')}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === '' || val === '.' || /^\d+\.?\d{0,2}$/.test(val)) {
+                                              setRawInputValues(prev => ({ ...prev, [`${product.uid}-disc`]: val }));
+                                              const pct = Math.min(100, Math.max(0, parseFloat(val) || 0));
+                                              const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                              setProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[index] = {
+                                                  ...copy[index],
+                                                  discount: pct,
+                                                  discountAmount: parseFloat(((price * pct) / 100).toFixed(4)),
+                                                };
+                                                return copy;
+                                              });
+                                            }
+                                          }}
+                                          onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-disc`]; return c; })}
+                                          className="w-12 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                          placeholder="%"
+                                        />
+                                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">%</span>
+                                      </div>
+                                      <span className="text-[8px] text-gray-400">|</span>
+                                      {/* Discount ₱ amount input — bidirectional */}
+                                      <div className="relative">
+                                        <Input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={rawInputValues[`${product.uid}-discAmt`] ?? (unitDiscountAmt > 0 ? unitDiscountAmt.toFixed(2) : '')}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const raw = val.replace(/,/g, '');
+                                            if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                              setRawInputValues(prev => ({ ...prev, [`${product.uid}-discAmt`]: val }));
+                                              const amt = Math.max(0, parseFloat(raw) || 0);
+                                              const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                              const newPct = price > 0 ? parseFloat(((amt / price) * 100).toFixed(4)) : 0;
+                                              setProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[index] = {
+                                                  ...copy[index],
+                                                  discountAmount: amt,
+                                                  discount: Math.min(100, newPct),
+                                                };
+                                                return copy;
+                                              });
+                                            }
+                                          }}
+                                          onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-discAmt`]; return c; })}
+                                          className="w-16 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                          placeholder="₱"
+                                        />
+                                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">₱</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-gray-300">—</span>
+                                )}
+                              </td>
+
+                              {/* Net — editable, back-calculates discount */}
+                              <td className="border border-gray-300 p-1 text-center bg-blue-50/30">
+                                {isDiscounted ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center justify-center gap-0.5">
+                                      <span className="text-[9px] text-gray-400">₱</span>
+                                      <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={rawInputValues[`${product.uid}-net`] ?? (discountedUnitPrice > 0 ? discountedUnitPrice.toFixed(2) : '')}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const raw = val.replace(/,/g, '');
+                                          if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                            setRawInputValues(prev => ({ ...prev, [`${product.uid}-net`]: val }));
+                                            const newNet = Math.max(0, parseFloat(raw) || 0);
+                                            const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                            if (price > 0 && newNet < price) {
+                                              const discAmt = price - newNet;
+                                              const discPct = (discAmt / price) * 100;
+                                              setProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[index] = {
+                                                  ...copy[index],
+                                                  isDiscounted: true,
+                                                  discountAmount: parseFloat(discAmt.toFixed(4)),
+                                                  discount: parseFloat(Math.min(100, Math.max(0, discPct)).toFixed(4)),
+                                                };
+                                                return copy;
+                                              });
+                                            } else if (newNet >= price) {
+                                              setProducts((prev) => {
+                                                const copy = [...prev];
+                                                copy[index] = { ...copy[index], isDiscounted: false, discountAmount: 0, discount: 0 };
+                                                return copy;
+                                              });
+                                            }
+                                          }
+                                        }}
+                                        onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-net`]; return c; })}
+                                        className="w-14 p-0.5 rounded-none text-[10px] text-right font-bold text-blue-700 border-gray-300 h-6 focus:outline-none"
+                                        placeholder="₱"
+                                      />
+                                    </div>
+                                    <div className="text-[8px] text-blue-600 text-center">
+                                      {rowDiscountPct.toFixed(2)}% off
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-gray-300">—</span>
+                                )}
+                              </td>
+
+                              {/* Total — editable, back-calculates discount from total */}
+                              <td className="border border-gray-300 p-1 text-center">
+                                <div className="flex flex-col gap-0.5">
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={rawInputValues[`${product.uid}-total`] ?? (totalAfterDiscount > 0 ? totalAfterDiscount.toFixed(2) : '')}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const raw = val.replace(/,/g, '');
+                                      if (raw === '' || raw === '.' || /^\d+\.?\d{0,2}$/.test(raw)) {
+                                        setRawInputValues(prev => ({ ...prev, [`${product.uid}-total`]: val }));
+                                        const newTotal = Math.max(0, parseFloat(raw) || 0);
+                                        const price = product.price || parseFloat(product.product_amount ?? "0") || 0;
+                                        const qty = product.quantity || parseFloat(product.product_quantity ?? "0") || 0;
+                                        const gross = price * qty;
+                                        if (gross > 0 && newTotal <= gross && qty > 0) {
+                                          const totalDiscAmt = gross - newTotal;
+                                          const unitDiscAmt = totalDiscAmt / qty;
+                                          const newPct = price > 0 ? (unitDiscAmt / price) * 100 : 0;
+                                          setProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[index] = {
+                                              ...copy[index],
+                                              isDiscounted: true,
+                                              discountAmount: parseFloat(unitDiscAmt.toFixed(4)),
+                                              discount: parseFloat(Math.min(100, Math.max(0, newPct)).toFixed(4)),
+                                            };
+                                            return copy;
+                                          });
+                                        } else if (newTotal > gross && qty > 0) {
+                                          // Total exceeds gross — increase unit price
+                                          const newUnitPrice = newTotal / qty;
+                                          setProducts((prev) => {
+                                            const copy = [...prev];
+                                            copy[index] = {
+                                              ...copy[index],
+                                              price: parseFloat(newUnitPrice.toFixed(4)),
+                                              product_amount: newUnitPrice.toFixed(2),
+                                              isDiscounted: false,
+                                              discount: 0,
+                                              discountAmount: 0,
+                                            };
+                                            return copy;
+                                          });
+                                        }
+                                      }
+                                    }}
+                                    onBlur={() => setRawInputValues(prev => { const c = {...prev}; delete c[`${product.uid}-total`]; return c; })}
+                                    className="w-full min-w-[60px] p-0.5 rounded-none text-[10px] font-bold text-right border-gray-300 h-6 focus:outline-none"
+                                    placeholder="₱"
+                                  />
+                                  {isDiscounted && unitDiscountAmt > 0 && !(product.isHidden || product.hideDiscountInPreview) && (
+                                    <span className="text-[8px] text-green-600 font-semibold text-right whitespace-nowrap">
+                                      save ₱{(unitDiscountAmt * qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                    </span>
+                                  )}
+                                  {(product.isHidden || product.hideDiscountInPreview) && isDiscounted && (
+                                    <span className="text-[8px] text-blue-500 font-semibold italic text-right whitespace-nowrap">
+                                      hidden
+                                    </span>
+                                  )}
                                 </div>
                               </td>
 
@@ -3759,43 +4054,56 @@ ${payload.whtType && payload.whtType !== "none"
                     </tbody>
                     <tfoot className="bg-gray-100 font-bold text-xs">
                       <tr>
-                        <td className="border border-gray-300 p-2 text-center"></td>
-                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell"></td>
+                        {/* Drag Handle */}
                         <td className="border border-gray-300 p-2"></td>
+                        {/* Row Number */}
+                        <td className="border border-gray-300 p-2"></td>
+                        {/* Disc, Promo, Hide, Display checkboxes - 4 empty cells */}
+                        <td className="border border-gray-300 p-2"></td>
+                        <td className="border border-gray-300 p-2"></td>
+                        <td className="border border-gray-300 p-2"></td>
+                        <td className="border border-gray-300 p-2"></td>
+                        {/* Remarks - hidden sm */}
+                        <td className="border border-gray-300 p-2 hidden sm:table-cell"></td>
+                        {/* Product */}
+                        <td className="border border-gray-300 p-2"></td>
+                        {/* Qty total */}
                         <td className="border border-gray-300 p-2 text-center font-black">
                           {products.reduce((acc, p) => acc + (parseFloat(p.product_quantity ?? "0") || 0), 0)}
                         </td>
+                        {/* Unit price total */}
                         <td className="border border-gray-300 p-2 text-center font-black">
                           {products.reduce((acc, p) => acc + (parseFloat(p.product_amount ?? "0") || 0), 0).toFixed(2)}
                         </td>
-                        <td className="border border-gray-300 p-2 text-center hidden sm:table-cell">
-                          ₱{products.reduce((acc, p, idx) => {
-                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
-                            const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const unitDiscountAmt = (amt * disc) / 100;
-                            const discountedUnitPrice = amt - unitDiscountAmt;
-                            const lineTotal = discountedUnitPrice * qty;
-                            return acc + lineTotal;
-                          }, 0).toFixed(2)}
-                        </td>
+                        {/* Discount - empty */}
+                        <td className="border border-gray-300 p-2"></td>
+                        {/* Net total */}
                         <td className="border border-gray-300 p-2 text-center font-black">
-                          ₱{products.reduce((acc, p, idx) => {
+                          ₱{products.reduce((acc, p) => {
                             const qty = parseFloat(p.product_quantity ?? "0") || 0;
                             const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            const disc = checkedRows[idx] ? (p.discount ?? 0) : 0;
-                            const unitDiscountAmt = (amt * disc) / 100;
+                            const unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
                             const discountedUnitPrice = amt - unitDiscountAmt;
-                            const lineTotal = discountedUnitPrice * qty;
-                            return acc + lineTotal;
+                            return acc + (discountedUnitPrice * qty);
                           }, 0).toFixed(2)}
                         </td>
+                        {/* Total */}
+                        <td className="border border-gray-300 p-2 text-center font-black">
+                          ₱{products.reduce((acc, p) => {
+                            const qty = parseFloat(p.product_quantity ?? "0") || 0;
+                            const amt = parseFloat(p.product_amount ?? "0") || 0;
+                            const unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
+                            const discountedUnitPrice = amt - unitDiscountAmt;
+                            return acc + (discountedUnitPrice * qty);
+                          }, 0).toFixed(2)}
+                        </td>
+                        {/* Actions */}
                         <td className="border border-gray-300 p-2"></td>
                       </tr>
 
                       {/* Delivery & Restocking Fee — desktop inside table */}
                       <tr className="hidden sm:table-row">
-                        <td colSpan={4} className="border border-gray-300 p-2"></td>
+                        <td colSpan={9} className="border border-gray-300 p-2"></td>
                         <td colSpan={4} className="border border-gray-300 p-2">
                           <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between gap-2">
@@ -3822,6 +4130,7 @@ ${payload.whtType && payload.whtType !== "none"
                             </div>
                           </div>
                         </td>
+                        <td className="border border-gray-300 p-2"></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -3865,16 +4174,16 @@ ${payload.whtType && payload.whtType !== "none"
 
           <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-center">
             <div className="flex gap-2 w-full sm:w-auto flex-wrap p-2 items-center justify-center">
-              {/* Hide Discount in Preview Toggle */}
-              <label className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-3 py-2 rounded transition-colors" title="Hide discount columns in preview - shows SRP only">
+              {/* Show Discounts toggle — matches quotation.tsx bottom bar */}
+              <label className="flex items-center gap-1.5 cursor-pointer hover:bg-blue-100/50 px-3 py-2 rounded transition-colors" title="Show or hide discount columns in preview/PDF">
                 <input
                   type="checkbox"
-                  checked={hideDiscountInPreview}
-                  onChange={(e) => setHideDiscountInPreview(e.target.checked)}
-                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                  checked={showDiscountColumns}
+                  onChange={(e) => setShowDiscountColumns(e.target.checked)}
+                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className={`font-medium text-xs ${hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
-                  {hideDiscountInPreview ? '✓ Hide Discounts' : '○ Show Discounts'}
+                <span className={`font-medium text-xs ${showDiscountColumns ? 'text-blue-700' : 'text-gray-500'}`}>
+                  {showDiscountColumns ? '✓ Show Discounts' : '○ Show Discounts'}
                 </span>
               </label>
 

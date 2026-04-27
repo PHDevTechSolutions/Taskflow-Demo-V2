@@ -1249,8 +1249,13 @@ Procurement
     const isHiddenFlags = selectedProducts.map((p) => (p.isHidden ? "1" : "0"));
     const rowDisplayModes = selectedProducts.map((p) => p.rowDisplayMode || "full");
 
+    setProductCat(ids.join(","));
+    setProductQuantity(quantities.join(","));
+    setProductAmount(amounts.join(","));
     setProductSku(skus.join(","));
     setProductTitle(titles.join(","));
+    setProductDescription(descriptions.join(" || "));
+    setProductPhoto(photos.join(","));
     setItemRemarks(remarks.join(","));
     setProductDiscountedPrice(discountedPrices.join(","));
     setProductDiscountedAmount(discountedAmounts.join(","));
