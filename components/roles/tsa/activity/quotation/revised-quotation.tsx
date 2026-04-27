@@ -423,8 +423,8 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     () =>
       [...activities].sort(
         (a, b) =>
-          new Date(b.date_updated ?? b.date_created).getTime() -
-          new Date(a.date_updated ?? a.date_created).getTime(),
+          new Date(b.date_updated!).getTime() -
+          new Date(a.date_updated!).getTime(),
       ),
     [activities],
   );
@@ -892,7 +892,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Timeline</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Feedback / Notes</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-right">Amount</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Created</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Updated</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1059,7 +1059,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       </TableCell>
 
                       <TableCell className="text-center font-mono text-[11px] text-zinc-400">
-                        {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                        {new Date(item.date_updated!).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
                       </TableCell>
                     </TableRow>
                   );

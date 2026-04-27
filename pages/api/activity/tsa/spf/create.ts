@@ -54,6 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 manager: data.manager ?? null,
                 item_description: data.item_description ?? null,
                 item_photo: data.item_photo ?? null,
+                item_qty: data.item_qty ?? null,
                 start_date: data.start_date ? new Date(data.start_date) : null,
                 end_date: data.end_date ? new Date(data.end_date) : null,
                 date_created: new Date().toISOString(),

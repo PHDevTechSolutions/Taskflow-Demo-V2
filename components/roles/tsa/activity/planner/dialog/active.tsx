@@ -135,6 +135,7 @@ interface AccountFormData {
   industry: string;
   date_created?: string;
   company_group: string;
+  tin_number?: string;
 }
 
 interface Agent {
@@ -178,6 +179,7 @@ const DEFAULT_FORM: AccountFormData = {
   type_client: "New Client",
   industry: "OTHER",
   company_group: "",
+  tin_number: "",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -638,6 +640,22 @@ export function AccountDialog({
                   )}
                 </>
               )}
+            </div>
+
+            {/* TIN Number */}
+            <div className="mb-4">
+              <FieldContent>
+                <FieldLabel className="font-bold">TIN Number</FieldLabel>
+                <FieldDescription>
+                  Enter the Tax Identification Number (optional).
+                </FieldDescription>
+              </FieldContent>
+              <Input
+                value={formData.tin_number || ""}
+                onChange={(e) => updateField("tin_number", e.target.value)}
+                placeholder="000-000-000-000"
+                className="rounded-none"
+              />
             </div>
 
             {/* Contact Person(s) */}

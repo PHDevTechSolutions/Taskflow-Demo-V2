@@ -31,6 +31,7 @@ interface Props {
 interface ItemRow {
   item_photo: string;
   item_description: string;
+  item_qty: string;
 }
 
 interface SPFCreationRow {
@@ -718,13 +719,48 @@ function StepperView({
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [isSpfNumberEditable, setIsSpfNumberEditable] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const MASTER_PASSWORD = "PHDEVTECH";
+
+  // Keyboard shortcut listener for Alt+Ctrl+E
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.ctrlKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        if (!isSpfNumberEditable) {
+          setPasswordDialogOpen(true);
+          setPasswordInput("");
+          setPasswordError("");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, isSpfNumberEditable]);
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput === MASTER_PASSWORD) {
+      setIsSpfNumberEditable(true);
+      setPasswordDialogOpen(false);
+      setPasswordInput("");
+      setPasswordError("");
+    } else {
+      setPasswordError("Incorrect password. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
     const descs = (currentSPF?.item_description || "").split(",").map((s: string) => s.trim());
     const photos = (currentSPF?.item_photo || "").split(",").map((s: string) => s.trim());
-    const maxLen = Math.max(descs.filter(Boolean).length, photos.filter(Boolean).length);
-    setItems(maxLen > 0 ? Array.from({ length: maxLen }, (_, i) => ({ item_description: descs[i] || "", item_photo: photos[i] || "" })) : []);
+    const qtys = (currentSPF?.item_qty || "").split(",").map((s: string) => s.trim());
+    const maxLen = Math.max(descs.filter(Boolean).length, photos.filter(Boolean).length, qtys.filter(Boolean).length);
+    setItems(maxLen > 0 ? Array.from({ length: maxLen }, (_, i) => ({ item_description: descs[i] || "", item_photo: photos[i] || "", item_qty: qtys[i] || "" })) : []);
     setStep(1);
     setErrors([]);
   }, [open]);
@@ -734,22 +770,13 @@ function StepperView({
     [currentSPF, setCurrentSPF]
   );
 
-  const validateStep = (stepNum: number): boolean => {
-    const newErrors: string[] = [];
-    if (stepNum === 1 && !currentSPF?.customer_name?.trim()) newErrors.push("Customer Name is required");
-    if (stepNum === 3) {
-      if (items.length === 0) newErrors.push("Please add at least one item");
-      items.forEach((it, i) => {
-        if (!it.item_photo) newErrors.push(`Item ${i + 1}: Photo is required`);
-        if (!it.item_description.trim()) newErrors.push(`Item ${i + 1}: Description is required`);
-      });
-    }
-    setErrors(newErrors);
-    return newErrors.length === 0;
-  };
+  const addItem = () => setItems((prev) => [...prev, { item_photo: "", item_description: "", item_qty: "" }]);
+  const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+  const updateItemDesc = (i: number, val: string) =>
+    setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_description: val.replace(/,/g, "") }; return next; });
 
-  const handleNext = () => { if (validateStep(step)) setStep(step + 1); };
-  const handlePrev = () => setStep(step - 1);
+  const updateItemQty = (i: number, val: string) =>
+    setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_qty: val.replace(/,/g, "") }; return next; });
 
   const handleUpload = async (file: File, index: number) => {
     setUploadingIdx(index);
@@ -772,15 +799,28 @@ function StepperView({
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { item_photo: "", item_description: "" }]);
-  const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
-  const updateItemDesc = (i: number, val: string) =>
-    setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_description: val.replace(/,/g, "") }; return next; });
+  const validateStep = (stepNum: number): boolean => {
+    const newErrors: string[] = [];
+    if (stepNum === 1 && !currentSPF?.customer_name?.trim()) newErrors.push("Customer Name is required");
+    if (stepNum === 3) {
+      if (items.length === 0) newErrors.push("Please add at least one item");
+      items.forEach((it, i) => {
+        if (!it.item_photo) newErrors.push(`Item ${i + 1}: Photo is required`);
+        if (!it.item_qty?.trim()) newErrors.push(`Item ${i + 1}: Quantity is required`);
+        if (!it.item_description.trim()) newErrors.push(`Item ${i + 1}: Description is required`);
+      });
+    }
+    setErrors(newErrors);
+    return newErrors.length === 0;
+  };
+
+  const handleNext = () => { if (validateStep(step)) setStep(step + 1); };
+  const handlePrev = () => setStep(step - 1);
 
   const handleSubmit = async () => {
     if (!validateStep(3)) return;
     setSubmitting(true);
-    const updated = { ...currentSPF, item_description: items.map((it) => it.item_description).join(","), item_photo: items.map((it) => it.item_photo).join(",") };
+    const updated = { ...currentSPF, item_description: items.map((it) => it.item_description).join(","), item_photo: items.map((it) => it.item_photo).join(","), item_qty: items.map((it) => it.item_qty).join(",") };
     setCurrentSPF(updated);
     try {
       if (isEditMode) await handleEditSPF(updated);
@@ -882,6 +922,9 @@ function StepperView({
                   )}
                 </div>
               </Field>
+              <Field label="Item Quantity" required>
+                <Input type="number" className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0" placeholder="Enter quantity..." value={row.item_qty} onChange={(e) => updateItemQty(i, e.target.value)} />
+              </Field>
               <Field label="Description" required>
                 <Textarea className="rounded-sm text-sm resize-none border-gray-300 focus:border-gray-400 focus:ring-0" placeholder="Describe the item in detail..." value={row.item_description} onChange={(e) => updateItemDesc(i, e.target.value)} rows={4} />
               </Field>
@@ -900,7 +943,19 @@ function StepperView({
           <div className="flex items-center justify-between px-6 py-5">
             <div>
               <h2 className="text-lg font-bold text-gray-900 tracking-tight">{isEditMode ? "Edit SPF Record" : "New SPF Request"}</h2>
-              {currentSPF?.spf_number && <p className="text-xs text-gray-500 font-mono mt-1">{currentSPF.spf_number}</p>}
+              {currentSPF?.spf_number && (
+                <div className="flex items-center gap-2 mt-1">
+                  {isSpfNumberEditable ? (
+                    <Input
+                      className="h-7 text-xs font-mono w-48 rounded-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                      value={currentSPF.spf_number}
+                      onChange={(e) => setField("spf_number", e.target.value)}
+                    />
+                  ) : (
+                    <p className="text-xs text-gray-500 font-mono">{currentSPF.spf_number}</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {STEPS.map((s, idx) => (
@@ -919,6 +974,49 @@ function StepperView({
             <p className="text-sm font-semibold text-gray-700">Step {step} of {STEPS.length}: {STEPS[step - 1].name}</p>
           </div>
         </div>
+
+        {/* Password Dialog for SPF Number Edit */}
+        <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+          <DialogContent className="sm:max-w-sm rounded-lg p-0 overflow-hidden">
+            <div className="bg-gray-900 px-6 py-4">
+              <h3 className="text-white text-sm font-bold uppercase tracking-widest">Unlock SPF Number Edit</h3>
+              <p className="text-gray-400 text-xs mt-1">Enter master password to enable editing</p>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <Field label="Password" required>
+                <Input
+                  type="password"
+                  className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                  placeholder="Enter password..."
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSubmit(); }}
+                />
+              </Field>
+              {passwordError && (
+                <p className="text-xs text-red-600 font-medium">{passwordError}</p>
+              )}
+              <div className="text-xs text-gray-500">
+                <span className="font-semibold">Hint:</span> Press <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">Alt</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">E</kbd> to trigger this dialog
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPasswordDialogOpen(false)}
+                className="rounded-sm h-9 text-xs uppercase font-bold tracking-wider px-4 border-gray-300 hover:bg-gray-100"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handlePasswordSubmit}
+                className="rounded-sm h-9 text-xs uppercase font-bold tracking-wider px-4 bg-gray-900 hover:bg-gray-800 text-white"
+              >
+                Unlock
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Step Content */}
         <div className="px-6 py-6 min-h-[400px] max-h-[calc(100vh-300px)] overflow-y-auto">

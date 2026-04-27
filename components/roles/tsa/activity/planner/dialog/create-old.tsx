@@ -695,7 +695,6 @@ export function CreateActivityDialog({
     // Handle user confirmed cancel
     const confirmCancel = () => {
         resetForm();
-        setStep(1); // Reset step to 1
         setShowConfirmCancel(false);
         setSheetOpen(false);
     };
@@ -880,6 +879,90 @@ export function CreateActivityDialog({
                                                         title: "Viber Replies / Messages",
                                                         desc:
                                                             "Handle Viber replies and messages from clients.",
+                                                    },
+                                                    {
+                                                        value: "Admin - Supplier Accreditation",
+                                                        title: "Admin - Supplier Accreditation",
+                                                        desc:
+                                                            "Handle supplier accreditation tasks.",
+                                                    },
+                                                    {
+                                                        value: "Admin - Credit Terms Application",
+                                                        title: "Admin - Credit Terms Application",
+                                                        desc:
+                                                            "Handle credit terms application tasks.",
+                                                    },
+                                                    {
+                                                        value: "Accounting Concerns",
+                                                        title: "Accounting Concerns",
+                                                        desc:
+                                                            "Handle accounting concerns.",
+                                                    },
+                                                    {
+                                                        value: "After Sales Refunds",
+                                                        title: "After Sales Refunds",
+                                                        desc:
+                                                            "Handle after sales refunds.",
+                                                    },
+                                                    {
+                                                        value: "After Sales Repair / Replacement",
+                                                        title: "After Sales Repair / Replacement",
+                                                        desc:
+                                                            "Handle after sales repair or replacement.",
+                                                    },
+                                                    {
+                                                        value: "Bidding Preparations",
+                                                        title: "Bidding Preparations",
+                                                        desc:
+                                                            "Handle bidding preparations.",
+                                                    },
+                                                    {
+                                                        value: "Customer Orders",
+                                                        title: "Customer Orders",
+                                                        desc:
+                                                            "Handle customer orders.",
+                                                    },
+                                                    {
+                                                        value: "Customer Inquiry Sales",
+                                                        title: "Customer Inquiry Sales",
+                                                        desc:
+                                                            "Handle customer inquiry sales.",
+                                                    },
+                                                    {
+                                                        value: "Delivery Concern",
+                                                        title: "Delivery Concern",
+                                                        desc:
+                                                            "Handle delivery concerns.",
+                                                    },
+                                                    {
+                                                        value: "FB Marketplace Replies / Messages",
+                                                        title: "FB Marketplace Replies / Messages",
+                                                        desc:
+                                                            "Handle FB Marketplace replies and messages from clients.",
+                                                    },
+                                                    {
+                                                        value: "Follow Up",
+                                                        title: "Follow Up",
+                                                        desc:
+                                                            "Handle follow-up activities.",
+                                                    },
+                                                    {
+                                                        value: "Sample Requests",
+                                                        title: "Sample Requests",
+                                                        desc:
+                                                            "Handle sample requests.",
+                                                    },
+                                                    {
+                                                        value: "Site Visits / Demos",
+                                                        title: "Site Visits / Demos",
+                                                        desc:
+                                                            "Handle site visits and demos.",
+                                                    },
+                                                    {
+                                                        value: "Technical Concerns",
+                                                        title: "Technical Concerns",
+                                                        desc:
+                                                            "Handle technical concerns.",
                                                     },
                                                 ].map((item) => (
                                                     <FieldLabel key={item.value}>

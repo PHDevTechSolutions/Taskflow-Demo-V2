@@ -50,7 +50,6 @@ interface Account {
   account_reference_number: string;
   next_available_date?: string | null;
   status: string;
-  date_created: string;
 }
 
 interface UserDetails {
@@ -91,7 +90,6 @@ interface ActivityForCheck {
   id: string;
   account_reference_number: string;
   activity_reference_number: string;
-  company_name: string;
   status: string;
   scheduled_date?: string;
   date_created: string;
@@ -120,14 +118,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
   >([]);
   const [existingHistory, setExistingHistory] = useState<HistoryForCheck[]>([]);
 
-  // ─── Activities state (same as page.tsx) ─────────────────────────────
-  const [activities, setActivities] = useState<ActivityForCheck[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
-  
-  // ─── Lazy Loading: Show first 10, then load more ─────────────────────
-  const NO_ACTIVITY_BATCH_SIZE = 10;
-  const [displayedNoActivityCount, setDisplayedNoActivityCount] = useState(NO_ACTIVITY_BATCH_SIZE);
-
   // State for Endorsed Tickets
   const [endorsedTickets, setEndorsedTickets] = useState<EndorsedTicket[]>([]);
   const [loadingEndorsed, setLoadingEndorsed] = useState(false);
@@ -144,6 +134,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // 🔔 sound refs
   const endorsedSoundRef = useRef<HTMLAudioElement | null>(null);
   const playedTicketIdsRef = useRef<Set<string>>(new Set());
+
+  // Cluster order for grouping
+  const clusterOrder = [
+    "top 50",
+    "next 30",
+    "balance 20",
+    "tsa client",
+    "new client",
+    "csr client",
+  ];
 
   // Generate Activity Reference Number helper
   const generateActivityRef = (companyName: string, region: string) => {
@@ -176,36 +176,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
   useEffect(() => {
     fetchExistingActivities();
   }, [fetchExistingActivities]);
-
-  // ─── Fetch ALL activities from /api/activities (same as page.tsx) ─────────
-  const fetchActivities = useCallback(async () => {
-    if (!referenceid) return;
-    setLoadingActivities(true);
-    try {
-      // Use fetchAll=true to get ALL activities (not just first 1000)
-      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(referenceid)}&fetchAll=true`;
-      const actRes = await fetch(activitiesUrl);
-      if (actRes.ok) {
-        const actData = await actRes.json();
-        const list = Array.isArray(actData) ? actData : actData.data ?? [];
-        setActivities(list);
-        console.log("Activities fetched (all):", list.length);
-      }
-    } catch (err) {
-      console.error("Error fetching activities:", err);
-    } finally {
-      setLoadingActivities(false);
-    }
-  }, [referenceid]);
-
-  useEffect(() => {
-    fetchActivities();
-  }, [fetchActivities]);
-
-  // Reset lazy loading when accounts change
-  useEffect(() => {
-    setDisplayedNoActivityCount(NO_ACTIVITY_BATCH_SIZE);
-  }, [accounts.length]);
 
   // Add Account Handler
   const handleAdd = async (account: Account) => {
@@ -319,6 +289,36 @@ export const NewTask: React.FC<NewTaskProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Normalize date string or return null
+  const normalizeDate = (dateStr?: string | null): string | null => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
+  // Group accounts by cluster with a date filter condition
+  const groupByCluster = (
+    accounts: Account[],
+    dateCondition: (date: string | null) => boolean,
+  ) => {
+    const grouped: Record<string, Account[]> = {};
+    for (const cluster of clusterOrder) {
+      grouped[cluster] = accounts.filter(
+        (acc) =>
+          acc.type_client?.toLowerCase() === cluster &&
+          dateCondition(normalizeDate(acc.next_available_date)) &&
+          acc.status?.toLowerCase() !== "pending",
+      );
+    }
+    return grouped;
   };
 
   // Fetch Accounts from API
@@ -606,89 +606,77 @@ export const NewTask: React.FC<NewTaskProps> = ({
     }
   };
 
-  // ─── Filter to ONLY ACTIVE accounts (same as Account Management) ───
-  const activeAccounts = React.useMemo(() => {
-    const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
-    const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
-    
+  // Filter accounts by search term - includes all regardless of date
+  const filteredBySearch = React.useMemo(() => {
+    if (!searchTerm.trim())
+      return accounts.filter(
+        (acc) =>
+          acc.status?.toLowerCase() !== "subject for transfer" &&
+          acc.status?.toLowerCase() !== "approved for deletion" &&
+          acc.status?.toLowerCase() !== "removed",
+      );
+
+    const lowerSearch = searchTerm.toLowerCase();
     return accounts.filter((acc) => {
-      const status = acc.status?.toLowerCase() || "";
-      const typeClient = acc.type_client?.toLowerCase() || "";
-      
-      // Must have status and type_client
-      if (!acc.status || !acc.type_client) return false;
-      
-      // Exclude removed/approved for deletion/subject for transfer
-      if (excludedStatuses.includes(status)) return false;
-      
-      // Must be in allowed types
-      if (!allowedTypes.includes(typeClient)) return false;
-      
-      return true;
-    });
-  }, [accounts]);
+      const status = acc.status?.toLowerCase();
+      const isStatusAllowed =
+        status !== "subject for transfer" &&
+        status !== "removed" &&
+        status !== "approved for deletion";
 
-  // Filter accounts by search term (ONLY from active accounts)
-  const filteredAccounts = React.useMemo(() => {
-    if (!searchTerm.trim()) return activeAccounts;
-    return activeAccounts.filter((acc) =>
-      acc.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+      return (
+        isStatusAllowed && acc.company_name.toLowerCase().includes(lowerSearch)
+      );
+    });
+  }, [accounts, searchTerm]);
+
+  // Dates for grouping accounts
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(now.getDate()).padStart(2, "0")}`;
+
+  // Group accounts by date condition (only when no search term)
+  const groupedToday = React.useMemo(() => {
+    if (searchTerm.trim()) return {};
+    return groupByCluster(filteredBySearch, (date) => date === todayStr);
+  }, [filteredBySearch, searchTerm, todayStr]);
+
+  const groupedNull = React.useMemo(() => {
+    if (searchTerm.trim()) return {};
+    return groupByCluster(filteredBySearch, (date) => date === null);
+  }, [filteredBySearch, searchTerm]);
+
+  // Totals for UI display when no search term
+  const totalTodayCount = React.useMemo(() => {
+    if (searchTerm.trim()) return 0;
+    return Object.values(groupedToday).reduce(
+      (sum, arr) => sum + arr.length,
+      0,
     );
-  }, [activeAccounts, searchTerm]);
+  }, [groupedToday, searchTerm]);
 
-  // ─── Calculate accounts WITH activity (based on account_reference_number) ───
-  const accountsWithActivity = React.useMemo(() => {
-    const s = new Set<string>();
-    activities.forEach((a) => { 
-      if (a.account_reference_number) s.add(a.account_reference_number); 
-    });
-    return s;
-  }, [activities]);
+  const totalAvailableCount = React.useMemo(() => {
+    if (searchTerm.trim()) return 0;
+    return Object.values(groupedNull).reduce((sum, arr) => sum + arr.length, 0);
+  }, [groupedNull, searchTerm]);
 
-  // ─── Calculate NO ACTIVITY accounts (from ACTIVE accounts only) ───
-  const accountsWithNoActivity = React.useMemo(() => {
-    return activeAccounts.filter((account) => {
-      // Only check ACTIVE accounts without activity (based on account_reference_number)
-      return !accountsWithActivity.has(account.account_reference_number);
-    });
-  }, [activeAccounts, accountsWithActivity]);
-
-  const noActivityCount = accountsWithNoActivity.length;
-
-  // ─── DEBUG: Log counts for verification ───
-  useEffect(() => {
-    console.log("=== NEW.TSX ACTIVITY COUNT ===");
-    console.log("Total Accounts (all):", accounts.length);
-    console.log("Active Accounts (filtered):", activeAccounts.length);
-    console.log("Activities count:", activities.length);
-    console.log("Unique accounts with activity (by ref):", accountsWithActivity.size);
-    console.log("No Activity count (active only):", noActivityCount);
-    console.log("==============================");
-  }, [accounts.length, activeAccounts.length, activities.length, accountsWithActivity.size, noActivityCount]);
-
-  // Helper function to calculate aging (days since a date)
-  const calculateAging = (dateStr: string): number => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  // Find first non-empty cluster for available OB calls
+  const getFirstNonEmptyCluster = (
+    grouped: Record<string, Account[]>,
+    orderedList: string[],
+  ) => {
+    for (const cluster of orderedList) {
+      if (grouped[cluster]?.length) return cluster;
+    }
+    return null;
   };
 
-  // ─── Get aging data for accounts with NO HISTORY (with LAZY LOADING) ───
-  const accountsWithNoActivityAndAging = React.useMemo(() => {
-    return accountsWithNoActivity
-      .map((account: Account) => {
-        const agingDays = calculateAging(account.date_created);
-        return {
-          ...account,
-          agingDays,
-          agingFrom: "account creation",
-          lastActivityDate: null as string | null,
-        };
-      })
-      .sort((a: Account & { agingDays: number }, b: Account & { agingDays: number }) => b.agingDays - a.agingDays) // Sort by oldest first
-      .slice(0, displayedNoActivityCount); // LAZY LOADING: Only show first N
-  }, [accountsWithNoActivity, displayedNoActivityCount]);
+  const firstAvailableCluster = getFirstNonEmptyCluster(
+    groupedNull,
+    clusterOrder,
+  );
 
   useEffect(() => {
     endorsedSoundRef.current = new Audio("/ticket-endorsed.mp3");
@@ -888,16 +876,16 @@ export const NewTask: React.FC<NewTaskProps> = ({
             </Button>
           </div>
 
-          {/* All Accounts - only show when searching */}
-          {searchTerm.trim() && (
+          {/* Show results based on search or grouped */}
+          {searchTerm.trim() ? (
             <section>
               <h2 className="text-xs font-bold mb-4">
                 Search Results{" "}
                 <span className="text-green-600">
-                  ({filteredAccounts.length})
+                  ({filteredBySearch.length})
                 </span>
               </h2>
-              {filteredAccounts.length === 0 ? (
+              {filteredBySearch.length === 0 ? (
                 <p className="text-xs text-gray-500">No companies found.</p>
               ) : (
                 <Accordion
@@ -905,7 +893,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
                   collapsible
                   className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase"
                 >
-                  {filteredAccounts.map((account) => (
+                  {filteredBySearch.map((account) => (
                     <AccordionItem key={account.id} value={account.id}>
                       <div className="flex justify-between items-center p-2 select-none">
                         <AccordionTrigger className="flex flex-1 items-center justify-between text-xs font-semibold font-mono">
@@ -947,6 +935,127 @@ export const NewTask: React.FC<NewTaskProps> = ({
                 </Accordion>
               )}
             </section>
+          ) : (
+            <>
+              {/* OB Calls for Today */}
+              {totalTodayCount > 0 && (
+                <section>
+                  <h2 className="text-xs font-bold mb-4">
+                    OB Calls Account for Today ({totalTodayCount})
+                  </h2>
+
+                  {clusterOrder.map((cluster) => {
+                    const clusterAccounts = groupedToday[cluster];
+                    if (!clusterAccounts || clusterAccounts.length === 0)
+                      return null;
+
+                    return (
+                      <div key={cluster} className="mb-4">
+                        <Accordion type="single" collapsible className="w-full">
+                          {clusterAccounts.map((account) => (
+                            <AccordionItem
+                              key={account.id}
+                              value={account.id}
+                              className="border border-green-300 rounded-sm mb-2 uppercase"
+                            >
+                              <div className="flex justify-between items-center p-2 select-none">
+                                <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
+                                  {account.company_name}
+                                </AccordionTrigger>
+
+                                <div className="flex gap-2 ml-4">
+                                  <AddButton account={account} />
+                                </div>
+                              </div>
+
+                              <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
+                                <p>
+                                  <strong>Contact:</strong>{" "}
+                                  {account.contact_number}
+                                </p>
+                                <p>
+                                  <strong>Email:</strong>{" "}
+                                  {account.email_address}
+                                </p>
+                                <p>
+                                  <strong>Client Type:</strong>{" "}
+                                  {account.type_client}
+                                </p>
+                                <p>
+                                  <strong>Address:</strong> {account.address}
+                                </p>
+                                <p className="text-[8px]">
+                                  {account.account_reference_number}
+                                </p>
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      </div>
+                    );
+                  })}
+                </section>
+              )}
+
+              {/* Available OB Calls */}
+              {totalAvailableCount > 0 && firstAvailableCluster && (
+                <section>
+                  <h2 className="text-xs font-bold mb-4">
+                    Available OB Calls (
+                    {groupedNull[firstAvailableCluster].length})
+                  </h2>
+
+                  <Alert className="font-mono rounded-xl shadow-lg">
+                    <CheckCircle2Icon />
+                    <AlertTitle className="text-xs font-bold">
+                      CLUSTER SERIES: {firstAvailableCluster.toUpperCase()}
+                    </AlertTitle>
+                    <AlertDescription className="text-xs italic">
+                      This alert provides important information about the
+                      selected cluster.
+                    </AlertDescription>
+                  </Alert>
+
+                  <Accordion
+                    type="single"
+                    collapsible
+                    className="w-full border rounded-none shadow-sm mt-2 border-blue-200 uppercase"
+                  >
+                    {groupedNull[firstAvailableCluster].map((account) => (
+                      <AccordionItem key={account.id} value={account.id}>
+                        <div className="flex justify-between items-center p-2 select-none">
+                          <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
+                            {account.company_name}
+                          </AccordionTrigger>
+
+                          <div className="flex gap-2 ml-4">
+                            <AddButton account={account} />
+                          </div>
+                        </div>
+
+                        <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
+                          <p>
+                            <strong>Contact:</strong> {account.contact_number}
+                          </p>
+                          <p>
+                            <strong>Email:</strong> {account.email_address}
+                          </p>
+                          <p>
+                            <strong>Client Type:</strong> {account.type_client}
+                          </p>
+                          <p>
+                            <strong>Address:</strong> {account.address}
+                          </p>
+                          <p className="text-[8px]">
+                            {account.account_reference_number}
+                          </p>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </section>
+              )}
+            </>
           )}
         </>
       )}
