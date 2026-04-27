@@ -822,12 +822,16 @@ export default function TaskListEditDialog({
       const isDiscounted = p.isDiscounted ?? false;
       const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
       const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
-      const unitDiscountAmt = isDiscounted
+      let unitDiscountAmt = isDiscounted
         ? (p.discountAmount != null && p.discountAmount > 0
             ? p.discountAmount
             : (amt * rowDiscount) / 100)
         : 0;
-      const discountedUnitPrice = amt - unitDiscountAmt;
+      // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+      if (unitDiscountAmt >= amt && qty > 1) {
+        unitDiscountAmt = unitDiscountAmt / qty;
+      }
+      const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
       const lineTotal = discountedUnitPrice * qty;
       total += lineTotal;
     });
@@ -1144,11 +1148,16 @@ export default function TaskListEditDialog({
           const isChecked = p.isDiscounted ?? false;
           if (!isChecked) return "0";
           const amt = p.price || parseFloat(p.product_amount ?? "0") || 0;
+          const qty = p.quantity || parseFloat(p.product_quantity ?? "0") || 0;
           const discountPercent = p.discount ?? 0;
           // Prefer explicit peso amount stored on product; fall back to % calc
-          const unitDiscountValue = p.discountAmount != null && p.discountAmount > 0
+          let unitDiscountValue = p.discountAmount != null && p.discountAmount > 0
             ? p.discountAmount
             : (amt * discountPercent) / 100;
+          // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+          if (unitDiscountValue >= amt && qty > 1) {
+            unitDiscountValue = unitDiscountValue / qty;
+          }
           return unitDiscountValue.toFixed(2);
         }),
       );
@@ -1279,12 +1288,16 @@ export default function TaskListEditDialog({
       const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
       const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
       // Prefer stored peso amount; fall back to percent-derived
-      const unitDiscountAmount = isDiscounted
+      let unitDiscountAmount = isDiscounted
         ? (p.discountAmount != null && p.discountAmount > 0
             ? p.discountAmount
             : (unitPrice * rowDiscount) / 100)
         : 0;
-      const discountedAmount = unitPrice - unitDiscountAmount; // net unit price
+      // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+      if (unitDiscountAmount >= unitPrice && qty > 1) {
+        unitDiscountAmount = unitDiscountAmount / qty;
+      }
+      const discountedAmount = Math.max(0, unitPrice - unitDiscountAmount); // net unit price
       const totalAmount = discountedAmount * qty;
 
       return {
@@ -3489,12 +3502,17 @@ ${payload.whtType && payload.whtType !== "none"
                           ? (product.discount ?? defaultDiscount)
                           : 0;
                         // Prefer explicit peso amount; fall back to % calculation
-                        const unitDiscountAmt = isDiscounted
+                        // If discountAmount looks like a total (>= unit price), convert to per-unit
+                        let unitDiscountAmt = isDiscounted
                           ? (product.discountAmount != null && product.discountAmount > 0
                               ? product.discountAmount
                               : (amt * rowDiscountPct) / 100)
                           : 0;
-                        const discountedUnitPrice = amt - unitDiscountAmt;
+                        // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                        if (unitDiscountAmt >= amt && qty > 1) {
+                          unitDiscountAmt = unitDiscountAmt / qty;
+                        }
+                        const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                         const totalAfterDiscount = discountedUnitPrice * qty;
                         return (
                           <React.Fragment key={index}>
@@ -3756,7 +3774,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   <Input
                                     type="text"
                                     inputMode="decimal"
-                                    value={rawInputValues[`${product.uid}-price`] ?? (product.price > 0 ? product.price.toFixed(2) : (product.product_amount ?? ''))}
+                                    value={rawInputValues[`${product.uid}-price`] ?? (product.price > 0 ? product.price.toFixed(2) : (product.product_amount || '0.00'))}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const raw = val.replace(/,/g, '');
@@ -3828,7 +3846,7 @@ ${payload.whtType && payload.whtType !== "none"
                                         <Input
                                           type="text"
                                           inputMode="decimal"
-                                          value={rawInputValues[`${product.uid}-disc`] ?? (rowDiscountPct > 0 ? rowDiscountPct.toString() : '')}
+                                          value={rawInputValues[`${product.uid}-disc`] ?? rowDiscountPct.toString()}
                                           onChange={(e) => {
                                             const val = e.target.value;
                                             if (val === '' || val === '.' || /^\d+\.?\d{0,2}$/.test(val)) {
@@ -3858,7 +3876,7 @@ ${payload.whtType && payload.whtType !== "none"
                                         <Input
                                           type="text"
                                           inputMode="decimal"
-                                          value={rawInputValues[`${product.uid}-discAmt`] ?? (unitDiscountAmt > 0 ? unitDiscountAmt.toFixed(2) : '')}
+                                          value={rawInputValues[`${product.uid}-discAmt`] ?? unitDiscountAmt.toFixed(2)}
                                           onChange={(e) => {
                                             const val = e.target.value;
                                             const raw = val.replace(/,/g, '');
@@ -3900,7 +3918,7 @@ ${payload.whtType && payload.whtType !== "none"
                                       <Input
                                         type="text"
                                         inputMode="decimal"
-                                        value={rawInputValues[`${product.uid}-net`] ?? (discountedUnitPrice > 0 ? discountedUnitPrice.toFixed(2) : '')}
+                                        value={rawInputValues[`${product.uid}-net`] ?? discountedUnitPrice.toFixed(2)}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           const raw = val.replace(/,/g, '');
@@ -3950,7 +3968,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   <Input
                                     type="text"
                                     inputMode="decimal"
-                                    value={rawInputValues[`${product.uid}-total`] ?? (totalAfterDiscount > 0 ? totalAfterDiscount.toFixed(2) : '')}
+                                    value={rawInputValues[`${product.uid}-total`] ?? totalAfterDiscount.toFixed(2)}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const raw = val.replace(/,/g, '');
@@ -4082,8 +4100,12 @@ ${payload.whtType && payload.whtType !== "none"
                           ₱{products.reduce((acc, p) => {
                             const qty = parseFloat(p.product_quantity ?? "0") || 0;
                             const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            const unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                            const discountedUnitPrice = amt - unitDiscountAmt;
+                            let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
+                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                            if (unitDiscountAmt >= amt && qty > 1) {
+                              unitDiscountAmt = unitDiscountAmt / qty;
+                            }
+                            const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                             return acc + (discountedUnitPrice * qty);
                           }, 0).toFixed(2)}
                         </td>
@@ -4092,8 +4114,12 @@ ${payload.whtType && payload.whtType !== "none"
                           ₱{products.reduce((acc, p) => {
                             const qty = parseFloat(p.product_quantity ?? "0") || 0;
                             const amt = parseFloat(p.product_amount ?? "0") || 0;
-                            const unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                            const discountedUnitPrice = amt - unitDiscountAmt;
+                            let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
+                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+                            if (unitDiscountAmt >= amt && qty > 1) {
+                              unitDiscountAmt = unitDiscountAmt / qty;
+                            }
+                            const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                             return acc + (discountedUnitPrice * qty);
                           }, 0).toFixed(2)}
                         </td>
