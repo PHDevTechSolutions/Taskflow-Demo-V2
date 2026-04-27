@@ -44,6 +44,9 @@ export default async function handler(
       item_remarks,
       discounted_priced,
       discounted_amount,
+      product_is_promo,
+      product_is_hidden,
+      product_display_mode,
 
       project_type,
       project_name,
@@ -197,6 +200,9 @@ export default async function handler(
         item_remarks: safe(item_remarks),
         discounted_priced: safe(discounted_priced),
         discounted_amount: safe(discounted_amount),
+        product_is_promo: safe(product_is_promo),
+        product_is_hidden: safe(product_is_hidden),
+        product_display_mode: safe(product_display_mode),
 
         project_type: safe(project_type),
         project_name: safe(project_name),

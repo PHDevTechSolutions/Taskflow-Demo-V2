@@ -136,6 +136,20 @@ interface Completed {
   discounted_priced?: string;
   discounted_amount?: string;
 
+  // Product data fields
+  product_quantity?: string;
+  product_amount?: string;
+  product_description?: string;
+  product_photo?: string;
+  product_title?: string;
+  product_sku?: string;
+  item_remarks?: string;
+
+  // Product flags (serialized as comma-separated values)
+  product_is_promo?: string;
+  product_is_hidden?: string;
+  product_display_mode?: string;
+
   // Quotation display configuration
   hide_discount_in_preview?: boolean;
   show_discount_columns?: boolean;
