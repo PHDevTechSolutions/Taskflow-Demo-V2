@@ -4168,6 +4168,9 @@ ${spec.value}
                                         description: newValue
                                           ? `This will apply a ${vatType === "vat_exe" ? 12 : 0}% discount to ALL ${affectedCount} items in your quotation. Each item will show the discount badge and calculate discounted prices.`
                                           : `This will remove discounts from ALL ${affectedCount} items. All items will revert to their original prices without discounts.`,
+                                        example: newValue
+                                          ? `All ${affectedCount} items will show: Unit Price → Discount ${vatType === "vat_exe" ? 12 : 0}% → Net Price with discount badge`
+                                          : `All ${affectedCount} items revert to original pricing without discount badges`,
                                         onConfirm: () => {
                                           console.log('Confirm DISC all clicked, setting all items to:', newValue);
                                           setSelectedProducts((prev) =>
@@ -4214,12 +4217,79 @@ ${spec.value}
                               )}
                               <th className="border border-gray-700 p-2 text-left font-bold min-w-[120px]" title="Click image to preview, click title to edit">Product</th>
                               <th className="border border-gray-700 p-2 text-center font-bold w-20" title="Quantity">Qty</th>
-                              <th className="border border-gray-700 p-2 text-center font-bold w-28" title="Unit price (can be edited)">Unit</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-28" title="Unit price (can be edited)">
+                                <div className="flex items-center justify-center gap-1">
+                                  <span>Unit</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmDialog({
+                                        isOpen: true,
+                                        title: 'Unit Price Column',
+                                        description: 'The Unit Price is the original price per item before any discounts are applied. This is the base price that clients would normally pay without any special pricing.',
+                                        example: 'Formula: Unit Price = Original Product Price\n\nExample: LED Bulb = ₱500.00 per unit',
+                                        onConfirm: () => setConfirmDialog(null),
+                                        onCancel: () => setConfirmDialog(null)
+                                      });
+                                    }}
+                                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </th>
                               {showDiscountColumns && (
-                                <th className="border border-gray-700 p-2 text-center font-bold w-52" title="Discount % and amount per unit">Discount</th>
+                                <th className="border border-gray-700 p-2 text-center font-bold w-52" title="Discount % and amount per unit">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span>Discount</span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConfirmDialog({
+                                          isOpen: true,
+                                          title: 'Discount Column',
+                                          description: 'Shows both the discount percentage and discount amount per unit. The discount reduces the Unit Price to calculate the Net Price.',
+                                          example: 'Formula: Discount Amount = Unit Price × (Discount % ÷ 100)\n\nExample: ₱500 × (20% ÷ 100) = ₱100 discount\n\nNet Price = Unit Price − Discount Amount\nNet Price = ₱500 − ₱100 = ₱400',
+                                          onConfirm: () => setConfirmDialog(null),
+                                          onCancel: () => setConfirmDialog(null)
+                                        });
+                                      }}
+                                      className="text-blue-400 hover:text-blue-300 transition-colors"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </th>
                               )}
                               <th className="border border-gray-700 p-2 text-center font-bold w-24 bg-blue-900/20" title="Net price after discount (editable - changes discount %)">
-                                <span className="text-blue-300">Net</span>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span className="text-blue-300">Net</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmDialog({
+                                        isOpen: true,
+                                        title: 'Net Price Column',
+                                        description: 'The Net Price is the final price per item after discount has been applied. This is what the client actually pays per unit. You can directly edit this value and it will automatically recalculate the discount percentage.',
+                                        example: 'Formula: Net Price = Unit Price − Discount Amount\n\nExample: ₱500 − ₱100 = ₱400 Net Price\n\nReverse Calculation:\nIf you set Net = ₱400, Discount % = ((500−400)÷500)×100 = 20%',
+                                        onConfirm: () => setConfirmDialog(null),
+                                        onCancel: () => setConfirmDialog(null)
+                                      });
+                                    }}
+                                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </th>
                               {showProfitMargins && (
                                 <>
@@ -4231,7 +4301,30 @@ ${spec.value}
                                   </th>
                                 </>
                               )}
-                              <th className="border border-gray-700 p-2 text-center font-bold w-32" title="Total after discount (can be edited)">Total</th>
+                              <th className="border border-gray-700 p-2 text-center font-bold w-32" title="Total after discount (can be edited)">
+                                <div className="flex items-center justify-center gap-1">
+                                  <span>Total</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmDialog({
+                                        isOpen: true,
+                                        title: 'Total Amount Column',
+                                        description: 'The Total is the final amount for the line item, calculated by multiplying Net Price by Quantity. This is the total amount the client pays for this specific product.',
+                                        example: 'Formula: Total = Net Price × Quantity\n\nExample: ₱400 × 10 qty = ₱4,000 Total\n\nOr if editing Total directly:\nNet Price = Total ÷ Quantity\n₱4,000 ÷ 10 = ₱400 Net Price',
+                                        onConfirm: () => setConfirmDialog(null),
+                                        onCancel: () => setConfirmDialog(null)
+                                      });
+                                    }}
+                                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </th>
                               <th className="border border-gray-700 p-2 text-center font-bold w-28" title="View details or delete">Act</th>
                             </tr>
                           </thead>
@@ -4352,6 +4445,9 @@ ${spec.value}
                                               description: newValue
                                                 ? `This will apply a ${vatType === "vat_exe" ? 12 : 0}% discount to this item. The discount badge will appear on the quote.`
                                                 : `This will remove the discount from this item and revert to original price.`,
+                                              example: newValue
+                                                ? `Unit Price: ₱${p.price.toFixed(2)} → Discount: ${vatType === "vat_exe" ? 12 : 0}% → Net: ₱${(p.price * (1 - (vatType === "vat_exe" ? 0.12 : 0))).toFixed(2)}`
+                                                : `Revert to original price: ₱${p.price.toFixed(2)} (no discount applied)`,
                                               onConfirm: () => {
                                                 setSelectedProducts((prev) => {
                                                   const copy = [...prev];
@@ -4395,6 +4491,9 @@ ${spec.value}
                                               description: newValue
                                                 ? 'This item will display a yellow "PROMO" badge on the quotation, highlighting it as a special offer.'
                                                 : 'The PROMO badge will be removed from this item on the quotation.',
+                                              example: newValue
+                                                ? '🏷️ PROMO badge will appear next to the product name: "BOLLARD FIXTURE E27 🏷️ PROMO"'
+                                                : 'PROMO badge removed: "BOLLARD FIXTURE E27" (no badge)',
                                               onConfirm: () => {
                                                 setSelectedProducts((prev) => {
                                                   const copy = [...prev];
@@ -4433,6 +4532,9 @@ ${spec.value}
                                               description: newValue
                                                 ? 'Discount details will be hidden on the PDF. Client sees clean pricing without discount breakdown.'
                                                 : 'Discount details will be visible on the PDF showing savings to client.',
+                                              example: newValue
+                                                ? 'Client sees: Product only, no discount % shown (hidden calculation)'
+                                                : 'Client sees: Product + Discount % + Amount saved + Net Price',
                                               onConfirm: () => {
                                                 setSelectedProducts((prev) => {
                                                   const copy = [...prev];
@@ -4459,44 +4561,50 @@ ${spec.value}
                                     {/* Per-Item Display Mode Dropdown */}
                                     {visibleColumns.displayMode && (
                                       <td className="border border-gray-300 p-0.5 bg-purple-50/30">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            const displayOptions = [
-                                              { value: 'transparent', label: 'Full', desc: 'Show all pricing details transparently' },
-                                              { value: 'net_only', label: 'Net Only', desc: 'Show only net price, hide unit price' },
-                                              { value: 'value_add', label: 'Show Savings', desc: 'Highlight discount savings to client' },
-                                              { value: 'bundle', label: 'Bundle', desc: 'Show as bundled package pricing' },
-                                              { value: 'request', label: 'On Request', desc: 'Price shown as "Upon Request"' }
-                                            ];
-                                            const currentMode = p.displayMode || 'transparent';
-                                            const nextIndex = (displayOptions.findIndex(o => o.value === currentMode) + 1) % displayOptions.length;
-                                            const nextOption = displayOptions[nextIndex];
-                                            
+                                        <Select
+                                          value={p.displayMode || 'transparent'}
+                                          onValueChange={(value) => {
+                                            const displayLabels: Record<string, string> = {
+                                              'transparent': 'Full',
+                                              'net_only': 'Net Only',
+                                              'value_add': 'Show Savings',
+                                              'bundle': 'Bundle',
+                                              'request': 'On Request'
+                                            };
+                                            const displayDesc: Record<string, string> = {
+                                              'transparent': 'Show all pricing details: Unit Price, Discount, and Net Price. Provides complete transparency to the client.',
+                                              'net_only': 'Show only the Net Price. Unit Price and Discount columns are hidden. Client sees final price only.',
+                                              'value_add': 'Highlight the savings with "You Save" messaging. Shows discount value prominently to emphasize the deal.',
+                                              'bundle': 'Show as bundled package pricing. Emphasizes the package deal value rather than individual item pricing.',
+                                              'request': 'Display "Price Upon Request" instead of actual pricing. Use for custom quotations or variable pricing.'
+                                            };
                                             setConfirmDialog({
                                               isOpen: true,
-                                              title: `Change Display for "${p.title}"?`,
-                                              description: `Switch from "${displayOptions.find(o => o.value === currentMode)?.label}" to "${nextOption.label}": ${nextOption.desc}`,
+                                              title: `Change Display Mode for "${p.title}" to ${displayLabels[value]}?`,
+                                              description: displayDesc[value],
+                                              example: `${displayLabels[value]} mode: ${displayDesc[value].split('.')[0]}`,
                                               onConfirm: () => {
                                                 setSelectedProducts((prev) => {
                                                   const copy = [...prev];
-                                                  copy[idx] = { ...copy[idx], displayMode: nextOption.value as SelectedProduct['displayMode'] };
+                                                  copy[idx] = { ...copy[idx], displayMode: value as SelectedProduct['displayMode'] };
                                                   return copy;
                                                 });
                                               },
                                               onCancel: () => {}
                                             });
                                           }}
-                                          className="w-full text-[9px] border border-gray-300 rounded px-1 py-0.5 bg-white text-left hover:bg-purple-100 transition-colors"
-                                          title="How to display pricing to client"
                                         >
-                                          {p.displayMode === 'net_only' ? 'Net Only' : 
-                                           p.displayMode === 'value_add' ? 'Show Savings' :
-                                           p.displayMode === 'bundle' ? 'Bundle' :
-                                           p.displayMode === 'request' ? 'On Request' : 'Full'}
-                                        </button>
+                                          <SelectTrigger className="w-20 text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-6 focus:ring-1 focus:ring-purple-500">
+                                            <SelectValue placeholder="..." />
+                                          </SelectTrigger>
+                                          <SelectContent className="min-w-[110px]">
+                                            <SelectItem value="transparent" className="text-xs py-1">Full</SelectItem>
+                                            <SelectItem value="net_only" className="text-xs py-1">Net Only</SelectItem>
+                                            <SelectItem value="value_add" className="text-xs py-1">Savings</SelectItem>
+                                            <SelectItem value="bundle" className="text-xs py-1">Bundle</SelectItem>
+                                            <SelectItem value="request" className="text-xs py-1">On Request</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </td>
                                     )}
 
@@ -5302,8 +5410,113 @@ ${spec.value}
         >
           <DialogTitle className="sr-only">Quotation Preview</DialogTitle>
           {(() => {
+            const [zoom, setZoom] = useState(100);
+            const [isFullscreen, setIsFullscreen] = useState(false);
+
+            const handleZoomIn = () => setZoom((z) => Math.min(z + 10, 150));
+            const handleZoomOut = () => setZoom((z) => Math.max(z - 10, 50));
+            const handleFitToWidth = () => setZoom(100);
+
+            const handlePrint = () => {
+              const printWindow = window.open('', '_blank');
+              if (printWindow) {
+                printWindow.document.write(document.getElementById('quotation-preview-content')?.innerHTML || '');
+                printWindow.document.close();
+                printWindow.print();
+              }
+            };
+
             return (
               <div className="flex flex-col bg-white min-h-full font-sans text-[#121212]">
+                {/* TOOLBAR */}
+                <div className="sticky top-0 z-50 bg-[#121212] text-white px-4 py-3 flex items-center justify-between border-b border-gray-700">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-bold uppercase tracking-wider">Quotation Preview</span>
+                    <div className="h-4 w-px bg-gray-600"></div>
+                    {/* Zoom Controls */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleZoomOut}
+                        className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+                        title="Zoom Out"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span className="text-xs font-mono w-12 text-center">{zoom}%</span>
+                      <button
+                        onClick={handleZoomIn}
+                        className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+                        title="Zoom In"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={handleFitToWidth}
+                        className="ml-2 px-2 py-1 text-xs hover:bg-gray-700 rounded transition-colors"
+                        title="Fit to Width"
+                      >
+                        Fit
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Action Buttons */}
+                    <button
+                      onClick={() => handleDownloadQuotationPDF()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs font-medium transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-medium transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      Print
+                    </button>
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setIsPreviewOpen(false)}
+                      className="p-1.5 hover:bg-red-600/80 rounded transition-colors ml-2"
+                      title="Close"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preview Content with Zoom */}
+                <div
+                  id="quotation-preview-content"
+                  className="flex-1 overflow-auto bg-gray-100 p-4"
+                  style={{
+                    transform: `scale(${zoom / 100})`,
+                    transformOrigin: 'top center',
+                    width: `${100 / (zoom / 100)}%`,
+                    margin: '0 auto'
+                  }}
+                >
+                  <div className="flex flex-col bg-white min-h-full font-sans text-[#121212] shadow-lg">
 
                 {/* CORPORATE BRANDING HEADER */}
                 <div className="w-full flex justify-center py-5 border-b border-gray-100 bg-white">
@@ -6007,6 +6220,8 @@ ${spec.value}
                   </div>
                 </div>
               </div>
+                </div>
+              </div>
             );
           })()}
         </DialogContent>
@@ -6223,6 +6438,149 @@ ${spec.value}
                 </div>
               )}
               
+              {/* Display Mode Examples */}
+              {confirmDialog?.title?.includes('Display Mode') && (
+                <>
+                  {/* Full Display Example */}
+                  {confirmDialog?.title?.includes('Full') && (
+                    <div className="overflow-hidden rounded border border-purple-200">
+                      <table className="w-full text-[9px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-100 text-purple-800 border-b border-purple-300">
+                            <th className="px-1 py-1 text-left font-bold">PRODUCT</th>
+                            <th className="px-1 py-1 text-right font-bold">UNIT PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold text-green-600">DISCOUNT</th>
+                            <th className="px-1 py-1 text-right font-bold">NET PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold">TOTAL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-white text-purple-900 border-b border-purple-100">
+                            <td className="px-1 py-1 font-medium">BOLLARD FIXTURE E27</td>
+                            <td className="px-1 py-1 text-right">₱500.00</td>
+                            <td className="px-1 py-1 text-right text-green-600 font-bold">20%</td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div className="bg-purple-50 p-1.5 text-[8px] text-purple-700 italic border-t border-purple-200">
+                        Client sees: All pricing details with discount breakdown
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Net Only Example */}
+                  {confirmDialog?.title?.includes('Net Only') && (
+                    <div className="overflow-hidden rounded border border-purple-200">
+                      <table className="w-full text-[9px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-100 text-purple-800 border-b border-purple-300">
+                            <th className="px-1 py-1 text-left font-bold">PRODUCT</th>
+                            <th className="px-1 py-1 text-right font-bold">NET PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold">TOTAL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-white text-purple-900 border-b border-purple-100">
+                            <td className="px-1 py-1 font-medium">BOLLARD FIXTURE E27</td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div className="bg-purple-50 p-1.5 text-[8px] text-purple-700 italic border-t border-purple-200">
+                        Client sees: Only final net price, unit price hidden
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show Savings Example */}
+                  {confirmDialog?.title?.includes('Savings') && (
+                    <div className="overflow-hidden rounded border border-purple-200">
+                      <div className="bg-green-100 px-2 py-1 text-[9px] font-bold text-green-800 border-b border-green-300">
+                        💰 YOU SAVE: ₱100.00 per item
+                      </div>
+                      <table className="w-full text-[9px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-100 text-purple-800 border-b border-purple-300">
+                            <th className="px-1 py-1 text-left font-bold">PRODUCT</th>
+                            <th className="px-1 py-1 text-right font-bold">UNIT PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold">NET PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold">TOTAL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-white text-purple-900 border-b border-purple-100">
+                            <td className="px-1 py-1 font-medium">BOLLARD FIXTURE E27</td>
+                            <td className="px-1 py-1 text-right line-through text-gray-400">₱500.00</td>
+                            <td className="px-1 py-1 text-right font-bold text-green-600">₱400.00</td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div className="bg-purple-50 p-1.5 text-[8px] text-purple-700 italic border-t border-purple-200">
+                        Client sees: Savings highlighted with strikethrough and "You Save" banner
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Bundle Example */}
+                  {confirmDialog?.title?.includes('Bundle') && (
+                    <div className="overflow-hidden rounded border border-purple-200">
+                      <div className="bg-purple-100 px-2 py-1 text-[9px] font-bold text-purple-800 border-b border-purple-300">
+                        📦 BUNDLE PACKAGE DEAL
+                      </div>
+                      <table className="w-full text-[9px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-100 text-purple-800 border-b border-purple-300">
+                            <th className="px-1 py-1 text-left font-bold">PACKAGE ITEMS</th>
+                            <th className="px-1 py-1 text-right font-bold">BUNDLE PRICE</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-white text-purple-900 border-b border-purple-100">
+                            <td className="px-1 py-1">
+                              <div className="font-medium">BOLLARD FIXTURE E27</div>
+                              <div className="text-[7px] text-gray-500">Qty: 1 | Part of bundle</div>
+                            </td>
+                            <td className="px-1 py-1 text-right font-bold">₱400.00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div className="bg-purple-50 p-1.5 text-[8px] text-purple-700 italic border-t border-purple-200">
+                        Client sees: Emphasis on package/bundle pricing rather than individual items
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* On Request Example */}
+                  {confirmDialog?.title?.includes('Request') && (
+                    <div className="overflow-hidden rounded border border-purple-200">
+                      <table className="w-full text-[9px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-100 text-purple-800 border-b border-purple-300">
+                            <th className="px-1 py-1 text-left font-bold">PRODUCT</th>
+                            <th className="px-1 py-1 text-right font-bold">UNIT PRICE</th>
+                            <th className="px-1 py-1 text-right font-bold">TOTAL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-white text-purple-900 border-b border-purple-100">
+                            <td className="px-1 py-1 font-medium">BOLLARD FIXTURE E27</td>
+                            <td className="px-1 py-1 text-right font-italic text-gray-500">Upon Request</td>
+                            <td className="px-1 py-1 text-right font-italic text-gray-500">Upon Request</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div className="bg-purple-50 p-1.5 text-[8px] text-purple-700 italic border-t border-purple-200">
+                        Client sees: "Price Upon Request" instead of actual pricing
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Show/Hide Discount Row Examples */}
               {confirmDialog?.title?.includes('Discount Row') && (
                 <div className="overflow-hidden rounded border border-yellow-200">
@@ -6385,6 +6743,20 @@ ${spec.value}
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Fallback - Show generic example text if no specific pattern matched but example exists */}
+              {confirmDialog?.example && 
+               !confirmDialog?.title?.includes('Discount Columns') &&
+               !confirmDialog?.title?.includes('Full Detail') &&
+               !confirmDialog?.title?.includes('SRP Only') &&
+               !confirmDialog?.title?.includes('Discount Row') &&
+               !confirmDialog?.title?.includes('Display Mode') &&
+               !confirmDialog?.title?.includes('VAT') &&
+               !confirmDialog?.title?.includes('EWT') && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-[11px] text-gray-700 font-mono leading-snug">{confirmDialog?.example}</p>
                 </div>
               )}
             </div>
