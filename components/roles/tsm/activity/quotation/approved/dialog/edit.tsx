@@ -127,6 +127,23 @@ function splitDescription(value?: string): string[] {
     return value.split("||").map((v) => v.trim());
 }
 
+function formatDuration(start?: string, end?: string) {
+    if (!start || !end) return "-";
+    const s = new Date(start),
+        e = new Date(end);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return "-";
+    let diff = Math.max(0, Math.floor((e.getTime() - s.getTime()) / 1000));
+    const h = Math.floor(diff / 3600);
+    diff %= 3600;
+    const m = Math.floor(diff / 60);
+    const sec = diff % 60;
+    const parts: string[] = [];
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    if (sec > 0 || parts.length === 0) parts.push(`${sec}s`);
+    return parts.join(" ");
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function TaskListEditDialog({
@@ -815,10 +832,10 @@ export default function TaskListEditDialog({
                 <div class="sku-text">${rowItem.sku}</div>
                 <div class="desc-text">${rowItem.product_description}<span class="desc-remarks">${rowItem.remarks}</span></div>
               </td>
-              <td style="width:70px; text-align:right;">₱${rowItem.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              <td style="width:70px; text-align:right;">₱${rowItem.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               <td style="width:50px; text-align:center;">${discountDisplay}</td>
-              <td style="width:70px; text-align:right;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              <td style="width:80px; text-align:right; font-weight:900;">₱${rowItem.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              <td style="width:70px; text-align:right;">₱${netUnitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td style="width:80px; text-align:right; font-weight:900;">₱${rowItem.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr></table>
           </div>`);
 
@@ -842,12 +859,12 @@ export default function TaskListEditDialog({
             const _restockingNum = payload.restockingFee || 0;
             const _netSales = payload.totalPrice - _deliveryNum - _restockingNum;
             const _vatBreak = payload.vatTypeLabel === "VAT Inc"
-                ? `<tr><td class="sum-gray-lbl">Less: VAT (12)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
+                ? `<tr><td class="sum-gray-lbl">Less: VAT (12)</td><td class="sum-gray-val">₱${(payload.totalPrice * (12 / 112)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr><tr${payload.whtType && payload.whtType !== "none" ? "" : " class='sum-divider'"}><td class="sum-gray-lbl">Net of VAT (Tax Base)</td><td class="sum-gray-val">₱${(payload.totalPrice / 1.12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>${payload.whtType && payload.whtType !== "none" ? `<tr class="sum-divider"><td class="sum-ewt-lbl">Less: ${payload.whtLabel}</td><td class="sum-ewt-val">− ₱${(payload.whtAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>` : ""}`
                 : `<tr class="sum-divider"><td class="sum-gray-lbl">Tax Status</td><td class="sum-gray-val" style="font-style:italic;">${payload.vatTypeLabel === "VAT Exe" ? "VAT Exempt" : "Zero-Rated"}</td></tr>`;
             const _whtBadge = payload.whtType && payload.whtType !== "none"
                 ? `<div class="summary-wht">● ${payload.whtLabel} — on Net of VAT</div>` : "";
             const _finalLbl = payload.whtType && payload.whtType !== "none" ? "Net Amount to Collect" : "Total Amount Due";
-            const _finalAmt = (payload.netAmountToCollect ?? payload.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const _finalAmt = (payload.netAmountToCollect ?? payload.totalPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             // Footer totals
             const footerBlock = await renderBlock(`
@@ -867,19 +884,19 @@ export default function TaskListEditDialog({
                 <table class="sum-tbl">
                   <tr>
                     <td class="sum-lbl">Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}</td>
-                    <td class="sum-val">₱${_netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="sum-val">₱${_netSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                   <tr>
                     <td class="sum-lbl">Delivery Charge</td>
-                    <td class="sum-val">₱${_deliveryNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="sum-val">₱${_deliveryNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                   <tr class="sum-divider">
                     <td class="sum-lbl">Restocking Fee</td>
-                    <td class="sum-val">₱${_restockingNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="sum-val">₱${_restockingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                   <tr>
                     <td class="sum-total-lbl">Total Invoice Amount</td>
-                    <td class="sum-total-val">₱${payload.totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="sum-total-val">₱${payload.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                   ${_vatBreak}
                   <tr class="sum-final-row">
@@ -1174,7 +1191,7 @@ export default function TaskListEditDialog({
                                     </div>
                                     <div className={`text-xs ${viewingCurrent ? "text-gray-300" : "text-gray-500"}`}>
                                         <div>Quotation: {item.quotation_number}</div>
-                                        <div>Amount: ₱{payload.netAmountToCollect.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                        <div>Amount: ₱{payload.netAmountToCollect.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                     </div>
                                 </div>
 
@@ -1191,9 +1208,21 @@ export default function TaskListEditDialog({
                                                 <div className="font-semibold text-sm mb-1 text-gray-800">{q.version || "N/A"}</div>
                                                 <div className="text-gray-600 space-y-0.5">
                                                     <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
-                                                    <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString()}</div>
-                                                    <div className="text-gray-400 text-[10px] mt-1">
-                                                        {q.start_date ? new Date(q.start_date).toLocaleDateString() : "N/A"} - {q.end_date ? new Date(q.end_date).toLocaleDateString() : "N/A"}
+                                                    <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-2">
+                                                        <span>Modified: {q.end_date ? (() => {
+                                                            const d = new Date(q.end_date + 'Z');
+                                                            return d.toLocaleString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric',
+                                                                hour: 'numeric',
+                                                                minute: '2-digit',
+                                                                hour12: true,
+                                                                timeZone: 'Asia/Manila'
+                                                            });
+                                                        })() : 'N/A'}</span>
+                                                    
                                                     </div>
                                                 </div>
                                             </div>
