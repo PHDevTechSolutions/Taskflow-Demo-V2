@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
+import { CollaborationHubRowTrigger } from "@/components/collaboration-row-trigger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,7 @@ interface SPFRecord {
     status?: string;
     item_description?: string;
     item_photo?: string;
+    spf_creation_id?: number | null;
 }
 
 interface SPFProps {
@@ -301,13 +303,25 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                             className={`text-xs ${isHighlighted ? "bg-yellow-100/50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-blue-50/60 transition-colors`}
                                         >
                                             <TableCell className="px-3 py-2 whitespace-nowrap">
-                                                <button
-                                                    title="Edit"
-                                                    onClick={() => openEditDialog(item)}
-                                                    className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
-                                                >
-                                                    <PenIcon className="w-3.5 h-3.5" />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        title="Edit"
+                                                        onClick={() => openEditDialog(item)}
+                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
+                                                    >
+                                                        <PenIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <CollaborationHubRowTrigger
+                                                        requestId={String(item.id)}
+                                                        spfNumber={item.spf_number}
+                                                        chatDocId={item.spf_creation_id}
+                                                        status={item.status || "PENDING"}
+                                                        collectionName="spf_creations"
+                                                        title={item.spf_number}
+                                                        variant="icon"
+                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
+                                                    />
+                                                </div>
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap"><StatusBadge status={item.status} /></TableCell>
                                             <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-700 font-semibold">{item.spf_number}</TableCell>

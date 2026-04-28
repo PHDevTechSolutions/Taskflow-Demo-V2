@@ -58,6 +58,7 @@ const data = {
   ],
   favorites: [
     { name: "Dashboard", url: "/roles/tsa/dashboard", icon: LayoutDashboard },
+    { name: "Dashboard", url: "/roles/manager/dashboard", icon: LayoutDashboard },
     { name: "Sales Performance", url: "/roles/tsa/sales-performance", icon: BarChart2 },
     { name: "National Call Ranking", url: "/roles/tsa/national-call-ranking", icon: Phone },
 

@@ -26,27 +26,30 @@ async function* fetchHistoryBatches(
 
     if (!data || data.length === 0) break;
 
-    // Fetch status from spf_creation table for each SPF request
+    // Fetch status and creation id from spf_creation table for each SPF request
     const spfNumbers = data.map(item => item.spf_number).filter(Boolean);
     let statusMap = new Map();
+    let creationIdMap = new Map();
     
     if (spfNumbers.length > 0) {
-      const { data: statusData, error: statusError } = await supabase
+      const { data: creationData, error: creationError } = await supabase
         .from("spf_creation")
-        .select("spf_number, status")
+        .select("id, spf_number, status")
         .in("spf_number", spfNumbers);
       
-      if (statusError) {
-        console.error("Error fetching status from spf_creation:", statusError);
-      } else if (statusData) {
-        statusMap = new Map(statusData.map(item => [item.spf_number, item.status]));
+      if (creationError) {
+        console.error("Error fetching data from spf_creation:", creationError);
+      } else if (creationData) {
+        statusMap = new Map(creationData.map(item => [item.spf_number, item.status]));
+        creationIdMap = new Map(creationData.map(item => [item.spf_number, item.id]));
       }
     }
 
-    // Merge status information into the data
+    // Merge status and creation id into the data
     const mergedData = data.map(item => ({
       ...item,
-      status: statusMap.get(item.spf_number) || item.status || "pending"
+      status: statusMap.get(item.spf_number) || item.status || "pending",
+      spf_creation_id: creationIdMap.get(item.spf_number) || null
     }));
 
     yield mergedData;
