@@ -100,6 +100,10 @@ export const Preview: React.FC<PreviewProps> = ({
         ? "/ecoshift-banner.png"
         : "/disruptive-banner.png";
 
+    // ── Computed totals (use actual line item totals, not payload.totalPrice which may be stale) ──
+    const netSales = (payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0);
+    const totalInvoiceAmount = netSales + (Number(payload.deliveryFee) || 0) + (Number(payload.restockingFee) || 0);
+
     // ── QR Code Security ──────────────────────────────────────────────────────
     const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
 
@@ -217,6 +221,7 @@ export const Preview: React.FC<PreviewProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                         <button
+                            type="button"
                             onClick={handleDownloadPDF}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs font-medium transition-colors"
                         >
@@ -226,6 +231,7 @@ export const Preview: React.FC<PreviewProps> = ({
                             Download PDF
                         </button>
                         <button
+                            type="button"
                             onClick={() => window.print()}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-medium transition-colors"
                         >
@@ -468,7 +474,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                 ) : item.discountAmount != null && item.discountAmount > 0 ? (
                                                     <div>
                                                         <div className="font-bold text-red-600 text-[10px]">
-                                                            −₱{item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                            −₱{(item.discountAmount / Number(item.qty || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                                         </div>
                                                         {item.discount != null && item.discount > 0 && (
                                                             <div className="text-[9px] text-gray-400">
@@ -488,7 +494,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                 {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
                                                     <span className="text-[10px] text-gray-400">—</span>
                                                 ) : item.discountedAmount != null ? (
-                                                    <span>₱{Number(item.discountedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                    <span>₱{(Number(item.discountedAmount) / Number(item.qty || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                                 ) : (
                                                     <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                                 )}
@@ -559,8 +565,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                     {showSummaryDiscounts ? "Gross Sales" : `Net Sales ${payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}`}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                    ₱{((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0))
-                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
 
@@ -615,18 +620,15 @@ export const Preview: React.FC<PreviewProps> = ({
                                                 </td>
                                             </tr>
 
-                                            {/* Total Invoice */}
                                             <tr className="bg-gray-50 border-b border-black">
                                                 <td className="px-3 py-2 text-right font-black uppercase border-r-2 border-black text-[10px]">
                                                     Total Invoice Amount
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-black text-[13px] text-blue-900 tabular-nums">
-                                                    ₱{Number(payload.totalPrice)
-                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{totalInvoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
 
-                                            {/* VAT Breakdown */}
                                             {payload.vatType === "vat_inc" && (
                                                 <>
                                                     <tr className="border-b border-gray-100">
@@ -634,7 +636,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                             Less: VAT (12%)
                                                         </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(Number(payload.totalPrice) * (12 / 112))
+                                                            ₱{(netSales * (12 / 112))
                                                                 .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
@@ -646,7 +648,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                             Net of VAT (Tax Base)
                                                         </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
-                                                            ₱{(Number(payload.totalPrice) / 1.12)
+                                                            ₱{(netSales / 1.12)
                                                                 .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
@@ -665,18 +667,6 @@ export const Preview: React.FC<PreviewProps> = ({
                                                 </>
                                             )}
 
-                                            {/* Non-VAT */}
-                                            {payload.vatType !== "vat_inc" && (
-                                                <tr className="border-b-2 border-black">
-                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
-                                                        Tax Status
-                                                    </td>
-                                                    <td className="px-3 py-1.5 text-right font-bold text-gray-400 italic">
-                                                        {payload.vatType === "vat_exe" ? "VAT Exempt" : "Zero-Rated"}
-                                                    </td>
-                                                </tr>
-                                            )}
-
                                             {/* Final Total */}
                                             <tr className="bg-gray-900 text-white">
                                                 <td className="px-3 py-3 text-right font-black uppercase border-r border-gray-700 text-[10px] tracking-tight">
@@ -685,11 +675,9 @@ export const Preview: React.FC<PreviewProps> = ({
                                                         : "Total Amount Due"}
                                                 </td>
                                                 <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
-                                                    ₱{(Number(payload.netAmountToCollect ?? payload.totalPrice))
-                                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{totalInvoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
-
                                         </tbody>
                                     </table>
                                 </td>

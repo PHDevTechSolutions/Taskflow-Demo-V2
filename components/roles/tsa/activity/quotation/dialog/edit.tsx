@@ -776,7 +776,13 @@ export default function TaskListEditDialog({
       const unitPrice = parseFloat(amt) || 0;
       // discounted_amount stores per-unit peso discount
       const discountedAmountArr = splitAndTrim(item.discounted_amount);
-      const savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      // Normalize: if saved discount looks like a total (>= 50% of unit price and qty > 1), convert to per-unit
+      // This handles cases where DB stores total discount (410 * 3 = 1230) instead of per-unit (410)
+      const qtyNum = parseFloat(qty) || 1;
+      if (savedDiscountAmt > 0 && qtyNum > 1 && savedDiscountAmt >= (unitPrice * 0.5)) {
+        savedDiscountAmt = savedDiscountAmt / qtyNum;
+      }
       const unitDiscountAmount = savedDiscountAmt > 0
         ? savedDiscountAmt
         : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
@@ -842,10 +848,10 @@ export default function TaskListEditDialog({
     }
 
     if (autoAction === "download") {
-      const t = setTimeout(() => DownloadPDF(false), 150);
+      const t = setTimeout(() => DownloadPDF(false, showSummaryDiscounts), 150);
       return () => clearTimeout(t);
     }
-  }, [autoAction, products]);
+  }, [autoAction, products, showSummaryDiscounts]);
 
   useEffect(() => {
     let total = 0;
@@ -1779,7 +1785,7 @@ export default function TaskListEditDialog({
     pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth / 2, footerY + 14, { align: "center" });
   };
 
-  const DownloadPDF = async (showDiscount: boolean = false) => {
+  const DownloadPDF = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts) => {
     if (typeof window === "undefined") return;
     const PRIMARY_CHARCOAL = "#121212";
     const OFF_WHITE = "#F9FAFA";
@@ -2229,6 +2235,7 @@ ${payload.whtType && payload.whtType !== "none"
       <div class="summary-right">
         <table class="sum-tbl">
 
+          ${summaryDiscounts ? `
           <tr>
             <td class="sum-lbl">Gross Sales</td>
             <td class="sum-val">₱${peso(_grossSales)}</td>
@@ -2240,10 +2247,11 @@ ${payload.whtType && payload.whtType !== "none"
             <td class="sum-val" style="color:#a16207;">−₱${peso(_totalDiscount)}</td>
           </tr>
           ` : ""}
+          ` : ""}
 
-          <tr class="${_totalDiscount > 0 ? '' : 'border-b border-gray-100'}">
+          <tr class="${summaryDiscounts && _totalDiscount > 0 ? '' : 'border-b border-gray-100'}">
             <td class="sum-lbl">
-              Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}
+              ${summaryDiscounts ? `Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}` : `Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}`}
             </td>
             <td class="sum-val">₱${peso(_netSales)}</td>
           </tr>
@@ -4647,7 +4655,7 @@ ${payload.whtType && payload.whtType !== "none"
             <Button
               onClick={() => {
                 setPdfOptionsOpen(false);
-                DownloadPDF(pdfOption === "with-discount");
+                DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts);
               }}
               className="rounded-none flex-1 bg-yellow-600 hover:bg-yellow-700"
             >
