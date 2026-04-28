@@ -1210,9 +1210,8 @@ export default function TaskListEditDialog({
                                                     <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
                                                     <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                     <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-2">
-                                                        <span>Created: {q.date_created ? new Date(q.date_created).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</span>
-                                                        <span>·</span>
-                                                        <span>Duration: <span className="font-mono font-medium text-gray-500">{formatDuration(q.start_date, q.end_date)}</span></span>
+                                                        <span>Modified: {q.end_date ? new Date(q.end_date).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}</span>
+                                                    
                                                     </div>
                                                 </div>
                                             </div>
