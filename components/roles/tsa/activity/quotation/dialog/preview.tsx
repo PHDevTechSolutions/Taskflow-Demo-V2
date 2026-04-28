@@ -379,8 +379,8 @@ export const Preview: React.FC<PreviewProps> = ({
                                 </th>
                                 {!hideDiscountInPreview && showDiscountColumns && (
                                     <>
-                                        <th className="p-3 border-r border-black w-14 text-center">DISC</th>
-                                        <th className="p-3 border-r border-black w-20 text-center">DISCOUNT PRICE</th>
+                                        <th className="p-3 border-r border-black w-14 text-center">DISC/UNIT</th>
+                                        <th className="p-3 border-r border-black w-20 text-center">DISCOUNTED PRICE</th>
                                     </>
                                 )}
                                 <th className={`p-3 text-center ${hideDiscountInPreview ? 'w-24' : 'w-20'}`}>TOTAL AMOUNT</th>
@@ -469,35 +469,45 @@ export const Preview: React.FC<PreviewProps> = ({
                                             <td className={`p-4 text-right border-r border-black align-top w-20 ${
                                                 item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? 'bg-gray-50' : ''
                                             }`}>
-                                                {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
-                                                    <span className="text-[10px] text-gray-400">—</span>
-                                                ) : item.discountAmount != null && item.discountAmount > 0 ? (
-                                                    <div>
-                                                        <div className="font-bold text-red-600 text-[10px]">
-                                                            −₱{(item.discountAmount / Number(item.qty || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                        </div>
-                                                        {item.discount != null && item.discount > 0 && (
-                                                            <div className="text-[9px] text-gray-400">
-                                                                ({item.discount.toFixed(2)}%)
+                                                {(() => {
+                                                    const mode = item.displayMode || 'transparent';
+                                                    if (mode === 'request' || mode === 'net_only' || mode === 'bundle') return <span className="text-[10px] text-gray-400">—</span>;
+
+                                                    // discountAmount is already per-unit (stored as per-unit in the data)
+                                                    const perUnitDiscount = item.discountAmount || 0;
+
+                                                    if (perUnitDiscount > 0) {
+                                                        return (
+                                                            <div>
+                                                                <div className="font-bold text-red-600 text-[10px]">
+                                                                    −₱{perUnitDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                </div>
+                                                                {item.discount != null && item.discount > 0 && (
+                                                                    <div className="text-[9px] text-gray-400">
+                                                                        ({item.discount.toFixed(2)}%)
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                ) : item.discount != null && item.discount > 0 ? (
-                                                    <span className="font-bold text-red-600 text-[10px]">{item.discount.toFixed(2)}%</span>
-                                                ) : (
-                                                    <span className="text-gray-300 text-[10px]">—</span>
-                                                )}
+                                                        );
+                                                    } else if (item.discount && item.discount > 0) {
+                                                        return <span className="font-bold text-red-600 text-[10px]">{item.discount.toFixed(2)}%</span>;
+                                                    }
+                                                    return <span className="text-gray-300 text-[10px]">—</span>;
+                                                })()}
                                             </td>
                                             <td className={`p-4 text-right border-r border-black align-top w-28 font-medium ${
                                                 item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? 'bg-gray-50' : ''
                                             }`}>
-                                                {item.displayMode === 'request' || item.displayMode === 'net_only' || item.displayMode === 'bundle' ? (
-                                                    <span className="text-[10px] text-gray-400">—</span>
-                                                ) : item.discountedAmount != null ? (
-                                                    <span>₱{(Number(item.discountedAmount) / Number(item.qty || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                                ) : (
-                                                    <span>₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                                )}
+                                                {(() => {
+                                                    const mode = item.displayMode || 'transparent';
+                                                    if (mode === 'request' || mode === 'net_only' || mode === 'bundle') return <span className="text-[10px] text-gray-400">—</span>;
+
+                                                    // discountAmount is already per-unit
+                                                    const perUnitDiscount = item.discountAmount || 0;
+                                                    const netUnitPrice = item.unitPrice - perUnitDiscount;
+
+                                                    return <span>₱{netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>;
+                                                })()}
                                             </td>
                                         </>
                                     )}
