@@ -479,21 +479,9 @@ export const Notes: React.FC<NotesProps> = ({
                   <SelectTrigger className="rounded-none h-7 text-xs border-zinc-200">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none max-h-[300px]">
+                  <SelectContent className="rounded-none">
                     <SelectItem value="all" className="text-xs">All Types</SelectItem>
-                    <SelectItem value="Admin - Supplier Accreditation" className="text-xs">Admin - Supplier Accreditation</SelectItem>
-                    <SelectItem value="Admin - Credit Terms Applications" className="text-xs">Admin - Credit Terms Applications</SelectItem>
-                    <SelectItem value="Accounting Concerns" className="text-xs">Accounting Concerns</SelectItem>
-                    <SelectItem value="After Sales Refunds" className="text-xs">After Sales Refunds</SelectItem>
-                    <SelectItem value="After Sales Repair / Replacement" className="text-xs">After Sales Repair / Replacement</SelectItem>
-                    <SelectItem value="Bidding Preparations" className="text-xs">Bidding Preparations</SelectItem>
-                    <SelectItem value="Customer Orders" className="text-xs">Customer Orders</SelectItem>
-                    <SelectItem value="Delivery Concern" className="text-xs">Delivery Concern</SelectItem>
                     <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
-                    <SelectItem value="FB Marketplace Replies / Messages" className="text-xs">FB Marketplace Replies / Messages</SelectItem>
-                    <SelectItem value="Follow Up" className="text-xs">Follow Up</SelectItem>
-                    <SelectItem value="Sample Request" className="text-xs">Sample Request</SelectItem>
-                    <SelectItem value="Technical Concerns" className="text-xs">Technical Concerns</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -652,19 +640,7 @@ export const Notes: React.FC<NotesProps> = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-none">
-                <SelectItem value="Admin - Supplier Accreditation" className="text-xs">Admin - Supplier Accreditation</SelectItem>
-                <SelectItem value="Admin - Credit Terms Applications" className="text-xs">Admin - Credit Terms Applications</SelectItem>
-                <SelectItem value="Accounting Concerns" className="text-xs">Accounting Concerns</SelectItem>
-                <SelectItem value="After Sales Refunds" className="text-xs">After Sales Refunds</SelectItem>
-                <SelectItem value="After Sales Repair / Replacement" className="text-xs">After Sales Repair / Replacement</SelectItem>
-                <SelectItem value="Bidding Preparations" className="text-xs">Bidding Preparations</SelectItem>
-                <SelectItem value="Customer Orders" className="text-xs">Customer Orders</SelectItem>
-                <SelectItem value="Delivery Concern" className="text-xs">Delivery Concern</SelectItem>
                 <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
-                <SelectItem value="FB Marketplace Replies / Messages" className="text-xs">FB Marketplace Replies / Messages</SelectItem>
-                <SelectItem value="Follow Up" className="text-xs">Follow Up</SelectItem>
-                <SelectItem value="Sample Request" className="text-xs">Sample Request</SelectItem>
-                <SelectItem value="Technical Concerns" className="text-xs">Technical Concerns</SelectItem>
               </SelectContent>
             </Select>
             {remarks && suggestActivityType(remarks) !== typeActivity && (

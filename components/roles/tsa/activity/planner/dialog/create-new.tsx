@@ -266,6 +266,11 @@ export function CreateActivityDialog({
     const [selectedContactPerson, setSelectedContactPerson] = useState(contact_person);
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
     const [selectedEmailAddress, setSelectedEmailAddress] = useState(email_address);
+
+    // Editable contact details (modified in quotation sheet)
+    const [editableContactPerson, setEditableContactPerson] = useState(contact_person);
+    const [editableContactNumber, setEditableContactNumber] = useState(contact_number);
+    const [editableEmailAddress, setEditableEmailAddress] = useState(email_address);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
     const [quotationSubject, setQuotationSubject] = useState("For Quotation");
@@ -472,14 +477,21 @@ export function CreateActivityDialog({
 
         const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
 
+        // Debug logging
+        console.log("[Create] Product flags before save:", {
+            productIsPromo,
+            productIsHidden,
+            productRowDisplayMode,
+        });
+
         const newActivity: Activity = {
             activity_reference_number: activityRef,
             account_reference_number: accountRef,
             type_client,
             company_name,
-            contact_person: selectedContactPerson, // <-- array now
-            contact_number: selectedContactNumber, // <-- array now
-            email_address,
+            contact_person: editableContactPerson || selectedContactPerson, // <-- uses edited value
+            contact_number: editableContactNumber || selectedContactNumber, // <-- uses edited value
+            email_address: editableEmailAddress || selectedEmailAddress, // <-- uses edited value
             address,
             date_created: dateCreated,
             date_updated: new Date().toISOString(),
@@ -695,6 +707,7 @@ export function CreateActivityDialog({
     // Handle user confirmed cancel
     const confirmCancel = () => {
         resetForm();
+        setStep(1); // Reset step to 1
         setShowConfirmCancel(false);
         setSheetOpen(false);
     };
@@ -880,90 +893,6 @@ export function CreateActivityDialog({
                                                         desc:
                                                             "Handle Viber replies and messages from clients.",
                                                     },
-                                                    {
-                                                        value: "Admin - Supplier Accreditation",
-                                                        title: "Admin - Supplier Accreditation",
-                                                        desc:
-                                                            "Handle supplier accreditation tasks.",
-                                                    },
-                                                    {
-                                                        value: "Admin - Credit Terms Application",
-                                                        title: "Admin - Credit Terms Application",
-                                                        desc:
-                                                            "Handle credit terms application tasks.",
-                                                    },
-                                                    {
-                                                        value: "Accounting Concerns",
-                                                        title: "Accounting Concerns",
-                                                        desc:
-                                                            "Handle accounting concerns.",
-                                                    },
-                                                    {
-                                                        value: "After Sales Refunds",
-                                                        title: "After Sales Refunds",
-                                                        desc:
-                                                            "Handle after sales refunds.",
-                                                    },
-                                                    {
-                                                        value: "After Sales Repair / Replacement",
-                                                        title: "After Sales Repair / Replacement",
-                                                        desc:
-                                                            "Handle after sales repair or replacement.",
-                                                    },
-                                                    {
-                                                        value: "Bidding Preparations",
-                                                        title: "Bidding Preparations",
-                                                        desc:
-                                                            "Handle bidding preparations.",
-                                                    },
-                                                    {
-                                                        value: "Customer Orders",
-                                                        title: "Customer Orders",
-                                                        desc:
-                                                            "Handle customer orders.",
-                                                    },
-                                                    {
-                                                        value: "Customer Inquiry Sales",
-                                                        title: "Customer Inquiry Sales",
-                                                        desc:
-                                                            "Handle customer inquiry sales.",
-                                                    },
-                                                    {
-                                                        value: "Delivery Concern",
-                                                        title: "Delivery Concern",
-                                                        desc:
-                                                            "Handle delivery concerns.",
-                                                    },
-                                                    {
-                                                        value: "FB Marketplace Replies / Messages",
-                                                        title: "FB Marketplace Replies / Messages",
-                                                        desc:
-                                                            "Handle FB Marketplace replies and messages from clients.",
-                                                    },
-                                                    {
-                                                        value: "Follow Up",
-                                                        title: "Follow Up",
-                                                        desc:
-                                                            "Handle follow-up activities.",
-                                                    },
-                                                    {
-                                                        value: "Sample Requests",
-                                                        title: "Sample Requests",
-                                                        desc:
-                                                            "Handle sample requests.",
-                                                    },
-                                                    {
-                                                        value: "Site Visits / Demos",
-                                                        title: "Site Visits / Demos",
-                                                        desc:
-                                                            "Handle site visits and demos.",
-                                                    },
-                                                    {
-                                                        value: "Technical Concerns",
-                                                        title: "Technical Concerns",
-                                                        desc:
-                                                            "Handle technical concerns.",
-                                                    },
                                                 ].map((item) => (
                                                     <FieldLabel key={item.value}>
                                                         <Field orientation="horizontal">
@@ -1133,6 +1062,9 @@ export function CreateActivityDialog({
                                     email_address={selectedEmailAddress}
                                     contact_number={selectedContactNumber}
                                     contact_person={selectedContactPerson}
+                                    setContactPerson={setEditableContactPerson}
+                                    setContactNumber={setEditableContactNumber}
+                                    setEmailAddress={setEditableEmailAddress}
                                     availableContacts={contactPersons.map((person, idx) => ({
                                         name: person,
                                         contact_number: contactNumbers[idx] || "",
