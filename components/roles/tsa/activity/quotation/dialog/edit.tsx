@@ -776,7 +776,13 @@ export default function TaskListEditDialog({
       const unitPrice = parseFloat(amt) || 0;
       // discounted_amount stores per-unit peso discount
       const discountedAmountArr = splitAndTrim(item.discounted_amount);
-      const savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      // Normalize: if saved discount looks like a total (>= 50% of unit price and qty > 1), convert to per-unit
+      // This handles cases where DB stores total discount (410 * 3 = 1230) instead of per-unit (410)
+      const qtyNum = parseFloat(qty) || 1;
+      if (savedDiscountAmt > 0 && qtyNum > 1 && savedDiscountAmt >= (unitPrice * 0.5)) {
+        savedDiscountAmt = savedDiscountAmt / qtyNum;
+      }
       const unitDiscountAmount = savedDiscountAmt > 0
         ? savedDiscountAmt
         : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
