@@ -441,10 +441,10 @@ export function QuotationSheet(props: Props) {
   const [mobilePanelTab, setMobilePanelTab] = useState<"search" | "products">("search");
 
   // NEW: Discount column visibility (accounting requirement - hide from clients)
-  const [showDiscountColumns, setShowDiscountColumns] = useState(true);
+  const [showDiscountColumns, setShowDiscountColumns] = useState(props.showDiscountColumns ?? true);
 
   // NEW: Show/hide summary discount row in preview
-  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(true);
+  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(props.showSummaryDiscounts ?? true);
 
   // Sync Show Discount Row with Show Discounts (but allow manual override)
   useEffect(() => {
@@ -457,6 +457,13 @@ export function QuotationSheet(props: Props) {
 
   // NEW: Hide discount columns in preview (for SRP-only quotes)
   const [hideDiscountInPreview, setHideDiscountInPreview] = useState(props.hideDiscountInPreview ?? false);
+
+  // Sync hideDiscountInPreview from parent when prop changes
+  useEffect(() => {
+    if (props.hideDiscountInPreview !== undefined) {
+      setHideDiscountInPreview(props.hideDiscountInPreview);
+    }
+  }, [props.hideDiscountInPreview]);
 
   // NEW: Quotation display configuration fields
   const [showProfitMargins, setShowProfitMargins] = useState(props.showProfitMargins ?? false);
@@ -471,6 +478,43 @@ export function QuotationSheet(props: Props) {
     hideDiscount: true,
     displayMode: true,
   });
+
+  // SYNC: PDF display options back to parent so they get saved to database
+  useEffect(() => {
+    if (props.setShowDiscountColumns) {
+      props.setShowDiscountColumns(showDiscountColumns);
+    }
+  }, [showDiscountColumns, props.setShowDiscountColumns]);
+
+  useEffect(() => {
+    if (props.setHideDiscountInPreview) {
+      props.setHideDiscountInPreview(hideDiscountInPreview);
+    }
+  }, [hideDiscountInPreview, props.setHideDiscountInPreview]);
+
+  useEffect(() => {
+    if (props.setShowSummaryDiscounts) {
+      props.setShowSummaryDiscounts(showSummaryDiscounts);
+    }
+  }, [showSummaryDiscounts, props.setShowSummaryDiscounts]);
+
+  useEffect(() => {
+    if (props.setShowProfitMargins) {
+      props.setShowProfitMargins(showProfitMargins);
+    }
+  }, [showProfitMargins, props.setShowProfitMargins]);
+
+  useEffect(() => {
+    if (props.setMarginAlertThreshold) {
+      props.setMarginAlertThreshold(marginAlertThreshold);
+    }
+  }, [marginAlertThreshold, props.setMarginAlertThreshold]);
+
+  useEffect(() => {
+    if (props.setShowMarginAlerts) {
+      props.setShowMarginAlerts(showMarginAlerts);
+    }
+  }, [showMarginAlerts, props.setShowMarginAlerts]);
 
   // NEW: Search filter for product table
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -818,38 +862,9 @@ export function QuotationSheet(props: Props) {
   };
 
   // ==================== USER PREFERENCES PERSISTENCE ====================
-  useEffect(() => {
-    const saved = localStorage.getItem('quotation_preferences');
-    if (saved) {
-      try {
-        const prefs = JSON.parse(saved);
-        if (prefs.productViewMode) setProductViewMode(prefs.productViewMode);
-        if (prefs.visibleColumns) setVisibleColumns(prefs.visibleColumns);
-        if (prefs.showDiscountColumns !== undefined) setShowDiscountColumns(prefs.showDiscountColumns);
-        if (prefs.showSummaryDiscounts !== undefined) setShowSummaryDiscounts(prefs.showSummaryDiscounts);
-        if (prefs.hideDiscountInPreview !== undefined) setHideDiscountInPreview(prefs.hideDiscountInPreview);
-        if (prefs.showProfitMargins !== undefined) setShowProfitMargins(prefs.showProfitMargins);
-        if (prefs.marginAlertThreshold !== undefined) setMarginAlertThreshold(prefs.marginAlertThreshold);
-        if (prefs.showMarginAlerts !== undefined) setShowMarginAlerts(prefs.showMarginAlerts);
-      } catch (e) {
-        console.error('Failed to load preferences:', e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const prefs = {
-      productViewMode,
-      visibleColumns,
-      showDiscountColumns,
-      showSummaryDiscounts,
-      hideDiscountInPreview,
-      showProfitMargins,
-      marginAlertThreshold,
-      showMarginAlerts,
-    };
-    localStorage.setItem('quotation_preferences', JSON.stringify(prefs));
-  }, [productViewMode, visibleColumns, showDiscountColumns, showSummaryDiscounts, hideDiscountInPreview, showProfitMargins, marginAlertThreshold, showMarginAlerts]);
+  // NOTE: Parent component (create.tsx) is now the single source of truth for PDF display options
+  // The parent loads from localStorage, saves to localStorage, and passes values as props to this component
+  // This component syncs changes back to parent via useEffect hooks above
 
   // ==================== MARGIN CALCULATION & ALERTS ====================
   const calculateMargin = (price: number, cost: number): number => {
@@ -1241,10 +1256,16 @@ Procurement
 
   // Sync local contact person state with props on initial load
   useEffect(() => {
-    if (contact_person) setLocalContactPerson(contact_person);
-    if (contact_number) setLocalContactNumber(contact_number);
-    if (email_address) setLocalEmailAddress(email_address);
-  }, [contact_person, contact_number, email_address]);
+    if (contact_person !== undefined) setLocalContactPerson(contact_person);
+  }, [contact_person]);
+
+  useEffect(() => {
+    if (contact_number !== undefined) setLocalContactNumber(contact_number);
+  }, [contact_number]);
+
+  useEffect(() => {
+    if (email_address !== undefined) setLocalEmailAddress(email_address);
+  }, [email_address]);
 
   // Pass local edits back to parent
   useEffect(() => {
@@ -2726,9 +2747,9 @@ Procurement
       {/* product selection dialog/modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[90vw] flex flex-col [&>button]:hidden"
+          className="h-screen max-h-screen overflow-hidden p-0 sm:p-0 w-full max-w-full flex flex-col [&>button]:hidden rounded-none"
           style={{
-            maxWidth: "2300px",
+            maxWidth: "100vw",
             width: "100vw",
           }}
         >
@@ -4045,15 +4066,15 @@ ${spec.value}
                       {/* Subject + VAT + WHT — single compact toolbar */}
                       <div className="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-0 bg-gray-50 border border-gray-100 rounded-lg overflow-hidden text-[10px]">
                         {/* Subject */}
-                        <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 border-b lg:border-b-0 lg:border-r border-gray-200">
+                        <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-[200px] border-b lg:border-b-0 lg:border-r border-gray-200">
                           <span className="font-black uppercase text-red-600 tracking-wider shrink-0 text-[9px]">Subject *</span>
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0 group">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-[120px] group">
                             <input
                               type="text"
                               value={quotationSubject}
                               onChange={(e) => setQuotationSubject(e.target.value)}
                               placeholder="Click to edit subject..."
-                              className="border border-gray-200 bg-white px-2 py-1 rounded text-[11px] font-bold uppercase flex-1 min-w-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                              className="border border-gray-200 bg-white px-2 py-1 rounded text-[11px] font-bold uppercase flex-1 min-w-[100px] focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
                             />
                             <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />

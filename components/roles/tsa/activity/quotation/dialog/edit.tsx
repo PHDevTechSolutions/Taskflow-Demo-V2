@@ -559,10 +559,17 @@ export default function TaskListEditDialog({
   } | null>(null);
   const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
   // NEW: Hide discount columns in preview (for SRP-only quotes)
-  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(item.hide_discount_in_preview ?? false);
+  // Helper to convert database value to boolean (handles strings like "true"/"false")
+  const toBoolean = (value: any, defaultValue: boolean): boolean => {
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    return defaultValue;
+  };
+
+  const [hideDiscountInPreview, setHideDiscountInPreview] = useState(toBoolean(item.hide_discount_in_preview, false));
   // Default to TRUE like planner - show discount columns by default
-  const [showDiscountColumns, setShowDiscountColumns] = useState(item.show_discount_columns ?? true);
-  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(item.show_summary_discounts ?? true);
+  const [showDiscountColumns, setShowDiscountColumns] = useState(toBoolean(item.show_discount_columns, true));
+  const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(toBoolean(item.show_summary_discounts, true));
 
   // Sync Show Discount Row with Show Discounts (but allow manual override) - same as planner
   useEffect(() => {
@@ -2036,9 +2043,14 @@ export default function TaskListEditDialog({
       currentY += 28;
 
       for (const [index, item] of payload.items.entries()) {
-        const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
-          ? item.discountedAmount
+        // discountAmount is already per-unit (stored as per-unit in the data)
+        const perUnitDiscountAmount = item.discountAmount || 0;
+        
+        // Calculate net unit price (unit price - per unit discount)
+        const netUnitPrice = item.discount && item.discount > 0 && perUnitDiscountAmount > 0
+          ? item.unitPrice - perUnitDiscountAmount
           : item.unitPrice;
+          
         const mode = item.displayMode || 'transparent';
         const isRequest = mode === 'request';
         const isNetOnly = mode === 'net_only';
@@ -2068,19 +2080,19 @@ export default function TaskListEditDialog({
           unitPriceContent = `₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
 
-        // DISC column content
+        // DISC column content - show per-unit discount amount
         let discContent;
         if (hidePriceCols) {
           discContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
-        } else if (item.discountAmount && item.discountAmount > 0) {
-          discContent = `<span style="color:#dc2626;">−₱${item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>`;
+        } else if (perUnitDiscountAmount > 0) {
+          discContent = `<span style="color:#dc2626;">−₱${perUnitDiscountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>`;
         } else if (item.discount && item.discount > 0) {
           discContent = `<span style="color:#dc2626;font-weight:700;">${item.discount}%</span>`;
         } else {
           discContent = '-';
         }
 
-        // Discount Price column content
+        // Discount Price column content - show net unit price
         let discountPriceContent;
         if (hidePriceCols) {
           discountPriceContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
@@ -2093,8 +2105,12 @@ export default function TaskListEditDialog({
         if (isRequest) {
           totalContent = `<span style="font-size:8px;color:#6b7280;font-style:italic;">Upon request</span>`;
         } else {
-          const savingsHtml = isValueAdd && item.discountAmount && item.discountAmount > 0
-            ? `<div style="font-size:7px;color:#16a34a;font-weight:600;margin-top:2px;">save ₱${(item.discountAmount * item.qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>`
+          // Calculate total savings for value_add mode
+          const totalSavings = isValueAdd && perUnitDiscountAmount > 0
+            ? perUnitDiscountAmount * item.qty
+            : 0;
+          const savingsHtml = totalSavings > 0
+            ? `<div style="font-size:7px;color:#16a34a;font-weight:600;margin-top:2px;">save ₱${totalSavings.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>`
             : '';
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
@@ -2478,10 +2494,13 @@ ${payload.whtType && payload.whtType !== "none"
     <>
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent
-          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[130vw] flex flex-col [&>button]:hidden"
+          className="h-screen max-h-screen overflow-hidden p-0 flex flex-col [&>button]:hidden rounded-none border-0"
           style={{
-            maxWidth: "3000px",
-            width: "95vw",
+            maxWidth: "100vw",
+            width: "100vw",
+            height: "100vh",
+            maxHeight: "100vh",
+            borderRadius: 0,
           }}
         >
           {/* HEADER */}
@@ -2489,7 +2508,19 @@ ${payload.whtType && payload.whtType !== "none"
             <div className="flex items-center justify-between pl-6 pr-4 py-2.5 sm:pl-8 sm:pr-5 bg-white">
               <div className="flex items-center gap-2 min-w-0">
                 <DialogTitle className="font-black text-sm tracking-tight truncate">
-                  Edit: {item.quotation_number || item.id}
+                  Edit:{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = item.quotation_number || String(item.id);
+                      navigator.clipboard.writeText(text);
+                      showToast(`Copied: ${text}`, 'success');
+                    }}
+                    className="hover:bg-blue-100 hover:text-blue-700 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                    title="Click to copy quotation number"
+                  >
+                    {item.quotation_number || item.id}
+                  </button>
                 </DialogTitle>
                 <span className="hidden sm:inline text-gray-300">|</span>
                 <span className="hidden sm:inline text-xs text-gray-500 truncate">{item.quotation_type}</span>
@@ -2547,7 +2578,7 @@ ${payload.whtType && payload.whtType !== "none"
           <div className="flex-1 overflow-hidden">
             <div className="h-full flex flex-col lg:flex-row gap-0 lg:gap-3 lg:pl-3 lg:pr-3 lg:py-3 p-0 overflow-hidden">
               {/* Left side: Search + history */}
-              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[30rem] min-w-[30rem]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
+              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[280px] min-w-[280px]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
                 {/* Collapse/Expand Button & Help */}
                 <div className={`flex items-center gap-1 mb-1 ${leftPanelCollapsed ? 'flex-col' : 'justify-between'}`}>
                   <button
@@ -3292,12 +3323,10 @@ ${payload.whtType && payload.whtType !== "none"
 
                     <div className="w-px h-4 bg-blue-200 shrink-0"></div>
 
-                    {/* Full Detail PDF Toggle — checked=Full Detail (hideDiscountInPreview=false) */}
+                    {/* SRP Only PDF Toggle — checked=SRP Only (hideDiscountInPreview=true) */}
                     <button
                       type="button"
                       onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
                         const newValue = !hideDiscountInPreview;
                         setConfirmDialog({
                           isOpen: true,
@@ -3318,16 +3347,16 @@ ${payload.whtType && payload.whtType !== "none"
                       className="flex items-center gap-1.5 cursor-pointer hover:bg-purple-100/50 px-1.5 py-0.5 rounded transition-colors shrink-0"
                       title="Click for detailed explanation with examples"
                     >
-                      {/* Checked = Full Detail (hideDiscountInPreview=false), Unchecked = SRP Only (hideDiscountInPreview=true) */}
-                      <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${!hideDiscountInPreview ? 'bg-purple-600 border-purple-600' : 'bg-white border-purple-300'}`}>
-                        {!hideDiscountInPreview && (
+                      {/* Checked = SRP Only (hideDiscountInPreview=true), Unchecked = Full Detail (hideDiscountInPreview=false) */}
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${hideDiscountInPreview ? 'bg-purple-600 border-purple-600' : 'bg-white border-purple-300'}`}>
+                        {hideDiscountInPreview && (
                           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                           </svg>
                         )}
                       </span>
-                      <span className={`font-medium ${!hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
-                        {!hideDiscountInPreview ? '✓ Full Detail PDF' : '○ Full Detail PDF'}
+                      <span className={`font-medium ${hideDiscountInPreview ? 'text-purple-700' : 'text-gray-500'}`}>
+                        {hideDiscountInPreview ? '✓ SRP Only PDF' : '○ Full Detail PDF'}
                       </span>
                     </button>
 
@@ -3641,7 +3670,7 @@ ${payload.whtType && payload.whtType !== "none"
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs table-auto border-collapse border border-gray-300">
+                    <table className="w-full text-xs table-fixed border-collapse border border-gray-300">
                       <thead>
                         <tr className="bg-[#121212] text-white text-[10px] uppercase tracking-wider">
                           {/* Drag Handle Column */}
@@ -3667,20 +3696,20 @@ ${payload.whtType && payload.whtType !== "none"
                             </th>
                           )}
                           <th className="border border-gray-700 p-1 text-center w-6 font-bold">#</th>
-                          <th className="border border-gray-700 p-1 text-center w-8">
+                          <th className="border border-gray-700 p-1 text-center w-10">
                             <span className="font-bold">Disc</span>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center w-8">
+                          <th className="border border-gray-700 p-1 text-center w-10">
                             <span className="font-bold text-yellow-400">Promo</span>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center w-8">
+                          <th className="border border-gray-700 p-1 text-center w-10">
                             <span className="font-bold text-blue-400">Hide</span>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center w-10">
+                          <th className="border border-gray-700 p-1 text-center w-24">
                             <span className="font-bold">Display</span>
                           </th>
                           <th className="border border-gray-700 p-1 text-left font-bold">Product</th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-24">
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">
                             <div className="flex items-center justify-center gap-1">
                               <span>Qty</span>
                               <button
@@ -3704,7 +3733,7 @@ ${payload.whtType && payload.whtType !== "none"
                               </button>
                             </div>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-16">
+                          <th className="border border-gray-700 p-1 text-center font-bold w-28">
                             <div className="flex items-center justify-center gap-1">
                               <span>Unit</span>
                               <button
@@ -3728,7 +3757,7 @@ ${payload.whtType && payload.whtType !== "none"
                               </button>
                             </div>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20">
+                          <th className="border border-gray-700 p-1 text-center font-bold w-48">
                             <div className="flex items-center justify-center gap-1">
                               <span>Discount</span>
                               <button
@@ -3752,7 +3781,7 @@ ${payload.whtType && payload.whtType !== "none"
                               </button>
                             </div>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20 bg-blue-900/20">
+                          <th className="border border-gray-700 p-1 text-center font-bold w-28 bg-blue-900/20">
                             <div className="flex items-center justify-center gap-1">
                               <span className="text-blue-300">Net</span>
                               <button
@@ -3776,7 +3805,7 @@ ${payload.whtType && payload.whtType !== "none"
                               </button>
                             </div>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-20">
+                          <th className="border border-gray-700 p-1 text-center font-bold w-28">
                             <div className="flex items-center justify-center gap-1">
                               <span>Total</span>
                               <button
@@ -3800,7 +3829,7 @@ ${payload.whtType && payload.whtType !== "none"
                               </button>
                             </div>
                           </th>
-                          <th className="border border-gray-700 p-1 text-center font-bold w-16">Act</th>
+                          <th className="border border-gray-700 p-1 text-center font-bold w-20">Act</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3903,7 +3932,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   </td>
 
                                   {/* Disc Checkbox */}
-                                  <td className="border border-gray-300 p-1 text-center">
+                                  <td className="border border-gray-300 p-1 text-center w-10">
                                     <input
                                       type="checkbox"
                                       checked={product.isDiscounted}
@@ -3929,7 +3958,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   </td>
 
                                   {/* Promo Checkbox */}
-                                  <td className="border border-gray-300 p-1 text-center">
+                                  <td className="border border-gray-300 p-1 text-center w-10">
                                     <input
                                       type="checkbox"
                                       checked={product.isPromo || false}
@@ -3945,7 +3974,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   </td>
 
                                   {/* Hide Checkbox */}
-                                  <td className="border border-gray-300 p-1 text-center">
+                                  <td className="border border-gray-300 p-1 text-center w-10">
                                     <input
                                       type="checkbox"
                                       checked={product.isHidden || false}
@@ -3961,7 +3990,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   </td>
 
                                   {/* Display Mode — Select dropdown with confirmation dialog */}
-                                  <td className="border border-gray-300 p-0.5 bg-purple-50/30">
+                                  <td className="border border-gray-300 p-0.5 bg-purple-50/30 w-24">
                                     <Select
                                       value={product.displayMode || 'transparent'}
                                       onValueChange={(value) => {
@@ -3995,7 +4024,7 @@ ${payload.whtType && payload.whtType !== "none"
                                         });
                                       }}
                                     >
-                                      <SelectTrigger className="w-20 text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-6 focus:ring-1 focus:ring-purple-500">
+                                      <SelectTrigger className="w-full text-[9px] border border-gray-300 rounded px-1 py-0 bg-white h-7 focus:ring-1 focus:ring-purple-500">
                                         <SelectValue placeholder="Full" />
                                       </SelectTrigger>
                                       <SelectContent className="min-w-[110px]">
@@ -4140,7 +4169,7 @@ ${payload.whtType && payload.whtType !== "none"
                                           }
                                         }}
                                         onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-price`]; return c; })}
-                                        className={`w-full min-w-[70px] p-0.5 rounded-none text-[10px] text-right font-medium border-gray-300 h-6 focus:outline-none ${product.procurementLockedPrice ? 'bg-gray-50 font-bold' : ''}`}
+                                        className={`w-full min-w-[90px] p-1 rounded-none text-[10px] text-right font-medium border-gray-300 h-7 focus:outline-none ${product.procurementLockedPrice ? 'bg-gray-50 font-bold' : ''}`}
                                       />
                                     </div>
                                     {product.procurementLockedPrice && product.originalPrice != null && (
@@ -4203,7 +4232,7 @@ ${payload.whtType && payload.whtType !== "none"
                                                 }
                                               }}
                                               onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-disc`]; return c; })}
-                                              className="w-12 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                              className="w-20 p-1 pr-5 rounded-none text-[10px] text-center border-gray-300 h-7 focus:outline-none"
                                               placeholder="%"
                                             />
                                             <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">%</span>
@@ -4235,7 +4264,7 @@ ${payload.whtType && payload.whtType !== "none"
                                                 }
                                               }}
                                               onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-discAmt`]; return c; })}
-                                              className="w-16 p-0.5 pr-4 rounded-none text-[10px] text-center border-gray-300 h-6 focus:outline-none"
+                                              className="w-20 p-1 pr-4 rounded-none text-[10px] text-center border-gray-300 h-7 focus:outline-none"
                                               placeholder="₱"
                                             />
                                             <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 font-bold pointer-events-none">₱</span>
@@ -4287,7 +4316,7 @@ ${payload.whtType && payload.whtType !== "none"
                                               }
                                             }}
                                             onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-net`]; return c; })}
-                                            className="w-14 p-0.5 rounded-none text-[10px] text-right font-bold text-blue-700 border-gray-300 h-6 focus:outline-none"
+                                            className="w-20 p-1 rounded-none text-[10px] text-right font-bold text-blue-700 border-gray-300 h-7 focus:outline-none"
                                             placeholder="₱"
                                           />
                                         </div>
@@ -4349,7 +4378,7 @@ ${payload.whtType && payload.whtType !== "none"
                                           }
                                         }}
                                         onBlur={() => setRawInputValues(prev => { const c = { ...prev }; delete c[`${product.uid}-total`]; return c; })}
-                                        className="w-full min-w-[60px] p-0.5 rounded-none text-[10px] font-bold text-right border-gray-300 h-6 focus:outline-none"
+                                        className="w-full min-w-[80px] p-1 rounded-none text-[10px] font-bold text-right border-gray-300 h-7 focus:outline-none"
                                         placeholder="₱"
                                       />
                                       {isDiscounted && unitDiscountAmt > 0 && !(product.isHidden || product.hideDiscountInPreview) && (
@@ -5329,36 +5358,47 @@ ${payload.whtType && payload.whtType !== "none"
         </DialogContent>
       </Dialog>
 
-      {/* ── MODERN TOAST NOTIFICATION ──────────────────────────────────────── */}
+      {/* ── PREMIUM TOAST NOTIFICATION ──────────────────────────────────────── */}
       {toast.show && (
-        <div className="fixed top-6 right-6 z-[100] transform transition-all duration-300">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-lg shadow-2xl border ${
+        <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className={`group flex items-center gap-4 pl-2 pr-4 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-md border ${
             toast.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
+              ? 'bg-gradient-to-r from-emerald-500/95 to-teal-500/95 border-white/20 text-white' 
+              : 'bg-gradient-to-r from-rose-500/95 to-red-500/95 border-white/20 text-white'
           }`}>
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-              toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+            {/* Icon with glass effect */}
+            <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center shadow-lg ${
+              toast.type === 'success' 
+                ? 'bg-white/20 backdrop-blur-sm' 
+                : 'bg-white/20 backdrop-blur-sm'
             }`}>
               {toast.type === 'success' ? (
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-white drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-white drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               )}
             </div>
-            <div>
-              <p className="font-semibold text-sm">{toast.type === 'success' ? 'Success' : 'Error'}</p>
-              <p className="text-sm">{toast.message}</p>
+            
+            {/* Message */}
+            <div className="flex-1 min-w-0">
+              <p className={`font-bold text-sm tracking-wide uppercase ${
+                toast.type === 'success' ? 'text-emerald-50' : 'text-rose-50'
+              }`}>
+                {toast.type === 'success' ? 'Success' : 'Error'}
+              </p>
+              <p className="text-white/95 text-sm font-medium truncate">{toast.message}</p>
             </div>
+            
+            {/* Close button */}
             <button 
               onClick={() => setToast(prev => ({ ...prev, show: false }))}
-              className="ml-2 text-gray-400 hover:text-gray-600"
+              className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-all duration-200 group-hover:scale-105"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
