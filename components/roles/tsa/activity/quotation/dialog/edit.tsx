@@ -858,10 +858,10 @@ export default function TaskListEditDialog({
     }
 
     if (autoAction === "download") {
-      const t = setTimeout(() => DownloadPDF(false), 150);
+      const t = setTimeout(() => DownloadPDF(false, showSummaryDiscounts), 150);
       return () => clearTimeout(t);
     }
-  }, [autoAction, products]);
+  }, [autoAction, products, showSummaryDiscounts]);
 
   useEffect(() => {
     let total = 0;
@@ -1796,7 +1796,7 @@ export default function TaskListEditDialog({
     pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth / 2, footerY + 14, { align: "center" });
   };
 
-  const DownloadPDF = async (showDiscount: boolean = false) => {
+  const DownloadPDF = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts) => {
     if (typeof window === "undefined") return;
     const PRIMARY_CHARCOAL = "#121212";
     const OFF_WHITE = "#F9FAFA";
@@ -2039,6 +2039,66 @@ export default function TaskListEditDialog({
         const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
           ? item.discountedAmount
           : item.unitPrice;
+        const mode = item.displayMode || 'transparent';
+        const isRequest = mode === 'request';
+        const isNetOnly = mode === 'net_only';
+        const isBundle = mode === 'bundle';
+        const isValueAdd = mode === 'value_add';
+        const hidePriceCols = isRequest || isNetOnly || isBundle;
+
+        // Build badges HTML
+        const badges = [];
+        if (item.isPromo) {
+          badges.push(`<span style="display:inline-block;background:#facc15;color:#713f12;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">PROMO</span>`);
+        }
+        if (item.isSpf1) {
+          badges.push(`<span style="display:inline-block;background:#dc2626;color:white;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">SPF</span>`);
+        }
+        if (isBundle) {
+          badges.push(`<span style="display:inline-block;background:#8b5cf6;color:white;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">BUNDLE</span>`);
+        }
+
+        // Unit Price column content
+        let unitPriceContent;
+        if (isRequest) {
+          unitPriceContent = `<span style="font-size:8px;color:#6b7280;font-style:italic;">Upon request</span>`;
+        } else if (isNetOnly || isBundle) {
+          unitPriceContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else {
+          unitPriceContent = `₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        // DISC column content
+        let discContent;
+        if (hidePriceCols) {
+          discContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else if (item.discountAmount && item.discountAmount > 0) {
+          discContent = `<span style="color:#dc2626;">−₱${item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>`;
+        } else if (item.discount && item.discount > 0) {
+          discContent = `<span style="color:#dc2626;font-weight:700;">${item.discount}%</span>`;
+        } else {
+          discContent = '-';
+        }
+
+        // Discount Price column content
+        let discountPriceContent;
+        if (hidePriceCols) {
+          discountPriceContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else {
+          discountPriceContent = `₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        // Total Amount column content
+        let totalContent;
+        if (isRequest) {
+          totalContent = `<span style="font-size:8px;color:#6b7280;font-style:italic;">Upon request</span>`;
+        } else {
+          const savingsHtml = isValueAdd && item.discountAmount && item.discountAmount > 0
+            ? `<div style="font-size:7px;color:#16a34a;font-weight:600;margin-top:2px;">save ₱${(item.discountAmount * item.qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>`
+            : '';
+          totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
+        }
+
         const rowBlock = await renderBlock(
           `<div class="content-area">
           <table class="main-table" style="border:1.5px solid black;border-top:none;">
@@ -2049,16 +2109,19 @@ export default function TaskListEditDialog({
           <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
           </td>
           <td style="padding:8px 10px;">
-          <p class="product-title">${item.title}</p>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+            <p class="product-title" style="margin:0;">${item.title}</p>
+            ${badges.join('')}
+          </div>
           ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
           ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
           <div class="desc-text">${item.product_description}</div>
           ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
-          <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${item.discountAmount && item.discountAmount > 0 ? `<span style="color:#dc2626;">−₱${item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>` : '-'}</td>
-          <td style="width:80px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
-          <td style="width:90px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="width:60px;text-align:center;${hidePriceCols ? 'background:#f9fafb;' : ''}" class="price-col">${unitPriceContent}</td>
+          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discContent}</td>
+          <td style="width:80px;text-align:center;font-weight:600;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discountPriceContent}</td>` : ""}
+          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
           </tr>
           </table>
           </div>`,
@@ -2182,6 +2245,7 @@ ${payload.whtType && payload.whtType !== "none"
       <div class="summary-right">
         <table class="sum-tbl">
 
+          ${summaryDiscounts ? `
           <tr>
             <td class="sum-lbl">Gross Sales</td>
             <td class="sum-val">₱${peso(_grossSales)}</td>
@@ -2193,10 +2257,11 @@ ${payload.whtType && payload.whtType !== "none"
             <td class="sum-val" style="color:#a16207;">−₱${peso(_totalDiscount)}</td>
           </tr>
           ` : ""}
+          ` : ""}
 
-          <tr class="${_totalDiscount > 0 ? '' : 'border-b border-gray-100'}">
+          <tr class="${summaryDiscounts && _totalDiscount > 0 ? '' : 'border-b border-gray-100'}">
             <td class="sum-lbl">
-              Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}
+              ${summaryDiscounts ? `Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}` : `Net Sales ${payload.vatTypeLabel === "VAT Inc" ? "(VAT Inc)" : "(Non-VAT)"}`}
             </td>
             <td class="sum-val">₱${peso(_netSales)}</td>
           </tr>
@@ -4605,7 +4670,7 @@ ${payload.whtType && payload.whtType !== "none"
             <Button
               onClick={() => {
                 setPdfOptionsOpen(false);
-                DownloadPDF(pdfOption === "with-discount");
+                DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts);
               }}
               className="rounded-none flex-1 bg-yellow-600 hover:bg-yellow-700"
             >
