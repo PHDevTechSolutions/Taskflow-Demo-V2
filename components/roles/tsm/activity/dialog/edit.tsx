@@ -1210,7 +1210,15 @@ export default function TaskListEditDialog({
                                                     <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
                                                     <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                     <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-2">
-                                                        <span>Modified: {q.end_date ? new Date(q.end_date).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}</span>
+                                                        <span>Modified: {q.end_date ? (() => {
+                                                            const d = new Date(q.end_date);
+                                                            const pad = (n: number) => n.toString().padStart(2, '0');
+                                                            const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+                                                            let hr = d.getHours();
+                                                            const ampm = hr >= 12 ? 'PM' : 'AM';
+                                                            hr = hr % 12 || 12;
+                                                            return `${month} ${d.getDate()}, ${d.getFullYear()}, ${pad(hr)}:${pad(d.getMinutes())} ${ampm}`;
+                                                        })() : 'N/A'}</span>
                                                     
                                                     </div>
                                                 </div>
