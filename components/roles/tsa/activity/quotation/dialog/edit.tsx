@@ -4519,6 +4519,7 @@ ${payload.whtType && payload.whtType !== "none"
             showMarginAlerts={showMarginAlerts}
             productViewMode={productViewMode}
             visibleColumns={visibleColumns}
+            approvedStatus={ApprovedStatus}
           />
         </DialogContent>
       </Dialog>
