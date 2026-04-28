@@ -99,6 +99,63 @@ export const Preview: React.FC<PreviewProps> = ({
     // ── QR Code Security ──────────────────────────────────────────────────────
     const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
 
+    // ── Toast Notification ───────────────────────────────────────────────────
+    const [toast, setToast] = React.useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+    };
+
+    // ── SO Preparation Helper ──────────────────────────────────────────────────
+    const [soHelperOpen, setSoHelperOpen] = React.useState(false);
+    const [selectedItems, setSelectedItems] = React.useState<Set<number>>(new Set());
+
+    const toggleItemSelection = (idx: number) => {
+        const newSet = new Set(selectedItems);
+        if (newSet.has(idx)) newSet.delete(idx);
+        else newSet.add(idx);
+        setSelectedItems(newSet);
+    };
+
+    const selectAllItems = () => {
+        if (selectedItems.size === payload.items.length) {
+            setSelectedItems(new Set());
+        } else {
+            setSelectedItems(new Set(payload.items.map((_, i) => i)));
+        }
+    };
+
+    const generateSOFormat = (format: 'excel' | 'tab' | 'list') => {
+        const itemsToCopy = payload.items.filter((_, i) => selectedItems.has(i));
+        if (itemsToCopy.length === 0) {
+            showToast('Please select items first', 'error');
+            return;
+        }
+
+        let text = '';
+        if (format === 'excel') {
+            text = 'Item Code\tProduct Description\tQty\tUnit Price\tTotal\n';
+            text += itemsToCopy.map(item => 
+                `${item.sku}\t${item.title} - ${item.product_description?.replace(/<[^>]*>/g, '').substring(0, 100) || ''}\t${item.qty}\t${item.unitPrice}\t${(item.totalAmount !== undefined ? Number(item.totalAmount) : Number(item.qty) * item.unitPrice)}`
+            ).join('\n');
+        } else if (format === 'tab') {
+            text = itemsToCopy.map(item => 
+                `${item.sku}\t${item.title}\t${item.qty}\t${item.unitPrice}`
+            ).join('\n');
+        } else {
+            text = itemsToCopy.map((item, i) => 
+                `${i + 1}. ${item.sku} - ${item.title} (Qty: ${item.qty})`
+            ).join('\n');
+        }
+
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`Copied ${itemsToCopy.length} items for SO (Format: ${format.toUpperCase()})`, 'success');
+        }).catch(() => {
+            showToast('Failed to copy', 'error');
+        });
+    };
+
     React.useEffect(() => {
         const generateQr = async () => {
             try {
@@ -311,6 +368,25 @@ export const Preview: React.FC<PreviewProps> = ({
                                                     SPF
                                                 </span>
                                             )}
+                                            {/* Copy Button for Product Description & Item Code */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cleanDescription = item.product_description?.replace(/<[^>]*>/g, '').trim() || '';
+                                                    const textToCopy = `Item Code: ${item.sku}\nProduct Name: ${item.title}\nProduct Description: ${cleanDescription}\nQty: ${item.qty}\nUnit Price: ₱${item.unitPrice.toLocaleString()}`;
+                                                    navigator.clipboard.writeText(textToCopy).then(() => {
+                                                        showToast('✓ Item details copied for SO preparation!', 'success');
+                                                    }).catch(() => {
+                                                        showToast('✗ Failed to copy to clipboard', 'error');
+                                                    });
+                                                }}
+                                                className="ml-2 p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                                                title="Copy Item Code & Product Description"
+                                            >
+                                                <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                            </button>
                                         </div>
                                         <p className="text-[9px] text-blue-600 font-bold mb-3 tracking-tighter">{item.sku}</p>
                                         {item.isSpf1 && item.procurementLeadTime && (
@@ -662,7 +738,7 @@ export const Preview: React.FC<PreviewProps> = ({
                         {/* <div className="col-span-2 font-black uppercase">Bank Details:</div> */}
                         <div className="col-span-2 font-black uppercase">Payment:</div>
                         <div className="col-span-10 pl-4 border-l border-gray-100 ">
-                            <p><span className="text-red-600 font-black">Cash on Delivery (COD)</span></p>
+                            <p><span className="text-red-600 font-black">For Cash on Delivery</span></p>
                             <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery. Exceeding 10,000 pesos should be transacted through bank deposit or mobile electronic transactions.</strong></p>
                             <p>For special items,  Seventy Percent (70%) down payment, 30% upon delivery.</p>
                             <p className="mt-5"><b>BANK DETAILS</b></p>
@@ -847,14 +923,226 @@ export const Preview: React.FC<PreviewProps> = ({
 
             {/* ACTION BUTTONS BAR */}
             <div className="p-8 bg-white border-t border-gray-100 flex justify-between items-center sticky bottom-0 z-50">
-                <Button
-                    variant="outline"
-                    onClick={() => setIsPreviewOpen(false)}
-                    className="rounded-none border-2 border-[#121212] font-black uppercase text-[10px] px-8 h-12 hover:bg-gray-50 transition-all"
-                >
-                    Back to Editor
-                </Button>
+                <div className="flex gap-3">
+                    <Button
+                        variant="outline"
+                        onClick={() => setIsPreviewOpen(false)}
+                        className="rounded-none border-2 border-[#121212] font-black uppercase text-[10px] px-8 h-12 hover:bg-gray-50 transition-all"
+                    >
+                        Back to Editor
+                    </Button>
+                    
+                    {/* SO Helper Button */}
+                    <Button
+                        variant="outline"
+                        onClick={() => setSoHelperOpen(true)}
+                        className="rounded-none border-2 border-blue-600 text-blue-600 font-black uppercase text-[10px] px-6 h-12 hover:bg-blue-50 transition-all flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        SO Helper
+                    </Button>
+                </div>
             </div>
+
+            {/* ── MODERN TOAST NOTIFICATION ──────────────────────────────────────── */}
+            {toast.show && (
+                <div className={`fixed top-6 right-6 z-[100] transform transition-all duration-300 ${toast.show ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
+                    <div className={`flex items-center gap-3 px-5 py-4 rounded-lg shadow-2xl border ${
+                        toast.type === 'success' 
+                            ? 'bg-green-50 border-green-200 text-green-800' 
+                            : 'bg-red-50 border-red-200 text-red-800'
+                    }`}>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                            toast.type === 'success' 
+                                ? 'bg-green-100' 
+                                : 'bg-red-100'
+                        }`}>
+                            {toast.type === 'success' ? (
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                            ) : (
+                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            )}
+                        </div>
+                        <div>
+                            <p className="font-semibold text-sm">{toast.type === 'success' ? 'Success' : 'Error'}</p>
+                            <p className="text-sm">{toast.message}</p>
+                        </div>
+                        <button 
+                            onClick={() => setToast(prev => ({ ...prev, show: false }))}
+                            className="ml-2 text-gray-400 hover:text-gray-600"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── SO PREPARATION HELPER DRAWER ─────────────────────────────────────── */}
+            {soHelperOpen && (
+                <div className="fixed inset-0 z-[60] flex">
+                    {/* Backdrop */}
+                    <div 
+                        className="flex-1 bg-black/30 backdrop-blur-sm"
+                        onClick={() => setSoHelperOpen(false)}
+                    />
+                    
+                    {/* Drawer */}
+                    <div className="w-[480px] bg-white shadow-2xl flex flex-col h-full animate-slideInRight">
+                        {/* Header */}
+                        <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-white font-bold text-lg">SO Preparation Helper</h2>
+                                    <p className="text-blue-100 text-xs">Quickly copy items for Sales Order creation</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setSoHelperOpen(false)}
+                                className="text-white/70 hover:text-white transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-auto p-5">
+                            {/* Actions Bar */}
+                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                                <button
+                                    onClick={selectAllItems}
+                                    className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    {selectedItems.size === payload.items.length ? 'Deselect All' : 'Select All'}
+                                </button>
+                                <span className="text-sm text-gray-500">
+                                    {selectedItems.size} of {payload.items.length} selected
+                                </span>
+                            </div>
+
+                            {/* Items List */}
+                            <div className="space-y-2 mb-6">
+                                {payload.items.map((item, idx) => (
+                                    <div 
+                                        key={idx}
+                                        onClick={() => toggleItemSelection(idx)}
+                                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                            selectedItems.has(idx) 
+                                                ? 'border-blue-500 bg-blue-50' 
+                                                : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                                selectedItems.has(idx) 
+                                                    ? 'bg-blue-600 border-blue-600' 
+                                                    : 'border-gray-300'
+                                            }`}>
+                                                {selectedItems.has(idx) && (
+                                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-sm text-gray-900 truncate">{item.title}</p>
+                                                <p className="text-xs text-blue-600 font-mono">{item.sku}</p>
+                                                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                                    <span>Qty: {item.qty}</span>
+                                                    <span>₱{item.unitPrice.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Copy Format Options */}
+                            <div className="bg-gray-50 rounded-lg p-4">
+                                <p className="text-sm font-semibold text-gray-700 mb-3">Copy Format for SO</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        onClick={() => generateSOFormat('excel')}
+                                        disabled={selectedItems.size === 0}
+                                        className="p-3 bg-white border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <svg className="w-6 h-6 mx-auto mb-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span className="text-xs font-medium text-gray-700">Excel</span>
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Tab-separated</p>
+                                    </button>
+                                    <button
+                                        onClick={() => generateSOFormat('tab')}
+                                        disabled={selectedItems.size === 0}
+                                        className="p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <svg className="w-6 h-6 mx-auto mb-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                        </svg>
+                                        <span className="text-xs font-medium text-gray-700">Simple</span>
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Tab-delimited</p>
+                                    </button>
+                                    <button
+                                        onClick={() => generateSOFormat('list')}
+                                        disabled={selectedItems.size === 0}
+                                        className="p-3 bg-white border border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <svg className="w-6 h-6 mx-auto mb-1 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                        </svg>
+                                        <span className="text-xs font-medium text-gray-700">List</span>
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Numbered items</p>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Tips */}
+                            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                    <svg className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p className="text-xs text-yellow-800">
+                                        <span className="font-semibold">Pro Tip:</span> Use Excel format to paste directly into spreadsheets. Simple format works best for SAP or internal systems.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Animation Styles */}
+            <style jsx>{`
+                @keyframes slideInRight {
+                    from {
+                        transform: translateX(100%);
+                    }
+                    to {
+                        transform: translateX(0);
+                    }
+                }
+                .animate-slideInRight {
+                    animation: slideInRight 0.3s ease-out;
+                }
+            `}</style>
         </div>
     );
 };
