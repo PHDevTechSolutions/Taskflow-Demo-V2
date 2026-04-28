@@ -1999,8 +1999,8 @@ export default function TaskListEditDialog({
         <th style="width:105px;text-align:center;">REF. PHOTO</th>
         <th style="text-align:left;">PRODUCT DESCRIPTION</th>
         <th style="width:60px;text-align:center;">UNIT PRICE</th>
-        ${showDiscount ? `<th style="width:40px;text-align:center;">DISC</th>
-        <th style="width:70px;text-align:center;">DISCOUNT PRICE</th>` : ""}
+        ${showDiscount ? `<th style="width:80px;text-align:center;">DISC</th>
+        <th style="width:80px;text-align:center;">DISCOUNT PRICE</th>` : ""}
         <th style="width:90px;text-align:center;">TOTAL</th>
         </tr>
         </thead>
@@ -2039,8 +2039,8 @@ export default function TaskListEditDialog({
           ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
           <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          ${showDiscount ? `<td style="width:40px;text-align:center;font-weight:700;">${item.discount && item.discount > 0 ? item.discount + '%' : '-'}</td>
-          <td style="width:70px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
+          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${item.discountAmount && item.discountAmount > 0 ? '₱' + item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+          <td style="width:80px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
           <td style="width:90px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           </table>
