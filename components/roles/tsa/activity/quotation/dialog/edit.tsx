@@ -2022,6 +2022,66 @@ export default function TaskListEditDialog({
         const netUnitPrice = item.discount && item.discount > 0 && item.discountedAmount !== undefined
           ? item.discountedAmount
           : item.unitPrice;
+        const mode = item.displayMode || 'transparent';
+        const isRequest = mode === 'request';
+        const isNetOnly = mode === 'net_only';
+        const isBundle = mode === 'bundle';
+        const isValueAdd = mode === 'value_add';
+        const hidePriceCols = isRequest || isNetOnly || isBundle;
+
+        // Build badges HTML
+        const badges = [];
+        if (item.isPromo) {
+          badges.push(`<span style="display:inline-block;background:#facc15;color:#713f12;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">PROMO</span>`);
+        }
+        if (item.isSpf1) {
+          badges.push(`<span style="display:inline-block;background:#dc2626;color:white;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">SPF</span>`);
+        }
+        if (isBundle) {
+          badges.push(`<span style="display:inline-block;background:#8b5cf6;color:white;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">BUNDLE</span>`);
+        }
+
+        // Unit Price column content
+        let unitPriceContent;
+        if (isRequest) {
+          unitPriceContent = `<span style="font-size:8px;color:#6b7280;font-style:italic;">Upon request</span>`;
+        } else if (isNetOnly || isBundle) {
+          unitPriceContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else {
+          unitPriceContent = `₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        // DISC column content
+        let discContent;
+        if (hidePriceCols) {
+          discContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else if (item.discountAmount && item.discountAmount > 0) {
+          discContent = `<span style="color:#dc2626;">−₱${item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>`;
+        } else if (item.discount && item.discount > 0) {
+          discContent = `<span style="color:#dc2626;font-weight:700;">${item.discount}%</span>`;
+        } else {
+          discContent = '-';
+        }
+
+        // Discount Price column content
+        let discountPriceContent;
+        if (hidePriceCols) {
+          discountPriceContent = `<span style="font-size:8px;color:#9ca3af;">—</span>`;
+        } else {
+          discountPriceContent = `₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        // Total Amount column content
+        let totalContent;
+        if (isRequest) {
+          totalContent = `<span style="font-size:8px;color:#6b7280;font-style:italic;">Upon request</span>`;
+        } else {
+          const savingsHtml = isValueAdd && item.discountAmount && item.discountAmount > 0
+            ? `<div style="font-size:7px;color:#16a34a;font-weight:600;margin-top:2px;">save ₱${(item.discountAmount * item.qty).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>`
+            : '';
+          totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
+        }
+
         const rowBlock = await renderBlock(
           `<div class="content-area">
           <table class="main-table" style="border:1.5px solid black;border-top:none;">
@@ -2032,16 +2092,19 @@ export default function TaskListEditDialog({
           <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
           </td>
           <td style="padding:8px 10px;">
-          <p class="product-title">${item.title}</p>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+            <p class="product-title" style="margin:0;">${item.title}</p>
+            ${badges.join('')}
+          </div>
           ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
           ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
           <div class="desc-text">${item.product_description}</div>
           ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
-          <td style="width:60px;text-align:center;" class="price-col">₱${item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${item.discountAmount && item.discountAmount > 0 ? `<span style="color:#dc2626;">−₱${item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><br/><span style="font-size:7px;color:#9ca3af;font-weight:600;">(${item.discount ?? 0}%)</span>` : '-'}</td>
-          <td style="width:80px;text-align:center;font-weight:600;">₱${netUnitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ""}
-          <td style="width:90px;text-align:center;" class="total-col">₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="width:60px;text-align:center;${hidePriceCols ? 'background:#f9fafb;' : ''}" class="price-col">${unitPriceContent}</td>
+          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discContent}</td>
+          <td style="width:80px;text-align:center;font-weight:600;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discountPriceContent}</td>` : ""}
+          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
           </tr>
           </table>
           </div>`,
