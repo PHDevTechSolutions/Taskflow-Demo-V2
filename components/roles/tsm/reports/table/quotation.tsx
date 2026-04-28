@@ -40,6 +40,7 @@ interface Quotation {
   status: string;
   referenceid: string;
   quotation_status: string;
+  quotation_status_sub?: string;
 }
 
 interface UserDetails {
@@ -77,22 +78,6 @@ const PRIORITY_MAP: Record<string, "HOT" | "WARM" | "COLD" | "DONE"> = {
   "DECLINE / DISAPPROVED": "COLD",
 };
 
-const ALL_STATUSES = [
-  "PENDING CLIENT APPROVAL",
-  "FOR BIDDING",
-  "NEGO",
-  "ORDER COMPLETE",
-  "CONVERT TO SO",
-  "LOSS PRICE IS TOO HIGH",
-  "LEAD TIME ISSUE",
-  "OUT OF STOCK",
-  "INSUFFICIENT STOCK",
-  "LOST BID",
-  "CANVASS ONLY",
-  "DID NOT MEET THE SPECS",
-  "DECLINE / DISAPPROVED",
-];
-
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
 const PRIORITY_STYLES: Record<string, { badge: string; dot: string }> = {
@@ -122,6 +107,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPriority, setFilterPriority] = useState<Priority>("all");
   const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
+  const [filterQuotationSubStatus, setFilterQuotationSubStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
 
   // Set search term if highlight is present
@@ -216,6 +202,32 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     return map;
   }, [agents]);
 
+  /* ---- Dynamic Status Lists ---- */
+  const useDynamicStatuses = (activities: Quotation[]) => {
+    return useMemo(() => {
+      const statuses = new Set<string>();
+      activities.forEach((item) => {
+        const status = item.quotation_status?.toUpperCase();
+        if (status) statuses.add(status);
+      });
+      return Array.from(statuses).sort();
+    }, [activities]);
+  };
+
+  const useDynamicSubStatuses = (activities: Quotation[]) => {
+    return useMemo(() => {
+      const subStatuses = new Set<string>();
+      activities.forEach((item) => {
+        const subStatus = item.quotation_status_sub?.toUpperCase();
+        if (subStatus) subStatuses.add(subStatus);
+      });
+      return Array.from(subStatuses).sort();
+    }, [activities]);
+  };
+
+  const uniqueStatuses = useDynamicStatuses(activities);
+  const uniqueSubStatuses = useDynamicSubStatuses(activities);
+
   /* ---- Sorted ---- */
   const sortedActivities = useMemo(() =>
     [...activities].sort((a, b) =>
@@ -240,6 +252,12 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       .filter(item => {
         if (filterQuotationStatus !== "all") {
           return item.quotation_status?.toUpperCase() === filterQuotationStatus;
+        }
+        return true;
+      })
+      .filter(item => {
+        if (filterQuotationSubStatus !== "all") {
+          return item.quotation_status_sub?.toUpperCase() === filterQuotationSubStatus;
         }
         return true;
       })
@@ -279,13 +297,13 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
         return true;
       });
-  }, [sortedActivities, searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
+  }, [sortedActivities, searchTerm, filterQuotationStatus, filterQuotationSubStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
 
   /* Reset page on filter change */
-  useEffect(() => { setPage(1); }, [searchTerm, filterQuotationStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
+  useEffect(() => { setPage(1); }, [searchTerm, filterQuotationStatus, filterQuotationSubStatus, filterPriority, selectedAgent, dateCreatedFilterRange]);
 
   /* Reset quotation_status filter when priority changes */
-  useEffect(() => { setFilterQuotationStatus("all"); }, [filterPriority]);
+  useEffect(() => { setFilterQuotationStatus("all"); setFilterQuotationSubStatus("all"); }, [filterPriority]);
 
   /* ---- Totals ---- */
   const totalQuotationAmount = useMemo(() =>
@@ -323,6 +341,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         { header: "Quotation Number", key: "quotationNumber", width: 20 },
         { header: "Amount", key: "amount", width: 15 },
         { header: "Status", key: "status", width: 20 },
+        { header: "Sub Status", key: "subStatus", width: 20 },
         { header: "Company", key: "company", width: 25 },
         { header: "Contact Person", key: "contactPerson", width: 20 },
         { header: "Priority", key: "priority", width: 15 },
@@ -349,6 +368,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           quotationNumber: item.quotation_number || "-",
           amount: item.quotation_amount ?? 0,
           status: item.quotation_status || "-",
+          subStatus: item.quotation_status_sub || "-",
           company: item.company_name || "-",
           contactPerson: item.contact_person || "-",
           priority: priority,
@@ -388,9 +408,9 @@ export const QuotationTable: React.FC<QuotationProps> = ({
 
   /* ---- Statuses filtered by selected priority ---- */
   const availableStatuses = useMemo(() => {
-    if (filterPriority === "all") return ALL_STATUSES;
-    return ALL_STATUSES.filter(s => PRIORITY_MAP[s] === filterPriority);
-  }, [filterPriority]);
+    if (filterPriority === "all") return uniqueStatuses;
+    return uniqueStatuses.filter(s => PRIORITY_MAP[s] === filterPriority);
+  }, [filterPriority, uniqueStatuses]);
 
   /* ---- Priority summary counts ---- */
   const priorityCounts = useMemo(() => {
@@ -455,7 +475,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           value={filterQuotationStatus}
           onValueChange={(v) => setFilterQuotationStatus(v)}
         >
-          <SelectTrigger className="w-[240px] text-xs">
+          <SelectTrigger className="w-[200px] text-xs">
             <SelectValue placeholder="Filter by Status" />
           </SelectTrigger>
           <SelectContent>
@@ -472,6 +492,24 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 </SelectItem>
               );
             })}
+          </SelectContent>
+        </Select>
+
+        {/* Quotation sub-status */}
+        <Select
+          value={filterQuotationSubStatus}
+          onValueChange={(v) => setFilterQuotationSubStatus(v)}
+        >
+          <SelectTrigger className="w-[200px] text-xs">
+            <SelectValue placeholder="Filter by Sub-Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sub-Statuses</SelectItem>
+            {uniqueSubStatuses.map((s) => (
+              <SelectItem key={s} value={s} className="text-xs">
+                {s}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -543,6 +581,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 <TableHead className="text-gray-500">Quotation No.</TableHead>
                 <TableHead className="text-gray-500 text-right">Amount</TableHead>
                 <TableHead className="text-gray-500">Status</TableHead>
+                <TableHead className="text-gray-500">Sub-Status</TableHead>
                 <TableHead className="text-gray-500">Company</TableHead>
                 <TableHead className="text-gray-500">Contact</TableHead>
                 <TableHead className="text-gray-500">Priority</TableHead>
@@ -594,6 +633,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                       {item.quotation_status || "-"}
                     </TableCell>
 
+                    {/* Quotation Sub-Status */}
+                    <TableCell className="uppercase text-gray-700 text-[10px]">
+                      {item.quotation_status_sub || "-"}
+                    </TableCell>
+
                     {/* Company */}
                     <TableCell className="text-gray-700">{item.company_name || "-"}</TableCell>
 
@@ -625,7 +669,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                 <TableCell className="text-right text-gray-800">
                   {totalQuotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                 </TableCell>
-                <TableCell colSpan={5} />
+                <TableCell colSpan={6} />
               </TableRow>
             </tfoot>
           </Table>

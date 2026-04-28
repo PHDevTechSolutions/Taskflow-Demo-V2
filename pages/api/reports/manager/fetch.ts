@@ -25,6 +25,7 @@ const COLUMNS = `
   quotation_amount,
   quotation_number,
   quotation_status,
+  quotation_status_sub,
   so_number,
   so_amount,
   actual_sales,

@@ -3092,13 +3092,14 @@ ${payload.whtType && payload.whtType !== "none"
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 p-4 max-h-64 overflow-auto custom-scrollbar">
+                <div className="mt-6 p-4 max-h-[300px] overflow-y-auto custom-scrollbar">
                   <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                     Revised Quotations History
                     <span className="bg-[#121212] text-white text-[10px] font-black px-2 py-0.5 rounded-full">
                       {revisedQuotations.length}
                     </span>
                   </h3>
+
                   {revisedQuotations.length === 0 ? (
                     <p>No revised quotations found.</p>
                   ) : (
@@ -3106,37 +3107,43 @@ ${payload.whtType && payload.whtType !== "none"
                       {revisedQuotations.map((q) => (
                         <Item
                           key={q.id}
-                          className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""}`}
+                          className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""
+                            }`}
                           onClick={() => setSelectedRevisedQuotation(q)}
                         >
-                          <ItemContent>
-                            <ItemTitle className="font-semibold text-sm">
+                          <ItemContent className="flex flex-col gap-2">
+
+                            <ItemTitle className="font-semibold text-sm break-words">
                               {q.version || "N/A"}
                             </ItemTitle>
-                            <ItemDescription className="text-xs text-gray-600">
-                              <div>
+
+                            <ItemDescription className="text-xs text-gray-600 flex flex-col gap-1">
+                              <div className="break-words">
                                 <strong>Product Title:</strong>{" "}
                                 {q.product_title || "N/A"}
                               </div>
-                              <div>
-                                <strong>Amount:</strong>{" "}
-                                {q.quotation_amount ?? "N/A"}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                <span>
-                                  <strong>Start:</strong>{" "}
-                                  {q.start_date
-                                    ? new Date(q.start_date).toLocaleString()
-                                    : "N/A"}
-                                </span>
-                                <br />
-                                <span>
-                                  <strong>End:</strong>{" "}
+
+                              {/* 👇 FIXED DATE ROW */}
+                              <div className="text-gray-700 text-[10px] flex items-center">
+                                <span>Modified:</span>
+                                <span className="text-right">
                                   {q.end_date
-                                    ? new Date(q.end_date).toLocaleString()
+                                    ? (() => {
+                                      const d = new Date(q.end_date + "Z");
+                                      return d.toLocaleString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                        timeZone: "Asia/Manila",
+                                      });
+                                    })()
                                     : "N/A"}
                                 </span>
                               </div>
+
                             </ItemDescription>
                           </ItemContent>
                         </Item>
@@ -3577,7 +3584,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   setVatTypeState(v as "vat_inc" | "vat_exe" | "zero_rated");
                                   setDiscount(v === "vat_exe" ? 12 : 0);
                                 },
-                                onCancel: () => {}
+                                onCancel: () => { }
                               });
                             }}
                             className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${vatTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
@@ -3610,7 +3617,7 @@ ${payload.whtType && payload.whtType !== "none"
                                 description: explanation,
                                 example: example,
                                 onConfirm: () => setWhtTypeState(v as "none" | "wht_1" | "wht_2"),
-                                onCancel: () => {}
+                                onCancel: () => { }
                               });
                             }}
                             className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${whtTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
@@ -3976,7 +3983,7 @@ ${payload.whtType && payload.whtType !== "none"
                                               return copy;
                                             });
                                           },
-                                          onCancel: () => {}
+                                          onCancel: () => { }
                                         });
                                       }}
                                     >
@@ -5098,7 +5105,7 @@ ${payload.whtType && payload.whtType !== "none"
                     Example Preview
                   </p>
                 </div>
-                
+
                 {/* VAT Type Indicator */}
                 <div className="px-3 py-2 bg-white">
                   <div className="flex items-center gap-2 mb-2">
@@ -5109,7 +5116,7 @@ ${payload.whtType && payload.whtType !== "none"
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${confirmDialog?.title?.toLowerCase().includes('zero') ? 'bg-yellow-400 text-yellow-900 font-bold' : 'bg-gray-100 text-gray-400'}`}>ZERO-RATED</span>
                     </div>
                   </div>
-                  
+
                   {/* Mini Invoice Preview */}
                   <div className="space-y-1 text-[10px]">
                     <div className="flex justify-between py-0.5">
@@ -5215,20 +5222,20 @@ ${payload.whtType && payload.whtType !== "none"
                     Example Preview
                   </p>
                 </div>
-                
+
                 <div className="px-3 py-2 bg-white">
                   {/* Display Mode Indicator */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[9px] font-bold text-gray-400 uppercase">Display Mode:</span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-400 text-white font-bold">
-                      {confirmDialog?.title?.includes('Net Only') ? 'NET ONLY' : 
-                       confirmDialog?.title?.includes('Full') ? 'FULL' :
-                       confirmDialog?.title?.includes('Savings') ? 'SAVINGS' :
-                       confirmDialog?.title?.includes('Bundle') ? 'BUNDLE' :
-                       confirmDialog?.title?.includes('On Request') ? 'ON REQUEST' : 'CUSTOM'}
+                      {confirmDialog?.title?.includes('Net Only') ? 'NET ONLY' :
+                        confirmDialog?.title?.includes('Full') ? 'FULL' :
+                          confirmDialog?.title?.includes('Savings') ? 'SAVINGS' :
+                            confirmDialog?.title?.includes('Bundle') ? 'BUNDLE' :
+                              confirmDialog?.title?.includes('On Request') ? 'ON REQUEST' : 'CUSTOM'}
                     </span>
                   </div>
-                  
+
                   {/* Product Table Preview */}
                   <div className="overflow-hidden rounded border border-gray-200">
                     <table className="w-full text-[10px] border-collapse">
@@ -5274,7 +5281,7 @@ ${payload.whtType && payload.whtType !== "none"
                       </tbody>
                     </table>
                   </div>
-                  
+
                   {/* Client View Note */}
                   <div className="mt-2 text-[9px] text-purple-600 italic">
                     {confirmDialog?.title?.includes('Net Only') && 'Client sees: Only final net price, unit price hidden'}
@@ -5317,14 +5324,12 @@ ${payload.whtType && payload.whtType !== "none"
       {/* ── MODERN TOAST NOTIFICATION ──────────────────────────────────────── */}
       {toast.show && (
         <div className="fixed top-6 right-6 z-[100] transform transition-all duration-300">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-lg shadow-2xl border ${
-            toast.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-              toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-lg shadow-2xl border ${toast.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
             }`}>
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
               {toast.type === 'success' ? (
                 <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -5339,7 +5344,7 @@ ${payload.whtType && payload.whtType !== "none"
               <p className="font-semibold text-sm">{toast.type === 'success' ? 'Success' : 'Error'}</p>
               <p className="text-sm">{toast.message}</p>
             </div>
-            <button 
+            <button
               onClick={() => setToast(prev => ({ ...prev, show: false }))}
               className="ml-2 text-gray-400 hover:text-gray-600"
             >

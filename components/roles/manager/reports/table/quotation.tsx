@@ -32,6 +32,7 @@ interface Quotation {
   status: string;
   referenceid: string;
   quotation_status: string;
+  quotation_status_sub?: string;
   tsm?: string;
 }
 
@@ -78,22 +79,6 @@ const PRIORITY_MAP: Record<string, "HOT" | "WARM" | "COLD" | "DONE"> = {
   "DID NOT MEET THE SPECS": "COLD",
   "DECLINE / DISAPPROVED": "COLD",
 };
-
-const ALL_STATUSES = [
-  "PENDING CLIENT APPROVAL",
-  "FOR BIDDING",
-  "NEGO",
-  "ORDER COMPLETE",
-  "CONVERT TO SO",
-  "LOSS PRICE IS TOO HIGH",
-  "LEAD TIME ISSUE",
-  "OUT OF STOCK",
-  "INSUFFICIENT STOCK",
-  "LOST BID",
-  "CANVASS ONLY",
-  "DID NOT MEET THE SPECS",
-  "DECLINE / DISAPPROVED",
-];
 
 type Priority = "all" | "HOT" | "WARM" | "COLD" | "DONE";
 
@@ -239,7 +224,27 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     [activities]
   );
 
-  // ─── TSM Summary (UPDATED: per-status counts) ────────────────────────────────
+  // ─── Dynamic Status Columns (based on quotation_status) ────────────────────────────────
+  const uniqueStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    sortedActivities.forEach((item) => {
+      const status = item.quotation_status?.toUpperCase();
+      if (status) statuses.add(status);
+    });
+    return Array.from(statuses).sort();
+  }, [sortedActivities]);
+
+  // ─── Dynamic Sub-Status Columns (based on quotation_status_sub) ────────────────────────────────
+  const uniqueSubStatuses = useMemo(() => {
+    const subStatuses = new Set<string>();
+    sortedActivities.forEach((item) => {
+      const subStatus = item.quotation_status_sub?.toUpperCase();
+      if (subStatus) subStatuses.add(subStatus);
+    });
+    return Array.from(subStatuses).sort();
+  }, [sortedActivities]);
+
+  // ─── TSM Summary (Dynamic per-status and per-sub-status counts) ────────────────────────────────
   const tsmSummary = useMemo(() => {
     const summaryMap = new Map<string, {
       tsmId: string;
@@ -247,6 +252,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       quoteCount: number;
       quotationAmount: number;
       statusCounts: Record<string, number>;
+      subStatusCounts: Record<string, number>;
     }>();
 
     // Initialize from official TSM list
@@ -257,7 +263,8 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         tsmName: `${tsm.Firstname} ${tsm.Lastname}`,
         quoteCount: 0,
         quotationAmount: 0,
-        statusCounts: Object.fromEntries(ALL_STATUSES.map((s) => [s, 0])),
+        statusCounts: {},
+        subStatusCounts: {},
       });
     });
 
@@ -271,10 +278,16 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       row.quoteCount += 1;
       row.quotationAmount += item.quotation_amount ?? 0;
 
+      // Count by main status
       const statusKey = item.quotation_status?.toUpperCase() ?? "";
-      const matchedStatus = ALL_STATUSES.find((s) => s === statusKey);
-      if (matchedStatus) {
-        row.statusCounts[matchedStatus] += 1;
+      if (statusKey) {
+        row.statusCounts[statusKey] = (row.statusCounts[statusKey] || 0) + 1;
+      }
+
+      // Count by sub-status
+      const subStatusKey = item.quotation_status_sub?.toUpperCase() ?? "";
+      if (subStatusKey) {
+        row.subStatusCounts[subStatusKey] = (row.subStatusCounts[subStatusKey] || 0) + 1;
       }
     });
 
@@ -307,11 +320,15 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("TSM Summary");
 
+    const dynamicStatuses = uniqueStatuses.length > 0 ? uniqueStatuses : ["NO STATUS"];
+    const dynamicSubStatuses = uniqueSubStatuses.length > 0 ? uniqueSubStatuses : [];
+
     worksheet.columns = [
       { header: "TSM", key: "tsm", width: 25 },
       { header: "Quote Count", key: "quoteCount", width: 12 },
       { header: "Quotation Amount", key: "quotationAmount", width: 18 },
-      ...ALL_STATUSES.map(status => ({ header: status, key: status, width: 20 }))
+      ...dynamicStatuses.map(status => ({ header: status, key: status, width: 20 })),
+      ...dynamicSubStatuses.map(subStatus => ({ header: `SUB: ${subStatus}`, key: `sub_${subStatus}`, width: 20 }))
     ];
 
     worksheet.getRow(1).font = { bold: true };
@@ -328,7 +345,8 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         quoteCount: item.quoteCount,
         quotationAmount: item.quotationAmount
       };
-      ALL_STATUSES.forEach(status => { rowData[status] = item.statusCounts[status] ?? 0; });
+      dynamicStatuses.forEach(status => { rowData[status] = item.statusCounts[status] ?? 0; });
+      dynamicSubStatuses.forEach(subStatus => { rowData[`sub_${subStatus}`] = item.subStatusCounts[subStatus] ?? 0; });
       worksheet.addRow(rowData);
     });
 
@@ -337,8 +355,11 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       quoteCount: filteredSummary.reduce((sum, t) => sum + t.quoteCount, 0),
       quotationAmount: filteredSummary.reduce((sum, t) => sum + t.quotationAmount, 0)
     };
-    ALL_STATUSES.forEach(status => {
+    dynamicStatuses.forEach(status => {
       totalsRow[status] = filteredSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0);
+    });
+    dynamicSubStatuses.forEach(subStatus => {
+      totalsRow[`sub_${subStatus}`] = filteredSummary.reduce((sum, t) => sum + (t.subStatusCounts[subStatus] ?? 0), 0);
     });
     const totalsRowIndex = worksheet.addRow(totalsRow);
     totalsRowIndex.font = { bold: true };
@@ -361,6 +382,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       { header: "Quotation Number", key: "quotationNumber", width: 20 },
       { header: "Quotation Amount", key: "quotationAmount", width: 18 },
       { header: "Quotation Status", key: "quotationStatus", width: 25 },
+      { header: "Quotation Sub Status", key: "quotationSubStatus", width: 25 },
       { header: "Company Name", key: "companyName", width: 25 },
       { header: "Contact Number", key: "contactNumber", width: 18 },
       { header: "Priority", key: "priority", width: 12 },
@@ -404,6 +426,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
           quotationNumber: row.quotation_number || "-",
           quotationAmount: row.quotation_amount ?? 0,
           quotationStatus: row.quotation_status || "-",
+          quotationSubStatus: row.quotation_status_sub || "-",
           companyName: row.company_name || "-",
           contactNumber: row.contact_number || "-",
           priority: priority,
@@ -509,19 +532,18 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                   <TableHead className="text-gray-500">TSM</TableHead>
                   <TableHead className="text-gray-500 text-right">Quote Count</TableHead>
                   <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-                  <TableHead className="text-gray-500 text-right">Pending Client Approval</TableHead>
-                  <TableHead className="text-gray-500 text-right">For Bidding</TableHead>
-                  <TableHead className="text-gray-500 text-right">Nego</TableHead>
-                  <TableHead className="text-gray-500 text-right">Order Complete</TableHead>
-                  <TableHead className="text-gray-500 text-right">Convert to SO</TableHead>
-                  <TableHead className="text-gray-500 text-right">Loss Price is Too High</TableHead>
-                  <TableHead className="text-gray-500 text-right">Lead Time Issue</TableHead>
-                  <TableHead className="text-gray-500 text-right">Out of Stock</TableHead>
-                  <TableHead className="text-gray-500 text-right">Insufficient Stock</TableHead>
-                  <TableHead className="text-gray-500 text-right">Lost Bid</TableHead>
-                  <TableHead className="text-gray-500 text-right">Canvass Only</TableHead>
-                  <TableHead className="text-gray-500 text-right">Did Not Meet the Specs</TableHead>
-                  <TableHead className="text-gray-500 text-right">Decline / Disapproved</TableHead>
+                  {/* Main Status Columns */}
+                  {uniqueStatuses.length === 0 ? (
+                    <TableHead className="text-gray-500 text-right">No Status</TableHead>
+                  ) : (
+                    uniqueStatuses.map((status: string) => (
+                      <TableHead key={status} className="text-gray-500 text-right">{status}</TableHead>
+                    ))
+                  )}
+                  {/* Sub-Status Columns */}
+                  {uniqueSubStatuses.map((subStatus: string) => (
+                    <TableHead key={subStatus} className="text-gray-500 text-right text-[10px]">{subStatus}</TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
 
@@ -539,20 +561,36 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         <TableCell className="text-right">
                           {item.quotationAmount.toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                         </TableCell>
-                        {/* Per-status counts — same order as ALL_STATUSES / TableHeader */}
-                        {ALL_STATUSES.map((status) => {
-                          const count = item.statusCounts[status] ?? 0;
-                          const priority = PRIORITY_MAP[status];
-                          const colorClass =
-                            priority === "HOT" ? "text-red-600 font-semibold" :
-                              priority === "WARM" ? "text-amber-600 font-semibold" :
-                                priority === "DONE" ? "text-green-600 font-semibold" :
-                                  priority === "COLD" ? "text-blue-500 font-semibold" :
-                                    "text-gray-700";
+                        {/* Main Status Counts */}
+                        {uniqueStatuses.length === 0 ? (
+                          <TableCell className="text-right text-gray-300">—</TableCell>
+                        ) : (
+                          uniqueStatuses.map((status: string) => {
+                            const count = item.statusCounts[status] ?? 0;
+                            const priority = PRIORITY_MAP[status];
+                            const colorClass =
+                              priority === "HOT" ? "text-red-600 font-semibold" :
+                                priority === "WARM" ? "text-amber-600 font-semibold" :
+                                  priority === "DONE" ? "text-green-600 font-semibold" :
+                                    priority === "COLD" ? "text-blue-500 font-semibold" :
+                                      "text-gray-700";
+                            return (
+                              <TableCell
+                                key={status}
+                                className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
+                              >
+                                {count > 0 ? count : "—"}
+                              </TableCell>
+                            );
+                          })
+                        )}
+                        {/* Sub-Status Counts */}
+                        {uniqueSubStatuses.map((subStatus: string) => {
+                          const count = item.subStatusCounts[subStatus] ?? 0;
                           return (
                             <TableCell
-                              key={status}
-                              className={`text-right ${count > 0 ? colorClass : "text-gray-300"}`}
+                              key={subStatus}
+                              className={`text-right ${count > 0 ? "text-gray-600 font-semibold" : "text-gray-300"}`}
                             >
                               {count > 0 ? count : "—"}
                             </TableCell>
@@ -572,9 +610,20 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                   <TableCell className="text-right">
                     {tsmSummary.reduce((sum, t) => sum + t.quotationAmount, 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
                   </TableCell>
-                  {ALL_STATUSES.map((status) => (
-                    <TableCell key={status} className="text-right">
-                      {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
+                  {/* Main Status Totals */}
+                  {uniqueStatuses.length === 0 ? (
+                    <TableCell className="text-right">—</TableCell>
+                  ) : (
+                    uniqueStatuses.map((status: string) => (
+                      <TableCell key={status} className="text-right">
+                        {tsmSummary.reduce((sum, t) => sum + (t.statusCounts[status] ?? 0), 0) || "—"}
+                      </TableCell>
+                    ))
+                  )}
+                  {/* Sub-Status Totals */}
+                  {uniqueSubStatuses.map((subStatus: string) => (
+                    <TableCell key={subStatus} className="text-right">
+                      {tsmSummary.reduce((sum, t) => sum + (t.subStatusCounts[subStatus] ?? 0), 0) || "—"}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -584,81 +633,83 @@ export const QuotationTable: React.FC<QuotationProps> = ({
         </>
       )}
 
-    {/* ── Expanded TSA Details ── */}
-    {expandedTsmId && (
-      <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
-        <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
-          TSA Details
-        </p>
+      {/* ── Expanded TSA Details ── */}
+      {expandedTsmId && (
+        <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4">
+          <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
+            TSA Details
+          </p>
 
-        {expandedTsaGroups.length === 0 ? (
-          <div className="text-xs text-gray-500 italic py-2">No TSA quotation records under this TSM.</div>
-        ) : (
-          expandedTsaGroups.map((group) => (
-            <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
-              <div className="px-4 py-2.5 border-b bg-gray-50">
-                <p className="text-xs font-semibold text-gray-700">
-                  {group.tsaName} <span className="text-gray-400 font-normal">({group.rows.length} quotations)</span>
-                </p>
+          {expandedTsaGroups.length === 0 ? (
+            <div className="text-xs text-gray-500 italic py-2">No TSA quotation records under this TSM.</div>
+          ) : (
+            expandedTsaGroups.map((group) => (
+              <div key={group.tsaName} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-700">
+                    {group.tsaName} <span className="text-gray-400 font-normal">({group.rows.length} quotations)</span>
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 text-[11px]">
+                        <TableHead className="text-gray-500">Date</TableHead>
+                        <TableHead className="text-gray-500">Quotation Number</TableHead>
+                        <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
+                        <TableHead className="text-gray-500">Quotation Status</TableHead>
+                        <TableHead className="text-gray-500">Quotation Sub Status</TableHead>
+                        <TableHead className="text-gray-500">Company Name</TableHead>
+                        <TableHead className="text-gray-500">Contact Number</TableHead>
+                        <TableHead className="text-gray-500">Priority</TableHead>
+                        <TableHead className="text-gray-500">Duration</TableHead>
+                        <TableHead className="text-gray-500">Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.rows.map((row) => {
+                        const quotationStatus = row.quotation_status?.toUpperCase() ?? "";
+                        const priority = PRIORITY_MAP[quotationStatus];
+                        const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
+                        const duration = computeDuration(row.start_date, row.end_date);
+
+                        return (
+                          <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
+                            <TableCell className="whitespace-nowrap">
+                              {new Date(row.date_created).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>{row.quotation_number || "-"}</TableCell>
+                            <TableCell className="text-right">
+                              {(row.quotation_amount ?? 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                            </TableCell>
+                            <TableCell className="uppercase font-semibold">{row.quotation_status || "-"}</TableCell>
+                            <TableCell className="text-gray-600">{row.quotation_status_sub || "-"}</TableCell>
+                            <TableCell>{row.company_name || "-"}</TableCell>
+                            <TableCell>{row.contact_number || "-"}</TableCell>
+                            <TableCell>
+                              {priority && priorityStyle ? (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
+                                  {priority}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{duration}</TableCell>
+                            <TableCell className="italic text-gray-500">{row.remarks || "-"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50 text-[11px]">
-                      <TableHead className="text-gray-500">Date</TableHead>
-                      <TableHead className="text-gray-500">Quotation Number</TableHead>
-                      <TableHead className="text-gray-500 text-right">Quotation Amount</TableHead>
-                      <TableHead className="text-gray-500">Quotation Status</TableHead>
-                      <TableHead className="text-gray-500">Company Name</TableHead>
-                      <TableHead className="text-gray-500">Contact Number</TableHead>
-                      <TableHead className="text-gray-500">Priority</TableHead>
-                      <TableHead className="text-gray-500">Duration</TableHead>
-                      <TableHead className="text-gray-500">Remarks</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.rows.map((row) => {
-                      const quotationStatus = row.quotation_status?.toUpperCase() ?? "";
-                      const priority = PRIORITY_MAP[quotationStatus];
-                      const priorityStyle = priority ? PRIORITY_STYLES[priority] : null;
-                      const duration = computeDuration(row.start_date, row.end_date);
-
-                      return (
-                        <TableRow key={row.id} className="text-xs font-mono hover:bg-gray-50/60">
-                          <TableCell className="whitespace-nowrap">
-                            {new Date(row.date_created).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>{row.quotation_number || "-"}</TableCell>
-                          <TableCell className="text-right">
-                            {(row.quotation_amount ?? 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
-                          </TableCell>
-                          <TableCell className="uppercase font-semibold">{row.quotation_status || "-"}</TableCell>
-                          <TableCell>{row.company_name || "-"}</TableCell>
-                          <TableCell>{row.contact_number || "-"}</TableCell>
-                          <TableCell>
-                            {priority && priorityStyle ? (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.badge}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${priorityStyle.dot}`} />
-                                {priority}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{duration}</TableCell>
-                          <TableCell className="italic text-gray-500">{row.remarks || "-"}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    )}
-  </div>
-);
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
