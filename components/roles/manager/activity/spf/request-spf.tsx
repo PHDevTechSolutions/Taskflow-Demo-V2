@@ -311,16 +311,17 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                                     >
                                                         <PenIcon className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <CollaborationHubRowTrigger
-                                                        requestId={String(item.id)}
-                                                        spfNumber={item.spf_number}
-                                                        chatDocId={item.spf_creation_id}
-                                                        status={item.status || "PENDING"}
-                                                        collectionName="spf_creations"
-                                                        title={item.spf_number}
-                                                        variant="icon"
-                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
-                                                    />
+                                                    {/*<CollaborationHubRowTrigger
+                                                            requestId={String(item.id)}
+                                                            spfNumber={item.spf_number}
+                                                            chatDocId={item.spf_creation_id}
+                                                            status={item.status || "PENDING"}
+                                                            collectionName="spf_creations"
+                                                            title={item.spf_number}
+                                                            variant="icon"
+                                                            className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
+                                                        />*/}
+                                                        
                                                 </div>
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap"><StatusBadge status={item.status} /></TableCell>
