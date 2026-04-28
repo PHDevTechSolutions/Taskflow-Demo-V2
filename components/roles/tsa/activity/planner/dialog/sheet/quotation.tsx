@@ -593,6 +593,11 @@ export function QuotationSheet(props: Props) {
         copySelectedRows();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        // Don't intercept paste if user is focused on an input/textarea (e.g. search bar)
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+          return;
+        }
         e.preventDefault();
         pasteFromClipboard();
       }

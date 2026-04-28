@@ -2378,14 +2378,10 @@ ${payload.whtType && payload.whtType !== "none"
     <>
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent
-          className="h-screen sm:max-h-screen overflow-hidden p-0 sm:p-0 w-full sm:w-full flex flex-col [&>button]:hidden"
+          className="h-[95vh] sm:max-h-[95vh] overflow-hidden p-0 sm:p-0 w-full sm:w-[130vw] flex flex-col [&>button]:hidden"
           style={{
-            maxWidth: "100vw",
-            width: "100vw",
-            maxHeight: "100vh",
-            height: "100vh",
-            margin: 0,
-            borderRadius: 0,
+            maxWidth: "3000px",
+            width: "95vw",
           }}
         >
           {/* HEADER */}
@@ -2447,7 +2443,7 @@ ${payload.whtType && payload.whtType !== "none"
           <div className="flex-1 overflow-hidden">
             <div className="h-full flex flex-col lg:flex-row gap-0 lg:gap-3 lg:pl-3 lg:pr-3 lg:py-3 p-0 overflow-hidden">
               {/* Left side: Search + history */}
-              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[22rem] min-w-[22rem]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
+              <div className={`relative flex-col gap-2 overflow-y-auto px-3 pt-2 h-full flex-shrink-0 scrollbar-thin ${leftPanelCollapsed ? 'hidden lg:flex items-center w-12' : 'flex w-[30rem] min-w-[30rem]'} ${mobilePanelTab === "products" && products.length > 0 ? "hidden lg:flex" : "flex"}`}>
                 {/* Collapse/Expand Button & Help */}
                 <div className={`flex items-center gap-1 mb-1 ${leftPanelCollapsed ? 'flex-col' : 'justify-between'}`}>
                   <button
@@ -3062,7 +3058,7 @@ ${payload.whtType && payload.whtType !== "none"
 
               {/* Right side: Products table */}
               <div
-                className={`flex-col overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${mobilePanelTab === "search" ? "hidden lg:flex" : "flex"} ${isDragOver ? "ring-2 ring-blue-400 ring-inset rounded-lg bg-blue-50/30" : ""} transition-all`}
+                className={`flex-col w-full overflow-y-auto px-3 lg:px-0 pb-3 lg:pb-0 min-h-0 ${mobilePanelTab === "search" ? "hidden lg:flex" : "flex"} ${isDragOver ? "ring-2 ring-blue-400 ring-inset rounded-lg bg-blue-50/30" : ""} transition-all`}
                 onDragOver={(e) => {
                   if (!e.dataTransfer.types.includes("application/json")) return;
                   e.preventDefault();

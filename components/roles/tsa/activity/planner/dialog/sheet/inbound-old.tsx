@@ -17,43 +17,72 @@ const INBOUND_SOURCES = [
         description: "Customer Service Representative inquiries.",
     },
     {
-        label: "New Client",
+        label: "Government",
         description: "Calls coming from government agencies.",
+    },
+    {
+        label: "Philgeps Website",
+        description: "Inquiries from Philgeps online platform.",
+    },
+    {
+        label: "Philgeps",
+        description: "Other Philgeps related contacts.",
+    },
+    {
+        label: "Distributor",
+        description: "Calls from product distributors or resellers.",
+    },
+    {
+        label: "Modern Trade",
+        description: "Contacts from retail or modern trade partners.",
+    },
+    {
+        label: "Facebook Marketplace",
+        description: "Leads or inquiries from Facebook Marketplace.",
+    },
+    {
+        label: "Walk-in Showroom",
+        description: "Visitors physically coming to showroom.",
     },
 ];
 
 const INBOUND_CALL_TYPES = [
     {
-        label: "Source",
-        description: "Source of the inquiry.",
+        label: "After Sales",
+        description: "Support after purchase or service completion — including warranty, replacement, certificates.",
+    },
+
+    {
+        label: "Delivery Concern",
+        description: "Issues or questions regarding delivery.",
     },
     {
-        label: "Email",
-        description: "Email inquiry.",
+        label: "Accounting Concern",
+        description: "Billing or payment related inquiries.",
     },
     {
-        label: "Viber",
-        description: "Viber message.",
+        label: "Technical / Product Concern",
+        description: "Product or service technical support.",
     },
     {
-        label: "Call",
-        description: "Phone call.",
+        label: "Request for Quotation",
+        description: "Potential client requesting price info.",
     },
     {
-        label: "FB Messenger",
-        description: "Facebook Messenger inquiry.",
+        label: "Inquiries",
+        description: "General questions or information requests.",
     },
     {
-        label: "FB Marketplace",
-        description: "Facebook Marketplace inquiry.",
+        label: "Follow Up",
+        description: "Following up on previous communication.",
     },
 ];
 
 const STATUS_OPTIONS = [
     {
-        label: "Completed",
-        description: "Call completed successfully.",
-        value: "Completed",
+        label: "Assisted",
+        description: "Call handled successfully.",
+        value: "Assisted",
     },
 ];
 
@@ -92,10 +121,10 @@ export function InboundSheet({
     handleNext,
     handleSave,
 }: InboundSheetProps) {
-    // If status empty, default to "Completed"
+    // If status empty, default to "Assisted"
     useEffect(() => {
         if (!status) {
-            setStatus("Completed");
+            setStatus("Assisted");
         }
     }, [status, setStatus]);
 
@@ -160,7 +189,7 @@ export function InboundSheet({
                 <>
                     <FieldGroup>
                         <FieldSet>
-                            <FieldLabel className="font-bold">Concerns</FieldLabel>
+                            <FieldLabel className="font-bold">Call Type</FieldLabel>
 
                             <RadioGroup
                                 value={callType}
@@ -196,6 +225,7 @@ export function InboundSheet({
                             </RadioGroup>
                         </FieldSet>
                     </FieldGroup>
+
                 </>
             )}
 

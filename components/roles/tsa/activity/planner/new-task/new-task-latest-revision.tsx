@@ -177,18 +177,19 @@ export const NewTask: React.FC<NewTaskProps> = ({
     fetchExistingActivities();
   }, [fetchExistingActivities]);
 
-  // ─── Fetch activities from /api/activities (same as page.tsx) ─────────
+  // ─── Fetch ALL activities from /api/activities (same as page.tsx) ─────────
   const fetchActivities = useCallback(async () => {
     if (!referenceid) return;
     setLoadingActivities(true);
     try {
-      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(referenceid)}`;
+      // Use fetchAll=true to get ALL activities (not just first 1000)
+      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(referenceid)}&fetchAll=true`;
       const actRes = await fetch(activitiesUrl);
       if (actRes.ok) {
         const actData = await actRes.json();
         const list = Array.isArray(actData) ? actData : actData.data ?? [];
         setActivities(list);
-        console.log("Activities fetched:", list.length);
+        console.log("Activities fetched (all):", list.length);
       }
     } catch (err) {
       console.error("Error fetching activities:", err);
@@ -605,9 +606,26 @@ export const NewTask: React.FC<NewTaskProps> = ({
     }
   };
 
-  // ─── Filter to ONLY ACTIVE accounts ───
+  // ─── Filter to ONLY ACTIVE accounts (same as Account Management) ───
   const activeAccounts = React.useMemo(() => {
-    return accounts.filter((acc) => acc.status?.toLowerCase() === "active");
+    const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
+    const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
+    
+    return accounts.filter((acc) => {
+      const status = acc.status?.toLowerCase() || "";
+      const typeClient = acc.type_client?.toLowerCase() || "";
+      
+      // Must have status and type_client
+      if (!acc.status || !acc.type_client) return false;
+      
+      // Exclude removed/approved for deletion/subject for transfer
+      if (excludedStatuses.includes(status)) return false;
+      
+      // Must be in allowed types
+      if (!allowedTypes.includes(typeClient)) return false;
+      
+      return true;
+    });
   }, [accounts]);
 
   // Filter accounts by search term (ONLY from active accounts)
@@ -618,11 +636,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
     );
   }, [activeAccounts, searchTerm]);
 
-  // ─── SAME AS page.tsx: Calculate companies WITH activity ───
-  const companiesWithActivity = React.useMemo(() => {
+  // ─── Calculate accounts WITH activity (based on account_reference_number) ───
+  const accountsWithActivity = React.useMemo(() => {
     const s = new Set<string>();
     activities.forEach((a) => { 
-      if (a.company_name) s.add(a.company_name.toLowerCase()); 
+      if (a.account_reference_number) s.add(a.account_reference_number); 
     });
     return s;
   }, [activities]);
@@ -630,10 +648,10 @@ export const NewTask: React.FC<NewTaskProps> = ({
   // ─── Calculate NO ACTIVITY accounts (from ACTIVE accounts only) ───
   const accountsWithNoActivity = React.useMemo(() => {
     return activeAccounts.filter((account) => {
-      // Only check ACTIVE accounts without activity
-      return !companiesWithActivity.has(account.company_name.toLowerCase());
+      // Only check ACTIVE accounts without activity (based on account_reference_number)
+      return !accountsWithActivity.has(account.account_reference_number);
     });
-  }, [activeAccounts, companiesWithActivity]);
+  }, [activeAccounts, accountsWithActivity]);
 
   const noActivityCount = accountsWithNoActivity.length;
 
@@ -641,12 +659,12 @@ export const NewTask: React.FC<NewTaskProps> = ({
   useEffect(() => {
     console.log("=== NEW.TSX ACTIVITY COUNT ===");
     console.log("Total Accounts (all):", accounts.length);
-    console.log("Active Accounts:", activeAccounts.length);
+    console.log("Active Accounts (filtered):", activeAccounts.length);
     console.log("Activities count:", activities.length);
-    console.log("Unique companies with activity:", companiesWithActivity.size);
+    console.log("Unique accounts with activity (by ref):", accountsWithActivity.size);
     console.log("No Activity count (active only):", noActivityCount);
     console.log("==============================");
-  }, [accounts.length, activeAccounts.length, activities.length, companiesWithActivity.size, noActivityCount]);
+  }, [accounts.length, activeAccounts.length, activities.length, accountsWithActivity.size, noActivityCount]);
 
   // Helper function to calculate aging (days since a date)
   const calculateAging = (dateStr: string): number => {
@@ -869,105 +887,6 @@ export const NewTask: React.FC<NewTaskProps> = ({
               <Plus /> Add
             </Button>
           </div>
-
-          {/* ─── Client No Touch/Activities Section ─────────────────────────── */}
-          {loadingActivities ? (
-            <section className="mb-6">
-              <div className="flex items-center gap-2 text-amber-600">
-                <Spinner className="size-4" />
-                <span className="text-xs">Loading activities...</span>
-              </div>
-            </section>
-          ) : noActivityCount > 0 && !searchTerm.trim() && (
-            <section className="mb-6">
-              <h2 className="text-xs font-bold mb-2 text-amber-600">
-                Client No Touch/Activities ({noActivityCount})
-              </h2>
-              <p className="text-[10px] text-gray-500 mb-1 italic">
-                Clients with NO recorded history (never had any activity)
-              </p>
-              
-              <Accordion
-                type="single"
-                collapsible
-                className="w-full border rounded-none shadow-sm border-amber-200 uppercase"
-              >
-                {accountsWithNoActivityAndAging.map((account) => (
-                  <AccordionItem key={account.id} value={account.id}>
-                    <div className="flex justify-between items-center p-2 select-none bg-amber-50/50">
-                      <AccordionTrigger className="flex-1 text-xs font-semibold cursor-pointer font-mono">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {account.company_name}
-                          <Badge
-                            className={`text-[9px] ${
-                              account.agingDays > 30
-                                ? "bg-red-100 text-red-700 border-red-200"
-                                : account.agingDays > 14
-                                ? "bg-orange-100 text-orange-700 border-orange-200"
-                                : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                            }`}
-                          >
-                            {account.agingDays} days
-                          </Badge>
-                          <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 uppercase">
-                            {account.type_client}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-
-                      <div className="flex gap-2 ml-4">
-                        <AddButton account={account} />
-                      </div>
-                    </div>
-
-                    <AccordionContent className="flex flex-col gap-2 p-3 text-xs bg-amber-50/30">
-                      <p className="text-[10px] text-amber-700">
-                        <strong>Aging:</strong> {account.agingDays} days since {account.agingFrom}
-                        {account.lastActivityDate && (
-                          <span className="block text-[9px] text-gray-500">
-                            Last activity: {new Date(account.lastActivityDate).toLocaleDateString("en-PH")}
-                          </span>
-                        )}
-                        {!account.lastActivityDate && (
-                          <span className="block text-[9px] text-gray-500">
-                            Account created: {new Date(account.date_created).toLocaleDateString("en-PH")}
-                          </span>
-                        )}
-                      </p>
-                      <p>
-                        <strong>Contact:</strong> {account.contact_number}
-                      </p>
-                      <p>
-                        <strong>Email:</strong> {account.email_address}
-                      </p>
-                      <p>
-                        <strong>Client Type:</strong> {account.type_client}
-                      </p>
-                      <p>
-                        <strong>Address:</strong> {account.address}
-                      </p>
-                      <p className="text-[8px]">
-                        {account.account_reference_number}
-                      </p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-                
-                {/* ─── LAZY LOADING: Load More Button ─── */}
-                {noActivityCount > displayedNoActivityCount && (
-                  <div className="flex justify-center py-4">
-                    <Button
-                      variant="outline"
-                      className="rounded-none text-xs"
-                      onClick={() => setDisplayedNoActivityCount(prev => prev + NO_ACTIVITY_BATCH_SIZE)}
-                    >
-                      Load More ({noActivityCount - displayedNoActivityCount} remaining)
-                    </Button>
-                  </div>
-                )}
-              </Accordion>
-            </section>
-          )}
 
           {/* All Accounts - only show when searching */}
           {searchTerm.trim() && (

@@ -160,6 +160,8 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const PROGRESS_BATCH_SIZE = 20;
+  const [displayedProgressCount, setDisplayedProgressCount] = useState(PROGRESS_BATCH_SIZE);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -281,7 +283,6 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   // Show all activities EXCEPT:
   // - Quote-Done with today's scheduled date (goes to Scheduled card)
-  // - Quote-Done with "Pending Client Approval" (goes to Overdue card)
   // - Completed and Delivered (finished activities)
   const mergedData = activities
     .filter((a) => {
@@ -289,7 +290,7 @@ export const Progress: React.FC<NewTaskProps> = ({
       if (a.status === "Completed" || a.status === "Delivered") {
         return false;
       }
-      // Exclude Quote-Done status with today's scheduled date
+      // Exclude Quote-Done status with today's scheduled date (goes to Scheduled)
       if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
         return false;
       }
@@ -306,17 +307,6 @@ export const Progress: React.FC<NewTaskProps> = ({
         ...activity,
         relatedHistoryItems,
       };
-    })
-    // Exclude Quote-Done with "Pending Client Approval" - those go to Overdue
-    .filter((activity) => {
-      if (activity.status === "Quote-Done") {
-        const hasPendingApproval = activity.relatedHistoryItems.some(
-          (h) => h.quotation_status === "Pending Client Approval"
-        );
-        // Exclude if has Pending Client Approval (goes to Overdue instead)
-        return !hasPendingApproval;
-      }
-      return true;
     })
     .sort(
       (a, b) =>
@@ -342,6 +332,15 @@ export const Progress: React.FC<NewTaskProps> = ({
       )
     );
   });
+
+  // Paginated data for lazy loading
+  const displayedProgressData = filteredData.slice(0, displayedProgressCount);
+  const hasMoreProgress = filteredData.length > displayedProgressCount;
+
+  // Reset pagination when search or filter changes
+  useEffect(() => {
+    setDisplayedProgressCount(PROGRESS_BATCH_SIZE);
+  }, [searchTerm, statusFilter]);
 
   const openDoneDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -520,7 +519,7 @@ export const Progress: React.FC<NewTaskProps> = ({
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {filteredData.map((item) => {
+          {displayedProgressData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
             let cardBgClass = "bg-gray-100"; // default light background
@@ -893,6 +892,19 @@ export const Progress: React.FC<NewTaskProps> = ({
             );
           })}
         </Accordion>
+
+        {/* ─── Lazy Loading: Load More Button ─── */}
+        {hasMoreProgress && (
+          <div className="flex justify-center py-4 mt-4">
+            <Button
+              variant="outline"
+              className="rounded-none text-xs"
+              onClick={() => setDisplayedProgressCount(prev => prev + PROGRESS_BATCH_SIZE)}
+            >
+              Load More ({filteredData.length - displayedProgressCount} remaining)
+            </Button>
+          </div>
+        )}
       </div>
 
       <DeleteDialog

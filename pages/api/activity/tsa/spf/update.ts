@@ -30,6 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             manager,
             item_description,
             item_photo,
+            item_qty,
             item_code
         } = req.body;
 
@@ -59,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 manager,
                 item_description,
                 item_photo,
+                item_qty,
                 item_code
             })
             .eq("id", id)

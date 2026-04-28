@@ -32,6 +32,8 @@ interface Account {
     contact_person: string;
     contact_number: string;
     address: string;
+    delivery_address?: string;
+    tin_number?: string;
 }
 
 interface SPFRecord {
@@ -56,7 +58,9 @@ interface SPFRecord {
     status?: string;
     item_description?: string;
     item_photo?: string;
+    item_qty?: string;
     spf_creation_id?: number;
+    tin_no?: string;
 }
 
 interface SPFProps {
@@ -412,10 +416,12 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         setCurrentSPF({
             customer_name: acc.company_name,
             registered_address: acc.address,
+            delivery_address: acc.delivery_address || "",
             prepared_by: prepared_by || "",
             sales_person: prepared_by || "",
             start_date: new Date().toISOString(),
             end_date: new Date().toISOString(),
+            tin_no: acc.tin_number || "",
         });
         setIsEditMode(false);
         setContactDialogOpen(true);

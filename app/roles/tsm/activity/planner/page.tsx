@@ -27,6 +27,7 @@ import { Scheduled } from "@/components/roles/tsm/activity/quotation/pending/pen
 import { EndorsedQuotation } from "@/components/roles/tsm/activity/quotation/endorsed/endorsed-quotation";
 import { AccountsCards } from "@/components/roles/tsm/accounts/transfer/transfer";
 import { RequestTable } from "@/components/roles/tsa/accounts/approval/table/table";
+import { ApprovalHistory } from "@/components/roles/tsm/activity/approval/approval-history";
 
 interface UserDetails {
     referenceid: string;
@@ -75,6 +76,19 @@ interface SPFRequest {
     prepared_by?: string;
 }
 
+interface HistoryItem {
+    id: number;
+    activity_reference_number: string;
+    company_name: string;
+    contact_person: string;
+    contact_number: string;
+    call_type: string;
+    source: string;
+    status: string;
+    date_created: string;
+    referenceid: string;
+}
+
 function DashboardContent() {
     const searchParams = useSearchParams();
     const { userId, setUserId } = useUser();
@@ -101,6 +115,10 @@ function DashboardContent() {
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [loadingDeletions, setLoadingDeletions] = useState(false);
     const [agentFilter, setAgentFilter] = useState<string>("all");
+
+    // Approval History State
+    const [approvalHistory, setApprovalHistory] = useState<HistoryItem[]>([]);
+    const [loadingApprovalHistory, setLoadingApprovalHistory] = useState(false);
 
     // SPF Notifications
     const [spfRequests, setSpfRequests] = useState<SPFRequest[]>([]);
@@ -349,6 +367,44 @@ function DashboardContent() {
         return () => clearInterval(interval);
     }, [userDetails.referenceid]);
 
+    // Fetch Approval History with "Approval for TSM" status
+    useEffect(() => {
+        if (!userDetails.referenceid) {
+            setApprovalHistory([]);
+            return;
+        }
+
+        const fetchApprovalHistory = async () => {
+            setLoadingApprovalHistory(true);
+            try {
+                const response = await fetch(
+                    `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+                );
+
+                if (!response.ok) throw new Error("Failed to fetch approval history");
+
+                const data = await response.json();
+                // Filter only those with "Approval for TSM" status
+                const pendingApprovals = (data.activities || []).filter(
+                    (item: HistoryItem) => item.status === "Approval for TSM"
+                );
+
+                setApprovalHistory(pendingApprovals);
+            } catch (err) {
+                console.error("Error fetching approval history:", err);
+                setApprovalHistory([]);
+            } finally {
+                setLoadingApprovalHistory(false);
+            }
+        };
+
+        fetchApprovalHistory();
+
+        // Set up polling every 30 seconds
+        const interval = setInterval(fetchApprovalHistory, 30000);
+        return () => clearInterval(interval);
+    }, [userDetails.referenceid]);
+
     const filteredData = useMemo(() => {
         let filteredPosts = posts;
 
@@ -457,6 +513,51 @@ function DashboardContent() {
                     description: "text-white",
                 },
             });
+        }
+    }
+
+    async function refreshApprovalHistory() {
+        if (!userDetails.referenceid) return;
+
+        setLoadingApprovalHistory(true);
+        try {
+            const response = await fetch(
+                `/api/act-fetch-tsm-history?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch approval history");
+
+            const data = await response.json();
+            const pendingApprovals = (data.activities || []).filter(
+                (item: HistoryItem) => item.status === "Approval for TSM"
+            );
+
+            setApprovalHistory(pendingApprovals);
+            sileo.success({
+                title: "Success",
+                description: "Approval history refreshed successfully!",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
+        } catch (error) {
+            sileo.error({
+                title: "Failed",
+                description: "Failed to refresh approval history. Please try again.",
+                duration: 4000,
+                position: "top-right",
+                fill: "black",
+                styles: {
+                    title: "text-white!",
+                    description: "text-white",
+                },
+            });
+        } finally {
+            setLoadingApprovalHistory(false);
         }
     }
 
@@ -650,6 +751,31 @@ function DashboardContent() {
                                         userDetails={userDetails}
                                         onRefreshAccountsAction={refreshDeletionRequests}
                                     />
+                                </CardContent>
+                            </Card>
+
+                            {/* Card 5 - Approval for TSM Outbound Calls */}
+                            <Card className="rounded-none border">
+                                <CardHeader className="flex flex-col space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircleIcon className="w-5 h-5 text-orange-500" />
+                                        <CardTitle className="text-sm font-semibold">Approval for TSM - Outbound Calls</CardTitle>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Outbound calls awaiting TSM approval with "Approval for TSM" status.
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    {loadingApprovalHistory ? (
+                                        <div className="text-center py-4 text-xs text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ApprovalHistory
+                                            history={approvalHistory}
+                                            dateCreatedFilterRange={dateCreatedFilterRange}
+                                            setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                            onRefresh={refreshApprovalHistory}
+                                        />
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>

@@ -127,6 +127,23 @@ function splitDescription(value?: string): string[] {
     return value.split("||").map((v) => v.trim());
 }
 
+function formatDuration(start?: string, end?: string) {
+    if (!start || !end) return "-";
+    const s = new Date(start),
+        e = new Date(end);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return "-";
+    let diff = Math.max(0, Math.floor((e.getTime() - s.getTime()) / 1000));
+    const h = Math.floor(diff / 3600);
+    diff %= 3600;
+    const m = Math.floor(diff / 60);
+    const sec = diff % 60;
+    const parts: string[] = [];
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    if (sec > 0 || parts.length === 0) parts.push(`${sec}s`);
+    return parts.join(" ");
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function TaskListEditDialog({
@@ -1192,8 +1209,9 @@ export default function TaskListEditDialog({
                                                 <div className="text-gray-600 space-y-0.5">
                                                     <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
                                                     <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                    <div className="text-gray-400 text-[10px] mt-1">
-                                                        {q.start_date ? new Date(q.start_date).toLocaleDateString() : "N/A"} - {q.end_date ? new Date(q.end_date).toLocaleDateString() : "N/A"}
+                                                    <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-2">
+                                                        <span>Modified: {q.end_date ? new Date(q.end_date).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}</span>
+                                                    
                                                     </div>
                                                 </div>
                                             </div>

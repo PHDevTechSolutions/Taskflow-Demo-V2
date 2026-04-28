@@ -37,6 +37,7 @@ export async function PUT(req: Request) {
       industry,
       status,
       company_group,
+      tin_number,
     } = body;
 
     if (!id) {
@@ -61,7 +62,8 @@ export async function PUT(req: Request) {
         date_updated = ${date_updated},
         industry = ${industry},
         status = ${status},
-        company_group = ${company_group}
+        company_group = ${company_group},
+        tin_number = ${tin_number || null}
       WHERE id = ${id}
       RETURNING *;
     `;

@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       date_created,
       industry,
       status,
-      company_group
+      company_group,
+      tin_number
     } = body;
 
     if (!referenceid || !company_name || !type_client || !region) {
@@ -116,7 +117,8 @@ export async function POST(req: Request) {
         industry,
         status,
         company_group,
-        account_reference_number
+        account_reference_number,
+        tin_number
       )
       VALUES
       (
@@ -135,7 +137,8 @@ export async function POST(req: Request) {
         ${industry || null},
         ${status || "Active"},
         ${company_group || null},
-        ${account_reference_number}
+        ${account_reference_number},
+        ${tin_number || null}
       )
       RETURNING *;
     `;

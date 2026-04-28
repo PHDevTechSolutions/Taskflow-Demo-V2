@@ -38,6 +38,7 @@ interface Account {
   status?: string;
   company_group: string;
   next_available_date: string;
+  tin_number?: string;
 }
 
 interface UserDetails {

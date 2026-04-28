@@ -38,6 +38,7 @@ import {
   PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck,
   AlertCircle, ChevronDown, ChevronRight, Bell, CheckCircle2,
   XCircle, Eye, Download, Trash2, PackageCheck, Clock, List,
+  AlertTriangle, PhoneOff, Search,
 } from "lucide-react";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ interface Account {
   contact_number: string; email_address: string; address: string;
   delivery_address: string; region: string; industry: string;
   status?: string; company_group?: string;
+  account_reference_number: string;
 }
 
 interface SupervisorDetails {
@@ -87,6 +89,16 @@ interface SPFNotification {
   date_updated?: string;
   status: string;
   referenceid: string;
+}
+
+interface ActivityForCheck {
+  id: string;
+  account_reference_number: string;
+  activity_reference_number: string;
+  company_name: string;
+  status: string;
+  scheduled_date?: string;
+  date_created: string;
 }
 
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
@@ -463,6 +475,14 @@ function DashboardContent() {
 
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
 
+  // ─── No Activity Accounts State ────────────────────────────────────────────
+  const [activities, setActivities] = useState<ActivityForCheck[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loadingNoActivity, setLoadingNoActivity] = useState(false);
+  const [noActivitySearch, setNoActivitySearch] = useState("");
+  const NO_ACTIVITY_BATCH_SIZE = 15;
+  const [displayedNoActivityCount, setDisplayedNoActivityCount] = useState(NO_ACTIVITY_BATCH_SIZE);
+
   const queryUserId = searchParams?.get("id") ?? "";
 
   // ── Alt + Ctrl + C shortcut ───────────────────────────────────────────────
@@ -595,6 +615,102 @@ function DashboardContent() {
     }
   }, []);
 
+  // ─── Fetch activities for no-activity calculation ─────────────────────────
+  const fetchActivitiesForNoActivity = useCallback(async () => {
+    if (!userDetails.referenceid) return;
+    try {
+      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true`;
+      const actRes = await fetch(activitiesUrl);
+      if (actRes.ok) {
+        const actData = await actRes.json();
+        const list = Array.isArray(actData) ? actData : actData.data ?? [];
+        setActivities(list);
+      }
+    } catch (err) {
+      console.error("Error fetching activities:", err);
+    }
+  }, [userDetails.referenceid]);
+
+  // ─── Fetch accounts for no-activity calculation ──────────────────────────
+  const fetchAccountsForNoActivity = useCallback(async () => {
+    if (!userDetails.referenceid) return;
+    setLoadingNoActivity(true);
+    try {
+      const response = await fetch(
+        `/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(userDetails.referenceid)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // Filter to only active accounts (same logic as new.tsx)
+        const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
+        const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
+        const filtered = (data.data || []).filter((acc: Account) => {
+          const status = acc.status?.toLowerCase() || "";
+          const typeClient = acc.type_client?.toLowerCase() || "";
+          if (!acc.status || !acc.type_client) return false;
+          if (excludedStatuses.includes(status)) return false;
+          if (!allowedTypes.includes(typeClient)) return false;
+          return true;
+        });
+        setAccounts(filtered);
+      }
+    } catch (err) {
+      console.error("Error fetching accounts:", err);
+    } finally {
+      setLoadingNoActivity(false);
+    }
+  }, [userDetails.referenceid]);
+
+  useEffect(() => {
+    if (userDetails.referenceid) {
+      fetchActivitiesForNoActivity();
+      fetchAccountsForNoActivity();
+    }
+  }, [userDetails.referenceid, fetchActivitiesForNoActivity, fetchAccountsForNoActivity]);
+
+  // ─── Calculate accounts WITH activity ─────────────────────────────────────
+  const accountsWithActivity = React.useMemo(() => {
+    const s = new Set<string>();
+    activities.forEach((a) => {
+      if (a.account_reference_number) s.add(a.account_reference_number);
+    });
+    return s;
+  }, [activities]);
+
+  // ─── Calculate NO ACTIVITY accounts with aging ─────────────────────────────
+  const calculateAging = (dateStr: string): number => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  const filteredNoActivityAccounts = React.useMemo(() => {
+    let filtered = accounts
+      .filter((account) => !accountsWithActivity.has(account.account_reference_number))
+      .map((account) => ({
+        ...account,
+        agingDays: calculateAging(account.date_created),
+      }))
+      .sort((a, b) => b.agingDays - a.agingDays);
+    
+    if (noActivitySearch.trim()) {
+      const searchLower = noActivitySearch.toLowerCase();
+      filtered = filtered.filter((acc) =>
+        acc.company_name.toLowerCase().includes(searchLower) ||
+        acc.type_client.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return filtered;
+  }, [accounts, accountsWithActivity, noActivitySearch]);
+
+  const displayedNoActivityAccounts = React.useMemo(() => {
+    return filteredNoActivityAccounts.slice(0, displayedNoActivityCount);
+  }, [filteredNoActivityAccounts, displayedNoActivityCount]);
+
+  const hasMoreNoActivity = filteredNoActivityAccounts.length > displayedNoActivityCount;
+
   // ── Shared props builder ──────────────────────────────────────────────────
   const sharedProps = {
     referenceid: userDetails.referenceid,
@@ -650,7 +766,7 @@ function DashboardContent() {
             </div>
           </header>
 
-          <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+          <main className="flex flex-1 gap-4 p-4 overflow-hidden">
             {loadingUser ? (
               <div className="flex flex-1 items-center justify-center">
                 <div className="flex flex-col items-center gap-2">
@@ -661,99 +777,186 @@ function DashboardContent() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <>
+                {/* ─── No Activity Sidebar ───────────────────────────────────── */}
+                {filteredNoActivityAccounts.length > 0 && (
+                  <div className="w-[280px] shrink-0 flex flex-col border-r pr-4 overflow-hidden">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <h3 className="text-xs font-bold text-amber-700">Activities of Client Last Touch or No Activity</h3>
+                      <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">
+                        {filteredNoActivityAccounts.length}
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mb-2 italic">
+                      (Based on date of last activity)
+                    </p>
+                    
+                    {/* Search bar */}
+                    <div className="relative mb-3">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-gray-200 rounded-none focus:outline-none focus:border-amber-400"
+                        value={noActivitySearch}
+                        onChange={(e) => {
+                          setNoActivitySearch(e.target.value);
+                          setDisplayedNoActivityCount(NO_ACTIVITY_BATCH_SIZE);
+                        }}
+                      />
+                    </div>
 
-                {/* ── New Task (full width) ── */}
-                <Card className="rounded-none">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <PlusCircle className="w-5 h-5" /><span>New Task</span>
-                    </CardTitle>
-                    <CardDescription>
-                      Manage your latest Endorsed Tickets and Outbound Calls efficiently. Stay updated with pending tasks and streamline your workflow.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <NewTask
-                      referenceid={userDetails.referenceid}
-                      userDetails={userDetails}
-                      onSaveAccountAction={handleSaveAccount}
-                      onRefreshAccountsAction={refreshAccounts}
-                    />
-                  </CardContent>
-                </Card>
+                    {/* Scrollable list */}
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                      {loadingNoActivity ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                        </div>
+                      ) : (
+                        <>
+                          {displayedNoActivityAccounts.map((account) => (
+                            <div
+                              key={account.id}
+                              className="p-2 bg-amber-50 border border-amber-200 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium truncate flex-1">{account.company_name}</span>
+                                <Badge
+                                  className={`text-[9px] shrink-0 ${
+                                    account.agingDays > 30
+                                      ? "bg-red-100 text-red-700 border-red-200"
+                                      : account.agingDays > 14
+                                      ? "bg-orange-100 text-orange-700 border-orange-200"
+                                      : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                  }`}
+                                >
+                                  {account.agingDays}d
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge className="text-[8px] bg-blue-100 text-blue-700 border-blue-200 uppercase">
+                                  {account.type_client}
+                                </Badge>
+                                <span className="text-[9px] text-gray-400">
+                                  {new Date(account.date_created).toLocaleDateString("en-PH")}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {/* Load more button */}
+                          {hasMoreNoActivity && (
+                            <button
+                              className="w-full py-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-none hover:bg-amber-100 transition-colors"
+                              onClick={() => setDisplayedNoActivityCount(prev => prev + NO_ACTIVITY_BATCH_SIZE)}
+                            >
+                              Load more ({filteredNoActivityAccounts.length - displayedNoActivityCount} remaining)
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                {/* ── In Progress ── */}
-                <PlannerCard
-                  title="In Progress"
-                  icon={<Loader2 className="w-4 h-4" />}
-                  count={progressCount}
-                  isOpen={collapseState.inProgress}
-                  onToggle={() => toggleCollapse("inProgress")}
-                >
-                  <Progress {...sharedProps} onCountChange={setProgressCount} />
-                </PlannerCard>
+                {/* ─── Main Cards Grid ─────────────────────────────────────── */}
+                <div className="flex-1 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                {/* ── Scheduled ── */}
-                <PlannerCard
-                  title="Scheduled"
-                  icon={<Calendar className="w-4 h-4" />}
-                  count={scheduledCount}
-                  isOpen={collapseState.scheduled}
-                  onToggle={() => toggleCollapse("scheduled")}
-                >
-                  <Scheduled {...sharedProps} tsm={userDetails.tsm} onCountChange={setScheduledCount} />
-                </PlannerCard>
+                    {/* ── New Task (full width) ── */}
+                    <Card className="rounded-none">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <PlusCircle className="w-5 h-5" /><span>New Task</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Manage your latest Endorsed Tickets and Outbound Calls efficiently. Stay updated with pending tasks and streamline your workflow.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <NewTask
+                          referenceid={userDetails.referenceid}
+                          userDetails={userDetails}
+                          onSaveAccountAction={handleSaveAccount}
+                          onRefreshAccountsAction={refreshAccounts}
+                        />
+                      </CardContent>
+                    </Card>
 
-                {/* ── Completed ── */}
-                <PlannerCard
-                  title="Completed"
-                  icon={<CheckCircle className="w-4 h-4" />}
-                  count={completedCount}
-                  isOpen={collapseState.completed}
-                  onToggle={() => toggleCollapse("completed")}
-                >
-                  <Completed {...sharedProps} onCountChange={setCompletedCount} />
-                </PlannerCard>
+                    {/* ── In Progress ── */}
+                    <PlannerCard
+                      title="In Progress"
+                      icon={<Loader2 className="w-4 h-4" />}
+                      count={progressCount}
+                      isOpen={collapseState.inProgress}
+                      onToggle={() => toggleCollapse("inProgress")}
+                    >
+                      <Progress {...sharedProps} onCountChange={setProgressCount} />
+                    </PlannerCard>
 
-                {/* ── Delivered ── 
-                <PlannerCard
-                  title="Delivered"
-                  icon={<PackageCheck className="w-4 h-4" />}
-                  count={deliveredCount}
-                  isOpen={collapseState.delivered}
-                  onToggle={() => toggleCollapse("delivered")}
-                >
-                  <Delivered {...sharedProps} onCountChange={setDeliveredCount} />
-                </PlannerCard>*/}
+                    {/* ── Scheduled ── */}
+                    <PlannerCard
+                      title="Scheduled"
+                      icon={<Calendar className="w-4 h-4" />}
+                      count={scheduledCount}
+                      isOpen={collapseState.scheduled}
+                      onToggle={() => toggleCollapse("scheduled")}
+                    >
+                      <Scheduled {...sharedProps} tsm={userDetails.tsm} onCountChange={setScheduledCount} />
+                    </PlannerCard>
+
+                    {/* ── Completed ── */}
+                    <PlannerCard
+                      title="Completed"
+                      icon={<CheckCircle className="w-4 h-4" />}
+                      count={completedCount}
+                      isOpen={collapseState.completed}
+                      onToggle={() => toggleCollapse("completed")}
+                    >
+                      <Completed {...sharedProps} onCountChange={setCompletedCount} />
+                    </PlannerCard>
+
+                    {/* ── Delivered ── 
+                    <PlannerCard
+                      title="Delivered"
+                      icon={<PackageCheck className="w-4 h-4" />}
+                      count={deliveredCount}
+                      isOpen={collapseState.delivered}
+                      onToggle={() => toggleCollapse("delivered")}
+                    >
+                      <Delivered {...sharedProps} onCountChange={setDeliveredCount} />
+                    </PlannerCard>*/}
 
 
-                {/* ── Pending Task ── 
-                <PlannerCard
-                  title="Pending Task"
-                  icon={<Clock className="w-4 h-4" />}
-                  count={doneCount}
-                  isOpen={collapseState.done}
-                  onToggle={() => toggleCollapse("done")}
-                >
-                  <Done {...sharedProps} onCountChange={setDoneCount} />
-                </PlannerCard>*/}
+                    {/* ── Pending Task ── 
+                    <PlannerCard
+                      title="Pending Task"
+                      icon={<Clock className="w-4 h-4" />}
+                      count={doneCount}
+                      isOpen={collapseState.done}
+                      onToggle={() => toggleCollapse("done")}
+                    >
+                      <Done {...sharedProps} onCountChange={setDoneCount} />
+                    </PlannerCard>*/}
 
 
-                {/* ── Overdue (full width, red border) ── */}
-                <PlannerCard
-                  title="Overdue"
-                  icon={<AlertCircle className="w-4 h-4" />}
-                  count={overdueCount}
-                  isOpen={collapseState.overdue}
-                  onToggle={() => toggleCollapse("overdue")}
-                  className="border-3 border-red-400 shadow-lg"
-                  countColor="text-red-600"
-                >
-                  <Overdue {...sharedProps} tsm={userDetails.tsm} onCountChange={setOverdueCount} />
-                </PlannerCard>
+                    {/* ── Overdue (full width, red border) ── */}
+                    <PlannerCard
+                      title="Overdue"
+                      icon={<AlertCircle className="w-4 h-4" />}
+                      count={overdueCount}
+                      isOpen={collapseState.overdue}
+                      onToggle={() => toggleCollapse("overdue")}
+                      className="border-3 border-red-400 shadow-lg"
+                      countColor="text-red-600"
+                    >
+                      <Overdue {...sharedProps} tsm={userDetails.tsm} onCountChange={setOverdueCount} />
+                    </PlannerCard>
 
-              </div>
+                  </div>
+                </div>
+              </>
             )}
           </main>
         </SidebarInset>

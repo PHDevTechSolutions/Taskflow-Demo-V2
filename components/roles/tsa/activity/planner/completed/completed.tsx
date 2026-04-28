@@ -106,8 +106,6 @@ export const Completed: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const COMPLETED_BATCH_SIZE = 20;
-  const [displayedCompletedCount, setDisplayedCompletedCount] = useState(COMPLETED_BATCH_SIZE);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -217,7 +215,7 @@ export const Completed: React.FC<NewTaskProps> = ({
     return true;
   };
 
-  const allowedStatuses = ["Completed", "Delivered"];
+  const allowedStatuses = ["Completed"];
 
   const mergedData = activities
     .filter((a) => allowedStatuses.includes(a.status))
@@ -252,18 +250,9 @@ export const Completed: React.FC<NewTaskProps> = ({
     );
   });
 
-  // Paginated data for lazy loading
-  const displayedCompletedData = filteredData.slice(0, displayedCompletedCount);
-  const hasMoreCompleted = filteredData.length > displayedCompletedCount;
-
   useEffect(() => {
     onCountChange?.(filteredData.length);
   }, [filteredData.length]);
-
-  // Reset pagination when search changes
-  useEffect(() => {
-    setDisplayedCompletedCount(COMPLETED_BATCH_SIZE);
-  }, [searchTerm]);
 
   if (error) {
     return (
@@ -307,24 +296,19 @@ export const Completed: React.FC<NewTaskProps> = ({
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {displayedCompletedData.map((item) => {
+          {filteredData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800";
-            let cardBgClass = "bg-gray-100";
 
             if (item.status === "Completed") {
               badgeClass = "bg-green-400 text-white";
-              cardBgClass = "bg-green-100";
-            } else if (item.status === "Delivered") {
-              badgeClass = "bg-teal-500 text-white";
-              cardBgClass = "bg-teal-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
+                className="w-full border rounded-none shadow-sm mt-2"
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
@@ -635,19 +619,6 @@ export const Completed: React.FC<NewTaskProps> = ({
             );
           })}
         </Accordion>
-
-        {/* ─── Lazy Loading: Load More Button ─── */}
-        {hasMoreCompleted && (
-          <div className="flex justify-center py-4 mt-4">
-            <Button
-              variant="outline"
-              className="rounded-none text-xs"
-              onClick={() => setDisplayedCompletedCount(prev => prev + COMPLETED_BATCH_SIZE)}
-            >
-              Load More ({filteredData.length - displayedCompletedCount} remaining)
-            </Button>
-          </div>
-        )}
       </div>
     </>
   );

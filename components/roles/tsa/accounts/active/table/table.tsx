@@ -77,6 +77,7 @@ interface Account {
   company_group: string;
   status?: string;
   next_available_date: string;
+  tin_number?: string;
 }
 
 interface UserDetails {
@@ -496,6 +497,14 @@ export function AccountsTable({
         ),
       },
       {
+        accessorKey: "tin_number",
+        header: "TIN No.",
+        cell: ({ row }) => (
+          <p className="text-[11px] text-slate-500 font-mono">
+            {row.original.tin_number ?? "—"}</p>
+        ),
+      },
+      {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => <StatusBadge value={row.original.status ?? "—"} />,
@@ -833,6 +842,7 @@ export function AccountsTable({
             company_group: editingAccount.company_group,
             type_client: editingAccount.type_client,
             date_created: editingAccount.date_created,
+            tin_number: editingAccount.tin_number,
           }}
           userDetails={userDetails}
           onSaveAction={(data) => {
