@@ -565,6 +565,12 @@ export default function TaskListEditDialog({
   const [showProfitMargins, setShowProfitMargins] = useState(item.show_profit_margins ?? false);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState(item.margin_alert_threshold ?? 0);
   const [showMarginAlerts, setShowMarginAlerts] = useState(item.show_margin_alerts ?? false);
+  // Toast notification state
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+  };
   const [productViewMode, setProductViewMode] = useState<'list' | 'grid'>('list');
   const [visibleColumns, setVisibleColumns] = useState(item.visible_columns ?? null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -1961,7 +1967,7 @@ export default function TaskListEditDialog({
 
       const initiateNewPage = async () => {
         const banner = await renderBlock(
-          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo} | ${payload.companyName}<br/>DATE: ${payload.date}</div></div>`,
+          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo}<br/>DATE: ${payload.date}</div></div>`,
         );
         pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
         return banner.h;
@@ -3460,31 +3466,72 @@ ${payload.whtType && payload.whtType !== "none"
                     </div>
                     {/* VAT */}
                     <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200">
-                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">VAT</span>
-                      <RadioGroup value={vatTypeState} onValueChange={(value) => {
-                        const v = value as "vat_inc" | "vat_exe" | "zero_rated";
-                        setVatTypeState(v);
-                        setDiscount(v === "vat_exe" ? 12 : 0);
-                      }} className="flex gap-2">
-                        {[{ v: "vat_inc", l: "Inc" }, { v: "vat_exe", l: "Exe" }, { v: "zero_rated", l: "0%" }].map(({ v, l }) => (
-                          <div key={v} className="flex items-center gap-0.5">
-                            <RadioGroupItem value={v} id={`edit-vat-${v}`} />
-                            <label htmlFor={`edit-vat-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${vatTypeState === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                          </div>
+                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0 text-[9px]">VAT</span>
+                      <div className="flex gap-2">
+                        {[
+                          { v: "vat_inc", l: "Inc", desc: "VAT Inclusive", explanation: "Price includes 12% VAT. Client sees: 'VAT Inclusive' on quote.", example: "Unit: ₱500 | VAT: ₱53.57 | Net: ₱446.43" },
+                          { v: "vat_exe", l: "Exe", desc: "VAT Exempt", explanation: "No VAT charged. Common for zero-rated or exempt transactions.", example: "Unit: ₱500 | VAT: ₱0.00 | Net: ₱500.00" },
+                          { v: "zero_rated", l: "0%", desc: "Zero Rated", explanation: "0% VAT rate applies. Common for export or special transactions.", example: "Unit: ₱500 | VAT: 0% | Net: ₱500.00" }
+                        ].map(({ v, l, desc, explanation, example }) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => {
+                              if (vatTypeState === v) return;
+                              setConfirmDialog({
+                                isOpen: true,
+                                title: `Switch to ${desc}?`,
+                                description: explanation,
+                                example: example,
+                                onConfirm: () => {
+                                  setVatTypeState(v as "vat_inc" | "vat_exe" | "zero_rated");
+                                  setDiscount(v === "vat_exe" ? 12 : 0);
+                                },
+                                onCancel: () => {}
+                              });
+                            }}
+                            className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${vatTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
+                          >
+                            <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${vatTypeState === v ? "border-[#121212]" : "border-gray-300"}`}>
+                              {vatTypeState === v && <div className="w-1.5 h-1.5 rounded-full bg-[#121212]" />}
+                            </div>
+                            <span className="font-black uppercase text-[10px]">{l}</span>
+                          </button>
                         ))}
-                      </RadioGroup>
+                      </div>
                     </div>
                     {/* EWT */}
                     <div className="flex items-center gap-2 px-3 py-2">
-                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0">EWT</span>
-                      <RadioGroup value={whtTypeState} onValueChange={setWhtTypeState} className="flex gap-2">
-                        {[{ v: "none", l: "None" }, { v: "wht_1", l: "1%" }, { v: "wht_2", l: "2%" }].map(({ v, l }) => (
-                          <div key={v} className="flex items-center gap-0.5">
-                            <RadioGroupItem value={v} id={`edit-ewt-${v}`} />
-                            <label htmlFor={`edit-ewt-${v}`} className={`font-black uppercase cursor-pointer transition-colors ${whtTypeState === v ? "text-[#121212]" : "text-gray-300"}`}>{l}</label>
-                          </div>
+                      <span className="font-black uppercase text-gray-400 tracking-widest shrink-0 text-[9px]">EWT</span>
+                      <div className="flex gap-2">
+                        {[
+                          { v: "none", l: "None", desc: "No EWT", explanation: "No Expanded Withholding Tax deduction applied.", example: "Gross: ₱500 | EWT: ₱0.00 | Net: ₱500.00" },
+                          { v: "wht_1", l: "1%", desc: "EWT 1%", explanation: "1% withholding tax deduction for regular transactions.", example: "Gross: ₱500 | EWT: ₱5.00 | Net: ₱495.00" },
+                          { v: "wht_2", l: "2%", desc: "EWT 2%", explanation: "2% withholding tax deduction for government or specified transactions.", example: "Gross: ₱500 | EWT: ₱10.00 | Net: ₱490.00" }
+                        ].map(({ v, l, desc, explanation, example }) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => {
+                              if (whtTypeState === v) return;
+                              setConfirmDialog({
+                                isOpen: true,
+                                title: `Switch to ${desc}?`,
+                                description: explanation,
+                                example: example,
+                                onConfirm: () => setWhtTypeState(v as "none" | "wht_1" | "wht_2"),
+                                onCancel: () => {}
+                              });
+                            }}
+                            className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${whtTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
+                          >
+                            <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${whtTypeState === v ? "border-[#121212]" : "border-gray-300"}`}>
+                              {whtTypeState === v && <div className="w-1.5 h-1.5 rounded-full bg-[#121212]" />}
+                            </div>
+                            <span className="font-black uppercase text-[10px]">{l}</span>
+                          </button>
                         ))}
-                      </RadioGroup>
+                      </div>
                     </div>
                   </div>
 
@@ -3808,15 +3855,38 @@ ${payload.whtType && payload.whtType !== "none"
                                     />
                                   </td>
 
-                                  {/* Display Mode — proper Select dropdown (Full / Net Only / Savings / Bundle / On Request) */}
+                                  {/* Display Mode — Select dropdown with confirmation dialog */}
                                   <td className="border border-gray-300 p-0.5 bg-purple-50/30">
                                     <Select
                                       value={product.displayMode || 'transparent'}
                                       onValueChange={(value) => {
-                                        setProducts((prev) => {
-                                          const copy = [...prev];
-                                          copy[index] = { ...copy[index], displayMode: value as ProductItem['displayMode'] };
-                                          return copy;
+                                        const displayLabels: Record<string, string> = {
+                                          'transparent': 'Full',
+                                          'net_only': 'Net Only',
+                                          'value_add': 'Show Savings',
+                                          'bundle': 'Bundle',
+                                          'request': 'On Request'
+                                        };
+                                        const displayDesc: Record<string, string> = {
+                                          'transparent': 'Show all pricing details: Unit Price, Discount, and Net Price. Provides complete transparency to the client.',
+                                          'net_only': 'Show only the Net Price. Unit Price and Discount columns are hidden. Client sees final price only.',
+                                          'value_add': 'Highlight the savings with "You Save" messaging. Shows discount value prominently to emphasize the deal.',
+                                          'bundle': 'Show as bundled package pricing. Emphasizes the package deal value rather than individual item pricing.',
+                                          'request': 'Display "Price Upon Request" instead of actual pricing. Use for custom quotations or variable pricing.'
+                                        };
+                                        setConfirmDialog({
+                                          isOpen: true,
+                                          title: `Change Display Mode for "${product.product_title}" to ${displayLabels[value]}?`,
+                                          description: displayDesc[value],
+                                          example: `${displayLabels[value]} mode: ${displayDesc[value].split('.')[0]}`,
+                                          onConfirm: () => {
+                                            setProducts((prev) => {
+                                              const copy = [...prev];
+                                              copy[index] = { ...copy[index], displayMode: value as ProductItem['displayMode'] };
+                                              return copy;
+                                            });
+                                          },
+                                          onCancel: () => {}
                                         });
                                       }}
                                     >
@@ -4374,21 +4444,9 @@ ${payload.whtType && payload.whtType !== "none"
             ⚠️ Quotation Number only appears on the final downloaded quotation.
           </div>
 
-          <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-center">
-            <div className="flex gap-2 w-full sm:w-auto flex-wrap p-2 items-center justify-center">
-              {/* Show Discounts toggle — matches quotation.tsx bottom bar */}
-              <label className="flex items-center gap-1.5 cursor-pointer hover:bg-blue-100/50 px-3 py-2 rounded transition-colors" title="Show or hide discount columns in preview/PDF">
-                <input
-                  type="checkbox"
-                  checked={showDiscountColumns}
-                  onChange={(e) => setShowDiscountColumns(e.target.checked)}
-                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`font-medium text-xs ${showDiscountColumns ? 'text-blue-700' : 'text-gray-500'}`}>
-                  {showDiscountColumns ? '✓ Show Discounts' : '○ Show Discounts'}
-                </span>
-              </label>
-
+          <DialogFooter className="flex flex-col gap-2 pl-8 pr-5 py-3 sm:pl-10 sm:pr-6 border-t border-gray-200 shrink-0 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap p-2 items-center justify-end">
+              {/* Review Button */}
               <Button
                 className="flex-1 lg:flex-none bg-[#121212] rounded-none hover:bg-black text-white flex gap-2 items-center h-12 px-6"
                 onClick={() => setIsPreviewOpen(true)}
@@ -4457,6 +4515,7 @@ ${payload.whtType && payload.whtType !== "none"
             showMarginAlerts={showMarginAlerts}
             productViewMode={productViewMode}
             visibleColumns={visibleColumns}
+            approvedStatus={ApprovedStatus}
           />
         </DialogContent>
       </Dialog>
@@ -4911,24 +4970,94 @@ ${payload.whtType && payload.whtType !== "none"
 
       {/* Confirm Dialog — rich toggle confirmation (mirrors quotation.tsx) */}
       <Dialog open={!!confirmDialog?.isOpen} onOpenChange={(open) => { if (!open) setConfirmDialog(null); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-xl border border-gray-200 shadow-2xl [&>button]:hidden">
-          {/* Header */}
-          <div className="bg-[#121212] px-5 py-4">
-            <DialogTitle className="text-white text-sm font-black uppercase tracking-widest leading-tight">
+        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-xl border border-gray-200 shadow-2xl [&>button]:hidden">
+          {/* Header - Blue like planner */}
+          <div className="bg-blue-600 px-5 py-4 flex items-center justify-between">
+            <DialogTitle className="text-white text-sm font-black uppercase tracking-widest leading-tight flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               {confirmDialog?.title}
             </DialogTitle>
+            <button
+              type="button"
+              onClick={() => setConfirmDialog(null)}
+              className="text-white/80 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Body */}
-          <div className="px-5 py-4 space-y-3">
+          <div className="px-5 py-4 space-y-4">
             <p className="text-xs text-gray-600 leading-relaxed">
               {confirmDialog?.description}
             </p>
 
-            {confirmDialog?.example && (
+            {/* Visual Example Preview - VAT/EWT/Zero-Rated style like planner */}
+            {(confirmDialog?.title?.toLowerCase().includes('vat') || confirmDialog?.title?.toLowerCase().includes('ewt') || confirmDialog?.title?.toLowerCase().includes('zero')) && (
+              <div className="overflow-hidden rounded-lg border-2 border-yellow-300 bg-gradient-to-b from-yellow-50 to-white">
+                {/* Example Label */}
+                <div className="bg-yellow-100 px-3 py-1.5 border-b border-yellow-200">
+                  <p className="text-[10px] font-bold text-yellow-700 uppercase tracking-wider flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Example Preview
+                  </p>
+                </div>
+                
+                {/* VAT Type Indicator */}
+                <div className="px-3 py-2 bg-white">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase">Tax Type:</span>
+                    <div className="flex gap-1">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${confirmDialog?.title?.toLowerCase().includes('vat inc') ? 'bg-yellow-400 text-yellow-900 font-bold' : 'bg-gray-100 text-gray-400'}`}>VAT INC</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${confirmDialog?.title?.toLowerCase().includes('vat exe') || confirmDialog?.title?.toLowerCase().includes('exempt') ? 'bg-yellow-400 text-yellow-900 font-bold' : 'bg-gray-100 text-gray-400'}`}>VAT EXE</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${confirmDialog?.title?.toLowerCase().includes('zero') ? 'bg-yellow-400 text-yellow-900 font-bold' : 'bg-gray-100 text-gray-400'}`}>ZERO-RATED</span>
+                    </div>
+                  </div>
+                  
+                  {/* Mini Invoice Preview */}
+                  <div className="space-y-1 text-[10px]">
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-gray-500">Net Sales (Non-VAT):</span>
+                      <span className="font-mono font-medium">₱100,000.00</span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-gray-500">Delivery Charge:</span>
+                      <span className="font-mono font-medium">₱0.00</span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-gray-500">Restocking Fee:</span>
+                      <span className="font-mono font-medium">₱0.00</span>
+                    </div>
+                    <div className="border-t border-gray-200 my-1"></div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="font-bold text-gray-700">Total Invoice Amount:</span>
+                      <span className="font-mono font-bold">₱100,000.00</span>
+                    </div>
+                    <div className="flex justify-between py-0.5 text-[9px]">
+                      <span className="text-gray-400">Tax Status:</span>
+                      <span className="font-bold text-yellow-600">{confirmDialog?.title?.replace('Switch to ', '').replace('?', '')}</span>
+                    </div>
+                    <div className="bg-gray-900 text-white p-2 rounded mt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] uppercase tracking-wider">Total Amount Due:</span>
+                        <span className="font-mono font-bold text-sm">₱100,000.00</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {confirmDialog?.example && !confirmDialog?.title?.toLowerCase().includes('vat') && !confirmDialog?.title?.toLowerCase().includes('ewt') && !confirmDialog?.title?.toLowerCase().includes('zero') && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p>
-                <p className="text-[11px] text-gray-700 font-mono leading-snug">{confirmDialog?.example}</p>
+                <p className="text-[11px] text-gray-700 font-mono leading-snug whitespace-pre-line">{confirmDialog?.example}</p>
               </div>
             )}
 
@@ -4983,6 +5112,90 @@ ${payload.whtType && payload.whtType !== "none"
                 </table>
               </div>
             )}
+
+            {/* Display Mode Preview */}
+            {confirmDialog?.title?.toLowerCase().includes('display mode') && (
+              <div className="overflow-hidden rounded-lg border-2 border-purple-300 bg-gradient-to-b from-purple-50 to-white">
+                {/* Example Label */}
+                <div className="bg-purple-100 px-3 py-1.5 border-b border-purple-200">
+                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Example Preview
+                  </p>
+                </div>
+                
+                <div className="px-3 py-2 bg-white">
+                  {/* Display Mode Indicator */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase">Display Mode:</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-400 text-white font-bold">
+                      {confirmDialog?.title?.includes('Net Only') ? 'NET ONLY' : 
+                       confirmDialog?.title?.includes('Full') ? 'FULL' :
+                       confirmDialog?.title?.includes('Savings') ? 'SAVINGS' :
+                       confirmDialog?.title?.includes('Bundle') ? 'BUNDLE' :
+                       confirmDialog?.title?.includes('On Request') ? 'ON REQUEST' : 'CUSTOM'}
+                    </span>
+                  </div>
+                  
+                  {/* Product Table Preview */}
+                  <div className="overflow-hidden rounded border border-gray-200">
+                    <table className="w-full text-[10px] border-collapse">
+                      <thead>
+                        <tr className="bg-[#121212] text-white">
+                          <th className="px-2 py-1 text-left font-bold">Product</th>
+                          {confirmDialog?.title?.includes('Net Only') ? (
+                            <>
+                              <th className="px-2 py-1 text-right font-bold bg-purple-900/40 text-purple-200">Net Price</th>
+                              <th className="px-2 py-1 text-right font-bold">Total</th>
+                            </>
+                          ) : confirmDialog?.title?.includes('On Request') ? (
+                            <th className="px-2 py-1 text-center font-bold bg-purple-900/40 text-purple-200" colSpan={2}>Price</th>
+                          ) : (
+                            <>
+                              <th className="px-2 py-1 text-right font-bold">Unit</th>
+                              {confirmDialog?.title?.includes('Savings') && <th className="px-2 py-1 text-right font-bold text-green-400">You Save</th>}
+                              <th className="px-2 py-1 text-right font-bold bg-purple-900/40 text-purple-200">Net</th>
+                              <th className="px-2 py-1 text-right font-bold">Total</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-white">
+                          <td className="px-2 py-1 font-medium">BOLLARD FIXTURE E27</td>
+                          {confirmDialog?.title?.includes('Net Only') ? (
+                            <>
+                              <td className="px-2 py-1 text-right text-purple-700 font-bold">₱400.00</td>
+                              <td className="px-2 py-1 text-right font-bold">₱4,000.00</td>
+                            </>
+                          ) : confirmDialog?.title?.includes('On Request') ? (
+                            <td className="px-2 py-1 text-center text-purple-700 font-bold italic" colSpan={2}>Price Upon Request</td>
+                          ) : (
+                            <>
+                              <td className="px-2 py-1 text-right">₱500.00</td>
+                              {confirmDialog?.title?.includes('Savings') && <td className="px-2 py-1 text-right text-green-600 font-bold">₱100.00</td>}
+                              <td className="px-2 py-1 text-right text-purple-700 font-bold">₱400.00</td>
+                              <td className="px-2 py-1 text-right font-bold">₱4,000.00</td>
+                            </>
+                          )}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Client View Note */}
+                  <div className="mt-2 text-[9px] text-purple-600 italic">
+                    {confirmDialog?.title?.includes('Net Only') && 'Client sees: Only final net price, unit price hidden'}
+                    {confirmDialog?.title?.includes('Full') && 'Client sees: All pricing details including unit price, discount, and net price'}
+                    {confirmDialog?.title?.includes('Savings') && 'Client sees: Emphasized savings amount with "You Save" messaging'}
+                    {confirmDialog?.title?.includes('Bundle') && 'Client sees: Package deal pricing, individual items de-emphasized'}
+                    {confirmDialog?.title?.includes('On Request') && 'Client sees: "Price Upon Request" - contact for pricing'}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -5010,6 +5223,43 @@ ${payload.whtType && payload.whtType !== "none"
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── MODERN TOAST NOTIFICATION ──────────────────────────────────────── */}
+      {toast.show && (
+        <div className="fixed top-6 right-6 z-[100] transform transition-all duration-300">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-lg shadow-2xl border ${
+            toast.type === 'success' 
+              ? 'bg-green-50 border-green-200 text-green-800' 
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+              toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+              {toast.type === 'success' ? (
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <p className="font-semibold text-sm">{toast.type === 'success' ? 'Success' : 'Error'}</p>
+              <p className="text-sm">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToast(prev => ({ ...prev, show: false }))}
+              className="ml-2 text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
