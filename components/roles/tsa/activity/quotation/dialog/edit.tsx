@@ -1877,7 +1877,7 @@ export default function TaskListEditDialog({
         const hidePriceCols = isRequest || isNetOnly || isBundle;
 
         // Build badges HTML
-        const badges = [];
+        const badges: string[] = [];
         if (item.isPromo) {
           badges.push(`<span style="display:inline-block;background:#facc15;color:#713f12;font-size:7px;font-weight:900;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em;margin-left:4px;">PROMO</span>`);
         }
@@ -1933,50 +1933,182 @@ export default function TaskListEditDialog({
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
 
-        const rowBlock = await renderBlock(
-          `<div class="content-area">
+        // ===== SECTION-AWARE INTELLIGENT PAGE SPLITTING =====
+        // Strategy: Try full item first. If it doesn't fit, split into sections
+        const usablePageHeight = pdfHeight - 50;
+
+        // Helper: Build complete row HTML
+        const buildFullRowHtml = (descContent: string): string => {
+          return `<div class="content-area">
           <table class="main-table" style="border:1.5px solid black;border-top:none;">
           <tr>
           <td style="width:35px;" class="item-no">${index + 1}</td>
           <td style="width:40px;" class="qty-col">${item.qty}</td>
-          <td style="width:105px;padding:8px;text-align:center;vertical-align:middle;">
+          <td style="width:105px;padding:8px;text-align:center;vertical-align:top;">
           <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
           </td>
-          <td style="padding:8px 10px;">
+          <td style="padding:8px 10px;vertical-align:top;">
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
             <p class="product-title" style="margin:0;">${item.title}</p>
             ${badges.join('')}
           </div>
           ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
           ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          <div class="desc-text">${item.product_description}</div>
+          <div class="desc-text">${descContent}</div>
           ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
           <td style="width:60px;text-align:center;${hidePriceCols ? 'background:#f9fafb;' : ''}" class="price-col">${unitPriceContent}</td>
           ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discContent}</td>
           <td style="width:80px;text-align:center;font-weight:600;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discountPriceContent}</td>` : ""}
           <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
-          </tr>
-          </table>
-          </div>`,
-        );
-        if (currentY + rowBlock.h > pdfHeight - 50) {
+          </tr></table></div>`;
+        };
+
+        // Step 1: Try rendering the FULL item first
+        const fullRowBlock = await renderBlock(buildFullRowHtml(item.product_description || ''));
+
+        // Step 2: If it fits on current page, place it and continue
+        if (currentY + fullRowBlock.h <= usablePageHeight) {
+          pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
+          currentY += fullRowBlock.h;
+          continue;
+        }
+
+        // Step 3: Full item doesn't fit - split into sections
+        const parseSections = (html: string): string[] => {
+          if (!html) return [];
+          const parts = html.split(/(?=<div[^>]*background:#121212[^>]*>)/i);
+          return parts.map(s => s.trim()).filter(Boolean);
+        };
+
+        const sections = parseSections(item.product_description);
+        if (sections.length === 0) {
+          // No sections to split - put on new page
           finalizeCurrentPage();
           pdf.addPage([612, 936]);
           pageCount++;
           currentY = await initiateNewPage();
-          pdf.addImage(
-            headerBlock.img,
-            "JPEG",
-            0,
-            currentY,
-            pdfWidth,
-            headerBlock.h,
-          );
+          pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
           currentY += 28;
+          pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
+          currentY += fullRowBlock.h;
+          continue;
         }
-        pdf.addImage(rowBlock.img, "JPEG", 0, currentY, pdfWidth, rowBlock.h);
-        currentY += rowBlock.h;
+
+        // Step 4: Measure each section in real table context
+        type MeasuredSection = { html: string; h: number };
+        const measuredSections: MeasuredSection[] = [];
+
+        for (const section of sections) {
+          const sectionBlock = await renderBlock(`
+            <div class="content-area">
+            <table class="main-table" style="border:1.5px solid black;border-top:none;">
+            <tr>
+            <td style="width:35px;">&nbsp;</td>
+            <td style="width:40px;">&nbsp;</td>
+            <td style="width:105px;">&nbsp;</td>
+            <td style="padding:8px 10px;vertical-align:top;">
+              <div class="desc-text">${section}</div>
+            </td>
+            <td style="width:60px;">&nbsp;</td>
+            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
+            <td style="width:90px;">&nbsp;</td>
+            </tr></table></div>`);
+          measuredSections.push({ html: section, h: sectionBlock.h });
+        }
+
+        // Step 5: Measure overhead (title, photo, prices)
+        const overheadBlock = await renderBlock(`
+          <div class="content-area">
+          <table class="main-table" style="border:1.5px solid black;border-top:none;">
+          <tr>
+          <td style="width:35px;" class="item-no">${index + 1}</td>
+          <td style="width:40px;" class="qty-col">${item.qty}</td>
+          <td style="width:105px;padding:8px;text-align:center;vertical-align:top;">
+          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
+          </td>
+          <td style="padding:8px 10px;vertical-align:top;">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+            <p class="product-title" style="margin:0;">${item.title}</p>
+            ${badges.join('')}
+          </div>
+          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
+          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
+          </td>
+          <td style="width:60px;text-align:center;" class="price-col">${unitPriceContent}</td>
+          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${discContent}</td>
+          <td style="width:80px;text-align:center;font-weight:600;">${discountPriceContent}</td>` : ""}
+          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
+          </tr></table></div>`);
+        const topOverheadH = overheadBlock.h;
+
+        // Step 6: Bin-pack sections into page groups
+        type PageGroup = { sections: string[]; isFirst: boolean };
+        const pageGroups: PageGroup[] = [];
+
+        const headerHeight = 28;
+        const freshPageAvailable = usablePageHeight - headerHeight;
+
+        let currentGroup: string[] = [];
+        let currentGroupH = 0;
+        let isFirstGroup = true;
+
+        for (const section of measuredSections) {
+          const overhead = isFirstGroup && currentGroup.length === 0 ? topOverheadH : 0;
+          const projectedH = overhead + currentGroupH + section.h;
+          const available = isFirstGroup ? (usablePageHeight - currentY) : freshPageAvailable;
+
+          if (currentGroup.length > 0 && projectedH > available) {
+            pageGroups.push({ sections: [...currentGroup], isFirst: isFirstGroup });
+            isFirstGroup = false;
+            currentGroup = [section.html];
+            currentGroupH = section.h;
+          } else {
+            currentGroup.push(section.html);
+            currentGroupH += section.h;
+          }
+        }
+        if (currentGroup.length > 0) {
+          pageGroups.push({ sections: currentGroup, isFirst: isFirstGroup });
+        }
+
+        // Step 7: Render each group
+        let isFirstPg = true;
+        for (const group of pageGroups) {
+          const combinedDesc = group.sections.join('\n');
+          const groupHtml = group.isFirst
+            ? buildFullRowHtml(combinedDesc)
+            : `<div class="content-area">
+            <table class="main-table" style="border:1.5px solid black;border-top:none;">
+            <tr>
+            <td style="width:35px;" class="item-no">&nbsp;</td>
+            <td style="width:40px;" class="qty-col">&nbsp;</td>
+            <td style="width:105px;padding:8px;">&nbsp;</td>
+            <td style="padding:8px 10px;vertical-align:top;">
+            <div class="desc-text">${combinedDesc}</div>
+            </td>
+            <td style="width:60px;" class="price-col">&nbsp;</td>
+            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
+            <td style="width:90px;" class="total-col">&nbsp;</td>
+            </tr></table></div>`;
+
+          const groupBlock = await renderBlock(groupHtml);
+          const spaceNeeded = groupBlock.h;
+          const spaceAvailable = isFirstPg ? (usablePageHeight - currentY) : freshPageAvailable;
+
+          if (!isFirstPg || currentY + spaceNeeded > usablePageHeight) {
+            if (!isFirstPg) finalizeCurrentPage();
+            pdf.addPage([612, 936]);
+            pageCount++;
+            currentY = await initiateNewPage();
+            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+            currentY += headerHeight;
+          }
+
+          pdf.addImage(groupBlock.img, "JPEG", 0, currentY, pdfWidth, groupBlock.h);
+          currentY += groupBlock.h;
+          isFirstPg = false;
+        }
       }
 
       // ✅ Helper (put above this block if possible)
