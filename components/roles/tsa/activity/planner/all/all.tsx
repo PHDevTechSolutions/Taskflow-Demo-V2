@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Calendar, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Calendar, Settings, Pen, } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -154,6 +156,12 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [rescheduleDate, setRescheduleDate] = useState<string>("");
 
+  // ── View mode & settings ──────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<"accordion" | "table">("accordion");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
+  const [editCellValue, setEditCellValue] = useState<string>("");
+
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
@@ -276,9 +284,34 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
       );
   }, [mergedActivities, statusFilter, searchTerm]);
 
+  // ── Lazy loading pagination ────────────────────────────────────────────────
+  const INITIAL_DISPLAY_COUNT = 20;
+  const LOAD_MORE_COUNT = 10;
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
+
+  // Reset display count when search or filter changes
+  useEffect(() => {
+    setDisplayCount(INITIAL_DISPLAY_COUNT);
+  }, [searchTerm, statusFilter]);
+
+  // Slice the filtered activities for display
+  const displayedActivities = useMemo(() => {
+    return filteredActivities.slice(0, displayCount);
+  }, [filteredActivities, displayCount]);
+
+  const hasMoreToLoad = displayCount < filteredActivities.length;
+
+  const handleLoadMore = () => {
+    setDisplayCount((prev) => Math.min(prev + LOAD_MORE_COUNT, filteredActivities.length));
+  };
+
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
   }, [filteredActivities, onCountChange]);
+
+  // Also notify about displayed count for UI
+  const displayedCount = displayedActivities.length;
+  const totalCount = filteredActivities.length;
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -695,6 +728,56 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
   const selectedTicketReferenceNumber =
     selectedActivity?.ticket_reference_number || null;
 
+  // ── Inline edit handler for table view ──────────────────────────────────────
+  const READ_ONLY_FIELDS = ["activity_reference_number", "company_name"];
+
+  const handleActivityInlineUpdate = async (id: string, field: string, value: string) => {
+    if (READ_ONLY_FIELDS.includes(field)) return;
+    try {
+      const res = await fetch(`/api/activity/tsa/planner/update?id=${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRF-Protection": "1" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to update");
+      }
+      sileo.success({
+        title: "Updated",
+        description: `${field.replace(/_/g, " ")} updated.`,
+        duration: 2000, position: "top-right", fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+      fetchAllData();
+    } catch (err: any) {
+      sileo.error({
+        title: "Update Failed",
+        description: err?.message || "Could not update.",
+        duration: 3000, position: "top-right", fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    }
+  };
+
+  const startCellEdit = (id: string, field: string, currentValue: string) => {
+    if (READ_ONLY_FIELDS.includes(field)) return;
+    setEditingCell({ id, field });
+    setEditCellValue(currentValue || "");
+  };
+
+  const saveCellEdit = () => {
+    if (!editingCell) return;
+    handleActivityInlineUpdate(editingCell.id, editingCell.field, editCellValue);
+    setEditingCell(null);
+    setEditCellValue("");
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+    setEditCellValue("");
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -733,8 +816,12 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
   }
 
   const activeDateLabel = (() => {
-    if (searchTerm.trim() !== "") return `Showing all matching "${searchTerm}"`;
-    return `All Activities (${filteredActivities.length} items)`;
+    if (searchTerm.trim() !== "") {
+      return `Showing ${displayedCount} of ${totalCount} matching "${searchTerm}"`;
+    }
+    if (totalCount === 0) return "No activities found";
+    if (displayedCount === totalCount) return `All Activities (${totalCount} items)`;
+    return `Showing ${displayedCount} of ${totalCount} activities`;
   })();
 
   return (
@@ -781,21 +868,35 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant="outline"
+            className="whitespace-nowrap rounded-none"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       <p className="text-[10px] text-muted-foreground mb-1 px-1">
         {activeDateLabel}
+        {viewMode === "table" && (
+          <span className="ml-2 inline-flex items-center gap-1 text-blue-600 font-bold uppercase">
+            <Pen className="w-2.5 h-2.5" /> Table Edit Mode
+          </span>
+        )}
       </p>
 
+      {viewMode === "accordion" ? (
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {filteredActivities.length === 0 ? (
+          {displayedActivities.length === 0 ? (
             <p className="text-muted-foreground text-xs px-2">
               No activities found.
             </p>
           ) : (
-            filteredActivities.map((item) => {
+            displayedActivities.map((item) => {
               const badgeProps = getBadgeProps(item.status);
               const statusStyles = getStatusStyles(item.status);
 
@@ -1178,6 +1279,148 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
           )}
         </Accordion>
       </div>
+      ) : (
+
+      // ── Table View ──────────────────────────────────────────────────────────
+      <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="text-xs min-w-[1800px]">
+            <TableHeader className="bg-zinc-50/50">
+              <TableRow className="hover:bg-transparent border-b border-zinc-200">
+                {[
+                  "Act Ref #", "Company", "Contact Person", "Contact #", "Email", "Address",
+                  "Type Client", "Status", "Scheduled Date", "Ticket Ref #", "Ticket Remarks",
+                ].map((h) => (
+                  <TableHead key={h} className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 whitespace-nowrap py-3 px-3">
+                    {h}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayedActivities.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="text-center py-10 text-zinc-400">
+                    No activities found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                displayedActivities.map((item) => {
+                  const isReadOnly = (field: string) => READ_ONLY_FIELDS.includes(field);
+                  const isEditing = (field: string) => editingCell?.id === item.id && editingCell?.field === field;
+
+                  const renderCell = (field: string, value: string) => {
+                    if (isReadOnly(field)) {
+                      return (
+                        <span className="font-bold text-zinc-700">{value || "-"}</span>
+                      );
+                    }
+                    if (isEditing(field)) {
+                      return (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            className="h-6 text-xs rounded-none px-1 py-0"
+                            value={editCellValue}
+                            onChange={(e) => setEditCellValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveCellEdit();
+                              if (e.key === "Escape") cancelCellEdit();
+                            }}
+                            autoFocus
+                          />
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 rounded-none" onClick={saveCellEdit}>
+                            <Check className="w-3 h-3 text-green-600" />
+                          </Button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <span
+                        className="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded-sm border border-transparent hover:border-blue-200 transition-colors"
+                        onClick={() => startCellEdit(item.id, field, value)}
+                        title="Click to edit"
+                      >
+                        {value || <span className="text-zinc-300 italic">—</span>}
+                      </span>
+                    );
+                  };
+
+                  return (
+                    <TableRow key={item.id} className="hover:bg-zinc-50/50">
+                      <TableCell className="px-3 font-mono text-[10px] text-zinc-500">
+                        {item.activity_reference_number}
+                      </TableCell>
+                      <TableCell className="px-3 font-bold text-zinc-800 whitespace-nowrap">
+                        {renderCell("company_name", item.company_name)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("contact_person", item.contact_person)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("contact_number", item.contact_number)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("email_address", item.email_address)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("address", item.address)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("type_client", item.type_client)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        <Badge
+                          variant="outline"
+                          className={`rounded-none text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent ${
+                            item.status === "Delivered" || item.status === "Done" || item.status === "Completed"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : item.status === "Quote-Done"
+                                ? "bg-blue-50 text-blue-700 border-blue-100"
+                                : item.status === "SO-Done"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : item.status === "Cancelled"
+                                    ? "bg-red-50 text-red-700 border-red-100"
+                                    : "bg-orange-50 text-orange-700 border-orange-100"
+                          }`}
+                        >
+                          {item.status.replace("-", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-3 whitespace-nowrap font-mono text-[11px] text-zinc-500">
+                        {new Date(item.scheduled_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("ticket_reference_number", item.ticket_reference_number)}
+                      </TableCell>
+                      <TableCell className="px-3">
+                        {renderCell("ticket_remarks", item.ticket_remarks)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+      )}
+
+      {/* ── Load More Button ─────────────────────────────────────────────── */}
+      {hasMoreToLoad && (
+        <div className="flex justify-center py-4">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            className="rounded-none text-xs"
+            disabled={activitiesLoading || historyLoading}
+          >
+            {activitiesLoading || historyLoading ? (
+              <Spinner className="size-4 mr-2" />
+            ) : null}
+            Load More ({filteredActivities.length - displayCount} remaining)
+          </Button>
+        </div>
+      )}
 
       <DoneDialog
         open={dialogDoneOpen}
@@ -1255,6 +1498,84 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
               Reschedule
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Settings Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-sm rounded-none p-0 overflow-hidden gap-0">
+          <div className="bg-zinc-900 px-6 pt-5 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="bg-white/10 rounded-full p-1.5">
+                  <Settings className="h-4 w-4 text-white" />
+                </div>
+                <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                  Settings
+                </DialogTitle>
+              </div>
+              <p className="text-zinc-400 text-[11px] mt-1">
+                Configure view and editing preferences.
+              </p>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 py-5 space-y-5">
+            <div className="space-y-3">
+              <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block">
+                Layout Mode
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => { setViewMode("accordion"); setSettingsOpen(false); }}
+                  className={`flex flex-col items-center gap-2 p-3 border rounded-none transition-colors ${
+                    viewMode === "accordion"
+                      ? "border-zinc-900 bg-zinc-50 text-zinc-900"
+                      : "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
+                  }`}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Accordion</span>
+                </button>
+                <button
+                  onClick={() => { setViewMode("table"); setSettingsOpen(false); }}
+                  className={`flex flex-col items-center gap-2 p-3 border rounded-none transition-colors ${
+                    viewMode === "table"
+                      ? "border-zinc-900 bg-zinc-50 text-zinc-900"
+                      : "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
+                  }`}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18M3 6h18M3 18h18" />
+                  </svg>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Table</span>
+                </button>
+              </div>
+            </div>
+
+            {viewMode === "table" && (
+              <div className="bg-blue-50 border border-blue-100 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
+                  Table Edit Mode
+                </p>
+                <p className="text-[10px] text-blue-600 leading-relaxed">
+                  Click any cell to edit it inline. <strong>Activity Reference #</strong> and <strong>Company Name</strong> are read-only. Press <kbd className="px-1 py-0.5 bg-blue-100 border border-blue-200 rounded text-[9px] font-mono">Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-blue-100 border border-blue-200 rounded text-[9px] font-mono">Esc</kbd> to cancel.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+            <Button
+              variant="outline"
+              className="rounded-none flex-1 text-xs h-10"
+              onClick={() => setSettingsOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

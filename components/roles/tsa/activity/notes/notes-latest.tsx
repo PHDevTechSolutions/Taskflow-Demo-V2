@@ -310,6 +310,18 @@ export const Notes: React.FC<NotesProps> = ({
 
   // Auto-suggest activity type based on remarks
   const suggestActivityType = (remarks: string): string => {
+    const r = remarks.toLowerCase();
+    if (r.includes("supplier") || r.includes("accreditation")) return "Admin - Supplier Accreditation";
+    if (r.includes("credit terms") || r.includes("credit application")) return "Admin - Credit Terms Application";
+    if (r.includes("accounting") || r.includes("billing") || r.includes("invoice") || r.includes("payment issue")) return "Accounting Concerns";
+    if (r.includes("refund")) return "After Sales Refunds";
+    if (r.includes("repair") || r.includes("replacement") || r.includes("warranty")) return "After Sales Repair / Replacement";
+    if (r.includes("bidding") || r.includes("bid prep") || r.includes("tender")) return "Bidding Preparations";
+    if (r.includes("order") || r.includes("purchase order") || r.includes("po ")) return "Customer Orders";
+    if (r.includes("delivery") || r.includes("shipment") || r.includes("shipping")) return "Delivery Concern";
+    if (r.includes("follow up") || r.includes("follow-up") || r.includes("followup")) return "Follow Up";
+    if (r.includes("sample") || r.includes("sample request")) return "Sample Requests";
+    if (r.includes("technical") || r.includes("troubleshoot") || r.includes("specification")) return "Technical Concerns";
     return "Documentation";
   };
 
@@ -324,12 +336,27 @@ export const Notes: React.FC<NotesProps> = ({
     setEndDate(toLocalDateTimeInput(endTime.toISOString()));
   };
 
+  // Duration map (in minutes) per activity type
+  const activityDurations: Record<string, number> = {
+    "Documentation": 30,
+    "Admin - Supplier Accreditation": 45,
+    "Admin - Credit Terms Application": 45,
+    "Accounting Concerns": 30,
+    "After Sales Refunds": 30,
+    "After Sales Repair / Replacement": 45,
+    "Bidding Preparations": 60,
+    "Customer Orders": 30,
+    "Delivery Concern": 20,
+    "Follow Up": 15,
+    "Sample Requests": 20,
+    "Technical Concerns": 45,
+  };
+
   // Suggest end time based on typical duration
   const suggestEndTime = (activityType: string) => {
     if (!startDate) return;
-    
     const start = new Date(startDate);
-    const duration = 30 * 60 * 1000; // 30 minutes for Documentation
+    const duration = (activityDurations[activityType] ?? 30) * 60 * 1000;
     const endTime = new Date(start.getTime() + duration);
     setEndDate(toLocalDateTimeInput(endTime.toISOString()));
   };
@@ -482,6 +509,17 @@ export const Notes: React.FC<NotesProps> = ({
                   <SelectContent className="rounded-none">
                     <SelectItem value="all" className="text-xs">All Types</SelectItem>
                     <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
+                    <SelectItem value="Admin - Supplier Accreditation" className="text-xs">Admin - Supplier Accreditation</SelectItem>
+                    <SelectItem value="Admin - Credit Terms Application" className="text-xs">Admin - Credit Terms Application</SelectItem>
+                    <SelectItem value="Accounting Concerns" className="text-xs">Accounting Concerns</SelectItem>
+                    <SelectItem value="After Sales Refunds" className="text-xs">After Sales Refunds</SelectItem>
+                    <SelectItem value="After Sales Repair / Replacement" className="text-xs">After Sales Repair / Replacement</SelectItem>
+                    <SelectItem value="Bidding Preparations" className="text-xs">Bidding Preparations</SelectItem>
+                    <SelectItem value="Customer Orders" className="text-xs">Customer Orders</SelectItem>
+                    <SelectItem value="Delivery Concern" className="text-xs">Delivery Concern</SelectItem>
+                    <SelectItem value="Follow Up" className="text-xs">Follow Up</SelectItem>
+                    <SelectItem value="Sample Requests" className="text-xs">Sample Requests</SelectItem>
+                    <SelectItem value="Technical Concerns" className="text-xs">Technical Concerns</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -641,6 +679,17 @@ export const Notes: React.FC<NotesProps> = ({
               </SelectTrigger>
               <SelectContent className="rounded-none">
                 <SelectItem value="Documentation" className="text-xs">Documentation</SelectItem>
+                <SelectItem value="Admin - Supplier Accreditation" className="text-xs">Admin - Supplier Accreditation</SelectItem>
+                <SelectItem value="Admin - Credit Terms Application" className="text-xs">Admin - Credit Terms Application</SelectItem>
+                <SelectItem value="Accounting Concerns" className="text-xs">Accounting Concerns</SelectItem>
+                <SelectItem value="After Sales Refunds" className="text-xs">After Sales Refunds</SelectItem>
+                <SelectItem value="After Sales Repair / Replacement" className="text-xs">After Sales Repair / Replacement</SelectItem>
+                <SelectItem value="Bidding Preparations" className="text-xs">Bidding Preparations</SelectItem>
+                <SelectItem value="Customer Orders" className="text-xs">Customer Orders</SelectItem>
+                <SelectItem value="Delivery Concern" className="text-xs">Delivery Concern</SelectItem>
+                <SelectItem value="Follow Up" className="text-xs">Follow Up</SelectItem>
+                <SelectItem value="Sample Requests" className="text-xs">Sample Requests</SelectItem>
+                <SelectItem value="Technical Concerns" className="text-xs">Technical Concerns</SelectItem>
               </SelectContent>
             </Select>
             {remarks && suggestActivityType(remarks) !== typeActivity && (
@@ -694,7 +743,7 @@ export const Notes: React.FC<NotesProps> = ({
               />
               {startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime()) && (
                 <p className="text-[9px] text-zinc-500 mt-1">
-                  ⏱️ Suggested duration for Documentation: 30 min
+                  ⏱️ Suggested duration for {typeActivity}: {activityDurations[typeActivity] ?? 30} min
                 </p>
               )}
             </div>

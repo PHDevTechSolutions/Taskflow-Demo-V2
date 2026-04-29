@@ -25,7 +25,6 @@ import {
   Activity,
   MoreVertical,
   Lock,
-  MessageSquare,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -40,11 +39,6 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
@@ -168,7 +162,6 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const PROGRESS_BATCH_SIZE = 20;
   const [displayedProgressCount, setDisplayedProgressCount] = useState(PROGRESS_BATCH_SIZE);
-  const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -592,66 +585,6 @@ export const Progress: React.FC<NewTaskProps> = ({
                         signature={signature}
                       />
 
-                      {/* TSM Feedback Chat Icon */}
-                      {item.relatedHistoryItems.some(
-                        (h) =>
-                          h.tsm_approved_status &&
-                          h.tsm_approved_status !== "-",
-                      ) && (() => {
-                        const feedbackItems = item.relatedHistoryItems.filter(
-                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
-                        );
-
-                        return (
-                          <Popover open={tsmFeedbackOpen === item.id} onOpenChange={(open) => setTsmFeedbackOpen(open ? item.id : null)}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 relative"
-                                title="TSM Feedback"
-                              >
-                                <MessageSquare className="h-3 w-3" />
-                                <Badge
-                                  variant="destructive"
-                                  className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
-                                >
-                                  {feedbackItems.length}
-                                </Badge>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 rounded-none">
-                              <div className="space-y-2">
-                                <p className="text-xs font-bold uppercase text-gray-700">TSM Feedback</p>
-                                <div className="text-xs space-y-2 max-h-60 overflow-y-auto">
-                                  {feedbackItems.map((h, idx) => (
-                                    <div key={idx} className="border-b pb-2 last:border-0">
-                                      <div className="font-semibold text-blue-600 uppercase py-1">
-                                        {h.tsm_approved_status}
-                                      </div>
-                                      <div className="space-y-1 text-gray-600">
-                                        {h.type_activity && h.type_activity !== "-" && (
-                                          <div><span className="font-medium">Type:</span> {h.type_activity}</div>
-                                        )}
-                                        {h.quotation_number && h.quotation_number !== "-" && (
-                                          <div><span className="font-medium">Quotation #:</span> {h.quotation_number}</div>
-                                        )}
-                                        {h.so_number && h.so_number !== "-" && (
-                                          <div><span className="font-medium">SO #:</span> {h.so_number}</div>
-                                        )}
-                                        {h.call_type && h.call_type !== "-" && (
-                                          <div><span className="font-medium">Call Type:</span> {h.call_type}</div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        );
-                      })()}
-
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -922,6 +855,22 @@ export const Progress: React.FC<NewTaskProps> = ({
                             <span className="uppercase">
                               {item.relatedHistoryItems
                                 .map((h) => h.call_status ?? "-")
+                                .filter((v) => v !== "-")
+                                .join(", ")}
+                            </span>
+                          </p>
+                        )}
+                      <Separator className="mb-2 mt-2" />
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.tsm_approved_status &&
+                          h.tsm_approved_status !== "-",
+                      ) && (
+                          <p>
+                            <strong>TSM Feedback:</strong>{" "}
+                            <span className="uppercase">
+                              {item.relatedHistoryItems
+                                .map((h) => h.tsm_approved_status ?? "-")
                                 .filter((v) => v !== "-")
                                 .join(", ")}
                             </span>
